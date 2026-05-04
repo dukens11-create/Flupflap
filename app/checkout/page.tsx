@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
-import type { Metadata } from 'next';
 
 interface CartItem {
   id: string;
@@ -62,7 +61,8 @@ export default function CheckoutPage() {
       });
       const data = await res.json();
       if (data.url) {
-        location.href = data.url;
+        // Stripe checkout requires a full page navigation to an external URL
+        window.location.href = data.url;
       } else if (res.status === 401) {
         router.push('/login?callbackUrl=/checkout');
       } else {

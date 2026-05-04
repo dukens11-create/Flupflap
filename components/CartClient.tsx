@@ -87,7 +87,7 @@ export default function CartClient() {
           <p className="text-lg font-black">Total: {dollars(total)}</p>
           <p className="text-xs text-slate-500">Includes item prices and shipping</p>
         </div>
-        <button onClick={() => router.push('/checkout')} className="btn-primary min-w-[140px]">
+        <button onClick={() => router.push('/checkout')} className="btn-primary min-w-[140px]" aria-label="Review order and proceed to checkout">
           Review order →
         </button>
       </div>
