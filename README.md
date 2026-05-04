@@ -45,6 +45,50 @@ Open: http://localhost:3000
 - Seller: `seller@flupflap.com`
 - Password: `password123`
 
+## Deploying to Render
+
+This is a **server-rendered Next.js app** with dynamic routes, API routes, auth, Stripe webhooks, and middleware. It must be deployed as a **Web Service**, not a Static Site. Do **not** set a publish directory (e.g. `dist`) — Next.js server output lives in `.next`, not a static folder.
+
+### Using render.yaml (recommended)
+
+A `render.yaml` is included in the repository. To use it:
+
+1. Push this repo to GitHub.
+2. In [Render](https://render.com), click **New → Blueprint** and connect your repo.
+3. Render will detect `render.yaml` and create the Web Service automatically.
+4. Set the required environment variables in the Render dashboard (see below).
+
+### Manual setup in Render
+
+If you prefer to create the service manually:
+
+| Setting | Value |
+|---|---|
+| **Service type** | Web Service |
+| **Runtime** | Node |
+| **Build command** | `npm install && npm run build` |
+| **Start command** | `npm run start` |
+| **Publish directory** | *(leave blank — do not set this)* |
+
+### Required environment variables
+
+Set these in **Environment → Environment Variables** in the Render dashboard:
+
+| Variable | Description |
+|---|---|
+| `DATABASE_URL` | PostgreSQL connection string |
+| `NEXTAUTH_SECRET` | Random secret for NextAuth (use "Generate" in Render) |
+| `NEXTAUTH_URL` | Full public URL of your Render service (e.g. `https://flupflap.onrender.com`) |
+| `NEXT_PUBLIC_APP_URL` | Same as `NEXTAUTH_URL` |
+| `STRIPE_SECRET_KEY` | Stripe secret key |
+| `STRIPE_PUBLISHABLE_KEY` | Stripe publishable key |
+| `STRIPE_WEBHOOK_SECRET` | Secret from your Stripe webhook endpoint |
+| `PLATFORM_FEE_PERCENT` | Commission percentage (default `3`) |
+
+### Why the build succeeded but deployment failed
+
+`next build` completes successfully and generates a `.next` directory. The failure `Publish directory dist does not exist!` happens only when Render is mistakenly configured as a **Static Site** (which looks for a `dist` folder). The fix is simply to use a **Web Service** deployment, which runs `npm run start` instead of serving a static directory.
+
 ## Stripe webhook setup
 After deploying or while using Stripe CLI locally, point Stripe webhooks to:
 
