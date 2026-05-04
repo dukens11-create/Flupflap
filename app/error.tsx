@@ -7,6 +7,7 @@
  * (e.g. Render dashboard) for full functionality.
  */
 export default function GlobalError({
+  error,
   reset,
 }: {
   error: Error & { digest?: string };
