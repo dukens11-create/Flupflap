@@ -13,11 +13,14 @@
   },
   "dependencies": {
     "@next-auth/prisma-adapter": "latest",
+    "@prisma/adapter-pg": "latest",
     "@prisma/client": "latest",
+    "@prisma/config": "latest",
     "bcryptjs": "latest",
     "lucide-react": "latest",
     "next": "latest",
     "next-auth": "latest",
+    "pg": "latest",
     "prisma": "latest",
     "react": "latest",
     "react-dom": "latest",
@@ -27,6 +30,7 @@
   "devDependencies": {
     "@types/bcryptjs": "latest",
     "@types/node": "latest",
+    "@types/pg": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "autoprefixer": "latest",
@@ -36,3 +40,4 @@
     "typescript": "latest"
   }
 }
+
