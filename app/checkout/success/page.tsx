@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import ClearCart from '@/components/ClearCart';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = { title: 'Order Confirmed' };
@@ -11,6 +12,8 @@ export default async function CheckoutSuccessPage({
   const { session_id } = await searchParams;
   return (
     <main className="max-w-md mx-auto text-center py-16">
+      {/* Clear the cart from localStorage after a successful purchase */}
+      <ClearCart />
       <div className="card p-10">
         <p className="text-5xl mb-4">🎉</p>
         <h1 className="text-3xl font-black mb-2">Order confirmed!</h1>

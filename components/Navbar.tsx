@@ -2,10 +2,37 @@
 import Link from 'next/link';
 import { signOut, useSession } from 'next-auth/react';
 import { ShoppingCart, Package, LayoutDashboard, LogIn, UserPlus, LogOut, User } from 'lucide-react';
+import { useEffect, useState } from 'react';
+
+function useCartCount() {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    function read() {
+      try {
+        const cart = JSON.parse(localStorage.getItem('flupflap_cart') || '[]') as { quantity: number }[];
+        setCount(cart.reduce((s, i) => s + i.quantity, 0));
+      } catch {
+        setCount(0);
+      }
+    }
+    read();
+    // storage fires for cross-tab changes; flupflap:cart-updated fires for same-tab changes
+    window.addEventListener('storage', read);
+    window.addEventListener('flupflap:cart-updated', read);
+    return () => {
+      window.removeEventListener('storage', read);
+      window.removeEventListener('flupflap:cart-updated', read);
+    };
+  }, []);
+
+  return count;
+}
 
 export default function Navbar() {
   const { data: session } = useSession();
   const role = session?.user?.role;
+  const cartCount = useCartCount();
 
   return (
     <header className="bg-white border-b border-slate-200 sticky top-0 z-30">
@@ -28,8 +55,13 @@ export default function Navbar() {
         </nav>
 
         <div className="flex items-center gap-2 text-sm font-medium">
-          <Link href="/cart" className="flex items-center gap-1 hover:text-blue-600">
+          <Link href="/cart" className="relative flex items-center gap-1 hover:text-blue-600">
             <ShoppingCart size={16} /> Cart
+            {cartCount > 0 && (
+              <span className="absolute -top-2 -right-3 bg-blue-600 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                {cartCount}
+              </span>
+            )}
           </Link>
           {session?.user ? (
             <>

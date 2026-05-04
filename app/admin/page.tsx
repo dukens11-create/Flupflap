@@ -19,7 +19,8 @@ function statusBadge(status: string) {
 
 export default async function AdminPage() {
   const session = await getServerSession(authOptions);
-  if (!session?.user || session.user.role !== 'ADMIN') redirect('/login');
+  if (!session?.user) redirect('/login');
+  if (session.user.role !== 'ADMIN') redirect('/');
 
   const [pending, all, recentOrders] = await Promise.all([
     prisma.product.findMany({
