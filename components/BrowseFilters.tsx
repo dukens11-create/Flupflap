@@ -1,6 +1,6 @@
 "use client";
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useTransition } from 'react';
+import { useCallback, useEffect, useRef, useTransition, useState } from 'react';
 
 const CATEGORIES = ['Electronics', 'Clothing', 'Furniture', 'Books', 'Toys', 'Sports', 'Collectibles', 'Other'];
 const CONDITIONS = ['New', 'Like New', 'Used', 'For Parts'];
@@ -9,6 +9,8 @@ export default function BrowseFilters() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
+  const [searchValue, setSearchValue] = useState(searchParams.get('q') ?? '');
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const update = useCallback(
     (key: string, value: string) => {
@@ -21,7 +23,22 @@ export default function BrowseFilters() {
     [router, searchParams]
   );
 
-  const clear = () => startTransition(() => router.push('/'));
+  // Debounced search so we don't navigate on every keystroke
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      update('q', searchValue);
+    }, 350);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchValue]);
+
+  const clear = () => {
+    setSearchValue('');
+    startTransition(() => router.push('/'));
+  };
 
   const hasFilters = searchParams.toString().length > 0;
 
@@ -30,8 +47,8 @@ export default function BrowseFilters() {
       <input
         className="input max-w-xs"
         placeholder="Search products…"
-        defaultValue={searchParams.get('q') ?? ''}
-        onChange={e => update('q', e.target.value)}
+        value={searchValue}
+        onChange={e => setSearchValue(e.target.value)}
       />
       <select
         className="input w-40"

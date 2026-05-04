@@ -10,7 +10,8 @@ const CONDITIONS = ['New', 'Like New', 'Used', 'For Parts'];
 
 export default async function SellerNewPage() {
   const session = await getServerSession(authOptions);
-  if (!session?.user || session.user.role !== 'SELLER') redirect('/login');
+  if (!session?.user) redirect('/login');
+  if (session.user.role !== 'SELLER') redirect('/');
 
   return (
     <main className="max-w-xl mx-auto">

@@ -18,9 +18,10 @@ function statusBadge(status: string) {
   return map[status] ?? 'badge-slate';
 }
 
-export default async function SellerPage({ searchParams }: { searchParams: Promise<{ created?: string }> }) {
+export default async function SellerPage({ searchParams }: { searchParams: Promise<{ created?: string; stripe?: string }> }) {
   const session = await getServerSession(authOptions);
-  if (!session?.user || session.user.role !== 'SELLER') redirect('/login');
+  if (!session?.user) redirect('/login');
+  if (session.user.role !== 'SELLER') redirect('/');
   const sp = await searchParams;
 
   const [products, orders] = await Promise.all([
@@ -51,6 +52,12 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
       {sp.created && (
         <div className="card p-4 mb-6 bg-green-50 border-green-200 text-green-800 text-sm">
           ✅ Product submitted for review! It will appear publicly once approved by an admin.
+        </div>
+      )}
+
+      {sp.stripe === 'connected' && (
+        <div className="card p-4 mb-6 bg-green-50 border-green-200 text-green-800 text-sm">
+          ✅ Stripe account connected! You&apos;re now set up to receive payouts.
         </div>
       )}
 
