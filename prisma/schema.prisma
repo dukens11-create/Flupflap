@@ -1,113 +1,138 @@
-generator client { provider = "prisma-client-js" }
-datasource db { provider = "postgresql" url = env("DATABASE_URL") }
+generator client {
+  provider = "prisma-client-js"
+}
 
-enum Role { CUSTOMER SELLER ADMIN }
-enum ProductStatus { PENDING APPROVED REJECTED SOLD }
-enum OrderStatus { PENDING PAID SHIPPED DELIVERED CANCELLED REFUNDED }
+// Database connection URL is configured in prisma.config.ts (Prisma 7 pattern)
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  CUSTOMER
+  SELLER
+  ADMIN
+}
+
+enum ProductStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SOLD
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
 
 model User {
-  id        String   @id @default(cuid())
-  name      String
-  email     String   @unique
-  password  String
-  role      Role     @default(CUSTOMER)
-  stripeAccountId String?
-  stripeOnboardingComplete Boolean @default(false)
-  createdAt DateTime @default(now())
-  products  Product[]
-  orders    Order[]
-  addresses Address[]
-  accounts  Account[]
-  sessions  Session[]
+  id                       String   @id @default(cuid())
+  name                     String
+  email                    String   @unique
+  password                 String
+  role                     Role     @default(CUSTOMER)
+  stripeAccountId          String?
+  stripeOnboardingComplete Boolean  @default(false)
+  createdAt                DateTime @default(now())
+  products                 Product[]
+  orders                   Order[]
+  addresses                Address[]
+  accounts                 Account[]
+  sessions                 Session[]
 }
 
 model Product {
-  id          String @id @default(cuid())
-  title       String
-  description String
-  priceCents  Int
-  condition   String
-  category    String
-  imageUrl    String
-  inventory   Int @default(1)
-  shippingCents Int @default(0)
-  status      ProductStatus @default(PENDING)
-  sellerId    String
-  seller      User @relation(fields: [sellerId], references: [id])
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  orderItems  OrderItem[]
+  id            String        @id @default(cuid())
+  title         String
+  description   String
+  priceCents    Int
+  condition     String
+  category      String
+  imageUrl      String
+  inventory     Int           @default(1)
+  shippingCents Int           @default(0)
+  status        ProductStatus @default(PENDING)
+  sellerId      String
+  seller        User          @relation(fields: [sellerId], references: [id])
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  orderItems    OrderItem[]
 
   @@index([status, category, condition])
   @@index([title])
 }
 
 model Address {
-  id String @id @default(cuid())
-  userId String
-  user User @relation(fields: [userId], references: [id])
-  fullName String
-  line1 String
-  line2 String?
-  city String
-  state String
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  fullName   String
+  line1      String
+  line2      String?
+  city       String
+  state      String
   postalCode String
-  country String @default("US")
-  phone String?
-  createdAt DateTime @default(now())
+  country    String   @default("US")
+  phone      String?
+  createdAt  DateTime @default(now())
 }
 
 model Order {
-  id        String @id @default(cuid())
-  buyerId   String
-  buyer     User @relation(fields: [buyerId], references: [id])
-  totalCents Int
-  subtotalCents Int @default(0)
-  shippingCents Int @default(0)
-  taxCents Int @default(0)
-  platformFeeCents Int
-  sellerPayoutCents Int @default(0)
-  status    OrderStatus @default(PENDING)
-  stripeCheckoutId String? @unique
+  id                    String      @id @default(cuid())
+  buyerId               String
+  buyer                 User        @relation(fields: [buyerId], references: [id])
+  totalCents            Int
+  subtotalCents         Int         @default(0)
+  shippingCents         Int         @default(0)
+  taxCents              Int         @default(0)
+  platformFeeCents      Int
+  sellerPayoutCents     Int         @default(0)
+  status                OrderStatus @default(PENDING)
+  stripeCheckoutId      String?     @unique
   stripePaymentIntentId String?
-  trackingNumber String?
-  shippingCarrier String?
-  shippingName String?
-  shippingLine1 String?
-  shippingLine2 String?
-  shippingCity String?
-  shippingState String?
-  shippingPostalCode String?
-  shippingCountry String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  items     OrderItem[]
+  trackingNumber        String?
+  shippingCarrier       String?
+  shippingName          String?
+  shippingLine1         String?
+  shippingLine2         String?
+  shippingCity          String?
+  shippingState         String?
+  shippingPostalCode    String?
+  shippingCountry       String?
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+  items                 OrderItem[]
 }
 
 model OrderItem {
-  id        String @id @default(cuid())
+  id        String  @id @default(cuid())
   orderId   String
-  order     Order @relation(fields: [orderId], references: [id])
+  order     Order   @relation(fields: [orderId], references: [id])
   productId String
   product   Product @relation(fields: [productId], references: [id])
   priceCents Int
-  quantity Int @default(1)
+  quantity   Int    @default(1)
 }
 
 model Account {
-  id                 String  @id @default(cuid())
-  userId             String
-  type               String
-  provider           String
-  providerAccountId  String
-  refresh_token      String?
-  access_token       String?
-  expires_at         Int?
-  token_type         String?
-  scope              String?
-  id_token           String?
-  session_state      String?
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@unique([provider, providerAccountId])
 }
 
@@ -116,12 +141,13 @@ model Session {
   sessionToken String   @unique
   userId       String
   expires      DateTime
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model VerificationToken {
   identifier String
   token      String   @unique
   expires    DateTime
+
   @@unique([identifier, token])
 }
