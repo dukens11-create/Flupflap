@@ -7,6 +7,8 @@ import AddToCartButton from '@/components/AddToCartButton';
 import BuyNowButton from '@/components/BuyNowButton';
 import type { Metadata } from 'next';
 
+export const dynamic = 'force-dynamic';
+
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   const p = await prisma.product.findUnique({ where: { id } });

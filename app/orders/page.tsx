@@ -5,6 +5,8 @@ import { prisma } from '@/lib/db';
 import { dollars } from '@/lib/money';
 import type { Metadata } from 'next';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = { title: 'My Orders' };
 
 const STATUS_LABELS: Record<string, string> = {
