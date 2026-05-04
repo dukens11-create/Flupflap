@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate; next build",
     "start": "next start",
     "lint": "next lint",
     "prisma:generate": "prisma generate",
@@ -16,6 +16,7 @@
     "@prisma/adapter-pg": "latest",
     "@prisma/client": "latest",
     "@prisma/config": "latest",
+    "@tailwindcss/postcss": "^4.2.4",
     "bcryptjs": "latest",
     "lucide-react": "latest",
     "next": "latest",
@@ -40,4 +41,3 @@
     "typescript": "latest"
   }
 }
-
