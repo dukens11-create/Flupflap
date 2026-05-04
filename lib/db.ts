@@ -13,6 +13,8 @@ function createPrismaClient(): PrismaClient {
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
 function getDb(): PrismaClient {
+  // Cache in globalThis so Next.js hot-reloads (dev) don't create multiple connections.
+  // In production the module is loaded once, but globalThis caching is still harmless.
   if (!globalForPrisma.prisma) {
     globalForPrisma.prisma = createPrismaClient();
   }
