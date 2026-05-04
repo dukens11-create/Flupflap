@@ -28,5 +28,14 @@ export const prisma: PrismaClient = new Proxy({} as PrismaClient, {
     const value = (db as any)[prop];
     return typeof value === 'function' ? value.bind(db) : value;
   },
+  has(_target, prop: string | symbol) {
+    return prop in getDb();
+  },
+  ownKeys(_target) {
+    return Reflect.ownKeys(getDb());
+  },
+  getOwnPropertyDescriptor(_target, prop: string | symbol) {
+    return Reflect.getOwnPropertyDescriptor(getDb(), prop);
+  },
 });
 

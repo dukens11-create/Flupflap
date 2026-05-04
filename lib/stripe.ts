@@ -22,6 +22,15 @@ export const stripe: Stripe = new Proxy({} as Stripe, {
     const value = (s as any)[prop];
     return typeof value === 'function' ? value.bind(s) : value;
   },
+  has(_target, prop: string | symbol) {
+    return prop in getStripe();
+  },
+  ownKeys(_target) {
+    return Reflect.ownKeys(getStripe());
+  },
+  getOwnPropertyDescriptor(_target, prop: string | symbol) {
+    return Reflect.getOwnPropertyDescriptor(getStripe(), prop);
+  },
 });
 
 export const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000';
