@@ -47,28 +47,30 @@ Open: http://localhost:3000
 
 ## Deploying to Render
 
-This is a **server-rendered Next.js app** with dynamic routes, API routes, auth, Stripe webhooks, and middleware. It must be deployed as a **Web Service**, not a Static Site. Do **not** set a publish directory (e.g. `dist`) — Next.js server output lives in `.next`, not a static folder.
+> **⚠️ IMPORTANT — Web Service only, no publish directory**
+>
+> This is a **server-rendered Next.js app** (dynamic routes, API routes, NextAuth, Stripe webhooks, Prisma). It **must** be deployed as a **Render Web Service**. Do **not** deploy it as a Static Site and do **not** set a publish directory such as `dist`. `next build` produces a `.next` server bundle that is started with `npm run start` (`next start`) — it does not produce a static `dist` folder. Setting a publish directory will cause the deployment to fail with `Publish directory dist does not exist!` even when the build itself succeeds.
 
-### Using render.yaml (recommended)
+See [`DEPLOYMENT.md`](./DEPLOYMENT.md) for a full step-by-step deployment guide.
 
-A `render.yaml` is included in the repository. To use it:
+### Quick setup (recommended — uses render.yaml Blueprint)
 
 1. Push this repo to GitHub.
 2. In [Render](https://render.com), click **New → Blueprint** and connect your repo.
-3. Render will detect `render.yaml` and create the Web Service automatically.
+3. Render will detect `render.yaml` and create the **Web Service** automatically.
 4. Set the required environment variables in the Render dashboard (see below).
 
 ### Manual setup in Render
 
-If you prefer to create the service manually:
+If you prefer to create the service manually, use **exactly** these settings:
 
 | Setting | Value |
 |---|---|
-| **Service type** | Web Service |
+| **Service type** | **Web Service** (not Static Site) |
 | **Runtime** | Node |
 | **Build command** | `npm install && npm run build` |
 | **Start command** | `npm run start` |
-| **Publish directory** | *(leave blank — do not set this)* |
+| **Publish directory** | *(leave completely blank — do not enter anything here)* |
 
 ### Required environment variables
 
@@ -85,9 +87,9 @@ Set these in **Environment → Environment Variables** in the Render dashboard:
 | `STRIPE_WEBHOOK_SECRET` | Secret from your Stripe webhook endpoint |
 | `PLATFORM_FEE_PERCENT` | Commission percentage (default `3`) |
 
-### Why the build succeeded but deployment failed
+### Why the build succeeds but deployment fails
 
-`next build` completes successfully and generates a `.next` directory. The failure `Publish directory dist does not exist!` happens only when Render is mistakenly configured as a **Static Site** (which looks for a `dist` folder). The fix is simply to use a **Web Service** deployment, which runs `npm run start` instead of serving a static directory.
+`next build` completes and generates a `.next` directory — the **build is not broken**. The error `Publish directory dist does not exist!` appears only when Render is mistakenly configured as a **Static Site**, which expects a `dist` output folder. The fix is to use a **Web Service**, which runs `npm run start` to serve the Next.js server instead of looking for a static directory.
 
 ## Stripe webhook setup
 After deploying or while using Stripe CLI locally, point Stripe webhooks to:

@@ -1,10 +1,25 @@
+# Render Blueprint — deploys FlupFlap as a Node Web Service (NOT a Static Site).
+#
+# IMPORTANT: This app is server-rendered (Next.js with API routes, auth, Stripe,
+# and Prisma). It must be deployed as a Web Service. Do NOT deploy it as a Static
+# Site and do NOT set a publish directory (e.g. "dist"). The Next.js server output
+# is in .next/, which is served via `npm run start` (next start).
+#
+# To use: In Render click New → Blueprint, connect this repo, and Render will read
+# this file and create the service with the correct settings automatically.
+
 services:
-  - type: web
+  - type: web           # Web Service — runs a Node server, not a static CDN
     name: flupflap
     runtime: node
-    buildCommand: npm install && npm run build
-    startCommand: npm run start
+    buildCommand: npm install && npm run build   # installs deps + runs: prisma generate && next build
+    startCommand: npm run start                  # runs: next start (Node HTTP server on $PORT)
+    # NOTE: there is no publishDir / publish directory. This is intentional.
+    # Setting publishDir to "dist" or any other path will cause deployment to fail
+    # because Next.js does not produce a static dist folder.
     envVars:
+      - key: NODE_ENV
+        value: production
       - key: DATABASE_URL
         sync: false
       - key: NEXTAUTH_SECRET
