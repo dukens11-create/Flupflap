@@ -1,5 +1,5 @@
 import { Suspense } from 'react';
-import { prisma } from '@/lib/db';
+import { prisma, isDatabaseConfigured } from '@/lib/db';
 import ProductCard from '@/components/ProductCard';
 import BrowseFilters from '@/components/BrowseFilters';
 import type { Metadata } from 'next';
@@ -25,6 +25,21 @@ async function ProductGrid({ sp }: { sp: SearchParams }) {
     where.priceCents = {};
     if (sp.minPrice) where.priceCents.gte = Math.round(Number(sp.minPrice) * 100);
     if (sp.maxPrice) where.priceCents.lte = Math.round(Number(sp.maxPrice) * 100);
+  }
+
+  // If DATABASE_URL is not configured, show a clear fallback instead of crashing.
+  // Set DATABASE_URL in your environment (e.g. Render dashboard) for full functionality.
+  if (!isDatabaseConfigured()) {
+    return (
+      <div className="card p-10 text-center text-slate-500">
+        <p className="font-semibold text-slate-700 mb-1">Database not configured</p>
+        <p className="text-sm">
+          Product listings are unavailable.{' '}
+          Set <code className="font-mono text-xs bg-slate-100 px-1 rounded">DATABASE_URL</code>{' '}
+          to enable full functionality.
+        </p>
+      </div>
+    );
   }
 
   const products = await prisma.product.findMany({
