@@ -7,7 +7,7 @@ export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   // Routes that require any authenticated user
-  const authRequired = ['/account', '/orders'];
+  const authRequired = ['/account', '/orders', '/checkout'];
   // Routes that require SELLER role
   const sellerRequired = ['/seller'];
   // Routes that require ADMIN role
@@ -37,5 +37,5 @@ export async function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/account/:path*', '/orders/:path*', '/seller/:path*', '/admin/:path*'],
+  matcher: ['/account/:path*', '/orders/:path*', '/checkout/:path*', '/seller/:path*', '/admin/:path*'],
 };

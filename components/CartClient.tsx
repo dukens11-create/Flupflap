@@ -15,7 +15,6 @@ type Item = {
 
 export default function CartClient() {
   const [items, setItems] = useState<Item[]>([]);
-  const [checking, setChecking] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -32,24 +31,6 @@ export default function CartClient() {
     () => items.reduce((s, i) => s + (i.priceCents + i.shippingCents) * i.quantity, 0),
     [items]
   );
-
-  async function checkout() {
-    setChecking(true);
-    const res = await fetch('/api/checkout/cart', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items: items.map(i => ({ productId: i.id, quantity: i.quantity })) }),
-    });
-    const data = await res.json();
-    if (data.url) {
-      location.href = data.url;
-    } else if (res.status === 401) {
-      router.push('/login?callbackUrl=/cart');
-    } else {
-      alert(data.error || 'Checkout failed');
-      setChecking(false);
-    }
-  }
 
   if (!items.length) {
     return (
@@ -106,8 +87,8 @@ export default function CartClient() {
           <p className="text-lg font-black">Total: {dollars(total)}</p>
           <p className="text-xs text-slate-500">Includes item prices and shipping</p>
         </div>
-        <button onClick={checkout} disabled={checking} className="btn-primary min-w-[140px]">
-          {checking ? 'Redirecting…' : 'Checkout'}
+        <button onClick={() => router.push('/checkout')} className="btn-primary min-w-[140px]" aria-label="Review order and proceed to checkout">
+          Review order →
         </button>
       </div>
     </div>
