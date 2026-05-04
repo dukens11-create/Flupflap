@@ -4,6 +4,8 @@ import ProductCard from '@/components/ProductCard';
 import BrowseFilters from '@/components/BrowseFilters';
 import type { Metadata } from 'next';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = { title: 'Browse Products' };
 
 interface SearchParams {

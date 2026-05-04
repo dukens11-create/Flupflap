@@ -6,6 +6,8 @@ import { dollars } from '@/lib/money';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = { title: 'Seller Dashboard' };
 
 function statusBadge(status: string) {
