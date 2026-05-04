@@ -59,7 +59,7 @@ export default async function OrdersPage() {
             <div key={order.id} className="card p-5">
               <div className="flex items-center justify-between mb-3">
                 <div>
-                  <span className="text-xs font-mono text-slate-400">Order #{order.id.slice(-8).toUpperCase()}</span>
+                  <a href={`/orders/${order.id}`} className="text-xs font-mono text-slate-400 hover:text-blue-600">Order #{order.id.slice(-8).toUpperCase()}</a>
                   <p className="text-xs text-slate-400">{new Date(order.createdAt).toLocaleDateString()}</p>
                 </div>
                 <span className={statusBadge(order.status)}>{STATUS_LABELS[order.status] ?? order.status}</span>

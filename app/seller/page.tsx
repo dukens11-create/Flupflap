@@ -57,6 +57,18 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
         </div>
       )}
 
+      {(sp as any).updated && (
+        <div className="card p-4 mb-6 bg-green-50 border-green-200 text-green-800 text-sm">
+          ✅ Listing updated and re-submitted for review.
+        </div>
+      )}
+
+      {(sp as any).deleted && (
+        <div className="card p-4 mb-6 bg-slate-50 border-slate-200 text-slate-700 text-sm">
+          🗑️ Listing deleted.
+        </div>
+      )}
+
       {sp.stripe === 'connected' && (
         <div className="card p-4 mb-6 bg-green-50 border-green-200 text-green-800 text-sm">
           ✅ Stripe account connected! You&apos;re now set up to receive payouts.
@@ -83,6 +95,9 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                   <p className="text-sm text-slate-500">{p.condition} · {p.category} · {dollars(p.priceCents)}</p>
                 </div>
                 <span className={statusBadge(p.status)}>{p.status}</span>
+                {p.status !== 'SOLD' && (
+                  <Link href={`/seller/edit/${p.id}`} className="btn-outline text-xs py-1 px-2 flex-shrink-0">Edit</Link>
+                )}
               </div>
             ))}
           </div>

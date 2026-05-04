@@ -24,23 +24,21 @@ export default async function AdminPage() {
   if (!session?.user) redirect('/login');
   if (session.user.role !== 'ADMIN') redirect('/');
 
-  const [pending, all, recentOrders] = await Promise.all([
-    prisma.product.findMany({
-      where: { status: 'PENDING' },
-      include: { seller: { select: { name: true, email: true } } },
-      orderBy: { createdAt: 'asc' },
-    }),
-    prisma.product.findMany({
-      orderBy: { createdAt: 'desc' },
-      take: 20,
-      include: { seller: { select: { name: true } } },
-    }),
-    prisma.order.findMany({
-      orderBy: { createdAt: 'desc' },
-      take: 10,
-      include: { buyer: { select: { name: true, email: true } } },
-    }),
-  ]);
+  const pending = await prisma.product.findMany({
+    where: { status: 'PENDING' },
+    include: { seller: { select: { name: true, email: true } } },
+    orderBy: { createdAt: 'asc' },
+  });
+  const all = await prisma.product.findMany({
+    orderBy: { createdAt: 'desc' },
+    take: 20,
+    include: { seller: { select: { name: true } } },
+  });
+  const recentOrders = await prisma.order.findMany({
+    orderBy: { createdAt: 'desc' },
+    take: 10,
+    include: { buyer: { select: { name: true, email: true } } },
+  });
 
   return (
     <main className="max-w-5xl mx-auto">
