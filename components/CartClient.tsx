@@ -25,6 +25,7 @@ export default function CartClient() {
   function save(next: Item[]) {
     setItems(next);
     localStorage.setItem('flupflap_cart', JSON.stringify(next));
+    window.dispatchEvent(new Event('flupflap:cart-updated'));
   }
 
   const total = useMemo(
@@ -43,7 +44,7 @@ export default function CartClient() {
     if (data.url) {
       location.href = data.url;
     } else if (res.status === 401) {
-      router.push('/login');
+      router.push('/login?callbackUrl=/cart');
     } else {
       alert(data.error || 'Checkout failed');
       setChecking(false);

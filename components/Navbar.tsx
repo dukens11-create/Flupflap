@@ -17,11 +17,12 @@ function useCartCount() {
       }
     }
     read();
+    // storage fires for cross-tab changes; flupflap:cart-updated fires for same-tab changes
     window.addEventListener('storage', read);
-    const id = setInterval(read, 1000);
+    window.addEventListener('flupflap:cart-updated', read);
     return () => {
       window.removeEventListener('storage', read);
-      clearInterval(id);
+      window.removeEventListener('flupflap:cart-updated', read);
     };
   }, []);
 

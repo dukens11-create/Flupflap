@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 export default function ClearCart() {
   useEffect(() => {
     localStorage.removeItem('flupflap_cart');
+    window.dispatchEvent(new Event('flupflap:cart-updated'));
   }, []);
   return null;
 }

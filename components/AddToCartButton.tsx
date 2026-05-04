@@ -23,6 +23,7 @@ export default function AddToCartButton({ item }: { item: Omit<Item, 'quantity'>
       cart.push({ ...item, quantity: 1 });
     }
     localStorage.setItem('flupflap_cart', JSON.stringify(cart));
+    window.dispatchEvent(new Event('flupflap:cart-updated'));
     setDone(true);
     // Reset button label after 2 seconds
     setTimeout(() => setDone(false), 2000);

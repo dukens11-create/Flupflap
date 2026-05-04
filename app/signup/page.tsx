@@ -35,7 +35,6 @@ export default function SignupPage() {
     });
 
     router.push(payload.role === 'SELLER' ? '/seller' : '/');
-    router.refresh();
   }
 
   return (
