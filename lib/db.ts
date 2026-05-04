@@ -21,6 +21,15 @@ function getDb(): PrismaClient {
   return globalForPrisma.prisma;
 }
 
+/**
+ * Returns true if DATABASE_URL is set in the environment.
+ * Use this to guard DB-dependent code paths and render appropriate fallbacks.
+ * Note: DATABASE_URL is still required for full functionality and production usage.
+ */
+export function isDatabaseConfigured(): boolean {
+  return Boolean(process.env.DATABASE_URL);
+}
+
 // Lazily-initialized singleton — does NOT connect until the first property access.
 // This prevents module-level initialization from failing at build time when
 // DATABASE_URL is only available at runtime.
