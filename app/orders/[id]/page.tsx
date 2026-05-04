@@ -108,7 +108,7 @@ export default async function OrderDetailPage({
         <h2 className="font-bold mb-1">Payment summary</h2>
         <div className="flex justify-between">
           <span className="text-slate-500">Subtotal</span>
-          <span>{dollars(order.subtotalCents || order.totalCents)}</span>
+          <span>{dollars(order.subtotalCents ?? order.totalCents)}</span>
         </div>
         {order.shippingCents > 0 && (
           <div className="flex justify-between">

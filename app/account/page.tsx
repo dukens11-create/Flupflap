@@ -94,6 +94,13 @@ export default function AccountPage() {
     setPwLoading(false);
   }
 
+  function handleEditName() {
+    setName(session?.user.name ?? '');
+    setEditingName(true);
+    setNameError('');
+    setNameSuccess('');
+  }
+
   return (
     <main className="max-w-md mx-auto">
       <h1 className="text-3xl font-black mb-6">My Account</h1>
@@ -124,7 +131,7 @@ export default function AccountPage() {
             <div className="flex items-center gap-2">
               <p className="font-medium">{session.user.name}</p>
               <button
-                onClick={() => { setName(session.user.name ?? ''); setEditingName(true); setNameError(''); setNameSuccess(''); }}
+                onClick={handleEditName}
                 className="text-xs text-blue-600 hover:underline"
               >
                 Edit

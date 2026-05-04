@@ -94,7 +94,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Product not found.' }, { status: 404 });
     }
 
-    const body = await req.json() as Record<string, string>;
+    const body: unknown = await req.json();
     const data = updateSchema.parse(body);
 
     const updated = await prisma.product.update({

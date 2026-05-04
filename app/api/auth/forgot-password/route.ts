@@ -34,11 +34,14 @@ export async function POST(req: Request) {
     });
 
     // In production, send an email with the reset link.
-    // For now, the reset link is: /reset-password?token=<token>&email=<email>
-    // TODO: integrate with an email provider (e.g. Resend, SendGrid, Nodemailer)
-    console.log(
-      `[forgot-password] Reset link for ${email}: /reset-password?token=${token}&email=${encodeURIComponent(email)}`
-    );
+    // For now, only log in development — in production configure an email provider
+    // (e.g. Resend, SendGrid, Nodemailer) and remove this log.
+    if (process.env.NODE_ENV === 'development') {
+      console.log(
+        `[forgot-password] Reset link for ${email}: /reset-password?token=${token}&email=${encodeURIComponent(email)}`
+      );
+    }
+    // TODO: send email with reset link
 
     return NextResponse.json({ ok: true });
   } catch (err) {
