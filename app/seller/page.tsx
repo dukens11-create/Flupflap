@@ -2,7 +2,8 @@ import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
-import { dollars } from '@/lib/money';
+import { dollars, platformFee } from '@/lib/money';
+import { stripe } from '@/lib/stripe';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 
@@ -20,13 +21,27 @@ function statusBadge(status: string) {
   return map[status] ?? 'badge-slate';
 }
 
+function orderStatusBadge(status: string) {
+  return ['PAID', 'SHIPPED', 'DELIVERED'].includes(status) ? 'badge-green' : 'badge-yellow';
+}
+
+function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="card p-5 flex flex-col gap-1">
+      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{label}</p>
+      <p className="text-2xl font-black text-slate-900">{value}</p>
+      {sub && <p className="text-xs text-slate-400">{sub}</p>}
+    </div>
+  );
+}
+
 export default async function SellerPage({ searchParams }: { searchParams: Promise<{ created?: string; stripe?: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect('/login');
   if (session.user.role !== 'SELLER') redirect('/');
   const sp = await searchParams;
 
-  const [products, orders] = await Promise.all([
+  const [products, orders, soldItems] = await Promise.all([
     prisma.product.findMany({
       where: { sellerId: session.user.id },
       orderBy: { createdAt: 'desc' },
@@ -37,9 +52,46 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
       orderBy: { createdAt: 'desc' },
       take: 20,
     }),
+    // Order items belonging to this seller from completed orders (for earnings)
+    prisma.orderItem.findMany({
+      where: {
+        product: { sellerId: session.user.id },
+        order: { status: { in: ['PAID', 'SHIPPED', 'DELIVERED'] } },
+      },
+      include: {
+        product: { select: { title: true, id: true } },
+        order: { select: { id: true, status: true, createdAt: true } },
+      },
+      orderBy: { order: { createdAt: 'desc' } },
+    }),
   ]);
 
+  // Compute earnings from seller's completed order items
+  const grossSalesCents = soldItems.reduce((s, i) => s + i.priceCents * i.quantity, 0);
+  const platformFeesCents = platformFee(grossSalesCents);
+  const netEarningsCents = grossSalesCents - platformFeesCents;
+  const itemsSoldCount = soldItems.reduce((s, i) => s + i.quantity, 0);
+  const completedOrdersCount = new Set(soldItems.map(i => i.order.id)).size;
+
+  // Fetch Stripe balance for connected sellers
   const stripeOnboarded = session.user.stripeOnboardingComplete;
+  const stripeAccountId = session.user.stripeAccountId;
+  let stripeAvailableCents: number | null = null;
+  let stripePendingCents: number | null = null;
+  if (stripeOnboarded && stripeAccountId) {
+    try {
+      const balance = await stripe.balance.retrieve(
+        {} as any,
+        { stripeAccount: stripeAccountId },
+      );
+      stripeAvailableCents = (balance.available as Array<{ currency: string; amount: number }>)
+        .reduce((s, b) => s + (b.currency === 'usd' ? b.amount : 0), 0);
+      stripePendingCents = (balance.pending as Array<{ currency: string; amount: number }>)
+        .reduce((s, b) => s + (b.currency === 'usd' ? b.amount : 0), 0);
+    } catch {
+      // Stripe not available or account not fully set up; balances remain null
+    }
+  }
 
   return (
     <main className="max-w-4xl mx-auto">
@@ -82,6 +134,80 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
         </div>
       )}
 
+      {/* ── Earnings Summary ── */}
+      <section className="mb-8">
+        <h2 className="text-xl font-bold mb-3">Earnings Summary</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
+          <StatCard label="Items Sold" value={String(itemsSoldCount)} sub="paid/shipped/delivered" />
+          <StatCard label="Orders" value={String(completedOrdersCount)} sub="completed" />
+          <StatCard label="Gross Sales" value={dollars(grossSalesCents)} sub="before fees" />
+          <StatCard label="Platform Fees" value={`−${dollars(platformFeesCents)}`} sub={`${Number(process.env.PLATFORM_FEE_PERCENT || 3)}% commission`} />
+          <StatCard label="Net Earnings" value={dollars(netEarningsCents)} sub="after fees" />
+          {stripeOnboarded ? (
+            stripeAvailableCents !== null ? (
+              <div className="card p-5 flex flex-col gap-1">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Stripe Balance</p>
+                <p className="text-2xl font-black text-slate-900">{dollars(stripeAvailableCents)}</p>
+                <p className="text-xs text-slate-400">available · {dollars(stripePendingCents ?? 0)} pending</p>
+              </div>
+            ) : (
+              <div className="card p-5 flex flex-col gap-1">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Stripe Balance</p>
+                <p className="text-sm text-slate-400 mt-1">Unavailable — check your Stripe dashboard</p>
+              </div>
+            )
+          ) : (
+            <div className="card p-5 flex flex-col gap-1 bg-slate-50">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Stripe Balance</p>
+              <p className="text-sm text-slate-400 mt-1">Connect Stripe to see your payout balance</p>
+            </div>
+          )}
+        </div>
+        {stripeOnboarded && (
+          <p className="text-xs text-slate-400">
+            Stripe balance reflects your connected account. <a href="/api/stripe/connect" className="text-blue-500 hover:underline">Open Stripe dashboard →</a>
+          </p>
+        )}
+      </section>
+
+      {/* ── Sold Items ── */}
+      <section className="mb-8">
+        <h2 className="text-xl font-bold mb-3">Sold Items</h2>
+        {soldItems.length === 0 ? (
+          <div className="card p-6 text-slate-500">No items sold yet.</div>
+        ) : (
+          <div className="card overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-100 text-left">
+                  <th className="px-4 py-3 font-semibold text-slate-600">Item</th>
+                  <th className="px-4 py-3 font-semibold text-slate-600 hidden sm:table-cell">Date</th>
+                  <th className="px-4 py-3 font-semibold text-slate-600 text-right">Qty</th>
+                  <th className="px-4 py-3 font-semibold text-slate-600 text-right">Amount</th>
+                  <th className="px-4 py-3 font-semibold text-slate-600 text-right">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {soldItems.map(item => (
+                  <tr key={item.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                    <td className="px-4 py-3 font-medium text-slate-800 truncate max-w-[160px]">{item.product.title}</td>
+                    <td className="px-4 py-3 text-slate-500 hidden sm:table-cell">
+                      {item.order.createdAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </td>
+                    <td className="px-4 py-3 text-right text-slate-700">{item.quantity}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-slate-800">{dollars(item.priceCents * item.quantity)}</td>
+                    <td className="px-4 py-3 text-right">
+                      <span className={`badge ${orderStatusBadge(item.order.status)}`}>{item.order.status}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {/* ── My Listings ── */}
       <section className="mb-8">
         <h2 className="text-xl font-bold mb-3">My Listings</h2>
         {products.length === 0 ? (
@@ -104,6 +230,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
         )}
       </section>
 
+      {/* ── Recent Orders (for shipping management) ── */}
       <section>
         <h2 className="text-xl font-bold mb-3">Recent Orders</h2>
         {orders.length === 0 ? (
