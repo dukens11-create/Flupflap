@@ -159,8 +159,8 @@ function LoginForm() {
             required
           />
           <p className="text-xs text-slate-400 mt-1">
-            Include your country code — e.g. +1 for US/Canada, +44 for UK.
-            10-digit US numbers are accepted without a country code.
+            Country code recommended (e.g. +1 for US/Canada, +44 for UK).
+            10-digit US numbers without a country code are also accepted.
           </p>
         </div>
         {error && <p className="text-red-600 text-sm">{error}</p>}

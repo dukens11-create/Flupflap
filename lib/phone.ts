@@ -15,6 +15,12 @@
  *  6. Any other length with 7–15 digits: prepend "+" and let the provider
  *     validate the destination country.
  *  7. Fewer than 7 or more than 15 digits → return null (invalid).
+ *
+ * Limitations:
+ *  - Short codes (3–6 digits) used for SMS in some regions are not supported.
+ *  - Emergency numbers (e.g. 911, 112) are excluded by the 7-digit minimum.
+ *  - These are intentional: FlupFlap OTP is sent to personal subscriber numbers
+ *    only, never to short codes or emergency lines.
  */
 
 /**

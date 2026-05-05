@@ -92,12 +92,6 @@ export async function POST(req: Request) {
           { status: 429 },
         );
       }
-      if (result.error === 'invalid_phone') {
-        return NextResponse.json(
-          { error: 'Invalid phone number. Please include your country code (e.g. +1 for US/Canada).' },
-          { status: 400 },
-        );
-      }
       console.error('[setup-phone] OTP send failed for user', user.id);
       return NextResponse.json(
         { error: 'Failed to send verification code. Please check your phone number and try again.' },
