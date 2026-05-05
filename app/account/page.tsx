@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -19,6 +19,30 @@ export default function AccountPage() {
   const [pwLoading, setPwLoading] = useState(false);
   const [pwError, setPwError] = useState('');
   const [pwSuccess, setPwSuccess] = useState('');
+
+  // Phone management
+  const [phoneStep, setPhoneStep] = useState<'idle' | 'enter_phone' | 'enter_code'>('idle');
+  const [phoneInput, setPhoneInput] = useState('');
+  const [maskedPhone, setMaskedPhone] = useState('');
+  const [codeInput, setCodeInput] = useState('');
+  const [phoneLoading, setPhoneLoading] = useState(false);
+  const [phoneError, setPhoneError] = useState('');
+  const [phoneSuccess, setPhoneSuccess] = useState('');
+  const [dbPhone, setDbPhone] = useState<string | null>(null);
+  const [dbPhoneVerified, setDbPhoneVerified] = useState(false);
+
+  // Load current phone info from server
+  useEffect(() => {
+    if (session?.user?.id) {
+      fetch('/api/account/phone/info')
+        .then(r => r.json())
+        .then(d => {
+          if (d.phone !== undefined) setDbPhone(d.phone);
+          if (d.phoneVerified !== undefined) setDbPhoneVerified(d.phoneVerified);
+        })
+        .catch(() => null);
+    }
+  }, [session?.user?.id, phoneSuccess]);
 
   if (status === 'loading') {
     return (
@@ -50,7 +74,6 @@ export default function AccountPage() {
       if (!res.ok) {
         setNameError(data.error || 'Update failed.');
       } else {
-        // Refresh session to pick up the new name from the server
         await update();
         setNameSuccess('Name updated!');
         setEditingName(false);
@@ -92,6 +115,54 @@ export default function AccountPage() {
       setPwError('Network error. Please try again.');
     }
     setPwLoading(false);
+  }
+
+  async function sendPhoneCode(e: React.FormEvent) {
+    e.preventDefault();
+    setPhoneError('');
+    setPhoneLoading(true);
+    try {
+      const res = await fetch('/api/account/phone/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: phoneInput }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setPhoneError(data.error || 'Failed to send code.');
+      } else {
+        setMaskedPhone(data.maskedPhone);
+        setPhoneStep('enter_code');
+      }
+    } catch {
+      setPhoneError('Network error. Please try again.');
+    }
+    setPhoneLoading(false);
+  }
+
+  async function verifyPhoneCode(e: React.FormEvent) {
+    e.preventDefault();
+    setPhoneError('');
+    setPhoneLoading(true);
+    try {
+      const res = await fetch('/api/account/phone/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: codeInput }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setPhoneError(data.error || 'Verification failed.');
+      } else {
+        setPhoneSuccess('Phone number verified and saved!');
+        setPhoneStep('idle');
+        setPhoneInput('');
+        setCodeInput('');
+      }
+    } catch {
+      setPhoneError('Network error. Please try again.');
+    }
+    setPhoneLoading(false);
   }
 
   function handleEditName() {
@@ -152,6 +223,97 @@ export default function AccountPage() {
         <div>
           <p className="label">Role</p>
           <p className="font-medium capitalize">{role?.toLowerCase()}</p>
+        </div>
+
+        {/* Phone */}
+        <div>
+          <p className="label">Phone number</p>
+          {phoneStep === 'idle' && (
+            <div>
+              {dbPhone ? (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="font-medium text-slate-700">{dbPhone}</p>
+                  {dbPhoneVerified ? (
+                    <span className="badge badge-green">Verified</span>
+                  ) : (
+                    <span className="badge badge-yellow">Unverified</span>
+                  )}
+                  <button
+                    onClick={() => { setPhoneStep('enter_phone'); setPhoneError(''); setPhoneSuccess(''); }}
+                    className="text-xs text-blue-600 hover:underline"
+                  >
+                    Update
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <p className="text-sm text-slate-500">No phone number added</p>
+                  <button
+                    onClick={() => { setPhoneStep('enter_phone'); setPhoneError(''); setPhoneSuccess(''); }}
+                    className="text-xs text-blue-600 hover:underline"
+                  >
+                    Add phone
+                  </button>
+                </div>
+              )}
+              {phoneSuccess && <p className="text-green-600 text-xs mt-1">{phoneSuccess}</p>}
+              {role === 'SELLER' && !dbPhoneVerified && (
+                <p className="text-xs text-amber-600 mt-1">
+                  ⚠ Sellers need a verified phone number for two-step sign-in.
+                </p>
+              )}
+            </div>
+          )}
+          {phoneStep === 'enter_phone' && (
+            <form onSubmit={sendPhoneCode} className="space-y-2 mt-1">
+              <input
+                type="tel"
+                className="input"
+                placeholder="+1 555 000 1234"
+                value={phoneInput}
+                onChange={e => setPhoneInput(e.target.value)}
+                required
+                autoFocus
+              />
+              {phoneError && <p className="text-red-600 text-xs">{phoneError}</p>}
+              <div className="flex gap-2">
+                <button className="btn-primary text-sm" disabled={phoneLoading}>
+                  {phoneLoading ? 'Sending…' : 'Send code'}
+                </button>
+                <button type="button" className="btn-outline text-sm" onClick={() => { setPhoneStep('idle'); setPhoneError(''); }}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          )}
+          {phoneStep === 'enter_code' && (
+            <form onSubmit={verifyPhoneCode} className="space-y-2 mt-1">
+              <p className="text-xs text-slate-500">
+                Code sent to <span className="font-medium">{maskedPhone}</span>
+              </p>
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]{6}"
+                maxLength={6}
+                className="input tracking-widest text-center text-xl"
+                placeholder="123456"
+                value={codeInput}
+                onChange={e => setCodeInput(e.target.value)}
+                required
+                autoFocus
+              />
+              {phoneError && <p className="text-red-600 text-xs">{phoneError}</p>}
+              <div className="flex gap-2">
+                <button className="btn-primary text-sm" disabled={phoneLoading}>
+                  {phoneLoading ? 'Verifying…' : 'Verify'}
+                </button>
+                <button type="button" className="btn-outline text-sm" onClick={() => { setPhoneStep('enter_phone'); setPhoneError(''); }}>
+                  Back
+                </button>
+              </div>
+            </form>
+          )}
         </div>
 
         {/* Stripe (sellers) */}
@@ -243,3 +405,4 @@ export default function AccountPage() {
     </main>
   );
 }
+

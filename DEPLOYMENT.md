@@ -314,7 +314,6 @@ Demo accounts created by seed:
 | Image upload returns "not configured" error | Cloudinary env vars missing | Add `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` in Render → Environment and redeploy |
 | Seller OTP code never arrives | Twilio env vars missing or wrong | Set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` in Render → Environment and redeploy |
 | Seller OTP arrives in server logs only | App running in mock/dev mode | Set all three `TWILIO_*` env vars in Render → Environment so real SMS is sent |
-| Seller login returns "No phone number on file" | Seller account was created before phone 2FA was added | Ask the seller to contact support to add their phone number to the account |
 
 ---
 
@@ -445,3 +444,156 @@ The following columns were added to support pickup:
 No new environment variables are required for the pickup feature.
 The geocoding proxy (`/api/geo/zip`) calls `api.zippopotam.us` from the server;
 no API key or account is needed.
+
+---
+
+## Pickup handoff confirmation
+
+When a buyer places a pickup order, a **6-digit pickup confirmation code** is
+automatically generated and stored with the order.
+
+### How it works
+
+1. After successful payment, the Stripe webhook creates the order and generates
+   a random 6-digit pickup code (stored as `pickupCode` on the `Order` record).
+2. The buyer can view their pickup code on the **Order Detail** page
+   (`/orders/[id]`). It is displayed prominently so the buyer can show it to
+   the seller at the handoff.
+3. The seller opens the order in their **Seller Dashboard** (`/seller`) and
+   enters the buyer's 6-digit code in the "Confirm Pickup" form.
+4. If the code matches, the order status is updated to **PICKED\_UP** and the
+   `pickupConfirmedAt` timestamp is recorded.
+5. The order detail page then shows a confirmation message instead of the code.
+
+### Order statuses for pickup flow
+
+| Status | Meaning |
+|---|---|
+| `PAID` | Payment confirmed; pickup code generated and visible to buyer |
+| `READY_FOR_PICKUP` | (Optional) Seller can manually mark when item is ready |
+| `PICKED_UP` | Seller verified the buyer's code; handoff complete |
+
+### Schema additions for pickup confirmation
+
+| Table | Column | Type | Purpose |
+|---|---|---|---|
+| `Order` | `pickupCode` | `String?` | Plaintext 6-digit code shown to buyer |
+| `Order` | `pickupConfirmedAt` | `DateTime?` | When the pickup was confirmed |
+| `Order` | `pickupConfirmedById` | `String?` | Seller user ID who confirmed the pickup |
+
+### Anti-fraud protections
+
+- The pickup code is order-specific and single-use (matched by exact string).
+- Only sellers who own an item in the order can verify the code.
+- Restricted (suspended/banned) sellers cannot verify pickup codes.
+- Pickup confirmation events can be reviewed by admins via the admin user
+  detail page.
+
+---
+
+## Phone number management for existing accounts
+
+Buyers and sellers who created accounts without a phone number can add or
+update their phone number from the **Account Settings** page (`/account`).
+
+### How it works
+
+1. User navigates to `/account` and sees the **Phone number** section.
+2. If no phone is set, a link "Add phone" appears. If a phone is set, an
+   "Update" link is shown alongside the current number and its verification
+   status.
+3. User clicks Add/Update → enters their phone number → clicks **Send code**.
+4. A 6-digit verification code is sent by SMS (or logged to the console in dev
+   mode).
+5. User enters the code → clicks **Verify**. The phone is saved and marked as
+   verified.
+
+### Seller login without a phone number (migration flow)
+
+If a seller who does not yet have a phone number tries to sign in:
+
+1. After entering correct credentials, the login page shows a **phone capture
+   step** instead of the OTP step.
+2. The seller enters their phone number and clicks **Send verification code**.
+3. An OTP is sent to that phone. The phone number is saved (unverified) to the
+   seller's account.
+4. The seller enters the OTP to complete sign-in. On success, the phone is
+   automatically marked as verified (`phoneVerified = true`).
+5. All future sign-ins use the normal OTP flow.
+
+This ensures existing sellers can migrate to the required 2FA phone setup
+without being locked out of their accounts.
+
+### Schema additions
+
+| Table | Column | Type | Purpose |
+|---|---|---|---|
+| `User` | `phoneVerified` | `Boolean` | Whether the phone has been verified via OTP |
+| `User` | `phoneVerifiedAt` | `DateTime?` | When the phone was verified |
+| `PhoneVerificationToken` | (new model) | — | Stores pending OTP for account phone updates |
+
+The `PhoneVerificationToken` model uses the same security measures as
+`SellerOtp`: bcrypt-hashed code (cost 8), 10-minute expiry, 5-attempt limit,
+and 60-second resend cooldown.
+
+### Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| Phone code never arrives | Check Twilio env vars; dev mode logs code to console |
+| Seller login shows "Add phone" step | Normal for sellers without a phone — they complete the phone setup flow on first login |
+
+---
+
+## Admin user management and support access
+
+Admins can view and manage buyer and seller accounts from the admin panel at
+`/admin/users`.
+
+### What admins can see
+
+- **User list** (`/admin/users`): searchable/filterable list of all buyers and
+  sellers with name, email, role, order count, and joined date.
+- **User detail** (`/admin/users/[id]`): full account information including:
+  - Profile details (name, email, role, phone, phone verification status)
+  - Seller status and moderation state (for seller accounts)
+  - Stripe Connect status (for seller accounts)
+  - Recent orders (as buyer or as seller)
+  - Listings with status (for seller accounts)
+  - Moderation history (for seller accounts)
+
+### What admins cannot see
+
+- Password hashes (deliberately excluded from all admin queries)
+- Raw authentication secrets or tokens
+- Full payment card data (handled by Stripe, never stored)
+
+### Audit trail
+
+Every admin access to a user detail page creates an `AdminAccessLog` entry
+recording:
+
+| Field | Value |
+|---|---|
+| `adminId` | The admin who accessed the account |
+| `targetId` | The user whose account was accessed |
+| `action` | `view_account` |
+| `createdAt` | Timestamp of access |
+
+This provides a complete audit trail of admin account access for security
+and compliance review.
+
+### Schema additions
+
+| Model | Purpose |
+|---|---|
+| `AdminAccessLog` | Audit trail for admin access to user accounts |
+
+### Navigating to user management
+
+From the **Admin Dashboard** (`/admin`):
+- Click **"Users →"** to open the user list.
+- Click **"View →"** next to any user to open their detail page.
+- From a seller's detail page, click **"Seller Moderation →"** to go directly
+  to the moderation panel for that seller.
+

@@ -12,10 +12,10 @@ function LoginForm() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Two-step seller flow
-  const [step, setStep] = useState<'credentials' | 'otp'>('credentials');
+  // Multi-step seller flow: credentials → (add_phone?) → otp
+  const [step, setStep] = useState<'credentials' | 'add_phone' | 'otp'>('credentials');
   const [maskedPhone, setMaskedPhone] = useState('');
-  // Hold credentials for the second step
+  // Hold credentials for later steps
   const [pendingEmail, setPendingEmail] = useState('');
   const [pendingPassword, setPendingPassword] = useState('');
 
@@ -49,6 +49,11 @@ function LoginForm() {
       setPendingPassword(password);
       setMaskedPhone(data.maskedPhone ?? '');
       setStep('otp');
+    } else if (data.step === 'add_phone') {
+      // Seller without phone: show phone capture form
+      setPendingEmail(email);
+      setPendingPassword(password);
+      setStep('add_phone');
     } else {
       // Non-seller: sign in directly
       const result = await signIn('credentials', { email, password, redirect: false });
@@ -59,6 +64,33 @@ function LoginForm() {
         router.refresh();
       }
     }
+  }
+
+  /** Step 1b — seller has no phone; save phone and send OTP. */
+  async function submitPhone(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    const form = new FormData(e.currentTarget);
+    const phone = form.get('phone') as string;
+
+    const res = await fetch('/api/auth/otp/setup-phone', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: pendingEmail, password: pendingPassword, phone }),
+    });
+
+    const data = await res.json();
+    setLoading(false);
+
+    if (!res.ok) {
+      setError(data.error ?? 'Failed to save phone number.');
+      return;
+    }
+
+    setMaskedPhone(data.maskedPhone ?? '');
+    setStep('otp');
   }
 
   /** Step 2 — submit OTP code; complete the seller sign-in. */
@@ -108,6 +140,40 @@ function LoginForm() {
   function handleBackToCredentials() {
     setStep('credentials');
     setError('');
+  }
+
+  if (step === 'add_phone') {
+    return (
+      <form onSubmit={submitPhone} className="card p-6 mt-6 space-y-4">
+        <p className="text-sm text-slate-600">
+          Seller accounts require a phone number for two-step sign-in. Please add
+          your phone number to continue. A verification code will be sent to it.
+        </p>
+        <div>
+          <label className="label">Phone number</label>
+          <input
+            name="phone"
+            type="tel"
+            className="input"
+            placeholder="+1 555 000 1234"
+            required
+          />
+        </div>
+        {error && <p className="text-red-600 text-sm">{error}</p>}
+        <button className="btn-primary w-full" disabled={loading}>
+          {loading ? 'Sending code…' : 'Send verification code'}
+        </button>
+        <div className="text-right">
+          <button
+            type="button"
+            className="text-sm text-slate-500 hover:text-blue-600"
+            onClick={handleBackToCredentials}
+          >
+            Back
+          </button>
+        </div>
+      </form>
+    );
   }
 
   if (step === 'otp') {
@@ -194,3 +260,4 @@ export default function LoginPage() {
     </main>
   );
 }
+

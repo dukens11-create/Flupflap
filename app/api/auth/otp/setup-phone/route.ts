@@ -1,19 +1,20 @@
 /**
- * POST /api/auth/otp/send
+ * POST /api/auth/otp/setup-phone
  *
- * Step 1 of seller login: validate email + password and, if the user is a
- * SELLER, send a one-time code to their registered phone.
+ * Called during seller login when the seller has no phone on file.
+ * Validates credentials, saves the provided phone, and sends an OTP to it.
+ * After calling this endpoint the seller should be redirected to the normal
+ * OTP step so they can complete sign-in.
  *
  * Request body:
- *   { email: string; password: string }
+ *   { email: string; password: string; phone: string }
  *
  * Response (200):
- *   { step: 'otp';    maskedPhone: string }   — seller; OTP sent
- *   { step: 'signin' }                        — non-seller; call signIn() directly
+ *   { step: 'otp'; maskedPhone: string }
  *
  * Errors:
+ *   400 — validation error or not a seller account
  *   401 — invalid credentials
- *   400 — validation error (e.g. seller has no phone on file)
  *   429 — resend rate-limited
  *   500 — SMS delivery failed
  */
@@ -27,20 +28,24 @@ import { createAndSendOtp } from '@/lib/otp';
 const schema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
+  phone: z
+    .string()
+    .min(7, 'Please enter a valid phone number')
+    .max(20)
+    .regex(/^\+?[\d\s\-().]+$/, 'Invalid phone number format'),
 });
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { email, password } = schema.parse(body);
+    const { email, password, phone } = schema.parse(body);
 
     const user = await prisma.user.findUnique({
       where: { email: email.toLowerCase() },
     });
 
-    // Always run bcrypt compare to prevent timing attacks that could reveal
-    // whether an email address is registered in the system.
-    const timingAttackPreventionHash = '$2b$08$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+    const timingAttackPreventionHash =
+      '$2b$08$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
     let passwordOk: boolean;
     if (user) {
       passwordOk = await bcrypt.compare(password, user.password);
@@ -53,17 +58,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid email or password.' }, { status: 401 });
     }
 
-    // Non-seller accounts: skip OTP — let the normal signIn() call proceed.
     if (user.role !== 'SELLER') {
-      return NextResponse.json({ step: 'signin' });
+      return NextResponse.json({ error: 'Phone setup is only available for seller accounts.' }, { status: 400 });
     }
 
-    // Seller but no phone registered — route to phone setup flow.
-    if (!user.phone) {
-      return NextResponse.json({ step: 'add_phone' });
-    }
+    // Save phone (unverified); it will be marked verified on successful OTP login.
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { phone, phoneVerified: false },
+    });
 
-    const result = await createAndSendOtp(user.id, user.phone);
+    const result = await createAndSendOtp(user.id, phone);
 
     if (!result.ok) {
       if (result.error === 'rate_limited') {
@@ -81,7 +86,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ step: 'otp', maskedPhone: result.maskedPhone });
   } catch (err: any) {
     if (err?.name === 'ZodError') {
-      return NextResponse.json({ error: 'Invalid input.' }, { status: 400 });
+      return NextResponse.json({ error: err.errors[0]?.message || 'Invalid input.' }, { status: 400 });
     }
     return NextResponse.json({ error: 'Server error.' }, { status: 500 });
   }

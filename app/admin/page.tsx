@@ -42,6 +42,9 @@ export default async function AdminPage() {
   const restrictedSellersCount = await prisma.user.count({
     where: { role: 'SELLER', sellerStatus: { not: 'ACTIVE' } },
   });
+  const totalUsersCount = await prisma.user.count({
+    where: { role: { in: ['CUSTOMER', 'SELLER'] } },
+  });
 
   return (
     <main className="max-w-5xl mx-auto">
@@ -50,10 +53,13 @@ export default async function AdminPage() {
           <h1 className="text-3xl font-black">Admin Dashboard</h1>
           <p className="text-slate-500 text-sm">Platform management</p>
         </div>
-        <a href="/admin/sellers" className="btn-outline text-sm">Seller Management →</a>
+        <div className="flex gap-2">
+          <a href="/admin/users" className="btn-outline text-sm">Users →</a>
+          <a href="/admin/sellers" className="btn-outline text-sm">Seller Management →</a>
+        </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
         <div className="card p-4 text-center">
           <p className="text-3xl font-black text-yellow-600">{pending.length}</p>
           <p className="text-sm text-slate-500">Pending review</p>
@@ -69,6 +75,23 @@ export default async function AdminPage() {
         <a href="/admin/sellers" className="card p-4 text-center hover:bg-slate-50 transition-colors">
           <p className={`text-3xl font-black ${restrictedSellersCount > 0 ? 'text-red-600' : 'text-slate-600'}`}>{restrictedSellersCount}</p>
           <p className="text-sm text-slate-500">Restricted sellers</p>
+        </a>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+        <a href="/admin/users" className="card p-5 flex items-center gap-4 hover:bg-slate-50 transition-colors">
+          <div className="text-3xl">👥</div>
+          <div>
+            <p className="font-bold text-slate-800">User Management</p>
+            <p className="text-sm text-slate-500">{totalUsersCount} buyer{totalUsersCount !== 1 ? 's' : ''} &amp; sellers — view accounts, orders, and support details</p>
+          </div>
+        </a>
+        <a href="/admin/sellers" className="card p-5 flex items-center gap-4 hover:bg-slate-50 transition-colors">
+          <div className="text-3xl">🔒</div>
+          <div>
+            <p className="font-bold text-slate-800">Seller Moderation</p>
+            <p className="text-sm text-slate-500">Suspend or ban sellers for policy violations</p>
+          </div>
         </a>
       </div>
 

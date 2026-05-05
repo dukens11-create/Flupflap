@@ -29,6 +29,13 @@ export const authOptions: NextAuthOptions = {
           if (!credentials.otp) return null;
           const result = await verifyOtp(user.id, credentials.otp);
           if (!result.ok) return null;
+          // Mark phone as verified on first successful OTP sign-in.
+          if (user.phone && !user.phoneVerified) {
+            await prisma.user.update({
+              where: { id: user.id },
+              data: { phoneVerified: true, phoneVerifiedAt: new Date() },
+            }).catch(() => null);
+          }
         }
 
         return user as any;
