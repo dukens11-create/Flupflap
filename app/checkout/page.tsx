@@ -11,6 +11,9 @@ interface CartItem {
   shippingCents: number;
   imageUrl: string;
   quantity: number;
+  isPickup?: boolean;
+  pickupCity?: string;
+  pickupState?: string;
 }
 
 function dollars(cents: number) {
@@ -38,11 +41,13 @@ export default function CheckoutPage() {
     () => items.reduce((s, i) => s + i.priceCents * i.quantity, 0),
     [items]
   );
+  // Pickup items have no shipping cost
   const shipping = useMemo(
-    () => items.reduce((s, i) => s + i.shippingCents * i.quantity, 0),
+    () => items.reduce((s, i) => s + (i.isPickup ? 0 : i.shippingCents * i.quantity), 0),
     [items]
   );
   const total = subtotal + shipping;
+  const hasPickupItems = items.some(i => i.isPickup);
 
   async function handleCheckout() {
     if (!session?.user) {
@@ -56,7 +61,7 @@ export default function CheckoutPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          items: items.map(i => ({ productId: i.id, quantity: i.quantity })),
+          items: items.map(i => ({ productId: i.id, quantity: i.quantity, isPickup: i.isPickup ?? false })),
         }),
       });
       const data = await res.json();
@@ -108,6 +113,12 @@ export default function CheckoutPage() {
         </div>
       )}
 
+      {hasPickupItems && (
+        <div className="card p-4 mb-4 bg-green-50 border-green-200 text-green-800 text-sm">
+          📍 One or more items are marked for <strong>local pickup</strong>. No shipping address is required for pickup items. You will receive a pickup code after payment — show it to the seller when you collect your item.
+        </div>
+      )}
+
       <div className="card p-5 mb-4 space-y-3">
         {items.map(item => (
           <div key={item.id} className="flex items-center gap-3">
@@ -121,13 +132,18 @@ export default function CheckoutPage() {
               <p className="font-medium truncate">{item.title}</p>
               <p className="text-sm text-slate-500">
                 {dollars(item.priceCents)} × {item.quantity}
-                {item.shippingCents > 0 && (
+                {item.isPickup ? (
+                  <span className="ml-2 text-green-700 font-medium">📍 Pickup</span>
+                ) : item.shippingCents > 0 ? (
                   <span> · {dollars(item.shippingCents)} shipping</span>
-                )}
+                ) : null}
               </p>
+              {item.isPickup && item.pickupCity && (
+                <p className="text-xs text-slate-400">{item.pickupCity}{item.pickupState ? `, ${item.pickupState}` : ''}</p>
+              )}
             </div>
             <p className="font-semibold flex-shrink-0">
-              {dollars((item.priceCents + item.shippingCents) * item.quantity)}
+              {dollars((item.priceCents + (item.isPickup ? 0 : item.shippingCents)) * item.quantity)}
             </p>
           </div>
         ))}
@@ -149,7 +165,10 @@ export default function CheckoutPage() {
       </div>
 
       <p className="text-xs text-slate-500 mb-3">
-        You will be redirected to Stripe to complete your payment securely. Shipping address is collected at checkout.
+        You will be redirected to Stripe to complete your payment securely.
+        {hasPickupItems
+          ? ' Pickup items do not require a shipping address.'
+          : ' Shipping address is collected at checkout.'}
       </p>
 
       {error && (

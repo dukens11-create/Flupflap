@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db';
 import { dollars } from '@/lib/money';
 import AddToCartButton from '@/components/AddToCartButton';
 import BuyNowButton from '@/components/BuyNowButton';
+import PickupDistance from '@/components/PickupDistance';
 import type { Metadata } from 'next';
 
 export const dynamic = 'force-dynamic';
@@ -42,6 +43,28 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             <p className="text-xs text-slate-400 mt-1">Sold by {product.seller.name}</p>
           </div>
           <p className="text-slate-700 text-sm leading-relaxed">{product.description}</p>
+
+          {/* Pickup availability */}
+          {product.pickupAvailable && (
+            <div className="bg-green-50 border border-green-200 rounded-xl p-3">
+              <p className="text-sm font-semibold text-green-800">✅ Local pickup available</p>
+              {product.pickupLat != null && product.pickupLng != null ? (
+                <PickupDistance
+                  sellerLat={product.pickupLat}
+                  sellerLng={product.pickupLng}
+                  pickupCity={product.pickupCity ?? ''}
+                  pickupState={product.pickupState ?? ''}
+                />
+              ) : (
+                product.pickupCity && (
+                  <p className="text-sm text-slate-600 mt-1">
+                    📍 {product.pickupCity}{product.pickupState ? `, ${product.pickupState}` : ''}
+                  </p>
+                )
+              )}
+            </div>
+          )}
+
           {product.inventory <= 0 ? (
             <p className="text-red-600 font-semibold">Out of stock</p>
           ) : (
@@ -52,6 +75,9 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
                 priceCents: product.priceCents,
                 imageUrl: product.imageUrl,
                 shippingCents: product.shippingCents,
+                pickupAvailable: product.pickupAvailable,
+                pickupCity: product.pickupCity ?? undefined,
+                pickupState: product.pickupState ?? undefined,
               }} />
               <BuyNowButton productId={product.id} />
             </div>

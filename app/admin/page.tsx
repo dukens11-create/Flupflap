@@ -43,6 +43,8 @@ export default async function AdminPage() {
     where: { role: 'SELLER', sellerStatus: { not: 'ACTIVE' } },
   });
 
+  const totalUsersCount = await prisma.user.count();
+
   return (
     <main className="max-w-5xl mx-auto">
       <div className="mb-6 flex items-center justify-between">
@@ -50,10 +52,13 @@ export default async function AdminPage() {
           <h1 className="text-3xl font-black">Admin Dashboard</h1>
           <p className="text-slate-500 text-sm">Platform management</p>
         </div>
-        <a href="/admin/sellers" className="btn-outline text-sm">Seller Management →</a>
+        <div className="flex gap-2">
+          <a href="/admin/users" className="btn-outline text-sm">User Management →</a>
+          <a href="/admin/sellers" className="btn-outline text-sm">Seller Management →</a>
+        </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
         <div className="card p-4 text-center">
           <p className="text-3xl font-black text-yellow-600">{pending.length}</p>
           <p className="text-sm text-slate-500">Pending review</p>
@@ -69,6 +74,23 @@ export default async function AdminPage() {
         <a href="/admin/sellers" className="card p-4 text-center hover:bg-slate-50 transition-colors">
           <p className={`text-3xl font-black ${restrictedSellersCount > 0 ? 'text-red-600' : 'text-slate-600'}`}>{restrictedSellersCount}</p>
           <p className="text-sm text-slate-500">Restricted sellers</p>
+        </a>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+        <a href="/admin/users" className="card p-5 hover:bg-slate-50 transition-colors flex items-center gap-4">
+          <div className="text-3xl">👥</div>
+          <div>
+            <p className="font-bold text-slate-900">User Management</p>
+            <p className="text-sm text-slate-500">{totalUsersCount} accounts · View buyers, sellers, account details, orders, and moderation state for support</p>
+          </div>
+        </a>
+        <a href="/admin/sellers" className="card p-5 hover:bg-slate-50 transition-colors flex items-center gap-4">
+          <div className="text-3xl">🔒</div>
+          <div>
+            <p className="font-bold text-slate-900">Seller Moderation</p>
+            <p className="text-sm text-slate-500">{restrictedSellersCount} restricted · Suspend or ban sellers for policy violations with audit trail</p>
+          </div>
         </a>
       </div>
 
@@ -126,9 +148,12 @@ export default async function AdminPage() {
             <div key={o.id} className="card p-3 flex items-center justify-between gap-4">
               <div>
                 <p className="font-mono text-xs text-slate-400">{o.id.slice(-10)}</p>
-                <p className="text-sm font-medium">{o.buyer.name} · {dollars(o.totalCents)}</p>
+                <p className="text-sm font-medium">
+                  {o.buyer.name} · {dollars(o.totalCents)}
+                  {o.isPickup && <span className="ml-2 badge badge-blue text-xs">📍 Pickup</span>}
+                </p>
               </div>
-              <span className={`badge ${o.status === 'PAID' || o.status === 'SHIPPED' || o.status === 'DELIVERED' ? 'badge-green' : 'badge-yellow'}`}>{o.status}</span>
+              <span className={`badge ${['PAID', 'SHIPPED', 'DELIVERED', 'PICKED_UP'].includes(o.status) ? 'badge-green' : 'badge-yellow'}`}>{o.status}</span>
             </div>
           ))}
           {recentOrders.length === 0 && <div className="card p-4 text-slate-500">No orders yet.</div>}

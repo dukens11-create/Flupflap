@@ -118,6 +118,41 @@ export default async function SellerEditPage({
             defaultValue={product.inventory}
           />
         </div>
+
+        {/* Pickup section */}
+        <div className="border-t border-slate-100 pt-4">
+          <p className="text-sm font-semibold text-slate-700 mb-3">Local pickup (optional)</p>
+          <label className="flex items-center gap-2 cursor-pointer mb-3">
+            <input
+              name="pickupAvailable"
+              type="checkbox"
+              value="true"
+              defaultChecked={product.pickupAvailable}
+              className="rounded"
+            />
+            <span className="text-sm text-slate-700">Available for local pickup</span>
+          </label>
+          <div className="space-y-3">
+            <div>
+              <label className="label">Pickup city</label>
+              <input name="pickupCity" className="input" defaultValue={product.pickupCity ?? ''} placeholder="e.g. Brooklyn" />
+            </div>
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <label className="label">State</label>
+                <input name="pickupState" className="input" defaultValue={product.pickupState ?? ''} placeholder="e.g. NY" maxLength={2} />
+              </div>
+              <div className="flex-1">
+                <label className="label">ZIP code</label>
+                <input name="pickupPostalCode" className="input" defaultValue={product.pickupPostalCode ?? ''} placeholder="e.g. 11201" maxLength={10} />
+              </div>
+            </div>
+            <p className="text-xs text-slate-400">
+              Only your city and state will be shown to buyers. Your exact address is never displayed publicly.
+            </p>
+          </div>
+        </div>
+
         <div className="flex gap-3">
           <a href="/seller" className="btn-outline flex-1 text-center">Cancel</a>
           <button className="btn-primary flex-1" type="submit">Save changes</button>

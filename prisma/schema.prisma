@@ -33,6 +33,8 @@ enum OrderStatus {
   DELIVERED
   CANCELLED
   REFUNDED
+  READY_FOR_PICKUP
+  PICKED_UP
 }
 
 model User {
@@ -56,6 +58,8 @@ model User {
   sellerOtp                SellerOtp?
   moderationLogsAsSeller   SellerModerationLog[] @relation("ModeratedSeller")
   moderationLogsAsAdmin    SellerModerationLog[] @relation("AdminModerator")
+  adminAccessLogsAsAdmin   AdminAccessLog[]      @relation("AdminAccessor")
+  adminAccessLogsAsTarget  AdminAccessLog[]      @relation("AccessedUser")
 }
 
 model SellerOtp {
@@ -84,6 +88,14 @@ model Product {
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
   orderItems    OrderItem[]
+
+  // Pickup fields
+  pickupAvailable  Boolean @default(false)
+  pickupCity       String?
+  pickupState      String?
+  pickupPostalCode String?
+  pickupLat        Float?
+  pickupLng        Float?
 
   @@index([status, category, condition])
   @@index([title])
@@ -129,6 +141,12 @@ model Order {
   createdAt             DateTime    @default(now())
   updatedAt             DateTime    @updatedAt
   items                 OrderItem[]
+
+  // Pickup fields
+  isPickup              Boolean     @default(false)
+  pickupCity            String?
+  pickupState           String?
+  pickupConfirmation    PickupConfirmation?
 }
 
 model OrderItem {
@@ -187,4 +205,27 @@ model SellerModerationLog {
   createdAt      DateTime @default(now())
 
   @@index([sellerId])
+}
+
+model PickupConfirmation {
+  id          String    @id @default(cuid())
+  orderId     String    @unique
+  order       Order     @relation(fields: [orderId], references: [id])
+  code        String    // 6-digit pickup code
+  confirmedAt DateTime?
+  confirmedBy String?   // seller userId who verified the code
+  createdAt   DateTime  @default(now())
+}
+
+model AdminAccessLog {
+  id           String   @id @default(cuid())
+  adminId      String
+  admin        User     @relation("AdminAccessor", fields: [adminId], references: [id])
+  targetUserId String
+  targetUser   User     @relation("AccessedUser", fields: [targetUserId], references: [id])
+  reason       String?
+  createdAt    DateTime @default(now())
+
+  @@index([adminId])
+  @@index([targetUserId])
 }

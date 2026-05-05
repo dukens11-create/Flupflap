@@ -12,7 +12,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Please sign in to checkout.' }, { status: 401 });
     }
 
-    const { items } = await req.json() as { items: { productId: string; quantity: number }[] };
+    const { items } = await req.json() as { items: { productId: string; quantity: number; isPickup?: boolean }[] };
     if (!items?.length) return NextResponse.json({ error: 'Cart is empty.' }, { status: 400 });
 
     const products = await prisma.product.findMany({
@@ -26,21 +26,18 @@ export async function POST(req: Request) {
     if (!products.length) return NextResponse.json({ error: 'No valid products in cart.' }, { status: 400 });
 
     const lineItems = products.map(p => {
-      const qty = items.find(i => i.productId === p.id)?.quantity ?? 1;
+      const cartItem = items.find(i => i.productId === p.id);
+      const qty = cartItem?.quantity ?? 1;
+      const isPickup = cartItem?.isPickup ?? false;
       return {
         price_data: {
           currency: 'usd',
           product_data: { name: p.title, images: [p.imageUrl] },
-          unit_amount: p.priceCents + p.shippingCents,
+          unit_amount: p.priceCents + (isPickup ? 0 : p.shippingCents),
         },
         quantity: qty,
       };
     });
-
-    const totalCents = products.reduce((sum, p) => {
-      const qty = items.find(i => i.productId === p.id)?.quantity ?? 1;
-      return sum + (p.priceCents + p.shippingCents) * qty;
-    }, 0);
 
     const stripeSession = await stripe.checkout.sessions.create({
       mode: 'payment',

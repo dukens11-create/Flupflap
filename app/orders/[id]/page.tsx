@@ -15,6 +15,8 @@ const STATUS_LABELS: Record<string, string> = {
   DELIVERED: 'Delivered',
   CANCELLED: 'Cancelled',
   REFUNDED: 'Refunded',
+  READY_FOR_PICKUP: 'Ready for Pickup',
+  PICKED_UP: 'Picked Up',
 };
 
 function statusBadge(status: string) {
@@ -25,6 +27,8 @@ function statusBadge(status: string) {
     DELIVERED: 'badge-green',
     CANCELLED: 'badge-red',
     REFUNDED: 'badge-slate',
+    READY_FOR_PICKUP: 'badge-yellow',
+    PICKED_UP: 'badge-green',
   };
   return map[status] ?? 'badge-slate';
 }
@@ -58,6 +62,7 @@ export default async function OrderDetailPage({
           },
         },
       },
+      pickupConfirmation: true,
     },
   });
 
@@ -76,6 +81,41 @@ export default async function OrderDetailPage({
         </div>
         <span className={`badge ${statusBadge(order.status)}`}>{STATUS_LABELS[order.status] ?? order.status}</span>
       </div>
+
+      {/* Pickup info for buyers */}
+      {order.isPickup && (
+        <div className="card p-5 mb-4 bg-green-50 border-green-200">
+          <h2 className="font-bold mb-2 text-green-800">📍 Local Pickup Order</h2>
+          {order.pickupCity && (
+            <p className="text-sm text-slate-600 mb-3">
+              Pickup location: <strong>{order.pickupCity}{order.pickupState ? `, ${order.pickupState}` : ''}</strong>
+            </p>
+          )}
+          {order.pickupConfirmation && !order.pickupConfirmation.confirmedAt ? (
+            <div>
+              <p className="text-sm text-slate-600 mb-2">
+                Show this code to the seller when you collect your item:
+              </p>
+              <div className="bg-white border-2 border-green-400 rounded-xl p-4 text-center">
+                <p className="text-4xl font-black font-mono tracking-widest text-green-700">
+                  {order.pickupConfirmation.code}
+                </p>
+                <p className="text-xs text-slate-400 mt-1">Pickup verification code</p>
+              </div>
+            </div>
+          ) : order.pickupConfirmation?.confirmedAt ? (
+            <div className="bg-white border border-green-300 rounded-xl p-4 text-center">
+              <p className="text-green-700 font-semibold">✅ Pickup confirmed</p>
+              <p className="text-xs text-slate-400 mt-1">
+                Confirmed on {new Date(order.pickupConfirmation.confirmedAt).toLocaleDateString()}
+              </p>
+            </div>
+          ) : null}
+          <p className="text-xs text-slate-400 mt-3">
+            Your pickup code is only shared with the seller at the time of handoff. Contact support if you have issues.
+          </p>
+        </div>
+      )}
 
       {/* Items */}
       <div className="card p-5 mb-4">
@@ -116,6 +156,12 @@ export default async function OrderDetailPage({
             <span>{dollars(order.shippingCents)}</span>
           </div>
         )}
+        {order.isPickup && (
+          <div className="flex justify-between text-green-700">
+            <span>Shipping</span>
+            <span>Free (pickup)</span>
+          </div>
+        )}
         {order.taxCents > 0 && (
           <div className="flex justify-between">
             <span className="text-slate-500">Tax</span>
@@ -128,8 +174,8 @@ export default async function OrderDetailPage({
         </div>
       </div>
 
-      {/* Shipping info */}
-      {(order.shippingName || order.shippingLine1) && (
+      {/* Shipping info (only for non-pickup orders) */}
+      {!order.isPickup && (order.shippingName || order.shippingLine1) && (
         <div className="card p-5 mb-4">
           <h2 className="font-bold mb-2">Shipping address</h2>
           <address className="not-italic text-sm text-slate-600 space-y-0.5">
@@ -148,8 +194,8 @@ export default async function OrderDetailPage({
         </div>
       )}
 
-      {/* Tracking info */}
-      {order.trackingNumber && (
+      {/* Tracking info (only for non-pickup orders) */}
+      {!order.isPickup && order.trackingNumber && (
         <div className="card p-5 mb-4">
           <h2 className="font-bold mb-2">Tracking</h2>
           <p className="text-sm text-slate-600">
