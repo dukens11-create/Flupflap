@@ -156,7 +156,11 @@ export default async function AdminUserDetailPage({
           </div>
           <div>
             <p className="label">Phone</p>
-            <p>{user.phone ?? <span className="text-slate-400">Not set</span>}</p>
+            {user.phone ? (
+              <p>{user.phone}</p>
+            ) : (
+              <p className="text-slate-400">Not set</p>
+            )}
             {user.phone && (
               <span className={`badge text-xs mt-0.5 ${user.phoneVerified ? 'badge-green' : 'badge-yellow'}`}>
                 {user.phoneVerified ? 'Verified' : 'Unverified'}

@@ -17,6 +17,8 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { z } from 'zod';
 
+const MAX_PICKUP_ATTEMPTS = 10;
+
 const schema = z.object({
   orderId: z.string().min(1),
   code: z.string().length(6, 'Pickup code must be 6 digits').regex(/^\d{6}$/, 'Pickup code must be 6 digits'),
@@ -67,7 +69,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'No pickup code on record for this order.' }, { status: 400 });
     }
 
+    // Enforce attempt limit to prevent brute-forcing the 6-digit code space.
+    if (order.pickupCodeAttempts >= MAX_PICKUP_ATTEMPTS) {
+      return NextResponse.json(
+        { error: 'Maximum verification attempts reached. Please contact support.' },
+        { status: 400 },
+      );
+    }
+
     if (code.trim() !== order.pickupCode) {
+      await prisma.order.update({
+        where: { id: orderId },
+        data: { pickupCodeAttempts: { increment: 1 } },
+      });
       return NextResponse.json({ error: 'Invalid pickup code. Please check the code with the buyer.' }, { status: 400 });
     }
 

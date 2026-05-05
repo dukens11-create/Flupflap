@@ -44,6 +44,10 @@ export async function POST(req: Request) {
       where: { email: email.toLowerCase() },
     });
 
+    // Always run bcrypt.compare even when the user is not found.  This ensures
+    // both branches take roughly the same time, preventing timing side-channels
+    // that could reveal whether an email address is registered in the system.
+    // The goal is a CONSTANT (not random) execution time on the failure path.
     const timingAttackPreventionHash =
       '$2b$08$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
     let passwordOk: boolean;

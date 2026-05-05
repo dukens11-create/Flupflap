@@ -5,8 +5,11 @@ import { stripe } from '@/lib/stripe';
 import { platformFee, sellerPayout } from '@/lib/money';
 import crypto from 'crypto';
 
-/** Generate a 6-digit pickup confirmation code. */
+/** Generate a cryptographically secure 6-digit pickup confirmation code. */
 function generatePickupCode(): string {
+  // crypto.randomInt is CSPRNG; range [100000, 1000000) gives 900,000
+  // possible codes. Access is gated behind seller authentication and order
+  // ownership, making brute force impractical.
   return String(crypto.randomInt(100000, 1000000));
 }
 

@@ -74,7 +74,7 @@ export default function AccountPage() {
       if (!res.ok) {
         setNameError(data.error || 'Update failed.');
       } else {
-        await update();
+        await update(); // Refresh session to pick up the new name from the server
         setNameSuccess('Name updated!');
         setEditingName(false);
         router.refresh();
