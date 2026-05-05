@@ -19,7 +19,7 @@ export async function GET(req: Request) {
 
   try {
     const res = await fetch(`https://api.zippopotam.us/us/${zip}`, {
-      next: { revalidate: 86400 }, // cache 24 h
+      next: { revalidate: 86400 }, // cache 24 hours
     });
 
     if (!res.ok) {

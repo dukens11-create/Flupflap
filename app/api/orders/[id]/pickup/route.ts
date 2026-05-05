@@ -14,6 +14,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { z } from 'zod';
+import crypto from 'crypto';
 
 const schema = z.object({ code: z.string().min(1).max(6) });
 
@@ -63,8 +64,18 @@ export async function POST(
 
     const { code } = schema.parse(await req.json());
 
-    // Case-insensitive comparison
-    if (code.trim().toUpperCase() !== order.pickupConfirmation.code.toUpperCase()) {
+    // Use constant-time comparison to prevent timing attacks
+    const expectedCode = order.pickupConfirmation.code.toUpperCase();
+    const providedCode = code.trim().toUpperCase();
+
+    // Pad both codes to the same length before comparing (timingSafeEqual requires equal lengths)
+    const expected = Buffer.from(expectedCode.padEnd(10));
+    const provided = Buffer.from(providedCode.padEnd(10));
+    const codesMatch = expected.length === provided.length &&
+      crypto.timingSafeEqual(expected, provided) &&
+      expectedCode === providedCode; // final exact match after timing-safe check
+
+    if (!codesMatch) {
       return NextResponse.json({ error: 'Incorrect pickup code.' }, { status: 400 });
     }
 

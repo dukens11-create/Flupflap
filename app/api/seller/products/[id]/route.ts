@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { cents } from '@/lib/money';
 import { z } from 'zod';
+import { serverBaseUrl } from '@/lib/server-url';
 
 const updateSchema = z.object({
   title: z.string().min(3).optional(),
@@ -27,8 +28,7 @@ async function getSellerProduct(id: string, sellerId: string) {
 /** Geocode a postal code via the internal proxy. */
 async function geocodePostalCode(postalCode: string): Promise<{ lat: number; lng: number } | null> {
   try {
-    const base = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? `http://localhost:${process.env.PORT ?? 3000}`;
-    const res = await fetch(`${base}/api/geo/zip?zip=${encodeURIComponent(postalCode)}`);
+    const res = await fetch(`${serverBaseUrl()}/api/geo/zip?zip=${encodeURIComponent(postalCode)}`);
     if (!res.ok) return null;
     const data = await res.json();
     if (typeof data.lat === 'number' && typeof data.lng === 'number') return data;

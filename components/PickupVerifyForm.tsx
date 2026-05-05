@@ -41,24 +41,26 @@ export default function PickupVerifyForm({ orderId }: { orderId: string }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex gap-2 items-center">
-      <input
-        type="text"
-        value={code}
-        onChange={(e) => setCode(e.target.value.toUpperCase())}
-        placeholder="Enter buyer's pickup code"
-        maxLength={6}
-        className="input flex-1 font-mono tracking-widest uppercase text-center"
-        required
-      />
-      <button
-        type="submit"
-        disabled={loading || !code.trim()}
-        className="btn-primary text-sm whitespace-nowrap"
-      >
-        {loading ? 'Verifying…' : 'Verify pickup'}
-      </button>
-      {error && <p className="text-xs text-red-600 mt-1 w-full">{error}</p>}
-    </form>
+    <div>
+      <form onSubmit={handleSubmit} className="flex gap-2 items-center">
+        <input
+          type="text"
+          value={code}
+          onChange={(e) => setCode(e.target.value.toUpperCase())}
+          placeholder="Enter buyer's pickup code"
+          maxLength={6}
+          className="input flex-1 font-mono tracking-widest uppercase text-center"
+          required
+        />
+        <button
+          type="submit"
+          disabled={loading || !code.trim()}
+          className="btn-primary text-sm whitespace-nowrap"
+        >
+          {loading ? 'Verifying…' : 'Verify pickup'}
+        </button>
+      </form>
+      {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
+    </div>
   );
 }
