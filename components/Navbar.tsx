@@ -1,7 +1,7 @@
 "use client";
 import Link from 'next/link';
 import { signOut, useSession } from 'next-auth/react';
-import { ShoppingCart, Package, LayoutDashboard, LogIn, UserPlus, LogOut, User } from 'lucide-react';
+import { ShoppingCart, Package, LayoutDashboard, LogIn, UserPlus, LogOut, User, MessageCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 function useCartCount() {
@@ -29,10 +29,45 @@ function useCartCount() {
   return count;
 }
 
+/** Shape of each conversation returned by GET /api/messages (only fields used here). */
+type InboxConversation = {
+  unread: boolean;
+};
+
+function useUnreadMessages(loggedIn: boolean) {
+  const [unread, setUnread] = useState(0);
+
+  useEffect(() => {
+    if (!loggedIn) return;
+    let cancelled = false;
+    async function load() {
+      try {
+        const res = await fetch('/api/messages');
+        if (!res.ok || cancelled) return;
+        const data: InboxConversation[] = await res.json();
+        const count = data.filter((conv) => conv.unread).length;
+        if (!cancelled) setUnread(count);
+      } catch {
+        // ignore
+      }
+    }
+    load();
+    // Poll every 30 seconds so the badge stays up to date
+    const interval = setInterval(load, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [loggedIn]);
+
+  return unread;
+}
+
 export default function Navbar() {
   const { data: session } = useSession();
   const role = session?.user?.role;
   const cartCount = useCartCount();
+  const unreadMessages = useUnreadMessages(!!session?.user);
 
   return (
     <header className="bg-white border-b border-slate-200 sticky top-0 z-30">
@@ -67,6 +102,14 @@ export default function Navbar() {
             <>
               <Link href="/orders" className="flex items-center gap-1 hover:text-blue-600">
                 <Package size={16} /> Orders
+              </Link>
+              <Link href="/messages" className="relative flex items-center gap-1 hover:text-blue-600">
+                <MessageCircle size={16} /> Messages
+                {unreadMessages > 0 && (
+                  <span className="absolute -top-2 -right-3 bg-blue-600 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                    {unreadMessages}
+                  </span>
+                )}
               </Link>
               <Link href="/account" className="flex items-center gap-1 hover:text-blue-600">
                 <User size={16} /> Account

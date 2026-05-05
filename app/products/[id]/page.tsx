@@ -1,11 +1,14 @@
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { dollars } from '@/lib/money';
 import AddToCartButton from '@/components/AddToCartButton';
 import BuyNowButton from '@/components/BuyNowButton';
 import PickupDistance from '@/components/PickupDistance';
+import ContactSellerButton from '@/components/ContactSellerButton';
 import type { Metadata } from 'next';
 
 export const dynamic = 'force-dynamic';
@@ -18,12 +21,18 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
 export default async function ProductPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const product = await prisma.product.findUnique({
-    where: { id },
-    include: { seller: { select: { name: true } } },
-  });
+  const [product, session] = await Promise.all([
+    prisma.product.findUnique({
+      where: { id },
+      include: { seller: { select: { id: true, name: true } } },
+    }),
+    getServerSession(authOptions),
+  ]);
 
   if (!product || product.status !== 'APPROVED') notFound();
+
+  // Hide the message button if the viewer is the seller of this product
+  const isOwnListing = session?.user?.id === product.seller.id;
 
   return (
     <main className="max-w-4xl mx-auto">
@@ -90,6 +99,10 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
           )}
           {product.inventory > 0 && product.inventory <= 3 && (
             <p className="text-orange-600 text-sm font-medium">Only {product.inventory} left!</p>
+          )}
+          {/* Contact seller — hidden for the seller's own listing */}
+          {!isOwnListing && (
+            <ContactSellerButton productId={product.id} />
           )}
         </div>
       </div>
