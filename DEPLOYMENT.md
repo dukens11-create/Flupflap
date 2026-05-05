@@ -109,10 +109,44 @@ This app requires a PostgreSQL database. Options:
 
 After creating the database, copy the connection string into the `DATABASE_URL` environment variable.
 
-Run the Prisma schema push once the first deploy completes (or connect via a one-off command):
+### Automatic schema setup (Blueprint / render.yaml)
+
+When `DATABASE_URL` is set in the Render environment before the deploy runs, the build
+command automatically applies the Prisma schema:
+
+```bash
+npm install && npm run build && \
+  if [ -n "$DATABASE_URL" ]; then npx prisma db push --skip-generate; fi
+```
+
+`prisma db push` is **non-destructive and idempotent** — it creates any missing tables
+without dropping or resetting existing data, so it is safe to run on every deploy.
+If `DATABASE_URL` is not set at build time the `db push` step is skipped automatically.
+
+### Manual schema setup (first deploy without Blueprint, or DATABASE_URL added after build)
+
+If you added `DATABASE_URL` after the first build already ran (so the automatic step was
+skipped), run the schema push manually once:
+
 ```bash
 npx prisma db push
 ```
+
+You can do this from:
+- A **Shell** / **Exec** tab inside your Render Web Service (if your plan provides one)
+- Your local machine, with `DATABASE_URL` set to the **External Database URL** from Render
+
+### Seed demo data (optional)
+
+To populate the database with demo products and accounts:
+
+```bash
+npm run seed
+```
+
+Demo accounts created by seed:
+- Admin: `admin@flupflap.com` / `password123`
+- Seller: `seller@flupflap.com` / `password123`
 
 ---
 
@@ -122,6 +156,7 @@ npx prisma db push
 |---|---|---|
 | `Publish directory dist does not exist!` | Service is configured as Static Site | Delete the service and recreate it as a Web Service, or change the service type in Settings |
 | `PrismaClientInitializationError` | `DATABASE_URL` is missing or wrong | Set `DATABASE_URL` in Render → Environment |
+| Homepage shows "Database schema not yet initialized" | `DATABASE_URL` was added after the first build ran, so `prisma db push` was skipped | Trigger a new deploy (the build will now run `prisma db push` automatically), or run it manually |
 | NextAuth errors / redirect loop | `NEXTAUTH_SECRET` or `NEXTAUTH_URL` missing | Set both env vars; `NEXTAUTH_URL` must match the public Render URL |
 | Stripe webhook `400` errors | `STRIPE_WEBHOOK_SECRET` missing or wrong | Re-copy the signing secret from Stripe and update the env var |
 | App loads but images are broken | Image host not in `next.config.js` | Add the hostname to `remotePatterns` in `next.config.js` |
