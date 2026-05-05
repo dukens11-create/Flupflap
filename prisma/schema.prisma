@@ -24,6 +24,13 @@ enum ProductStatus {
   APPROVED
   REJECTED
   SOLD
+  HIDDEN
+}
+
+enum ReportStatus {
+  OPEN
+  DISMISSED
+  RESOLVED
 }
 
 enum OrderStatus {
@@ -66,6 +73,9 @@ model User {
   buyerConversations       Conversation[] @relation("BuyerConversations")
   sellerConversations      Conversation[] @relation("SellerConversations")
   sentMessages             Message[]      @relation("SentMessages")
+  reportsFiled             ProductReport[] @relation("ReporterReports")
+  reportsAboutSeller       ProductReport[] @relation("SellerReports")
+  reportResolutions        ProductReport[] @relation("AdminReportResolutions")
 }
 
 model SellerOtp {
@@ -95,6 +105,7 @@ model Product {
   updatedAt        DateTime      @updatedAt
   orderItems       OrderItem[]
   conversations    Conversation[]
+  reports          ProductReport[]
   // Pickup fields
   pickupAvailable  Boolean       @default(false)
   pickupCity       String?
@@ -270,4 +281,32 @@ model Message {
   createdAt      DateTime     @default(now())
 
   @@index([conversationId])
+}
+
+// ── Product Reporting ─────────────────────────────────────────────────────────
+
+model ProductReport {
+  id           String       @id @default(cuid())
+  productId    String
+  product      Product      @relation(fields: [productId], references: [id])
+  reporterId   String
+  reporter     User         @relation("ReporterReports", fields: [reporterId], references: [id])
+  sellerId     String
+  seller       User         @relation("SellerReports", fields: [sellerId], references: [id])
+  reason       String
+  notes        String?
+  status       ReportStatus @default(OPEN)
+  adminId      String?
+  admin        User?        @relation("AdminReportResolutions", fields: [adminId], references: [id])
+  adminAction  String?
+  adminNotes   String?
+  resolvedAt   DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  // One open report per reporter/product/reason (prevent spam)
+  @@unique([reporterId, productId, reason])
+  @@index([productId])
+  @@index([sellerId])
+  @@index([status])
 }
