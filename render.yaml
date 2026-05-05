@@ -12,7 +12,7 @@ services:
   - type: web           # Web Service — runs a Node server, not a static CDN
     name: flupflap
     runtime: node
-    buildCommand: npm install && npm run build   # installs deps + runs: prisma generate && next build
+    buildCommand: "npm install && npm run build && if [ -n \"$DATABASE_URL\" ]; then npx prisma db push --skip-generate; fi"  # installs deps, builds, then applies Prisma schema if DATABASE_URL is set
     startCommand: npm run start                  # runs: next start (Node HTTP server on $PORT)
     # NOTE: there is no publishDir / publish directory. This is intentional.
     # Setting publishDir to "dist" or any other path will cause deployment to fail

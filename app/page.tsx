@@ -8,6 +8,24 @@ export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = { title: 'Browse Products' };
 
+/**
+ * Returns true when a Prisma/Postgres error indicates the schema has not been
+ * applied yet (tables or columns are missing). This lets the homepage show a
+ * clear, actionable message instead of crashing to the global error boundary.
+ *
+ * Common causes: first deploy before `prisma db push` has run, or
+ * DATABASE_URL points to a brand-new empty database.
+ */
+function isSchemaNotInitializedError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  // Prisma error codes: P2021 = table does not exist, P2022 = column does not exist
+  const code = (err as { code?: string }).code;
+  if (code === 'P2021' || code === 'P2022') return true;
+  // Fallback: check the raw message for postgres "relation does not exist" text
+  const msg = String((err as { message?: string }).message ?? '');
+  return /relation .+ does not exist/i.test(msg) || /table .+ does not exist/i.test(msg);
+}
+
 interface SearchParams {
   q?: string;
   category?: string;
@@ -42,11 +60,31 @@ async function ProductGrid({ sp }: { sp: SearchParams }) {
     );
   }
 
-  const products = await prisma.product.findMany({
-    where,
-    orderBy: { createdAt: 'desc' },
-    take: 60,
-  });
+  let products;
+  try {
+    products = await prisma.product.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: 60,
+    });
+  } catch (err: unknown) {
+    // If tables don't exist yet (schema not initialized), show a clear actionable message
+    // instead of crashing to the global error boundary.
+    if (isSchemaNotInitializedError(err)) {
+      return (
+        <div className="card p-10 text-center text-slate-500">
+          <p className="font-semibold text-slate-700 mb-1">Database schema not yet initialized</p>
+          <p className="text-sm">
+            The database is connected but the tables have not been created.{' '}
+            Run{' '}
+            <code className="font-mono text-xs bg-slate-100 px-1 rounded">npx prisma db push</code>{' '}
+            against your database, then redeploy.
+          </p>
+        </div>
+      );
+    }
+    throw err;
+  }
 
   if (!products.length) {
     return (
