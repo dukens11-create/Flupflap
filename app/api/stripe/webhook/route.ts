@@ -3,6 +3,7 @@ import { headers } from 'next/headers';
 import { prisma } from '@/lib/db';
 import { stripe } from '@/lib/stripe';
 import { platformFee, sellerPayout } from '@/lib/money';
+import { generatePickupCode, hashPickupCode } from '@/lib/pickup';
 
 export async function POST(req: Request) {
   const body = await req.text();
@@ -22,6 +23,9 @@ export async function POST(req: Request) {
     const buyerId: string = cs.metadata?.buyerId;
     const rawItems: string = cs.metadata?.items ?? '[]';
     const items: { productId: string; quantity: number }[] = JSON.parse(rawItems);
+    const fulfillmentType: 'SHIPPING' | 'PICKUP' = cs.metadata?.fulfillmentType === 'PICKUP'
+      ? 'PICKUP'
+      : 'SHIPPING';
 
     if (!buyerId || !items.length) {
       return new NextResponse('Missing metadata', { status: 400 });
@@ -35,28 +39,39 @@ export async function POST(req: Request) {
       where: { id: { in: items.map(i => i.productId) } },
     });
 
-    const totalCents = products.reduce((sum, p) => {
+    const subtotalCents = products.reduce((sum, p) => {
       const qty = items.find(i => i.productId === p.id)?.quantity ?? 1;
-      return sum + (p.priceCents + p.shippingCents) * qty;
+      return sum + p.priceCents * qty;
     }, 0);
 
+    // For pickup orders, no shipping cost is charged
+    const shippingCents = fulfillmentType === 'PICKUP' ? 0 : products.reduce((s, p) => {
+      const qty = items.find(i => i.productId === p.id)?.quantity ?? 1;
+      return s + p.shippingCents * qty;
+    }, 0);
+
+    const totalCents = subtotalCents + shippingCents;
+
     const shipping = cs.shipping_details ?? {};
+
+    // For pickup orders, generate a 6-digit code
+    let pickupCode: string | null = null;
+    let pickupCodeHash: string | null = null;
+    if (fulfillmentType === 'PICKUP') {
+      pickupCode = generatePickupCode();
+      pickupCodeHash = await hashPickupCode(pickupCode);
+    }
 
     const order = await prisma.order.create({
       data: {
         buyerId,
         totalCents,
-        subtotalCents: products.reduce((s, p) => {
-          const qty = items.find(i => i.productId === p.id)?.quantity ?? 1;
-          return s + p.priceCents * qty;
-        }, 0),
-        shippingCents: products.reduce((s, p) => {
-          const qty = items.find(i => i.productId === p.id)?.quantity ?? 1;
-          return s + p.shippingCents * qty;
-        }, 0),
+        subtotalCents,
+        shippingCents,
         platformFeeCents: platformFee(totalCents),
         sellerPayoutCents: sellerPayout(totalCents),
-        status: 'PAID',
+        status: fulfillmentType === 'PICKUP' ? 'READY_FOR_PICKUP' : 'PAID',
+        fulfillmentType,
         stripeCheckoutId: cs.id,
         stripePaymentIntentId: cs.payment_intent ?? null,
         shippingName: shipping?.name ?? null,
@@ -66,6 +81,8 @@ export async function POST(req: Request) {
         shippingState: shipping?.address?.state ?? null,
         shippingPostalCode: shipping?.address?.postal_code ?? null,
         shippingCountry: shipping?.address?.country ?? null,
+        pickupCode,
+        pickupCodeHash,
         items: {
           create: products.map(p => ({
             productId: p.id,

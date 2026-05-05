@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { cents } from '@/lib/money';
+import { geocodeCity } from '@/lib/geocode';
 import { z } from 'zod';
 
 const updateSchema = z.object({
@@ -14,6 +15,10 @@ const updateSchema = z.object({
   condition: z.string().min(1).optional(),
   imageUrl: z.string().url().optional(),
   inventory: z.string().optional(),
+  pickupAvailable: z.string().optional(),
+  pickupCity: z.string().optional(),
+  pickupState: z.string().optional(),
+  pickupPostalCode: z.string().optional(),
 });
 
 async function getSellerProduct(id: string, sellerId: string) {
@@ -58,6 +63,29 @@ export async function POST(
     const raw = Object.fromEntries(form.entries());
     const data = updateSchema.parse(raw);
 
+    const pickupAvailable = data.pickupAvailable !== undefined
+      ? (data.pickupAvailable === 'on' || data.pickupAvailable === 'true')
+      : existing.pickupAvailable;
+
+    // Geocode if pickup location changed
+    let pickupLat: number | null = existing.pickupLat;
+    let pickupLng: number | null = existing.pickupLng;
+    const pickupCityChanged = data.pickupCity !== undefined || data.pickupState !== undefined;
+    if (pickupAvailable && pickupCityChanged) {
+      const city = data.pickupCity ?? existing.pickupCity ?? '';
+      const state = data.pickupState ?? existing.pickupState ?? '';
+      const postalCode = data.pickupPostalCode ?? existing.pickupPostalCode ?? undefined;
+      if (city && state) {
+        const coords = await geocodeCity(city, state, postalCode);
+        pickupLat = coords?.lat ?? null;
+        pickupLng = coords?.lng ?? null;
+      }
+    }
+    if (!pickupAvailable) {
+      pickupLat = null;
+      pickupLng = null;
+    }
+
     const updated = await prisma.product.update({
       where: { id },
       data: {
@@ -69,6 +97,12 @@ export async function POST(
         ...(data.condition && { condition: data.condition }),
         ...(data.imageUrl && { imageUrl: data.imageUrl }),
         ...(data.inventory && { inventory: Number(data.inventory) }),
+        pickupAvailable,
+        pickupCity: pickupAvailable ? (data.pickupCity ?? existing.pickupCity ?? null) : null,
+        pickupState: pickupAvailable ? (data.pickupState ?? existing.pickupState ?? null) : null,
+        pickupPostalCode: pickupAvailable ? (data.pickupPostalCode ?? existing.pickupPostalCode ?? null) : null,
+        pickupLat,
+        pickupLng,
         // Reset to PENDING on edit so admin can re-review
         status: 'PENDING',
       },
@@ -109,6 +143,28 @@ export async function PATCH(
     const body: unknown = await req.json();
     const data = updateSchema.parse(body);
 
+    const pickupAvailable = data.pickupAvailable !== undefined
+      ? (data.pickupAvailable === 'on' || data.pickupAvailable === 'true')
+      : existing.pickupAvailable;
+
+    let pickupLat: number | null = existing.pickupLat;
+    let pickupLng: number | null = existing.pickupLng;
+    const pickupCityChanged = data.pickupCity !== undefined || data.pickupState !== undefined;
+    if (pickupAvailable && pickupCityChanged) {
+      const city = data.pickupCity ?? existing.pickupCity ?? '';
+      const state = data.pickupState ?? existing.pickupState ?? '';
+      const postalCode = data.pickupPostalCode ?? existing.pickupPostalCode ?? undefined;
+      if (city && state) {
+        const coords = await geocodeCity(city, state, postalCode);
+        pickupLat = coords?.lat ?? null;
+        pickupLng = coords?.lng ?? null;
+      }
+    }
+    if (!pickupAvailable) {
+      pickupLat = null;
+      pickupLng = null;
+    }
+
     const updated = await prisma.product.update({
       where: { id },
       data: {
@@ -120,6 +176,12 @@ export async function PATCH(
         ...(data.condition && { condition: data.condition }),
         ...(data.imageUrl && { imageUrl: data.imageUrl }),
         ...(data.inventory && { inventory: Number(data.inventory) }),
+        pickupAvailable,
+        pickupCity: pickupAvailable ? (data.pickupCity ?? existing.pickupCity ?? null) : null,
+        pickupState: pickupAvailable ? (data.pickupState ?? existing.pickupState ?? null) : null,
+        pickupPostalCode: pickupAvailable ? (data.pickupPostalCode ?? existing.pickupPostalCode ?? null) : null,
+        pickupLat,
+        pickupLng,
         status: 'PENDING',
       },
     });

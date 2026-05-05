@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db';
 import { dollars } from '@/lib/money';
 import AddToCartButton from '@/components/AddToCartButton';
 import BuyNowButton from '@/components/BuyNowButton';
+import PickupInfo from '@/components/PickupInfo';
 import type { Metadata } from 'next';
 
 export const dynamic = 'force-dynamic';
@@ -38,10 +39,26 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             </p>
             <h1 className="text-2xl font-black mt-1">{product.title}</h1>
             <p className="text-3xl font-black text-blue-700 mt-2">{dollars(product.priceCents)}</p>
-            <p className="text-sm text-slate-500">+ {dollars(product.shippingCents)} shipping</p>
+            {product.pickupAvailable ? (
+              <p className="text-sm text-slate-500">
+                + {dollars(product.shippingCents)} shipping <span className="text-green-600 font-medium">· pickup available (free)</span>
+              </p>
+            ) : (
+              <p className="text-sm text-slate-500">+ {dollars(product.shippingCents)} shipping</p>
+            )}
             <p className="text-xs text-slate-400 mt-1">Sold by {product.seller.name}</p>
           </div>
           <p className="text-slate-700 text-sm leading-relaxed">{product.description}</p>
+
+          {product.pickupAvailable && (
+            <PickupInfo
+              pickupCity={product.pickupCity}
+              pickupState={product.pickupState}
+              pickupLat={product.pickupLat}
+              pickupLng={product.pickupLng}
+            />
+          )}
+
           {product.inventory <= 0 ? (
             <p className="text-red-600 font-semibold">Out of stock</p>
           ) : (
@@ -53,7 +70,12 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
                 imageUrl: product.imageUrl,
                 shippingCents: product.shippingCents,
               }} />
-              <BuyNowButton productId={product.id} />
+              <BuyNowButton
+                productId={product.id}
+                pickupAvailable={product.pickupAvailable}
+                pickupCity={product.pickupCity}
+                pickupState={product.pickupState}
+              />
             </div>
           )}
           {product.inventory > 0 && product.inventory <= 3 && (

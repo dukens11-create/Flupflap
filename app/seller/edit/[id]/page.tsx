@@ -118,6 +118,56 @@ export default async function SellerEditPage({
             defaultValue={product.inventory}
           />
         </div>
+
+        {/* ── Local pickup ── */}
+        <fieldset className="border border-slate-200 rounded-xl p-4 space-y-3">
+          <legend className="px-1 text-sm font-semibold text-slate-700">Local Pickup (optional)</legend>
+          <label className="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+            <input
+              type="checkbox"
+              name="pickupAvailable"
+              className="w-4 h-4 rounded"
+              defaultChecked={product.pickupAvailable}
+            />
+            Available for local pickup
+          </label>
+          <p className="text-xs text-slate-500">
+            If enabled, buyers can choose to pick up the item instead of having it shipped.
+            Only your city and state are shown publicly — your exact address is never exposed.
+          </p>
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <label className="label">Pickup city</label>
+              <input
+                name="pickupCity"
+                className="input"
+                placeholder="e.g. Brooklyn"
+                defaultValue={product.pickupCity ?? ''}
+              />
+            </div>
+            <div className="w-24">
+              <label className="label">State</label>
+              <input
+                name="pickupState"
+                className="input"
+                placeholder="NY"
+                maxLength={2}
+                defaultValue={product.pickupState ?? ''}
+              />
+            </div>
+            <div className="w-28">
+              <label className="label">ZIP code</label>
+              <input
+                name="pickupPostalCode"
+                className="input"
+                placeholder="11201"
+                maxLength={10}
+                defaultValue={product.pickupPostalCode ?? ''}
+              />
+            </div>
+          </div>
+        </fieldset>
+
         <div className="flex gap-3">
           <a href="/seller" className="btn-outline flex-1 text-center">Cancel</a>
           <button className="btn-primary flex-1" type="submit">Save changes</button>
