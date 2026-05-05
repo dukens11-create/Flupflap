@@ -19,6 +19,12 @@ export default async function SellerEditPage({
   if (!session?.user) redirect('/login');
   if (session.user.role !== 'SELLER') redirect('/');
 
+  // Block restricted sellers from editing listings
+  const dbUser = await prisma.user.findUnique({ where: { id: session.user.id } });
+  if (dbUser?.sellerStatus === 'SUSPENDED' || dbUser?.sellerStatus === 'BANNED') {
+    redirect('/seller');
+  }
+
   const { id } = await params;
   const product = await prisma.product.findFirst({
     where: { id, sellerId: session.user.id },

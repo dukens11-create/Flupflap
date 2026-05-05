@@ -41,6 +41,11 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   if (session.user.role !== 'SELLER') redirect('/');
   const sp = await searchParams;
 
+  // Fetch full user to check seller status (session JWT may be stale)
+  const dbUser = await prisma.user.findUnique({ where: { id: session.user.id } });
+  const sellerStatus = dbUser?.sellerStatus ?? 'ACTIVE';
+  const isRestricted = sellerStatus === 'SUSPENDED' || sellerStatus === 'BANNED';
+
   const [products, orders, soldItems] = await Promise.all([
     prisma.product.findMany({
       where: { sellerId: session.user.id },
@@ -100,8 +105,18 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
           <h1 className="text-3xl font-black">Seller Dashboard</h1>
           <p className="text-slate-500 text-sm">Welcome back, {session.user.name}</p>
         </div>
-        <Link href="/seller/new" className="btn-primary">+ New listing</Link>
+        {!isRestricted && <Link href="/seller/new" className="btn-primary">+ New listing</Link>}
       </div>
+
+      {isRestricted && (
+        <div className="card p-5 mb-6 bg-red-50 border-red-200 text-red-800">
+          <p className="font-semibold mb-1">Your seller account has been restricted.</p>
+          <p className="text-sm">
+            Your account is currently under review and certain seller features are
+            unavailable. If you believe this is an error, please contact support.
+          </p>
+        </div>
+      )}
 
       {sp.created && (
         <div className="card p-4 mb-6 bg-green-50 border-green-200 text-green-800 text-sm">
@@ -127,7 +142,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
         </div>
       )}
 
-      {!stripeOnboarded && (
+      {!isRestricted && !stripeOnboarded && (
         <div className="card p-4 mb-6 bg-yellow-50 border-yellow-200 text-yellow-800 text-sm flex justify-between items-center">
           <span>⚠️ Connect your bank account via Stripe to receive payouts.</span>
           <a href="/api/stripe/connect" className="btn-outline text-xs">Connect Stripe</a>
@@ -247,7 +262,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                   <p key={i.id} className="text-sm text-slate-700">{i.product.title} × {i.quantity}</p>
                 ))}
                 <p className="text-sm font-bold mt-2">{dollars(o.totalCents)}</p>
-                {(o.status === 'PAID') && (
+                {(o.status === 'PAID') && !isRestricted && (
                   <form action="/api/seller/ship" method="POST" className="mt-3 flex gap-2">
                     <input type="hidden" name="orderId" value={o.id} />
                     <input name="trackingNumber" className="input flex-1" placeholder="Tracking number" />

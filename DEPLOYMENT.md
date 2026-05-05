@@ -315,3 +315,63 @@ Demo accounts created by seed:
 | Seller OTP code never arrives | Twilio env vars missing or wrong | Set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` in Render → Environment and redeploy |
 | Seller OTP arrives in server logs only | App running in mock/dev mode | Set all three `TWILIO_*` env vars in Render → Environment so real SMS is sent |
 | Seller login returns "No phone number on file" | Seller account was created before phone 2FA was added | Ask the seller to contact support to add their phone number to the account |
+
+---
+
+## Admin seller moderation
+
+Admins can suspend or permanently ban seller accounts from the admin panel at
+`/admin/sellers`.
+
+### How it works
+
+1. Admin navigates to **Admin Dashboard → Seller Management** (or `/admin/sellers`).
+2. Each seller card shows the current status (Active / Suspended / Banned) and
+   listing count.
+3. Expanding the **Moderation actions** section reveals a form to:
+   - **Suspend** — temporary restriction while investigating.
+   - **Ban** — permanent restriction.
+   - **Reinstate** — lift a prior suspension or ban.
+4. A reason category (required for suspend/ban) and optional internal notes are
+   recorded with each action.
+5. The action is written to the `SellerModerationLog` audit table, capturing who
+   performed the action, when, the reason, and any notes.
+
+### Reason categories
+
+| Key | Label |
+|---|---|
+| `misconduct_to_customer` | Misconduct to customer |
+| `fake_product` | Fake product |
+| `unlawful_activity` | Unlawful activity |
+| `fraud` | Fraud |
+| `spam` | Spam |
+| `policy_violation` | Policy violation |
+| `other` | Other |
+
+### What restrictions do for sellers
+
+When a seller's status is **Suspended** or **Banned**:
+
+- The seller dashboard shows a neutral restriction notice.
+- The "New listing" button is hidden.
+- Attempting to create or edit listings redirects to the seller dashboard.
+- API routes for creating/editing/shipping listings return 403.
+- The Stripe Connect payout link is blocked.
+
+Restriction messaging to the seller is intentionally neutral:
+
+> *"Your seller account has been restricted. If you believe this is an error,
+> please contact support."*
+
+### Audit trail
+
+Every moderation action is stored in `SellerModerationLog` with:
+- `sellerId` — the affected seller
+- `adminId` — the admin who performed the action
+- `action` — `SUSPENDED`, `BANNED`, or `REINSTATED`
+- `reasonCategory` — one of the reason keys above
+- `notes` — free-text internal notes (never shown to the seller)
+- `createdAt` — timestamp
+
+The last five log entries are shown in the seller card on `/admin/sellers`.

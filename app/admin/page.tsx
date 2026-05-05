@@ -39,15 +39,21 @@ export default async function AdminPage() {
     take: 10,
     include: { buyer: { select: { name: true, email: true } } },
   });
+  const restrictedSellersCount = await prisma.user.count({
+    where: { role: 'SELLER', sellerStatus: { not: 'ACTIVE' } },
+  });
 
   return (
     <main className="max-w-5xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-3xl font-black">Admin Dashboard</h1>
-        <p className="text-slate-500 text-sm">Platform management</p>
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-black">Admin Dashboard</h1>
+          <p className="text-slate-500 text-sm">Platform management</p>
+        </div>
+        <a href="/admin/sellers" className="btn-outline text-sm">Seller Management →</a>
       </div>
 
-      <div className="grid grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-4 gap-4 mb-8">
         <div className="card p-4 text-center">
           <p className="text-3xl font-black text-yellow-600">{pending.length}</p>
           <p className="text-sm text-slate-500">Pending review</p>
@@ -60,6 +66,10 @@ export default async function AdminPage() {
           <p className="text-3xl font-black text-green-600">{recentOrders.length}</p>
           <p className="text-sm text-slate-500">Recent orders</p>
         </div>
+        <a href="/admin/sellers" className="card p-4 text-center hover:bg-slate-50 transition-colors">
+          <p className={`text-3xl font-black ${restrictedSellersCount > 0 ? 'text-red-600' : 'text-slate-600'}`}>{restrictedSellersCount}</p>
+          <p className="text-sm text-slate-500">Restricted sellers</p>
+        </a>
       </div>
 
       {pending.length > 0 && (
