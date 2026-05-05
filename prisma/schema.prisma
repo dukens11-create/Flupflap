@@ -63,6 +63,9 @@ model User {
   moderationLogsAsAdmin    SellerModerationLog[] @relation("AdminModerator")
   adminAccessLogs          AdminAccessLog[] @relation("AdminAccessor")
   accessedByAdminLogs      AdminAccessLog[] @relation("AccessedUser")
+  buyerConversations       Conversation[] @relation("BuyerConversations")
+  sellerConversations      Conversation[] @relation("SellerConversations")
+  sentMessages             Message[]      @relation("SentMessages")
 }
 
 model SellerOtp {
@@ -91,6 +94,7 @@ model Product {
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
   orderItems       OrderItem[]
+  conversations    Conversation[]
   // Pickup fields
   pickupAvailable  Boolean       @default(false)
   pickupCity       String?
@@ -233,4 +237,37 @@ model AdminAccessLog {
 
   @@index([adminId])
   @@index([targetId])
+}
+
+// ── Messaging ─────────────────────────────────────────────────────────────────
+
+model Conversation {
+  id        String    @id @default(cuid())
+  buyerId   String
+  buyer     User      @relation("BuyerConversations", fields: [buyerId], references: [id])
+  sellerId  String
+  seller    User      @relation("SellerConversations", fields: [sellerId], references: [id])
+  productId String
+  product   Product   @relation(fields: [productId], references: [id])
+  messages  Message[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  // One active thread per buyer/seller/product combination
+  @@unique([buyerId, sellerId, productId])
+  @@index([buyerId])
+  @@index([sellerId])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User         @relation("SentMessages", fields: [senderId], references: [id])
+  body           String
+  readAt         DateTime?
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId])
 }
