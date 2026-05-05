@@ -29,11 +29,21 @@ const VALID_REASON_CATEGORIES = [
   'other',
 ] as const;
 
-const schema = z.object({
-  action: z.enum(VALID_ACTIONS),
-  reasonCategory: z.enum(VALID_REASON_CATEGORIES).optional(),
-  notes: z.string().max(1000).optional(),
-});
+const schema = z
+  .object({
+    action: z.enum(VALID_ACTIONS),
+    reasonCategory: z.enum(VALID_REASON_CATEGORIES).optional(),
+    notes: z.string().max(1000).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.action !== 'REINSTATED' && !data.reasonCategory) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['reasonCategory'],
+        message: 'A reason category is required when suspending or banning.',
+      });
+    }
+  });
 
 export async function POST(
   req: Request,
@@ -58,14 +68,6 @@ export async function POST(
       [...form.entries()].map(([k, v]) => [k, v === '' ? undefined : v]),
     );
     const data = schema.parse(raw);
-
-    // Require a reason when suspending or banning
-    if (data.action !== 'REINSTATED' && !data.reasonCategory) {
-      return NextResponse.json(
-        { error: 'A reason category is required when suspending or banning.' },
-        { status: 400 },
-      );
-    }
 
     // Update seller status
     await prisma.user.update({

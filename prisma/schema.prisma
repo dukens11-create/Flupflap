@@ -54,7 +54,7 @@ model User {
   accounts                 Account[]
   sessions                 Session[]
   sellerOtp                SellerOtp?
-  moderationLogsAsseller   SellerModerationLog[] @relation("ModeratedSeller")
+  moderationLogsAsSeller   SellerModerationLog[] @relation("ModeratedSeller")
   moderationLogsAsAdmin    SellerModerationLog[] @relation("AdminModerator")
 }
 

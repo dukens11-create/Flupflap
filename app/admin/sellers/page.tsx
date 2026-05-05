@@ -38,7 +38,7 @@ export default async function AdminSellersPage() {
     where: { role: 'SELLER' },
     orderBy: { createdAt: 'desc' },
     include: {
-      moderationLogsAsseller: {
+      moderationLogsAsSeller: {
         orderBy: { createdAt: 'desc' },
         take: 5,
         include: { admin: { select: { name: true, email: true } } },
@@ -137,13 +137,13 @@ export default async function AdminSellersPage() {
               </details>
 
               {/* Audit log */}
-              {seller.moderationLogsAsseller.length > 0 && (
+              {seller.moderationLogsAsSeller.length > 0 && (
                 <div className="mt-4 border-t border-slate-100 pt-4">
                   <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
                     Moderation history
                   </p>
                   <div className="space-y-2">
-                    {seller.moderationLogsAsseller.map(log => (
+                    {seller.moderationLogsAsSeller.map(log => (
                       <div key={log.id} className="text-xs text-slate-600 flex flex-wrap gap-x-3 gap-y-0.5">
                         <span className="font-medium">{log.action}</span>
                         <span className="text-slate-400">
