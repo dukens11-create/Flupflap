@@ -128,8 +128,26 @@ export default async function OrderDetailPage({
         </div>
       </div>
 
+      {/* Pickup info */}
+      {order.isPickup && (
+        <div className="card p-5 mb-4 bg-green-50 border-green-200">
+          <h2 className="font-bold mb-2 text-green-800">🏠 Local Pickup Order</h2>
+          <p className="text-sm text-green-700 mb-1">
+            This order is marked for local pickup — no shipping is required.
+          </p>
+          {(order.pickupCity || order.pickupState) && (
+            <p className="text-sm text-green-700">
+              Pickup location: <span className="font-medium">{[order.pickupCity, order.pickupState].filter(Boolean).join(', ')}</span>
+            </p>
+          )}
+          <p className="text-xs text-green-600 mt-2">
+            Contact the seller to arrange a pickup time and confirm the exact location.
+          </p>
+        </div>
+      )}
+
       {/* Shipping info */}
-      {(order.shippingName || order.shippingLine1) && (
+      {!order.isPickup && (order.shippingName || order.shippingLine1) && (
         <div className="card p-5 mb-4">
           <h2 className="font-bold mb-2">Shipping address</h2>
           <address className="not-italic text-sm text-slate-600 space-y-0.5">

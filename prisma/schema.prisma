@@ -69,21 +69,26 @@ model SellerOtp {
 }
 
 model Product {
-  id            String        @id @default(cuid())
-  title         String
-  description   String
-  priceCents    Int
-  condition     String
-  category      String
-  imageUrl      String
-  inventory     Int           @default(1)
-  shippingCents Int           @default(0)
-  status        ProductStatus @default(PENDING)
-  sellerId      String
-  seller        User          @relation(fields: [sellerId], references: [id])
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  orderItems    OrderItem[]
+  id               String        @id @default(cuid())
+  title            String
+  description      String
+  priceCents       Int
+  condition        String
+  category         String
+  imageUrl         String
+  inventory        Int           @default(1)
+  shippingCents    Int           @default(0)
+  status           ProductStatus @default(PENDING)
+  sellerId         String
+  seller           User          @relation(fields: [sellerId], references: [id])
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  orderItems       OrderItem[]
+  // Pickup fields
+  pickupAvailable  Boolean       @default(false)
+  pickupCity       String?
+  pickupState      String?
+  pickupPostalCode String?
 
   @@index([status, category, condition])
   @@index([title])
@@ -126,6 +131,10 @@ model Order {
   shippingState         String?
   shippingPostalCode    String?
   shippingCountry       String?
+  // Pickup fields
+  isPickup              Boolean     @default(false)
+  pickupCity            String?
+  pickupState           String?
   createdAt             DateTime    @default(now())
   updatedAt             DateTime    @updatedAt
   items                 OrderItem[]

@@ -66,6 +66,33 @@ export default async function SellerNewPage() {
           <label className="label">Inventory (qty)</label>
           <input name="inventory" type="number" min="1" defaultValue="1" className="input" />
         </div>
+
+        {/* Pickup section */}
+        <fieldset className="border border-slate-200 rounded-xl p-4 space-y-3">
+          <legend className="text-sm font-semibold text-slate-700 px-1">Local Pickup (optional)</legend>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" name="pickupAvailable" value="true" className="rounded" />
+            <span className="text-sm text-slate-700">This item is available for local pickup</span>
+          </label>
+          <p className="text-xs text-slate-500">
+            If enabled, buyers can pick up this item directly from you. Only your city and state will be shown publicly — your exact address is never displayed.
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">City</label>
+              <input name="pickupCity" className="input" placeholder="e.g. Brooklyn" />
+            </div>
+            <div>
+              <label className="label">State</label>
+              <input name="pickupState" className="input" placeholder="e.g. NY" maxLength={2} />
+            </div>
+          </div>
+          <div>
+            <label className="label">ZIP / Postal code</label>
+            <input name="pickupPostalCode" className="input" placeholder="e.g. 11201" />
+          </div>
+        </fieldset>
+
         <button className="btn-primary w-full" type="submit">Submit for review</button>
         <p className="text-xs text-slate-500 text-center">Your listing will be reviewed by an admin before it goes live.</p>
       </form>

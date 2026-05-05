@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db';
 import { dollars } from '@/lib/money';
 import AddToCartButton from '@/components/AddToCartButton';
 import BuyNowButton from '@/components/BuyNowButton';
+import PickupDistance from '@/components/PickupDistance';
 import type { Metadata } from 'next';
 
 export const dynamic = 'force-dynamic';
@@ -38,10 +39,35 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             </p>
             <h1 className="text-2xl font-black mt-1">{product.title}</h1>
             <p className="text-3xl font-black text-blue-700 mt-2">{dollars(product.priceCents)}</p>
-            <p className="text-sm text-slate-500">+ {dollars(product.shippingCents)} shipping</p>
+            {product.pickupAvailable ? (
+              <p className="text-sm text-slate-500">+ {dollars(product.shippingCents)} shipping <span className="text-green-700 font-medium">or free local pickup</span></p>
+            ) : (
+              <p className="text-sm text-slate-500">+ {dollars(product.shippingCents)} shipping</p>
+            )}
             <p className="text-xs text-slate-400 mt-1">Sold by {product.seller.name}</p>
           </div>
           <p className="text-slate-700 text-sm leading-relaxed">{product.description}</p>
+
+          {/* Pickup distance widget */}
+          {product.pickupAvailable && product.pickupCity && product.pickupState && product.pickupPostalCode && (
+            <PickupDistance
+              pickupCity={product.pickupCity}
+              pickupState={product.pickupState}
+              pickupPostalCode={product.pickupPostalCode}
+            />
+          )}
+          {product.pickupAvailable && product.pickupCity && product.pickupState && !product.pickupPostalCode && (
+            <div className="mt-1 p-3 rounded-xl bg-green-50 border border-green-200 text-sm">
+              <div className="flex items-center gap-2 font-semibold text-green-800">
+                <span>🏠</span>
+                <span>Local pickup available</span>
+              </div>
+              <p className="text-green-700 mt-0.5">
+                Located in <span className="font-medium">{product.pickupCity}, {product.pickupState}</span>
+              </p>
+            </div>
+          )}
+
           {product.inventory <= 0 ? (
             <p className="text-red-600 font-semibold">Out of stock</p>
           ) : (
@@ -52,8 +78,14 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
                 priceCents: product.priceCents,
                 imageUrl: product.imageUrl,
                 shippingCents: product.shippingCents,
+                pickupAvailable: product.pickupAvailable,
+                pickupCity: product.pickupCity ?? undefined,
+                pickupState: product.pickupState ?? undefined,
               }} />
               <BuyNowButton productId={product.id} />
+              {product.pickupAvailable && (
+                <BuyNowButton productId={product.id} isPickup />
+              )}
             </div>
           )}
           {product.inventory > 0 && product.inventory <= 3 && (
