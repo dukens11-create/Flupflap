@@ -20,9 +20,10 @@ interface Props {
   country?: string; // ISO 2-letter country code, defaults to "us"
 }
 
-/** Haversine great-circle distance in miles. */
+/** Feet per mile — used to display sub-mile distances. */
 const FEET_PER_MILE = 5280;
 
+/** Haversine great-circle distance in miles. */
 function haversineDistanceMiles(
   lat1: number, lng1: number,
   lat2: number, lng2: number,

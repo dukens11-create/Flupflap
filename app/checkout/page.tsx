@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
@@ -45,9 +45,10 @@ export default function CheckoutPage() {
     [items],
   );
 
-  function isPickup(itemId: string): boolean {
-    return pickupEligibleIds.has(itemId) && !!pickupChoices[itemId];
-  }
+  const isPickup = useCallback(
+    (itemId: string): boolean => pickupEligibleIds.has(itemId) && !!pickupChoices[itemId],
+    [pickupEligibleIds, pickupChoices],
+  );
 
   const subtotal = useMemo(
     () => items.reduce((s, i) => s + i.priceCents * i.quantity, 0),
@@ -60,15 +61,13 @@ export default function CheckoutPage() {
         if (isPickup(i.id)) return s;
         return s + i.shippingCents * i.quantity;
       }, 0),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [items, pickupChoices],
+    [items, isPickup],
   );
   const total = subtotal + shipping;
 
   const pickupItemIds = useMemo(
     () => items.filter(i => isPickup(i.id)).map(i => i.id),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [items, pickupChoices],
+    [items, isPickup],
   );
 
   async function handleCheckout() {
