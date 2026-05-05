@@ -206,6 +206,40 @@ sent by SMS.  This lets you develop and test locally without a Twilio account.
 
 ---
 
+## Seller dashboard — earnings and balance
+
+Sellers have a dedicated dashboard at `/seller` that shows:
+
+- **Earnings Summary** — aggregated stats from all completed orders:
+  - Items sold (total quantity across paid/shipped/delivered orders)
+  - Orders completed (count of distinct orders)
+  - Gross sales (sum of item prices before platform fee)
+  - Platform fees deducted (configurable via `PLATFORM_FEE_PERCENT`)
+  - Net earnings (gross minus platform fees)
+- **Stripe Balance** (only shown when the seller has completed Stripe Connect
+  onboarding):
+  - Available balance — funds ready for payout
+  - Pending balance — funds not yet settled (typically 2-7 business days)
+  - A link to the seller's Stripe Express dashboard for full payout history
+- **Sold Items table** — line-item list of every sold product with title, date,
+  quantity, amount, and order status.
+- **Recent Orders** — full order view with a "Mark Shipped" action for orders
+  in PAID status.
+
+### Important notes
+
+- Earnings figures are computed from your app's order/item data.  The Stripe
+  balance reflects funds in the seller's connected Stripe account and may
+  differ from calculated earnings if payouts have already been transferred to
+  the seller's bank.
+- If the Stripe balance API call fails (e.g. the connected account is not fully
+  verified), the dashboard displays "Unavailable — check your Stripe dashboard"
+  and falls back gracefully without an error page.
+- Sellers without a Stripe Connect account see a prompt to connect and a note
+  that balance data requires connection.
+
+---
+
 ## Stripe webhook configuration
 
 After deploying, register a webhook endpoint in the Stripe dashboard:
