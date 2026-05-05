@@ -2,6 +2,7 @@ import { redirect, notFound } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
+import ImageUpload from '@/components/ImageUpload';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = { title: 'Edit Listing' };
@@ -100,16 +101,7 @@ export default async function SellerEditPage({
             </select>
           </div>
         </div>
-        <div>
-          <label className="label">Image URL</label>
-          <input
-            name="imageUrl"
-            type="url"
-            className="input"
-            defaultValue={product.imageUrl}
-            required
-          />
-        </div>
+        <ImageUpload defaultValue={product.imageUrl} required />
         <div>
           <label className="label">Inventory (qty)</label>
           <input

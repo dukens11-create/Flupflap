@@ -18,6 +18,7 @@
     "@prisma/config": "latest",
     "@tailwindcss/postcss": "^4.2.4",
     "bcryptjs": "latest",
+    "cloudinary": "^2.10.0",
     "lucide-react": "latest",
     "next": "latest",
     "next-auth": "latest",

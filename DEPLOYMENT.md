@@ -76,6 +76,9 @@ In the **Environment** tab, add:
 | `STRIPE_PUBLISHABLE_KEY` | From your Stripe dashboard → Developers → API keys |
 | `STRIPE_WEBHOOK_SECRET` | From Stripe → Webhooks → your endpoint → Signing secret |
 | `PLATFORM_FEE_PERCENT` | `3` (or your desired commission %) |
+| `CLOUDINARY_CLOUD_NAME` | From your Cloudinary dashboard — Settings → API Keys |
+| `CLOUDINARY_API_KEY` | From your Cloudinary dashboard — Settings → API Keys |
+| `CLOUDINARY_API_SECRET` | From your Cloudinary dashboard — Settings → API Keys |
 
 ### Step 5 — Deploy
 
@@ -87,6 +90,51 @@ Click **Create Web Service**. Render will:
 5. Start the server with `next start`
 
 A successful deploy shows the app live at your Render URL.
+
+---
+
+## Cloudinary (image uploads)
+
+Sellers upload product images directly from their device. Images are stored on
+[Cloudinary](https://cloudinary.com), which has a generous free tier and works
+seamlessly with Render.
+
+### Step 1 — Create a Cloudinary account
+
+Sign up for free at <https://cloudinary.com>. No credit card required for the
+free tier.
+
+### Step 2 — Copy your credentials
+
+Open the Cloudinary dashboard and go to **Settings → API Keys**. You need:
+
+| Value | Environment variable |
+|---|---|
+| Cloud name | `CLOUDINARY_CLOUD_NAME` |
+| API key | `CLOUDINARY_API_KEY` |
+| API secret | `CLOUDINARY_API_SECRET` |
+
+### Step 3 — Add the variables to Render
+
+In your Render **Web Service → Environment**, add the three variables above.
+Redeploy once to pick up the new values.
+
+### How it works
+
+When a seller picks a file on the **List Item** or **Edit Listing** page, the
+browser posts it to `/api/upload`. That route verifies the seller session,
+uploads the file to Cloudinary, and returns the hosted URL. The URL is placed
+in the form's `imageUrl` field before the form is submitted, so the rest of the
+product create/update flow is unchanged.
+
+- Accepted formats: JPEG, PNG, WebP, GIF (up to 10 MB)
+- Images are stored under the `flupflap/products/` folder in your Cloudinary
+  account
+- Sellers can also paste a direct image URL if they prefer not to upload
+
+> **Without Cloudinary configured** the file-picker upload returns a 503 error
+> and sellers can still paste a URL directly — backward compatibility is
+> preserved.
 
 ---
 
@@ -161,3 +209,4 @@ Demo accounts created by seed:
 | NextAuth errors / redirect loop | `NEXTAUTH_SECRET` or `NEXTAUTH_URL` missing | Set both env vars; `NEXTAUTH_URL` must match the public Render URL |
 | Stripe webhook `400` errors | `STRIPE_WEBHOOK_SECRET` missing or wrong | Re-copy the signing secret from Stripe and update the env var |
 | App loads but images are broken | Image host not in `next.config.js` | Add the hostname to `remotePatterns` in `next.config.js` |
+| Image upload returns "not configured" error | Cloudinary env vars missing | Add `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` in Render → Environment and redeploy |
