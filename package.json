@@ -27,6 +27,7 @@
     "react": "latest",
     "react-dom": "latest",
     "stripe": "latest",
+    "twilio": "^6.0.0",
     "zod": "latest"
   },
   "devDependencies": {

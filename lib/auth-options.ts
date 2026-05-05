@@ -2,6 +2,7 @@ import { PrismaAdapter } from '@next-auth/prisma-adapter';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import bcrypt from 'bcryptjs';
 import { prisma } from './db';
+import { verifyOtp } from './otp';
 import type { NextAuthOptions } from 'next-auth';
 
 export const authOptions: NextAuthOptions = {
@@ -11,13 +12,25 @@ export const authOptions: NextAuthOptions = {
   providers: [
     CredentialsProvider({
       name: 'Email and password',
-      credentials: { email: { label: 'Email', type: 'email' }, password: { label: 'Password', type: 'password' } },
+      credentials: {
+        email:    { label: 'Email',    type: 'email' },
+        password: { label: 'Password', type: 'password' },
+        otp:      { label: 'Code',     type: 'text' },
+      },
       async authorize(credentials) {
         if (!credentials?.email || !credentials.password) return null;
         const user = await prisma.user.findUnique({ where: { email: credentials.email.toLowerCase() } });
         if (!user) return null;
         const ok = await bcrypt.compare(credentials.password, user.password);
         if (!ok) return null;
+
+        // Sellers must supply a valid one-time code.
+        if (user.role === 'SELLER') {
+          if (!credentials.otp) return null;
+          const result = await verifyOtp(user.id, credentials.otp);
+          if (!result.ok) return null;
+        }
+
         return user as any;
       }
     })
