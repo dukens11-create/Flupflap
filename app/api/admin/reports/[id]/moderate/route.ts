@@ -22,6 +22,17 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { z } from 'zod';
 
+// Map product report reasons to the SellerModerationLog reason categories
+const REPORT_TO_SELLER_REASON: Record<string, string> = {
+  fake_counterfeit: 'fake_product',
+  misleading_description: 'misconduct_to_customer',
+  misleading_photos: 'misconduct_to_customer',
+  prohibited_item: 'policy_violation',
+  scam_fraud: 'fraud',
+  item_unavailable: 'misconduct_to_customer',
+  other: 'other',
+};
+
 const VALID_ACTIONS = [
   'dismiss',
   'resolve',
@@ -86,12 +97,14 @@ export async function POST(
             ? 'SUSPENDED'
             : 'WARNED';
 
+      const moderationReason = REPORT_TO_SELLER_REASON[report.reason] ?? 'other';
+
       if (data.action === 'suspend_seller' || data.action === 'ban_seller') {
         await prisma.user.update({
           where: { id: report.sellerId },
           data: {
             sellerStatus: sellerAction as 'SUSPENDED' | 'BANNED',
-            sellerStatusReason: 'fake_product',
+            sellerStatusReason: moderationReason,
             sellerStatusNotes: data.adminNotes ?? null,
           },
         });
@@ -102,7 +115,7 @@ export async function POST(
           sellerId: report.sellerId,
           adminId: session.user.id,
           action: sellerAction,
-          reasonCategory: 'fake_product',
+          reasonCategory: moderationReason,
           notes: data.adminNotes ?? null,
         },
       });

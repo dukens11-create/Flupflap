@@ -30,7 +30,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
     getServerSession(authOptions),
   ]);
 
-  if (!product || product.status === 'HIDDEN' || product.status !== 'APPROVED') notFound();
+  if (!product || product.status !== 'APPROVED') notFound();
 
   // Hide the message button if the viewer is the seller of this product
   const isOwnListing = session?.user?.id === product.seller.id;
