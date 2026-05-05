@@ -32,7 +32,7 @@ export default function PickupInfo({ pickupCity, pickupState, pickupLat, pickupL
       () => {
         setGeoError(true);
       },
-      { timeout: 8000 },
+      { timeout: 5000 },
     );
   }, [pickupLat, pickupLng]);
 

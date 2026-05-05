@@ -7,10 +7,14 @@ import { stripe } from '@/lib/stripe';
 import Link from 'next/link';
 import PickupVerifyForm from '@/components/PickupVerifyForm';
 import type { Metadata } from 'next';
+import type { OrderStatus } from '@prisma/client';
 
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = { title: 'Seller Dashboard' };
+
+/** Order statuses that count as "fulfilled" for earnings calculations. */
+const FULFILLED_STATUSES: OrderStatus[] = ['PAID', 'SHIPPED', 'DELIVERED', 'PICKED_UP'];
 
 function statusBadge(status: string) {
   const map: Record<string, string> = {
@@ -69,7 +73,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
     prisma.orderItem.findMany({
       where: {
         product: { sellerId: session.user.id },
-        order: { status: { in: ['PAID', 'SHIPPED', 'DELIVERED', 'PICKED_UP'] } },
+        order: { status: { in: FULFILLED_STATUSES } },
       },
       include: {
         product: { select: { title: true, id: true } },

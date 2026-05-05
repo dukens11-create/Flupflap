@@ -39,15 +39,15 @@ export async function POST(req: Request) {
       where: { id: { in: items.map(i => i.productId) } },
     });
 
-    const subtotalCents = products.reduce((sum, p) => {
-      const qty = items.find(i => i.productId === p.id)?.quantity ?? 1;
-      return sum + p.priceCents * qty;
-    }, 0);
+    // Pre-build a quantity map to avoid repeated O(n) lookups
+    const qtyMap = new Map(items.map(i => [i.productId, i.quantity]));
+    const getQty = (productId: string) => qtyMap.get(productId) ?? 1;
+
+    const subtotalCents = products.reduce((sum, p) => sum + p.priceCents * getQty(p.id), 0);
 
     // For pickup orders, no shipping cost is charged
     const shippingCents = fulfillmentType === 'PICKUP' ? 0 : products.reduce((s, p) => {
-      const qty = items.find(i => i.productId === p.id)?.quantity ?? 1;
-      return s + p.shippingCents * qty;
+      return s + p.shippingCents * getQty(p.id);
     }, 0);
 
     const totalCents = subtotalCents + shippingCents;
@@ -87,7 +87,7 @@ export async function POST(req: Request) {
           create: products.map(p => ({
             productId: p.id,
             priceCents: p.priceCents,
-            quantity: items.find(i => i.productId === p.id)?.quantity ?? 1,
+            quantity: getQty(p.id),
           })),
         },
       },
@@ -95,7 +95,7 @@ export async function POST(req: Request) {
 
     // Decrement inventory and mark as SOLD if qty reaches 0
     for (const p of products) {
-      const qty = items.find(i => i.productId === p.id)?.quantity ?? 1;
+      const qty = getQty(p.id);
       const newInventory = Math.max(0, p.inventory - qty);
       await prisma.product.update({
         where: { id: p.id },

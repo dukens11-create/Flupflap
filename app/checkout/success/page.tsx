@@ -24,7 +24,8 @@ export default async function CheckoutSuccessPage({
       });
       isPickup = order?.fulfillmentType === 'PICKUP';
       pickupCode = order?.pickupCode ?? null;
-    } catch {
+    } catch (err) {
+      console.error('[checkout/success] Failed to look up order:', err);
       // Not critical — fall back to generic message
     }
   }

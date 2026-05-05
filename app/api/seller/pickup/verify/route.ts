@@ -91,8 +91,8 @@ export async function POST(req: Request) {
     ]);
 
     return NextResponse.json({ ok: true, message: 'Pickup confirmed.' });
-  } catch (err: any) {
-    if (err?.name === 'ZodError') {
+  } catch (err: unknown) {
+    if (err && typeof err === 'object' && 'name' in err && (err as { name: string }).name === 'ZodError') {
       return NextResponse.json({ error: 'Please enter a valid 6-digit code.' }, { status: 400 });
     }
     console.error('[seller/pickup/verify]', err);

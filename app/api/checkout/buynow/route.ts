@@ -3,6 +3,12 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { stripe, appUrl } from '@/lib/stripe';
+import { z } from 'zod';
+
+const bodySchema = z.object({
+  productId: z.string().min(1),
+  fulfillmentType: z.enum(['SHIPPING', 'PICKUP']).default('SHIPPING'),
+});
 
 export async function POST(req: Request) {
   try {
@@ -11,10 +17,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Please sign in to purchase.' }, { status: 401 });
     }
 
-    const { productId, fulfillmentType = 'SHIPPING' } = await req.json() as {
-      productId: string;
-      fulfillmentType?: 'SHIPPING' | 'PICKUP';
-    };
+    const parsed = bodySchema.safeParse(await req.json());
+    if (!parsed.success) {
+      return NextResponse.json({ error: 'Invalid request.' }, { status: 400 });
+    }
+    const { productId, fulfillmentType } = parsed.data;
 
     const product = await prisma.product.findUnique({ where: { id: productId } });
 

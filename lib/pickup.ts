@@ -23,11 +23,12 @@ import bcrypt from 'bcryptjs';
 
 const BCRYPT_COST = 8;
 
-/** Generate a cryptographically secure 6-digit pickup code. */
+/** Generate a cryptographically secure 6-digit pickup code (100000–999999). */
 export function generatePickupCode(): string {
-  // Produce a number in [0, 1_000_000), zero-padded to 6 digits.
-  const n = crypto.randomInt(0, 1_000_000);
-  return String(n).padStart(6, '0');
+  // randomInt(min, max) produces a uniform integer in [min, max).
+  // Using 100_000..1_000_000 guarantees exactly 6 significant digits
+  // with no leading-zero padding needed.
+  return String(crypto.randomInt(100_000, 1_000_000));
 }
 
 /** Hash a pickup code for secure storage. */
