@@ -5,7 +5,7 @@ import { prisma } from '@/lib/db';
 import { dollars } from '@/lib/money';
 import AddToCartButton from '@/components/AddToCartButton';
 import BuyNowButton from '@/components/BuyNowButton';
-import PickupDistance from '@/components/PickupDistance';
+import PickupInfo from '@/components/PickupInfo';
 import type { Metadata } from 'next';
 
 export const dynamic = 'force-dynamic';
@@ -48,24 +48,13 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
           </div>
           <p className="text-slate-700 text-sm leading-relaxed">{product.description}</p>
 
-          {/* Pickup distance widget */}
-          {product.pickupAvailable && product.pickupCity && product.pickupState && product.pickupPostalCode && (
-            <PickupDistance
+          {product.pickupAvailable && (
+            <PickupInfo
               pickupCity={product.pickupCity}
               pickupState={product.pickupState}
-              pickupPostalCode={product.pickupPostalCode}
+              pickupLat={product.pickupLat}
+              pickupLng={product.pickupLng}
             />
-          )}
-          {product.pickupAvailable && product.pickupCity && product.pickupState && !product.pickupPostalCode && (
-            <div className="mt-1 p-3 rounded-xl bg-green-50 border border-green-200 text-sm">
-              <div className="flex items-center gap-2 font-semibold text-green-800">
-                <span>🏠</span>
-                <span>Local pickup available</span>
-              </div>
-              <p className="text-green-700 mt-0.5">
-                Located in <span className="font-medium">{product.pickupCity}, {product.pickupState}</span>
-              </p>
-            </div>
           )}
 
           {product.inventory <= 0 ? (
@@ -82,10 +71,12 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
                 pickupCity: product.pickupCity ?? undefined,
                 pickupState: product.pickupState ?? undefined,
               }} />
-              <BuyNowButton productId={product.id} />
-              {product.pickupAvailable && (
-                <BuyNowButton productId={product.id} isPickup />
-              )}
+              <BuyNowButton
+                productId={product.id}
+                pickupAvailable={product.pickupAvailable}
+                pickupCity={product.pickupCity}
+                pickupState={product.pickupState}
+              />
             </div>
           )}
           {product.inventory > 0 && product.inventory <= 3 && (

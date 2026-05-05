@@ -240,7 +240,80 @@ Sellers have a dedicated dashboard at `/seller` that shows:
 
 ---
 
-## Stripe webhook configuration
+## Local pickup and buyer distance
+
+Sellers can mark individual listings as available for local pickup when
+creating or editing a product. When enabled:
+
+- The seller enters their pickup **city**, **state**, and **ZIP/postal code**.
+  These approximate coordinates are geocoded using the free
+  [Nominatim / OpenStreetMap](https://nominatim.org) API (no API key required).
+- Only the **city and state** are shown publicly to buyers — the seller's exact
+  address is never displayed before purchase.
+- On the product detail page, buyers see a **"Pickup available"** badge and,
+  if they allow browser location access, their approximate **distance** to the
+  seller (calculated client-side using the Haversine formula).
+- At checkout, buyers can choose **"Ship it"** or **"Pick up locally"** using the
+  "Buy Now" button. Pickup orders have no shipping cost.
+
+**Current limitation:** pickup selection is supported via "Buy Now" only.
+Cart checkout always uses shipping, because carts may contain items from
+multiple sellers. Buyers who want to pick up an item should use the "Buy Now"
+button on the product detail page.
+
+### Geocoding notes
+
+- Geocoding is performed server-side when a product is saved with pickup
+  enabled. If the Nominatim request fails (network issue, address not found,
+  rate limit), the product is saved without coordinates — the pickup badge
+  still shows but distance is not calculated.
+- Nominatim rate limit is 1 request/second, which is well within the expected
+  product-save rate for a small marketplace.
+
+---
+
+## Pickup confirmation / receipt verification
+
+When a buyer selects local pickup at checkout, the system generates a unique
+**6-digit pickup code** tied to that order. This code is used to confirm the
+item handoff.
+
+### Pickup flow
+
+1. **Payment complete** → Order status set to `READY_FOR_PICKUP`, 6-digit
+   pickup code generated and stored (bcrypt-hashed in DB; plain text shown
+   to buyer only).
+2. **Buyer** views their order at `/orders/[id]` to see the pickup code.
+3. **Buyer arrives at seller's location** and shows the 6-digit code.
+4. **Seller** opens their dashboard at `/seller`, finds the order in
+   "Recent Orders", and enters the code in the "Confirm pickup" field.
+5. The code is verified server-side. On success:
+   - Order status transitions to `PICKED_UP`.
+   - `pickupConfirmedAt` timestamp is recorded.
+   - A `PickupEvent` audit record is created (actor, time, event type).
+6. Buyer sees "Pickup confirmed" in their order details.
+
+### Order statuses for pickup
+
+| Status | Meaning |
+|---|---|
+| `READY_FOR_PICKUP` | Payment confirmed; pickup code generated; awaiting handoff |
+| `PICKED_UP` | Seller verified the pickup code; handoff complete |
+
+### Security
+
+- Pickup codes are 6 cryptographically random digits.
+- Codes are bcrypt-hashed before storage; the plain code is only shown to the
+  buyer in their order details.
+- Sellers cannot view or copy the code — they must receive it from the buyer
+  at handoff.
+- A `PickupEvent` record provides an audit trail for dispute resolution by
+  admins.
+- Restricted (suspended/banned) sellers cannot verify pickup codes.
+
+---
+
+
 
 After deploying, register a webhook endpoint in the Stripe dashboard:
 

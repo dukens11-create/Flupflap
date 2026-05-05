@@ -15,6 +15,8 @@ const STATUS_LABELS: Record<string, string> = {
   DELIVERED: 'Delivered',
   CANCELLED: 'Cancelled',
   REFUNDED: 'Refunded',
+  READY_FOR_PICKUP: 'Ready for Pickup',
+  PICKED_UP: 'Picked Up',
 };
 
 function statusBadge(status: string) {
@@ -25,6 +27,8 @@ function statusBadge(status: string) {
     DELIVERED: 'badge-green',
     CANCELLED: 'badge-red',
     REFUNDED: 'badge-slate',
+    READY_FOR_PICKUP: 'badge-yellow',
+    PICKED_UP: 'badge-green',
   };
   return map[status] ?? 'badge-slate';
 }
@@ -63,6 +67,8 @@ export default async function OrderDetailPage({
 
   if (!order) notFound();
 
+  const isPickup = order.fulfillmentType === 'PICKUP';
+
   return (
     <main className="max-w-2xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
@@ -73,9 +79,39 @@ export default async function OrderDetailPage({
         <div>
           <h1 className="text-2xl font-black">Order #{order.id.slice(-8).toUpperCase()}</h1>
           <p className="text-sm text-slate-500">{new Date(order.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+          {isPickup && (
+            <p className="text-sm text-green-700 font-medium mt-1">📍 Local pickup order</p>
+          )}
         </div>
         <span className={`badge ${statusBadge(order.status)}`}>{STATUS_LABELS[order.status] ?? order.status}</span>
       </div>
+
+      {/* Pickup code (shown to buyer for pickup orders) */}
+      {isPickup && order.pickupCode && order.status !== 'PICKED_UP' && order.status !== 'CANCELLED' && (
+        <div className="card p-5 mb-4 bg-blue-50 border-blue-200">
+          <h2 className="font-bold mb-2 text-blue-900">📱 Your pickup code</h2>
+          <p className="text-xs text-blue-700 mb-3">
+            Show this code to the seller when you pick up your item. The seller will enter it to confirm the handoff.
+          </p>
+          <div className="flex items-center gap-3">
+            <span className="font-mono text-4xl font-black tracking-[0.25em] text-blue-800 bg-white border border-blue-200 rounded-xl px-5 py-3 select-all">
+              {order.pickupCode}
+            </span>
+          </div>
+          <p className="text-xs text-blue-500 mt-3">
+            This code is unique to your order. Do not share it until you are ready to receive the item.
+          </p>
+        </div>
+      )}
+
+      {isPickup && order.status === 'PICKED_UP' && (
+        <div className="card p-4 mb-4 bg-green-50 border-green-200 text-green-800 text-sm">
+          ✅ Pickup confirmed
+          {order.pickupConfirmedAt && (
+            <span className="text-green-600"> · {new Date(order.pickupConfirmedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+          )}
+        </div>
+      )}
 
       {/* Items */}
       <div className="card p-5 mb-4">
@@ -110,7 +146,12 @@ export default async function OrderDetailPage({
           <span className="text-slate-500">Subtotal</span>
           <span>{dollars(order.subtotalCents ?? order.totalCents)}</span>
         </div>
-        {order.shippingCents > 0 && (
+        {isPickup ? (
+          <div className="flex justify-between">
+            <span className="text-slate-500">Shipping</span>
+            <span className="text-green-600 font-medium">Free (pickup)</span>
+          </div>
+        ) : order.shippingCents > 0 && (
           <div className="flex justify-between">
             <span className="text-slate-500">Shipping</span>
             <span>{dollars(order.shippingCents)}</span>
@@ -128,26 +169,8 @@ export default async function OrderDetailPage({
         </div>
       </div>
 
-      {/* Pickup info */}
-      {order.isPickup && (
-        <div className="card p-5 mb-4 bg-green-50 border-green-200">
-          <h2 className="font-bold mb-2 text-green-800">🏠 Local Pickup Order</h2>
-          <p className="text-sm text-green-700 mb-1">
-            This order is marked for local pickup — no shipping is required.
-          </p>
-          {(order.pickupCity || order.pickupState) && (
-            <p className="text-sm text-green-700">
-              Pickup location: <span className="font-medium">{[order.pickupCity, order.pickupState].filter(Boolean).join(', ')}</span>
-            </p>
-          )}
-          <p className="text-xs text-green-600 mt-2">
-            Contact the seller to arrange a pickup time and confirm the exact location.
-          </p>
-        </div>
-      )}
-
-      {/* Shipping info */}
-      {!order.isPickup && (order.shippingName || order.shippingLine1) && (
+      {/* Shipping info — only for non-pickup orders */}
+      {!isPickup && (order.shippingName || order.shippingLine1) && (
         <div className="card p-5 mb-4">
           <h2 className="font-bold mb-2">Shipping address</h2>
           <address className="not-italic text-sm text-slate-600 space-y-0.5">
@@ -166,8 +189,8 @@ export default async function OrderDetailPage({
         </div>
       )}
 
-      {/* Tracking info */}
-      {order.trackingNumber && (
+      {/* Tracking info — only for non-pickup orders */}
+      {!isPickup && order.trackingNumber && (
         <div className="card p-5 mb-4">
           <h2 className="font-bold mb-2">Tracking</h2>
           <p className="text-sm text-slate-600">

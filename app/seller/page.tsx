@@ -5,11 +5,21 @@ import { prisma } from '@/lib/db';
 import { dollars, platformFee } from '@/lib/money';
 import { stripe } from '@/lib/stripe';
 import Link from 'next/link';
+import PickupVerifyForm from '@/components/PickupVerifyForm';
 import type { Metadata } from 'next';
+import type { OrderStatus } from '@prisma/client';
 
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = { title: 'Seller Dashboard' };
+
+/**
+ * Order statuses that count as "fulfilled" for earnings calculations.
+ * READY_FOR_PICKUP is intentionally excluded — earnings are counted only
+ * after the handoff is confirmed (PICKED_UP), consistent with the treatment
+ * of PAID/SHIPPED/DELIVERED for non-pickup orders.
+ */
+const FULFILLED_STATUSES: OrderStatus[] = ['PAID', 'SHIPPED', 'DELIVERED', 'PICKED_UP'];
 
 function statusBadge(status: string) {
   const map: Record<string, string> = {
@@ -22,7 +32,14 @@ function statusBadge(status: string) {
 }
 
 function orderStatusBadge(status: string) {
-  return ['PAID', 'SHIPPED', 'DELIVERED'].includes(status) ? 'badge-green' : 'badge-yellow';
+  const map: Record<string, string> = {
+    PAID: 'badge-green',
+    SHIPPED: 'badge-green',
+    DELIVERED: 'badge-green',
+    READY_FOR_PICKUP: 'badge-yellow',
+    PICKED_UP: 'badge-green',
+  };
+  return map[status] ?? 'badge-yellow';
 }
 
 function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
@@ -35,7 +52,7 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub?: s
   );
 }
 
-export default async function SellerPage({ searchParams }: { searchParams: Promise<{ created?: string; stripe?: string }> }) {
+export default async function SellerPage({ searchParams }: { searchParams: Promise<{ created?: string; stripe?: string; updated?: string; deleted?: string; pickup?: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect('/login');
   if (session.user.role !== 'SELLER') redirect('/');
@@ -61,11 +78,11 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
     prisma.orderItem.findMany({
       where: {
         product: { sellerId: session.user.id },
-        order: { status: { in: ['PAID', 'SHIPPED', 'DELIVERED'] } },
+        order: { status: { in: FULFILLED_STATUSES } },
       },
       include: {
         product: { select: { title: true, id: true } },
-        order: { select: { id: true, status: true, createdAt: true } },
+        order: { select: { id: true, status: true, createdAt: true, fulfillmentType: true } },
       },
       orderBy: { order: { createdAt: 'desc' } },
     }),
@@ -124,13 +141,13 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
         </div>
       )}
 
-      {(sp as any).updated && (
+      {sp.updated && (
         <div className="card p-4 mb-6 bg-green-50 border-green-200 text-green-800 text-sm">
           ✅ Listing updated and re-submitted for review.
         </div>
       )}
 
-      {(sp as any).deleted && (
+      {sp.deleted && (
         <div className="card p-4 mb-6 bg-slate-50 border-slate-200 text-slate-700 text-sm">
           🗑️ Listing deleted.
         </div>
@@ -139,6 +156,12 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
       {sp.stripe === 'connected' && (
         <div className="card p-4 mb-6 bg-green-50 border-green-200 text-green-800 text-sm">
           ✅ Stripe account connected! You&apos;re now set up to receive payouts.
+        </div>
+      )}
+
+      {sp.pickup === 'confirmed' && (
+        <div className="card p-4 mb-6 bg-green-50 border-green-200 text-green-800 text-sm">
+          ✅ Pickup confirmed! The order has been marked as picked up.
         </div>
       )}
 
@@ -245,7 +268,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
         )}
       </section>
 
-      {/* ── Recent Orders (for shipping management) ── */}
+      {/* ── Recent Orders (for shipping / pickup management) ── */}
       <section>
         <h2 className="text-xl font-bold mb-3">Recent Orders</h2>
         {orders.length === 0 ? (
@@ -255,14 +278,21 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
             {orders.map(o => (
               <div key={o.id} className="card p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-slate-400 font-mono">{o.id.slice(-8)}</span>
-                  <span className={`badge ${o.status === 'PAID' || o.status === 'SHIPPED' || o.status === 'DELIVERED' ? 'badge-green' : 'badge-yellow'}`}>{o.status}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-400 font-mono">{o.id.slice(-8)}</span>
+                    {o.fulfillmentType === 'PICKUP' && (
+                      <span className="badge badge-blue text-xs">📍 Pickup</span>
+                    )}
+                  </div>
+                  <span className={`badge ${orderStatusBadge(o.status)}`}>{o.status}</span>
                 </div>
                 {o.items.map(i => (
                   <p key={i.id} className="text-sm text-slate-700">{i.product.title} × {i.quantity}</p>
                 ))}
                 <p className="text-sm font-bold mt-2">{dollars(o.totalCents)}</p>
-                {(o.status === 'PAID') && !isRestricted && (
+
+                {/* Shipping: mark shipped */}
+                {o.status === 'PAID' && o.fulfillmentType !== 'PICKUP' && !isRestricted && (
                   <form action="/api/seller/ship" method="POST" className="mt-3 flex gap-2">
                     <input type="hidden" name="orderId" value={o.id} />
                     <input name="trackingNumber" className="input flex-1" placeholder="Tracking number" />
@@ -270,6 +300,16 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                     <button type="submit" className="btn-primary text-sm">Mark Shipped</button>
                   </form>
                 )}
+
+                {/* Pickup: verify pickup code */}
+                {o.status === 'READY_FOR_PICKUP' && o.fulfillmentType === 'PICKUP' && !isRestricted && (
+                  <PickupVerifyForm orderId={o.id} />
+                )}
+
+                {o.status === 'PICKED_UP' && o.fulfillmentType === 'PICKUP' && (
+                  <p className="text-xs text-green-600 mt-2 font-medium">✅ Pickup confirmed</p>
+                )}
+
                 {o.trackingNumber && (
                   <p className="text-xs text-slate-500 mt-2">📦 {o.shippingCarrier}: {o.trackingNumber}</p>
                 )}

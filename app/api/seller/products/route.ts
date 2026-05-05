@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { cents } from '@/lib/money';
+import { geocodeCity } from '@/lib/geocode';
 import { z } from 'zod';
 
 const schema = z.object({
@@ -50,6 +51,19 @@ export async function POST(req: Request) {
     const form = await req.formData();
     const data = schema.parse(Object.fromEntries(form.entries()));
 
+    const pickupAvailable = data.pickupAvailable === 'on' || data.pickupAvailable === 'true';
+
+    // Geocode pickup location if pickup is enabled and city/state are provided
+    let pickupLat: number | null = null;
+    let pickupLng: number | null = null;
+    if (pickupAvailable && data.pickupCity && data.pickupState) {
+      const coords = await geocodeCity(data.pickupCity, data.pickupState, data.pickupPostalCode);
+      if (coords) {
+        pickupLat = coords.lat;
+        pickupLng = coords.lng;
+      }
+    }
+
     const product = await prisma.product.create({
       data: {
         title: data.title,
@@ -62,10 +76,12 @@ export async function POST(req: Request) {
         shippingCents: cents(data.shipping || '0'),
         inventory: Number(data.inventory || 1),
         status: 'PENDING',
-        pickupAvailable: data.pickupAvailable === 'true',
-        pickupCity: data.pickupCity || null,
-        pickupState: data.pickupState || null,
-        pickupPostalCode: data.pickupPostalCode || null,
+        pickupAvailable,
+        pickupCity: pickupAvailable ? (data.pickupCity ?? null) : null,
+        pickupState: pickupAvailable ? (data.pickupState ?? null) : null,
+        pickupPostalCode: pickupAvailable ? (data.pickupPostalCode ?? null) : null,
+        pickupLat,
+        pickupLng,
       },
     });
 

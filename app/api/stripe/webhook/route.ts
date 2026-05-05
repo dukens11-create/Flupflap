@@ -3,6 +3,7 @@ import { headers } from 'next/headers';
 import { prisma } from '@/lib/db';
 import { stripe } from '@/lib/stripe';
 import { platformFee, sellerPayout } from '@/lib/money';
+import { generatePickupCode, hashPickupCode } from '@/lib/pickup';
 
 export async function POST(req: Request) {
   const body = await req.text();
@@ -22,9 +23,9 @@ export async function POST(req: Request) {
     const buyerId: string = cs.metadata?.buyerId;
     const rawItems: string = cs.metadata?.items ?? '[]';
     const items: { productId: string; quantity: number }[] = JSON.parse(rawItems);
-    const rawPickupIds: string = cs.metadata?.pickupItemIds ?? '[]';
-    const pickupItemIds: string[] = JSON.parse(rawPickupIds);
-    const isPickupOrder: boolean = cs.metadata?.isPickup === 'true';
+    const fulfillmentType: 'SHIPPING' | 'PICKUP' = cs.metadata?.fulfillmentType === 'PICKUP'
+      ? 'PICKUP'
+      : 'SHIPPING';
 
     if (!buyerId || !items.length) {
       return new NextResponse('Missing metadata', { status: 400 });
@@ -34,44 +35,52 @@ export async function POST(req: Request) {
     const existing = await prisma.order.findUnique({ where: { stripeCheckoutId: cs.id } });
     if (existing) return new NextResponse('Already processed', { status: 200 });
 
-    const pickupSet = new Set(pickupItemIds);
-
     const products = await prisma.product.findMany({
       where: { id: { in: items.map(i => i.productId) } },
     });
 
-    const totalCents = products.reduce((sum, p) => {
-      const qty = items.find(i => i.productId === p.id)?.quantity ?? 1;
-      const isPickup = pickupSet.has(p.id);
-      return sum + (p.priceCents + (isPickup ? 0 : p.shippingCents)) * qty;
+    // Pre-build a quantity map to avoid repeated O(n) lookups
+    const qtyMap = new Map(items.map(i => [i.productId, i.quantity]));
+    const getQty = (productId: string) => {
+      const qty = qtyMap.get(productId);
+      if (qty === undefined) {
+        console.warn('[webhook] Product %s not found in items map — defaulting qty to 1', productId);
+        return 1;
+      }
+      return qty;
+    };
+
+    const subtotalCents = products.reduce((sum, p) => sum + p.priceCents * getQty(p.id), 0);
+
+    // For pickup orders, no shipping cost is charged
+    const shippingCents = fulfillmentType === 'PICKUP' ? 0 : products.reduce((s, p) => {
+      return s + p.shippingCents * getQty(p.id);
     }, 0);
+
+    const totalCents = subtotalCents + shippingCents;
 
     const shipping = cs.shipping_details ?? {};
 
-    // Gather pickup location from first pickup product for order record
-    const firstPickupProduct = products.find(p => pickupSet.has(p.id));
+    // For pickup orders, generate a 6-digit confirmation code
+    let pickupCode: string | null = null;
+    let pickupCodeHash: string | null = null;
+    if (fulfillmentType === 'PICKUP') {
+      pickupCode = generatePickupCode();
+      pickupCodeHash = await hashPickupCode(pickupCode);
+    }
 
     const order = await prisma.order.create({
       data: {
         buyerId,
         totalCents,
-        subtotalCents: products.reduce((s, p) => {
-          const qty = items.find(i => i.productId === p.id)?.quantity ?? 1;
-          return s + p.priceCents * qty;
-        }, 0),
-        shippingCents: products.reduce((s, p) => {
-          const qty = items.find(i => i.productId === p.id)?.quantity ?? 1;
-          if (pickupSet.has(p.id)) return s; // no shipping for pickup
-          return s + p.shippingCents * qty;
-        }, 0),
+        subtotalCents,
+        shippingCents,
         platformFeeCents: platformFee(totalCents),
         sellerPayoutCents: sellerPayout(totalCents),
-        status: 'PAID',
+        status: fulfillmentType === 'PICKUP' ? 'READY_FOR_PICKUP' : 'PAID',
+        fulfillmentType,
         stripeCheckoutId: cs.id,
         stripePaymentIntentId: cs.payment_intent ?? null,
-        isPickup: isPickupOrder,
-        pickupCity: isPickupOrder ? (firstPickupProduct?.pickupCity ?? null) : null,
-        pickupState: isPickupOrder ? (firstPickupProduct?.pickupState ?? null) : null,
         shippingName: shipping?.name ?? null,
         shippingLine1: shipping?.address?.line1 ?? null,
         shippingLine2: shipping?.address?.line2 ?? null,
@@ -79,11 +88,13 @@ export async function POST(req: Request) {
         shippingState: shipping?.address?.state ?? null,
         shippingPostalCode: shipping?.address?.postal_code ?? null,
         shippingCountry: shipping?.address?.country ?? null,
+        pickupCode,
+        pickupCodeHash,
         items: {
           create: products.map(p => ({
             productId: p.id,
             priceCents: p.priceCents,
-            quantity: items.find(i => i.productId === p.id)?.quantity ?? 1,
+            quantity: getQty(p.id),
           })),
         },
       },
@@ -91,7 +102,7 @@ export async function POST(req: Request) {
 
     // Decrement inventory and mark as SOLD if qty reaches 0
     for (const p of products) {
-      const qty = items.find(i => i.productId === p.id)?.quantity ?? 1;
+      const qty = getQty(p.id);
       const newInventory = Math.max(0, p.inventory - qty);
       await prisma.product.update({
         where: { id: p.id },
@@ -101,6 +112,9 @@ export async function POST(req: Request) {
         },
       });
     }
+
+    // Silence unused variable warning
+    void order;
   }
 
   return new NextResponse('ok', { status: 200 });

@@ -33,6 +33,13 @@ enum OrderStatus {
   DELIVERED
   CANCELLED
   REFUNDED
+  READY_FOR_PICKUP
+  PICKED_UP
+}
+
+enum FulfillmentType {
+  SHIPPING
+  PICKUP
 }
 
 model User {
@@ -56,6 +63,7 @@ model User {
   sellerOtp                SellerOtp?
   moderationLogsAsSeller   SellerModerationLog[] @relation("ModeratedSeller")
   moderationLogsAsAdmin    SellerModerationLog[] @relation("AdminModerator")
+  pickupEventsAsActor      PickupEvent[]
 }
 
 model SellerOtp {
@@ -84,11 +92,15 @@ model Product {
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
   orderItems       OrderItem[]
-  // Pickup fields
+
+  // Local pickup fields
   pickupAvailable  Boolean       @default(false)
   pickupCity       String?
   pickupState      String?
   pickupPostalCode String?
+  // Approximate (city-level) coordinates — safe to expose to buyers
+  pickupLat        Float?
+  pickupLng        Float?
 
   @@index([status, category, condition])
   @@index([title])
@@ -110,17 +122,18 @@ model Address {
 }
 
 model Order {
-  id                    String      @id @default(cuid())
+  id                    String          @id @default(cuid())
   buyerId               String
-  buyer                 User        @relation(fields: [buyerId], references: [id])
+  buyer                 User            @relation(fields: [buyerId], references: [id])
   totalCents            Int
-  subtotalCents         Int         @default(0)
-  shippingCents         Int         @default(0)
-  taxCents              Int         @default(0)
+  subtotalCents         Int             @default(0)
+  shippingCents         Int             @default(0)
+  taxCents              Int             @default(0)
   platformFeeCents      Int
-  sellerPayoutCents     Int         @default(0)
-  status                OrderStatus @default(PENDING)
-  stripeCheckoutId      String?     @unique
+  sellerPayoutCents     Int             @default(0)
+  status                OrderStatus     @default(PENDING)
+  fulfillmentType       FulfillmentType @default(SHIPPING)
+  stripeCheckoutId      String?         @unique
   stripePaymentIntentId String?
   trackingNumber        String?
   shippingCarrier       String?
@@ -131,13 +144,14 @@ model Order {
   shippingState         String?
   shippingPostalCode    String?
   shippingCountry       String?
-  // Pickup fields
-  isPickup              Boolean     @default(false)
-  pickupCity            String?
-  pickupState           String?
-  createdAt             DateTime    @default(now())
-  updatedAt             DateTime    @updatedAt
+  // Pickup confirmation fields (for feature 5 — handoff verification)
+  pickupCode            String?
+  pickupCodeHash        String?
+  pickupConfirmedAt     DateTime?
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
   items                 OrderItem[]
+  pickupEvents          PickupEvent[]
 }
 
 model OrderItem {
@@ -196,4 +210,17 @@ model SellerModerationLog {
   createdAt      DateTime @default(now())
 
   @@index([sellerId])
+}
+
+model PickupEvent {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id])
+  actorId   String
+  actor     User     @relation(fields: [actorId], references: [id])
+  eventType String   // CODE_VERIFIED | PICKED_UP | DISPUTE
+  notes     String?
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
 }
