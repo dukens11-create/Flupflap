@@ -90,7 +90,7 @@ export async function POST(req: Request) {
       }),
     ]);
 
-    return NextResponse.redirect(new URL('/seller?pickup=confirmed', req.url));
+    return NextResponse.json({ ok: true, message: 'Pickup confirmed.' });
   } catch (err: any) {
     if (err?.name === 'ZodError') {
       return NextResponse.json({ error: 'Please enter a valid 6-digit code.' }, { status: 400 });

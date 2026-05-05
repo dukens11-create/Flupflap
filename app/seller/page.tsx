@@ -43,7 +43,7 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub?: s
   );
 }
 
-export default async function SellerPage({ searchParams }: { searchParams: Promise<{ created?: string; stripe?: string }> }) {
+export default async function SellerPage({ searchParams }: { searchParams: Promise<{ created?: string; stripe?: string; updated?: string; deleted?: string; pickup?: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect('/login');
   if (session.user.role !== 'SELLER') redirect('/');
@@ -132,13 +132,13 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
         </div>
       )}
 
-      {(sp as any).updated && (
+      {sp.updated && (
         <div className="card p-4 mb-6 bg-green-50 border-green-200 text-green-800 text-sm">
           ✅ Listing updated and re-submitted for review.
         </div>
       )}
 
-      {(sp as any).deleted && (
+      {sp.deleted && (
         <div className="card p-4 mb-6 bg-slate-50 border-slate-200 text-slate-700 text-sm">
           🗑️ Listing deleted.
         </div>
@@ -150,7 +150,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
         </div>
       )}
 
-      {(sp as any).pickup === 'confirmed' && (
+      {sp.pickup === 'confirmed' && (
         <div className="card p-4 mb-6 bg-green-50 border-green-200 text-green-800 text-sm">
           ✅ Pickup confirmed! The order has been marked as picked up.
         </div>
@@ -271,7 +271,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-slate-400 font-mono">{o.id.slice(-8)}</span>
-                    {(o as any).fulfillmentType === 'PICKUP' && (
+                    {o.fulfillmentType === 'PICKUP' && (
                       <span className="badge badge-blue text-xs">📍 Pickup</span>
                     )}
                   </div>
@@ -283,7 +283,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                 <p className="text-sm font-bold mt-2">{dollars(o.totalCents)}</p>
 
                 {/* Shipping: mark shipped */}
-                {o.status === 'PAID' && (o as any).fulfillmentType !== 'PICKUP' && !isRestricted && (
+                {o.status === 'PAID' && o.fulfillmentType !== 'PICKUP' && !isRestricted && (
                   <form action="/api/seller/ship" method="POST" className="mt-3 flex gap-2">
                     <input type="hidden" name="orderId" value={o.id} />
                     <input name="trackingNumber" className="input flex-1" placeholder="Tracking number" />
@@ -293,16 +293,16 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                 )}
 
                 {/* Pickup: verify pickup code */}
-                {o.status === 'READY_FOR_PICKUP' && (o as any).fulfillmentType === 'PICKUP' && !isRestricted && (
+                {o.status === 'READY_FOR_PICKUP' && o.fulfillmentType === 'PICKUP' && !isRestricted && (
                   <PickupVerifyForm orderId={o.id} />
                 )}
 
-                {o.status === 'PICKED_UP' && (o as any).fulfillmentType === 'PICKUP' && (
+                {o.status === 'PICKED_UP' && o.fulfillmentType === 'PICKUP' && (
                   <p className="text-xs text-green-600 mt-2 font-medium">✅ Pickup confirmed</p>
                 )}
 
-                {(o as any).trackingNumber && (
-                  <p className="text-xs text-slate-500 mt-2">📦 {(o as any).shippingCarrier}: {(o as any).trackingNumber}</p>
+                {o.trackingNumber && (
+                  <p className="text-xs text-slate-500 mt-2">📦 {o.shippingCarrier}: {o.trackingNumber}</p>
                 )}
               </div>
             ))}
