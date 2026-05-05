@@ -119,25 +119,25 @@ export default async function SellerEditPage({
           />
         </div>
 
-        {/* ── Local pickup ── */}
+        {/* Pickup section */}
         <fieldset className="border border-slate-200 rounded-xl p-4 space-y-3">
-          <legend className="px-1 text-sm font-semibold text-slate-700">Local Pickup (optional)</legend>
-          <label className="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+          <legend className="text-sm font-semibold text-slate-700 px-1">Local Pickup (optional)</legend>
+          <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
               name="pickupAvailable"
-              className="w-4 h-4 rounded"
+              value="true"
               defaultChecked={product.pickupAvailable}
+              className="rounded"
             />
-            Available for local pickup
+            <span className="text-sm text-slate-700">This item is available for local pickup</span>
           </label>
           <p className="text-xs text-slate-500">
-            If enabled, buyers can choose to pick up the item instead of having it shipped.
-            Only your city and state are shown publicly — your exact address is never exposed.
+            Only your city and state will be shown publicly — your exact address is never displayed.
           </p>
-          <div className="flex gap-3">
-            <div className="flex-1">
-              <label className="label">Pickup city</label>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">City</label>
               <input
                 name="pickupCity"
                 className="input"
@@ -145,26 +145,25 @@ export default async function SellerEditPage({
                 defaultValue={product.pickupCity ?? ''}
               />
             </div>
-            <div className="w-24">
+            <div>
               <label className="label">State</label>
               <input
                 name="pickupState"
                 className="input"
-                placeholder="NY"
+                placeholder="e.g. NY"
                 maxLength={2}
                 defaultValue={product.pickupState ?? ''}
               />
             </div>
-            <div className="w-28">
-              <label className="label">ZIP code</label>
-              <input
-                name="pickupPostalCode"
-                className="input"
-                placeholder="11201"
-                maxLength={10}
-                defaultValue={product.pickupPostalCode ?? ''}
-              />
-            </div>
+          </div>
+          <div>
+            <label className="label">ZIP / Postal code</label>
+            <input
+              name="pickupPostalCode"
+              className="input"
+              placeholder="e.g. 11201"
+              defaultValue={product.pickupPostalCode ?? ''}
+            />
           </div>
         </fieldset>
 

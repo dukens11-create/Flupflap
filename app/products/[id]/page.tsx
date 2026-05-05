@@ -40,9 +40,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             <h1 className="text-2xl font-black mt-1">{product.title}</h1>
             <p className="text-3xl font-black text-blue-700 mt-2">{dollars(product.priceCents)}</p>
             {product.pickupAvailable ? (
-              <p className="text-sm text-slate-500">
-                + {dollars(product.shippingCents)} shipping <span className="text-green-600 font-medium">· pickup available (free)</span>
-              </p>
+              <p className="text-sm text-slate-500">+ {dollars(product.shippingCents)} shipping <span className="text-green-700 font-medium">or free local pickup</span></p>
             ) : (
               <p className="text-sm text-slate-500">+ {dollars(product.shippingCents)} shipping</p>
             )}
@@ -69,6 +67,9 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
                 priceCents: product.priceCents,
                 imageUrl: product.imageUrl,
                 shippingCents: product.shippingCents,
+                pickupAvailable: product.pickupAvailable,
+                pickupCity: product.pickupCity ?? undefined,
+                pickupState: product.pickupState ?? undefined,
               }} />
               <BuyNowButton
                 productId={product.id}

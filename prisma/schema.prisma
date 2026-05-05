@@ -144,7 +144,7 @@ model Order {
   shippingState         String?
   shippingPostalCode    String?
   shippingCountry       String?
-  // Pickup confirmation fields
+  // Pickup confirmation fields (for feature 5 — handoff verification)
   pickupCode            String?
   pickupCodeHash        String?
   pickupConfirmedAt     DateTime?

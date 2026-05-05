@@ -15,10 +15,10 @@ const updateSchema = z.object({
   condition: z.string().min(1).optional(),
   imageUrl: z.string().url().optional(),
   inventory: z.string().optional(),
-  pickupAvailable: z.string().optional(),
-  pickupCity: z.string().optional(),
-  pickupState: z.string().optional(),
-  pickupPostalCode: z.string().optional(),
+  pickupAvailable: z.string().optional(), // "true" when checkbox is checked
+  pickupCity: z.string().max(100).optional(),
+  pickupState: z.string().max(2).optional(),
+  pickupPostalCode: z.string().max(20).optional(),
 });
 
 async function getSellerProduct(id: string, sellerId: string) {

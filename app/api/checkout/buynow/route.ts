@@ -30,12 +30,13 @@ export async function POST(req: Request) {
     }
 
     // Validate pickup eligibility
+    const isPickup = fulfillmentType === 'PICKUP' && product.pickupAvailable;
     if (fulfillmentType === 'PICKUP' && !product.pickupAvailable) {
       return NextResponse.json({ error: 'This item is not available for local pickup.' }, { status: 400 });
     }
 
     // For pickup orders, shipping cost is $0 (buyer picks up in person)
-    const unitAmount = fulfillmentType === 'PICKUP'
+    const unitAmount = isPickup
       ? product.priceCents
       : product.priceCents + product.shippingCents;
 
@@ -54,10 +55,16 @@ export async function POST(req: Request) {
       ],
       success_url: `${appUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${appUrl}/products/${product.id}`,
+      // Don't collect shipping address for pickup orders
+      ...(isPickup
+        ? {}
+        : {
+            shipping_address_collection: { allowed_countries: ['US', 'CA', 'GB', 'AU'] },
+          }),
       metadata: {
         buyerId: session.user.id,
         items: JSON.stringify([{ productId: product.id, quantity: 1 }]),
-        fulfillmentType,
+        fulfillmentType: isPickup ? 'PICKUP' : 'SHIPPING',
       },
     });
 

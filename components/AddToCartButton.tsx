@@ -8,6 +8,9 @@ type Item = {
   imageUrl: string;
   shippingCents: number;
   quantity: number;
+  pickupAvailable?: boolean;
+  pickupCity?: string;
+  pickupState?: string;
 };
 
 export default function AddToCartButton({ item }: { item: Omit<Item, 'quantity'> }) {

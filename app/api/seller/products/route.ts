@@ -15,10 +15,10 @@ const schema = z.object({
   condition: z.string().min(1),
   imageUrl: z.string().url(),
   inventory: z.string().optional(),
-  pickupAvailable: z.string().optional(),
-  pickupCity: z.string().optional(),
-  pickupState: z.string().optional(),
-  pickupPostalCode: z.string().optional(),
+  pickupAvailable: z.string().optional(), // "true" when checkbox is checked
+  pickupCity: z.string().max(100).optional(),
+  pickupState: z.string().max(2).optional(),
+  pickupPostalCode: z.string().max(20).optional(),
 });
 
 export async function GET(req: Request) {

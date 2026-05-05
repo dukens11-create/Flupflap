@@ -448,3 +448,73 @@ Every moderation action is stored in `SellerModerationLog` with:
 - `createdAt` — timestamp
 
 The last five log entries are shown in the seller card on `/admin/sellers`.
+
+---
+
+## Local pickup and buyer-to-seller distance
+
+Sellers can mark individual listings as available for local pickup. Buyers can
+see pickup availability, the seller's approximate location, and their distance
+from the seller.
+
+### How it works
+
+#### For sellers
+1. When creating or editing a listing, check **"This item is available for local pickup"**.
+2. Enter a **city**, **state**, and **ZIP / postal code** for the pickup location.
+   - Only city and state are shown publicly. The postal code is used only for
+     approximate distance calculation and is never displayed to buyers.
+
+#### For buyers
+- The product listing card shows a **"🏠 Pickup in City, State"** badge if pickup is available.
+- The product detail page shows a **green pickup widget** with:
+  - The seller's city and state.
+  - A **"Show distance from me"** button that uses the browser's Geolocation API
+    (with the buyer's consent) to calculate the approximate distance in miles.
+- At checkout, items with pickup available show a **"Pick up in City, State"** toggle.
+  Choosing pickup removes the shipping fee for that item and does not collect a
+  shipping address from Stripe.
+- The product page also shows a **"🏠 Buy now — Pick up locally"** button that
+  creates a pickup-only Stripe checkout session (no shipping address, no shipping fee).
+
+### Distance calculation
+
+Distance is calculated with the Haversine formula using:
+- **Buyer location**: browser Geolocation API (requires permission from the buyer).
+- **Seller location**: the seller's postal code is geocoded via the free
+  [zippopotam.us](https://api.zippopotam.us) service (no API key required).
+
+This gives city-level accuracy. If the buyer denies location access or the
+postal code cannot be geocoded, the distance widget shows a friendly error.
+
+**Limitation**: distance is approximate (city-level, not street-level) and
+requires the buyer to grant location permission in their browser. Exact pickup
+addresses are never stored or displayed; sellers should exchange precise
+address details with buyers privately after an order is placed.
+
+### Pickup orders
+
+- Pickup orders are stored with `isPickup = true` on the `Order` record.
+- The order detail page shows a green **"Local Pickup Order"** banner with the
+  seller's city and state, and a prompt to contact the seller to arrange a
+  pickup time and confirm the exact location.
+- Shipping tracking is not applicable for pickup orders.
+- No shipping address is collected from Stripe for pure pickup orders.
+
+### Schema changes
+
+The following columns were added to support pickup:
+
+| Table | Column | Type | Purpose |
+|---|---|---|---|
+| `Product` | `pickupAvailable` | `Boolean` | Whether pickup is offered |
+| `Product` | `pickupCity` | `String?` | Seller pickup city |
+| `Product` | `pickupState` | `String?` | Seller pickup state/region |
+| `Product` | `pickupPostalCode` | `String?` | Used for distance geocoding (not shown to buyers) |
+| `Order` | `isPickup` | `Boolean` | Whether this order is a pickup order |
+| `Order` | `pickupCity` | `String?` | Pickup city snapshot on order |
+| `Order` | `pickupState` | `String?` | Pickup state snapshot on order |
+
+No new environment variables are required for the pickup feature.
+The geocoding proxy (`/api/geo/zip`) calls `api.zippopotam.us` from the server;
+no API key or account is needed.

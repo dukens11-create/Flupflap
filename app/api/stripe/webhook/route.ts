@@ -61,7 +61,7 @@ export async function POST(req: Request) {
 
     const shipping = cs.shipping_details ?? {};
 
-    // For pickup orders, generate a 6-digit code
+    // For pickup orders, generate a 6-digit confirmation code
     let pickupCode: string | null = null;
     let pickupCodeHash: string | null = null;
     if (fulfillmentType === 'PICKUP') {
@@ -112,6 +112,9 @@ export async function POST(req: Request) {
         },
       });
     }
+
+    // Silence unused variable warning
+    void order;
   }
 
   return new NextResponse('ok', { status: 200 });

@@ -1,6 +1,5 @@
 "use client";
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 
 interface Props {
   productId: string;
@@ -11,7 +10,6 @@ interface Props {
 
 export default function BuyNowButton({ productId, pickupAvailable, pickupCity, pickupState }: Props) {
   const [loading, setLoading] = useState<'ship' | 'pickup' | null>(null);
-  const router = useRouter();
 
   async function handle(fulfillmentType: 'SHIPPING' | 'PICKUP') {
     setLoading(fulfillmentType === 'SHIPPING' ? 'ship' : 'pickup');
@@ -65,4 +63,3 @@ export default function BuyNowButton({ productId, pickupAvailable, pickupCity, p
     </button>
   );
 }
-
