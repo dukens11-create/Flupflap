@@ -72,6 +72,13 @@ export async function POST(req: Request) {
           { status: 429 },
         );
       }
+      if (result.error === 'invalid_phone') {
+        return NextResponse.json(
+          { error: 'Your phone number on file appears to be invalid. Please update it in account settings.' },
+          { status: 400 },
+        );
+      }
+      console.error('[otp/send] OTP send failed for user', user.id);
       return NextResponse.json(
         { error: 'Failed to send verification code. Please try again.' },
         { status: 500 },

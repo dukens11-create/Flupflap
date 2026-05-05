@@ -158,6 +158,10 @@ function LoginForm() {
             placeholder="+1 555 000 1234"
             required
           />
+          <p className="text-xs text-slate-400 mt-1">
+            Country code recommended (e.g. +1 for US/Canada, +44 for UK).
+            10-digit US numbers without a country code are also accepted.
+          </p>
         </div>
         {error && <p className="text-red-600 text-sm">{error}</p>}
         <button className="btn-primary w-full" disabled={loading}>

@@ -20,6 +20,20 @@ function isTwilioConfigured(): boolean {
   );
 }
 
+/** Log a structured error for actionable server-side diagnostics. */
+function logSmsError(to: string, err: unknown): void {
+  const errObj = err as any;
+  console.error('[SMS] Failed to send message', {
+    to,
+    env: process.env.NODE_ENV,
+    twilioConfigured: isTwilioConfigured(),
+    errorCode: errObj?.code,
+    errorStatus: errObj?.status,
+    errorMessage: errObj?.message,
+    moreInfo: errObj?.moreInfo,
+  });
+}
+
 /**
  * Send an SMS message.
  *
@@ -31,10 +45,12 @@ export async function sendSms(to: string, body: string): Promise<void> {
     if (process.env.NODE_ENV === 'production') {
       // In production without Twilio configured, refuse to proceed so the
       // operator is alerted immediately rather than silently skipping 2FA.
-      throw new Error(
-        'Twilio is not configured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, ' +
+      const err = new Error(
+        '[SMS] Twilio is not configured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, ' +
         'and TWILIO_FROM_NUMBER environment variables.',
       );
+      console.error(err.message, { to, env: process.env.NODE_ENV });
+      throw err;
     }
     // Dev / mock mode — logs OTP to console for local development only.
     console.warn('[OTP DEV MODE] SMS not sent. Twilio env vars missing.');
@@ -48,9 +64,14 @@ export async function sendSms(to: string, body: string): Promise<void> {
     process.env.TWILIO_ACCOUNT_SID!,
     process.env.TWILIO_AUTH_TOKEN!,
   );
-  await client.messages.create({
-    to,
-    from: process.env.TWILIO_FROM_NUMBER!,
-    body,
-  });
+  try {
+    await client.messages.create({
+      to,
+      from: process.env.TWILIO_FROM_NUMBER!,
+      body,
+    });
+  } catch (err) {
+    logSmsError(to, err);
+    throw err;
+  }
 }
