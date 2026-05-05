@@ -3,6 +3,15 @@ import { headers } from 'next/headers';
 import { prisma } from '@/lib/db';
 import { stripe } from '@/lib/stripe';
 import { platformFee, sellerPayout } from '@/lib/money';
+import crypto from 'crypto';
+
+/** Generate a cryptographically secure 6-digit pickup confirmation code. */
+function generatePickupCode(): string {
+  // crypto.randomInt is CSPRNG; range [100000, 1000000) gives 900,000
+  // possible codes. Access is gated behind seller authentication and order
+  // ownership, making brute force impractical.
+  return String(crypto.randomInt(100000, 1000000));
+}
 
 export async function POST(req: Request) {
   const body = await req.text();
@@ -70,6 +79,7 @@ export async function POST(req: Request) {
         stripeCheckoutId: cs.id,
         stripePaymentIntentId: cs.payment_intent ?? null,
         isPickup: isPickupOrder,
+        pickupCode: isPickupOrder ? generatePickupCode() : null,
         pickupCity: isPickupOrder ? (firstPickupProduct?.pickupCity ?? null) : null,
         pickupState: isPickupOrder ? (firstPickupProduct?.pickupState ?? null) : null,
         shippingName: shipping?.name ?? null,

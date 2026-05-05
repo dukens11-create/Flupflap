@@ -15,6 +15,8 @@ const STATUS_LABELS: Record<string, string> = {
   DELIVERED: 'Delivered',
   CANCELLED: 'Cancelled',
   REFUNDED: 'Refunded',
+  READY_FOR_PICKUP: 'Ready for Pickup',
+  PICKED_UP: 'Picked Up',
 };
 
 function statusBadge(status: string) {
@@ -25,6 +27,8 @@ function statusBadge(status: string) {
     DELIVERED: 'badge-green',
     CANCELLED: 'badge-red',
     REFUNDED: 'badge-slate',
+    READY_FOR_PICKUP: 'badge-blue',
+    PICKED_UP: 'badge-green',
   };
   return map[status] ?? 'badge-slate';
 }
@@ -136,13 +140,32 @@ export default async function OrderDetailPage({
             This order is marked for local pickup — no shipping is required.
           </p>
           {(order.pickupCity || order.pickupState) && (
-            <p className="text-sm text-green-700">
+            <p className="text-sm text-green-700 mb-2">
               Pickup location: <span className="font-medium">{[order.pickupCity, order.pickupState].filter(Boolean).join(', ')}</span>
             </p>
           )}
-          <p className="text-xs text-green-600 mt-2">
-            Contact the seller to arrange a pickup time and confirm the exact location.
-          </p>
+          {order.status === 'PICKED_UP' ? (
+            <div className="mt-2 p-3 bg-green-100 rounded-xl">
+              <p className="text-sm font-semibold text-green-800">✅ Pickup confirmed</p>
+              {order.pickupConfirmedAt && (
+                <p className="text-xs text-green-700 mt-0.5">
+                  Confirmed on {new Date(order.pickupConfirmedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                </p>
+              )}
+            </div>
+          ) : order.pickupCode ? (
+            <div className="mt-2 p-3 bg-white border border-green-200 rounded-xl">
+              <p className="text-xs text-green-700 font-semibold uppercase tracking-wide mb-1">Your pickup code</p>
+              <p className="text-3xl font-black tracking-widest text-slate-900">{order.pickupCode}</p>
+              <p className="text-xs text-slate-500 mt-1">
+                Show this code to the seller when you pick up your item. The seller will enter it to confirm the handoff.
+              </p>
+            </div>
+          ) : (
+            <p className="text-xs text-green-600 mt-2">
+              Contact the seller to arrange a pickup time and confirm the exact location.
+            </p>
+          )}
         </div>
       )}
 

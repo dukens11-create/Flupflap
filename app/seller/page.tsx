@@ -6,6 +6,7 @@ import { dollars, platformFee } from '@/lib/money';
 import { stripe } from '@/lib/stripe';
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import PickupVerifyForm from '@/components/PickupVerifyForm';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,7 +23,8 @@ function statusBadge(status: string) {
 }
 
 function orderStatusBadge(status: string) {
-  return ['PAID', 'SHIPPED', 'DELIVERED'].includes(status) ? 'badge-green' : 'badge-yellow';
+  const greenStatuses = ['PAID', 'SHIPPED', 'DELIVERED', 'READY_FOR_PICKUP', 'PICKED_UP'];
+  return greenStatuses.includes(status) ? 'badge-green' : 'badge-yellow';
 }
 
 function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
@@ -61,7 +63,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
     prisma.orderItem.findMany({
       where: {
         product: { sellerId: session.user.id },
-        order: { status: { in: ['PAID', 'SHIPPED', 'DELIVERED'] } },
+        order: { status: { in: ['PAID', 'SHIPPED', 'DELIVERED', 'PICKED_UP'] } },
       },
       include: {
         product: { select: { title: true, id: true } },
@@ -262,13 +264,24 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                   <p key={i.id} className="text-sm text-slate-700">{i.product.title} × {i.quantity}</p>
                 ))}
                 <p className="text-sm font-bold mt-2">{dollars(o.totalCents)}</p>
-                {(o.status === 'PAID') && !isRestricted && (
+                {/* Shipping form for non-pickup PAID orders */}
+                {o.status === 'PAID' && !o.isPickup && !isRestricted && (
                   <form action="/api/seller/ship" method="POST" className="mt-3 flex gap-2">
                     <input type="hidden" name="orderId" value={o.id} />
                     <input name="trackingNumber" className="input flex-1" placeholder="Tracking number" />
                     <input name="shippingCarrier" className="input w-24" placeholder="Carrier" />
                     <button type="submit" className="btn-primary text-sm">Mark Shipped</button>
                   </form>
+                )}
+                {/* Pickup verification for pickup orders */}
+                {o.isPickup && ['PAID', 'READY_FOR_PICKUP'].includes(o.status) && !isRestricted && (
+                  <div className="mt-3">
+                    <p className="text-xs text-slate-500 mb-2">📦 Pickup order — verify the buyer&apos;s code at handoff:</p>
+                    <PickupVerifyForm orderId={o.id} />
+                  </div>
+                )}
+                {o.isPickup && o.status === 'PICKED_UP' && (
+                  <p className="text-xs text-green-700 mt-2 font-medium">✅ Pickup confirmed</p>
                 )}
                 {o.trackingNumber && (
                   <p className="text-xs text-slate-500 mt-2">📦 {o.shippingCarrier}: {o.trackingNumber}</p>

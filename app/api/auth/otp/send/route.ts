@@ -58,12 +58,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ step: 'signin' });
     }
 
-    // Seller but no phone registered.
+    // Seller but no phone registered — route to phone setup flow.
     if (!user.phone) {
-      return NextResponse.json(
-        { error: 'No phone number on file. Please contact support.' },
-        { status: 400 },
-      );
+      return NextResponse.json({ step: 'add_phone' });
     }
 
     const result = await createAndSendOtp(user.id, user.phone);
