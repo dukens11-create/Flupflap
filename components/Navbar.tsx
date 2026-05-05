@@ -29,6 +29,11 @@ function useCartCount() {
   return count;
 }
 
+/** Shape of each conversation returned by GET /api/messages (only fields used here). */
+type InboxConversation = {
+  unread: boolean;
+};
+
 function useUnreadMessages(loggedIn: boolean) {
   const [unread, setUnread] = useState(0);
 
@@ -39,21 +44,20 @@ function useUnreadMessages(loggedIn: boolean) {
       try {
         const res = await fetch('/api/messages');
         if (!res.ok || cancelled) return;
-        const data: { messages: { senderId: string; readAt: string | null }[] }[] = await res.json();
-        // Count conversations that have an unread last message not from me
-        // (server already filters by current user, so any message with readAt=null from another sender counts)
-        let count = 0;
-        for (const conv of data) {
-          const last = (conv as any).messages?.[0];
-          if (last && last.readAt === null) count++;
-        }
+        const data: InboxConversation[] = await res.json();
+        const count = data.filter((conv) => conv.unread).length;
         if (!cancelled) setUnread(count);
       } catch {
         // ignore
       }
     }
     load();
-    return () => { cancelled = true; };
+    // Poll every 30 seconds so the badge stays up to date
+    const interval = setInterval(load, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, [loggedIn]);
 
   return unread;

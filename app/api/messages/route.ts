@@ -31,21 +31,39 @@ export async function GET() {
       buyer: { select: { id: true, name: true } },
       seller: { select: { id: true, name: true } },
       product: { select: { id: true, title: true, imageUrl: true, status: true } },
+      // Last message for preview
       messages: {
         orderBy: { createdAt: 'desc' },
         take: 1,
         select: { id: true, body: true, createdAt: true, senderId: true, readAt: true },
       },
+      // Separate count of all unread messages from the other party
+      _count: {
+        select: {
+          messages: true,
+        },
+      },
     },
     orderBy: { updatedAt: 'desc' },
   });
 
-  // Attach unread count (messages not sent by me that have no readAt)
-  const result = conversations.map((conv) => {
-    const unread = conv.messages.filter(
-      (m) => m.senderId !== userId && m.readAt === null,
-    ).length;
-    return { ...conv, unread };
+  // Compute per-conversation unread count using a separate aggregation query
+  // to avoid relying on the single take:1 preview message.
+  const unreadCounts = await Promise.all(
+    conversations.map((conv) =>
+      prisma.message.count({
+        where: {
+          conversationId: conv.id,
+          senderId: { not: userId },
+          readAt: null,
+        },
+      }),
+    ),
+  );
+
+  const result = conversations.map((conv, i) => {
+    const { _count: _, ...rest } = conv;
+    return { ...rest, unreadCount: unreadCounts[i], unread: unreadCounts[i] > 0 };
   });
 
   return NextResponse.json(result);

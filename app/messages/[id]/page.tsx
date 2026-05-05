@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
+import { dollars } from '@/lib/money';
 
 type Sender = { id: string; name: string };
 
@@ -44,10 +45,6 @@ function formatTime(dateStr: string): string {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-function dollars(cents: number): string {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
-}
-
 export default function ConversationPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -82,12 +79,17 @@ export default function ConversationPage() {
   }, [status, load, router]);
 
   // Scroll to bottom when messages change
+  const lastMessageId = conv?.messages[conv.messages.length - 1]?.id;
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [conv?.messages.length]);
+  }, [lastMessageId]);
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
+    await submitMessage();
+  }
+
+  async function submitMessage() {
     if (!reply.trim()) return;
     setSendError('');
     setSending(true);
@@ -213,7 +215,7 @@ export default function ConversationPage() {
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
-              handleSend(e as unknown as React.FormEvent);
+              submitMessage();
             }
           }}
           disabled={sending}
