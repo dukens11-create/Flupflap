@@ -29,10 +29,14 @@ export default function PickupDistance({ sellerLat, sellerLng, pickupCity, picku
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [geoTried, setGeoTried] = useState(false);
+  const [geoDenied, setGeoDenied] = useState(false);
 
   // Try browser geolocation on mount
   useEffect(() => {
-    if (!navigator.geolocation) return;
+    if (!navigator.geolocation) {
+      setGeoTried(true);
+      return;
+    }
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const d = haversineMiles(pos.coords.latitude, pos.coords.longitude, sellerLat, sellerLng);
@@ -40,7 +44,9 @@ export default function PickupDistance({ sellerLat, sellerLng, pickupCity, picku
         setGeoTried(true);
       },
       () => {
+        // Location access denied or error — prompt ZIP entry
         setGeoTried(true);
+        setGeoDenied(true);
       },
       { timeout: 5000 },
     );
@@ -88,23 +94,30 @@ export default function PickupDistance({ sellerLat, sellerLng, pickupCity, picku
         </p>
       ) : (
         geoTried && (
-          <form onSubmit={lookupZip} className="flex gap-2 items-center">
-            <input
-              type="text"
-              value={zipInput}
-              onChange={(e) => setZipInput(e.target.value)}
-              placeholder="Enter your ZIP code"
-              maxLength={5}
-            className="input max-w-[160px] text-sm py-1"
-            />
-            <button
-              type="submit"
-              disabled={loading}
-              className="btn-outline text-xs py-1 px-3"
-            >
-              {loading ? '…' : 'Get distance'}
-            </button>
-          </form>
+          <div>
+            {geoDenied && (
+              <p className="text-xs text-slate-500 mb-1">
+                📍 Location access was denied. Enter your ZIP code to see the distance:
+              </p>
+            )}
+            <form onSubmit={lookupZip} className="flex gap-2 items-center">
+              <input
+                type="text"
+                value={zipInput}
+                onChange={(e) => setZipInput(e.target.value)}
+                placeholder="Enter your ZIP code"
+                maxLength={5}
+                className="input max-w-[160px] text-sm py-1"
+              />
+              <button
+                type="submit"
+                disabled={loading}
+                className="btn-outline text-xs py-1 px-3"
+              >
+                {loading ? '…' : 'Get distance'}
+              </button>
+            </form>
+          </div>
         )
       )}
 

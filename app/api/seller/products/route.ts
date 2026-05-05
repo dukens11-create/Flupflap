@@ -35,19 +35,7 @@ export async function GET(req: Request) {
 }
 
 import { serverBaseUrl } from '@/lib/server-url';
-
-/** Geocode a postal code via the internal proxy (no external key needed). */
-async function geocodePostalCode(postalCode: string): Promise<{ lat: number; lng: number } | null> {
-  try {
-    const res = await fetch(`${serverBaseUrl()}/api/geo/zip?zip=${encodeURIComponent(postalCode)}`);
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (typeof data.lat === 'number' && typeof data.lng === 'number') return data;
-    return null;
-  } catch {
-    return null;
-  }
-}
+import { geocodeZip } from '@/lib/geo';
 
 export async function POST(req: Request) {
   try {
@@ -70,7 +58,7 @@ export async function POST(req: Request) {
     let pickupLng: number | null = null;
 
     if (pickupAvailable && data.pickupPostalCode) {
-      const geo = await geocodePostalCode(data.pickupPostalCode);
+      const geo = await geocodeZip(data.pickupPostalCode);
       if (geo) {
         pickupLat = geo.lat;
         pickupLng = geo.lng;

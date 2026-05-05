@@ -28,7 +28,8 @@ export async function POST(req: Request) {
     const lineItems = products.map(p => {
       const cartItem = items.find(i => i.productId === p.id);
       const qty = cartItem?.quantity ?? 1;
-      const isPickup = cartItem?.isPickup ?? false;
+      // Only apply zero shipping if the product actually supports pickup
+      const isPickup = (cartItem?.isPickup ?? false) && p.pickupAvailable;
       return {
         price_data: {
           currency: 'usd',
@@ -36,6 +37,17 @@ export async function POST(req: Request) {
           unit_amount: p.priceCents + (isPickup ? 0 : p.shippingCents),
         },
         quantity: qty,
+      };
+    });
+
+    // Build the validated items list (server-side) for the webhook
+    const validatedItems = items.map(i => {
+      const product = products.find(p => p.id === i.productId);
+      return {
+        productId: i.productId,
+        quantity: i.quantity,
+        // Only mark as pickup if product actually supports it
+        isPickup: (i.isPickup ?? false) && (product?.pickupAvailable ?? false),
       };
     });
 
@@ -47,7 +59,7 @@ export async function POST(req: Request) {
       cancel_url: `${appUrl}/checkout/cancel`,
       metadata: {
         buyerId: session.user.id,
-        items: JSON.stringify(items),
+        items: JSON.stringify(validatedItems),
       },
     });
 

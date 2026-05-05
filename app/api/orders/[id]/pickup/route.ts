@@ -64,18 +64,14 @@ export async function POST(
 
     const { code } = schema.parse(await req.json());
 
-    // Use constant-time comparison to prevent timing attacks
+    // Use constant-time comparison to prevent timing attacks on pickup codes.
+    // Both buffers must be the same length for timingSafeEqual.
     const expectedCode = order.pickupConfirmation.code.toUpperCase();
-    const providedCode = code.trim().toUpperCase();
+    const providedCode = code.trim().toUpperCase().padEnd(6).slice(0, 6);
+    const expectedBuf = Buffer.from(expectedCode.padEnd(6).slice(0, 6), 'utf8');
+    const providedBuf = Buffer.from(providedCode, 'utf8');
 
-    // Pad both codes to the same length before comparing (timingSafeEqual requires equal lengths)
-    const expected = Buffer.from(expectedCode.padEnd(10));
-    const provided = Buffer.from(providedCode.padEnd(10));
-    const codesMatch = expected.length === provided.length &&
-      crypto.timingSafeEqual(expected, provided) &&
-      expectedCode === providedCode; // final exact match after timing-safe check
-
-    if (!codesMatch) {
+    if (!crypto.timingSafeEqual(expectedBuf, providedBuf)) {
       return NextResponse.json({ error: 'Incorrect pickup code.' }, { status: 400 });
     }
 

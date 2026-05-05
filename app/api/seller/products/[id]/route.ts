@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { cents } from '@/lib/money';
 import { z } from 'zod';
-import { serverBaseUrl } from '@/lib/server-url';
+import { geocodeZip } from '@/lib/geo';
 
 const updateSchema = z.object({
   title: z.string().min(3).optional(),
@@ -23,19 +23,6 @@ const updateSchema = z.object({
 
 async function getSellerProduct(id: string, sellerId: string) {
   return prisma.product.findFirst({ where: { id, sellerId } });
-}
-
-/** Geocode a postal code via the internal proxy. */
-async function geocodePostalCode(postalCode: string): Promise<{ lat: number; lng: number } | null> {
-  try {
-    const res = await fetch(`${serverBaseUrl()}/api/geo/zip?zip=${encodeURIComponent(postalCode)}`);
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (typeof data.lat === 'number' && typeof data.lng === 'number') return data;
-    return null;
-  } catch {
-    return null;
-  }
 }
 
 /** POST handles both edits (_method=update) and deletes (_method=delete) via HTML forms */
@@ -82,7 +69,7 @@ export async function POST(
 
     if (data.pickupPostalCode !== undefined) {
       if (pickupAvailable && data.pickupPostalCode) {
-        const geo = await geocodePostalCode(data.pickupPostalCode);
+        const geo = await geocodeZip(data.pickupPostalCode);
         pickupLat = geo?.lat ?? null;
         pickupLng = geo?.lng ?? null;
       } else if (!pickupAvailable) {
@@ -155,7 +142,7 @@ export async function PATCH(
 
     if (data.pickupPostalCode !== undefined) {
       if (pickupAvailable && data.pickupPostalCode) {
-        const geo = await geocodePostalCode(data.pickupPostalCode);
+        const geo = await geocodeZip(data.pickupPostalCode);
         pickupLat = geo?.lat ?? null;
         pickupLng = geo?.lng ?? null;
       } else if (!pickupAvailable) {
