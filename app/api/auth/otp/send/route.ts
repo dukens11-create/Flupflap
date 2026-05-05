@@ -39,11 +39,15 @@ export async function POST(req: Request) {
     });
 
     // Always run bcrypt compare to prevent timing attacks that could reveal
-    // whether an email exists.
-    const dummyHash = '$2b$08$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
-    const passwordOk = user
-      ? await bcrypt.compare(password, user.password)
-      : (await bcrypt.compare(password, dummyHash), false);
+    // whether an email address is registered in the system.
+    const timingAttackPreventionHash = '$2b$08$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+    let passwordOk: boolean;
+    if (user) {
+      passwordOk = await bcrypt.compare(password, user.password);
+    } else {
+      await bcrypt.compare(password, timingAttackPreventionHash);
+      passwordOk = false;
+    }
 
     if (!user || !passwordOk) {
       return NextResponse.json({ error: 'Invalid email or password.' }, { status: 401 });

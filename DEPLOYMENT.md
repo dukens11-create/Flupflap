@@ -186,8 +186,10 @@ If any of the three Twilio variables are absent, the app runs in **mock mode**:
 the OTP is logged to the server console (`[OTP DEV MODE]`) instead of being
 sent by SMS.  This lets you develop and test locally without a Twilio account.
 
-> **Important:** mock mode must never be used in production.  Always set all
-> three `TWILIO_*` variables in the Render environment before going live.
+> **Important:** when `NODE_ENV=production` (which Render sets automatically),
+> the app will throw a startup error if any `TWILIO_*` variable is missing,
+> preventing sellers from bypassing the second factor.  Always set all three
+> `TWILIO_*` variables in the Render environment before going live.
 
 ### Testing seller sign-in locally
 

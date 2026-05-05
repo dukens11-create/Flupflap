@@ -26,7 +26,8 @@ const RESEND_COOLDOWN_SECONDS = 60;
 
 /** Generate a cryptographically secure 6-digit code (100000–999999). */
 function generateCode(): string {
-  return String(crypto.randomInt(100000, 999999));
+  // randomInt(min, max) returns a value in [min, max). Use 1_000_000 to include 999999.
+  return String(crypto.randomInt(100000, 1000000));
 }
 
 export type CreateOtpResult =

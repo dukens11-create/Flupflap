@@ -28,7 +28,15 @@ function isTwilioConfigured(): boolean {
  */
 export async function sendSms(to: string, body: string): Promise<void> {
   if (!isTwilioConfigured()) {
-    // Dev / mock mode — never runs in production
+    if (process.env.NODE_ENV === 'production') {
+      // In production without Twilio configured, refuse to proceed so the
+      // operator is alerted immediately rather than silently skipping 2FA.
+      throw new Error(
+        'Twilio is not configured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, ' +
+        'and TWILIO_FROM_NUMBER environment variables.',
+      );
+    }
+    // Dev / mock mode — logs OTP to console for local development only.
     console.warn('[OTP DEV MODE] SMS not sent. Twilio env vars missing.');
     console.info(`[OTP DEV MODE] To: ${to}  Message: ${body}`);
     return;

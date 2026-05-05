@@ -105,6 +105,11 @@ function LoginForm() {
     }
   }
 
+  function handleBackToCredentials() {
+    setStep('credentials');
+    setError('');
+  }
+
   if (step === 'otp') {
     return (
       <form onSubmit={submitOtp} className="card p-6 mt-6 space-y-4">
@@ -143,7 +148,7 @@ function LoginForm() {
           <button
             type="button"
             className="hover:text-blue-600"
-            onClick={() => { setStep('credentials'); setError(''); }}
+            onClick={handleBackToCredentials}
           >
             Back
           </button>
