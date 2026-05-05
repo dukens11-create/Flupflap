@@ -24,6 +24,7 @@ import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { createAndSendOtp } from '@/lib/otp';
+import { normalizePhone } from '@/lib/phone';
 
 const schema = z.object({
   email: z.string().email(),
@@ -67,13 +68,22 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Phone setup is only available for seller accounts.' }, { status: 400 });
     }
 
+    // Normalize to E.164 before saving and sending.
+    const normalizedPhone = normalizePhone(phone);
+    if (!normalizedPhone) {
+      return NextResponse.json(
+        { error: 'Invalid phone number. Please include your country code (e.g. +1 for US/Canada).' },
+        { status: 400 },
+      );
+    }
+
     // Save phone (unverified); it will be marked verified on successful OTP login.
     await prisma.user.update({
       where: { id: user.id },
-      data: { phone, phoneVerified: false },
+      data: { phone: normalizedPhone, phoneVerified: false },
     });
 
-    const result = await createAndSendOtp(user.id, phone);
+    const result = await createAndSendOtp(user.id, normalizedPhone);
 
     if (!result.ok) {
       if (result.error === 'rate_limited') {
@@ -82,8 +92,15 @@ export async function POST(req: Request) {
           { status: 429 },
         );
       }
+      if (result.error === 'invalid_phone') {
+        return NextResponse.json(
+          { error: 'Invalid phone number. Please include your country code (e.g. +1 for US/Canada).' },
+          { status: 400 },
+        );
+      }
+      console.error('[setup-phone] OTP send failed for user', user.id);
       return NextResponse.json(
-        { error: 'Failed to send verification code. Please try again.' },
+        { error: 'Failed to send verification code. Please check your phone number and try again.' },
         { status: 500 },
       );
     }

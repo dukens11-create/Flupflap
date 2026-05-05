@@ -13,6 +13,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { sendSms } from '@/lib/twilio';
+import { normalizePhone } from '@/lib/phone';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { z } from 'zod';
@@ -39,6 +40,15 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { phone } = schema.parse(body);
 
+    // Normalize to E.164 before storing and sending.
+    const normalizedPhone = normalizePhone(phone);
+    if (!normalizedPhone) {
+      return NextResponse.json(
+        { error: 'Invalid phone number. Please include your country code (e.g. +1 for US/Canada).' },
+        { status: 400 },
+      );
+    }
+
     // Enforce resend cooldown
     const existing = await prisma.phoneVerificationToken.findUnique({
       where: { userId: session.user.id },
@@ -59,21 +69,25 @@ export async function POST(req: Request) {
 
     await prisma.phoneVerificationToken.upsert({
       where: { userId: session.user.id },
-      update: { phone, codeHash, expiresAt, attempts: 0, createdAt: new Date() },
-      create: { userId: session.user.id, phone, codeHash, expiresAt },
+      update: { phone: normalizedPhone, codeHash, expiresAt, attempts: 0, createdAt: new Date() },
+      create: { userId: session.user.id, phone: normalizedPhone, codeHash, expiresAt },
     });
 
     try {
       await sendSms(
-        phone,
+        normalizedPhone,
         `Your FlupFlap phone verification code is: ${code}. It expires in ${EXPIRY_MINUTES} minutes.`,
       );
-    } catch {
+    } catch (err) {
+      console.error('[account/phone/send] SMS send failed', {
+        userId: session.user.id,
+        error: (err as any)?.message,
+      });
       await prisma.phoneVerificationToken.delete({ where: { userId: session.user.id } }).catch(() => null);
       return NextResponse.json({ error: 'Failed to send verification code. Please try again.' }, { status: 500 });
     }
 
-    const digits = phone.replace(/\D/g, '');
+    const digits = normalizedPhone.replace(/\D/g, '');
     const maskedPhone = digits.length >= 4 ? `***-***-${digits.slice(-4)}` : '****';
 
     return NextResponse.json({ ok: true, maskedPhone });

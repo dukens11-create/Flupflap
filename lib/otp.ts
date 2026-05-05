@@ -19,6 +19,7 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { prisma } from './db';
 import { sendSms } from './twilio';
+import { normalizePhone } from './phone';
 
 const OTP_EXPIRY_MINUTES = 10;
 const MAX_ATTEMPTS = 5;
@@ -32,16 +33,26 @@ function generateCode(): string {
 
 export type CreateOtpResult =
   | { ok: true; maskedPhone: string }
-  | { ok: false; error: 'rate_limited' | 'send_failed' };
+  | { ok: false; error: 'rate_limited' | 'send_failed' | 'invalid_phone' };
 
 /**
  * Generate, store, and send a new OTP for the given seller.
  * Returns `maskedPhone` (e.g. "***-***-1234") on success.
+ *
+ * The phone number is normalized to E.164 before being sent to the SMS
+ * provider so that numbers like "7753891414" are converted to "+17753891414".
  */
 export async function createAndSendOtp(
   userId: string,
   phone: string,
 ): Promise<CreateOtpResult> {
+  // Normalize to E.164 so the SMS provider receives a well-formed number.
+  const normalizedPhone = normalizePhone(phone);
+  if (!normalizedPhone) {
+    console.error('[OTP] Invalid phone number supplied', { userId, phone });
+    return { ok: false, error: 'invalid_phone' };
+  }
+
   // Enforce resend cooldown: reject if the last OTP was created < RESEND_COOLDOWN_SECONDS ago.
   const existing = await prisma.sellerOtp.findUnique({ where: { userId } });
   if (existing) {
@@ -61,12 +72,21 @@ export async function createAndSendOtp(
     create: { userId, codeHash, expiresAt },
   });
 
-  const maskedPhone = maskPhone(phone);
+  const maskedPhone = maskPhone(normalizedPhone);
 
   try {
-    await sendSms(phone, `Your FlupFlap verification code is: ${code}. It expires in ${OTP_EXPIRY_MINUTES} minutes.`);
-  } catch {
-    // Clean up the stored code so the user can retry.
+    await sendSms(
+      normalizedPhone,
+      `Your FlupFlap verification code is: ${code}. It expires in ${OTP_EXPIRY_MINUTES} minutes.`,
+    );
+  } catch (err) {
+    // Log the error with actionable details before cleaning up.
+    console.error('[OTP] SMS send failed', {
+      userId,
+      maskedPhone,
+      error: (err as any)?.message,
+    });
+    // Clean up the stored code so the user can retry cleanly.
     await prisma.sellerOtp.delete({ where: { userId } }).catch(() => null);
     return { ok: false, error: 'send_failed' };
   }
