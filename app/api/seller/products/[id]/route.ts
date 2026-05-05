@@ -27,8 +27,8 @@ async function getSellerProduct(id: string, sellerId: string) {
 /** Geocode a postal code via the internal proxy. */
 async function geocodePostalCode(postalCode: string): Promise<{ lat: number; lng: number } | null> {
   try {
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? `http://localhost:${process.env.PORT ?? 3000}`;
-    const res = await fetch(`${appUrl}/api/geo/zip?zip=${encodeURIComponent(postalCode)}`);
+    const base = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? `http://localhost:${process.env.PORT ?? 3000}`;
+    const res = await fetch(`${base}/api/geo/zip?zip=${encodeURIComponent(postalCode)}`);
     if (!res.ok) return null;
     const data = await res.json();
     if (typeof data.lat === 'number' && typeof data.lng === 'number') return data;
@@ -150,6 +150,20 @@ export async function PATCH(
 
     const pickupAvailable = data.pickupAvailable === 'true';
 
+    let pickupLat: number | null | undefined = undefined;
+    let pickupLng: number | null | undefined = undefined;
+
+    if (data.pickupPostalCode !== undefined) {
+      if (pickupAvailable && data.pickupPostalCode) {
+        const geo = await geocodePostalCode(data.pickupPostalCode);
+        pickupLat = geo?.lat ?? null;
+        pickupLng = geo?.lng ?? null;
+      } else if (!pickupAvailable) {
+        pickupLat = null;
+        pickupLng = null;
+      }
+    }
+
     const updated = await prisma.product.update({
       where: { id },
       data: {
@@ -165,6 +179,8 @@ export async function PATCH(
         ...(data.pickupCity !== undefined && { pickupCity: pickupAvailable ? (data.pickupCity || null) : null }),
         ...(data.pickupState !== undefined && { pickupState: pickupAvailable ? (data.pickupState || null) : null }),
         ...(data.pickupPostalCode !== undefined && { pickupPostalCode: pickupAvailable ? (data.pickupPostalCode || null) : null }),
+        ...(pickupLat !== undefined && { pickupLat }),
+        ...(pickupLng !== undefined && { pickupLng }),
         status: 'PENDING',
       },
     });

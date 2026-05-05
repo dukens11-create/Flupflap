@@ -375,3 +375,92 @@ Every moderation action is stored in `SellerModerationLog` with:
 - `createdAt` — timestamp
 
 The last five log entries are shown in the seller card on `/admin/sellers`.
+
+---
+
+## Local pickup and buyer-to-seller distance
+
+Sellers can mark listings as available for local pickup when creating or editing a listing.
+
+### Seller setup
+
+1. When creating or editing a listing, check **"Available for local pickup"**.
+2. Enter the pickup **city**, **state**, and **ZIP code**.
+3. The ZIP code is geocoded on save using the free [zippopotam.us](https://www.zippopotam.us) API (no API key required). Lat/lng is stored for distance calculation.
+
+> **Privacy note:** Only the city and state are shown publicly to buyers. The exact ZIP code and coordinates are never displayed on the listing or search results.
+
+### Buyer experience
+
+- On the product page, pickup-available items show a green "✅ Local pickup available" badge.
+- If the buyer's browser supports geolocation, distance is calculated automatically.
+- If geolocation is denied, the buyer can enter their ZIP code to see the approximate distance.
+- Distance is calculated using the [Haversine formula](https://en.wikipedia.org/wiki/Haversine_formula) and displayed in miles.
+- At checkout, pickup items show "📍 Pick up" and do not include a shipping cost.
+
+### Environment variables
+
+No new environment variables are needed. Geocoding uses the public zippopotam.us API.
+
+---
+
+## Pickup confirmation flow
+
+Pickup orders use a secure handoff code to confirm the buyer received the item.
+
+### How it works
+
+1. After a pickup order is paid, a 6-character alphanumeric code is generated and attached to the order (cryptographically random, using unambiguous characters).
+2. The buyer sees their pickup code on the order detail page (`/orders/[id]`). They show this to the seller at pickup.
+3. The seller enters the buyer's code in their seller dashboard (under "Recent Orders").
+4. If the code matches, the order status changes to `PICKED_UP`.
+5. The confirmation is logged with the seller's user ID and timestamp.
+
+### Order statuses added
+
+| Status | Meaning |
+|---|---|
+| `READY_FOR_PICKUP` | Seller has marked the item ready (future use) |
+| `PICKED_UP` | Pickup confirmed by seller code verification |
+
+### Limitations
+
+- Pickup code expiry is not currently enforced (code remains valid until the order is picked up or cancelled). If the order is cancelled, the code becomes functionally obsolete.
+- If a dispute arises, admins can view the PickupConfirmation audit record via the admin user detail page.
+
+---
+
+## Admin user management and support tooling
+
+Admins can view buyer and seller accounts for support and issue resolution at `/admin/users`.
+
+### What admins can see
+
+- Account details (name, email, phone, role, join date)
+- All orders (including pickup confirmation status)
+- All listings (sellers only)
+- Moderation history (sellers only)
+- Admin access log (every time an admin viewed this account)
+
+### What admins cannot see
+
+- Passwords or password hashes
+- Raw Stripe API keys or tokens
+- Two-factor authentication secrets
+
+### Audit trail
+
+Every time an admin visits a user's detail page (`/admin/users/[id]`), an entry is written to `AdminAccessLog`:
+- `adminId` — who accessed it
+- `targetUserId` — which user was viewed
+- `reason` — auto-set to `admin_ui_view` for UI views; can be set to a custom reason via the API
+- `createdAt` — timestamp
+
+The last 10 access log entries are shown on the user detail page.
+
+### Finding accounts
+
+- Use the search bar on `/admin/users` to search by name or email.
+- Use the role filter to see only buyers, sellers, or admins.
+- From a user's detail page, admins can navigate to `/admin/sellers` for seller moderation actions.
+

@@ -47,7 +47,7 @@ export default function PickupVerifyForm({ orderId }: { orderId: string }) {
         value={code}
         onChange={(e) => setCode(e.target.value.toUpperCase())}
         placeholder="Enter buyer's pickup code"
-        maxLength={10}
+        maxLength={6}
         className="input flex-1 font-mono tracking-widest uppercase text-center"
         required
       />

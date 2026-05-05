@@ -15,7 +15,7 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { z } from 'zod';
 
-const schema = z.object({ code: z.string().min(1).max(10) });
+const schema = z.object({ code: z.string().min(1).max(6) });
 
 export async function POST(
   req: Request,

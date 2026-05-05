@@ -35,9 +35,11 @@ export async function GET(req: Request) {
 }
 
 /** Geocode a postal code via the internal proxy (no external key needed). */
-async function geocodePostalCode(postalCode: string, appUrl: string): Promise<{ lat: number; lng: number } | null> {
+async function geocodePostalCode(postalCode: string): Promise<{ lat: number; lng: number } | null> {
   try {
-    const res = await fetch(`${appUrl}/api/geo/zip?zip=${encodeURIComponent(postalCode)}`);
+    // Use the server-side base URL; fall back to localhost for dev environments.
+    const base = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? `http://localhost:${process.env.PORT ?? 3000}`;
+    const res = await fetch(`${base}/api/geo/zip?zip=${encodeURIComponent(postalCode)}`);
     if (!res.ok) return null;
     const data = await res.json();
     if (typeof data.lat === 'number' && typeof data.lng === 'number') return data;
@@ -68,8 +70,7 @@ export async function POST(req: Request) {
     let pickupLng: number | null = null;
 
     if (pickupAvailable && data.pickupPostalCode) {
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? `http://localhost:${process.env.PORT ?? 3000}`;
-      const geo = await geocodePostalCode(data.pickupPostalCode, appUrl);
+      const geo = await geocodePostalCode(data.pickupPostalCode);
       if (geo) {
         pickupLat = geo.lat;
         pickupLng = geo.lng;

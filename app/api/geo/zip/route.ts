@@ -13,8 +13,8 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const zip = searchParams.get('zip')?.replace(/\D/g, '');
 
-  if (!zip || zip.length < 5) {
-    return NextResponse.json({ error: 'Invalid ZIP code.' }, { status: 400 });
+  if (!zip || zip.length !== 5) {
+    return NextResponse.json({ error: 'Please provide a valid 5-digit US ZIP code.' }, { status: 400 });
   }
 
   try {
