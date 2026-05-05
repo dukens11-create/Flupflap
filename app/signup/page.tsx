@@ -8,6 +8,7 @@ export default function SignupPage() {
   const router = useRouter();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [role, setRole] = useState('CUSTOMER');
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -55,11 +56,27 @@ export default function SignupPage() {
         </div>
         <div>
           <label className="label">Account type</label>
-          <select name="role" className="input">
+          <select name="role" className="input" value={role} onChange={e => setRole(e.target.value)}>
             <option value="CUSTOMER">Customer – I want to buy</option>
             <option value="SELLER">Seller – I want to sell</option>
           </select>
         </div>
+        {role === 'SELLER' && (
+          <div>
+            <label className="label">Mobile phone number</label>
+            <input
+              name="phone"
+              type="tel"
+              className="input"
+              placeholder="+1 555 000 1234"
+              required
+            />
+            <p className="text-xs text-slate-500 mt-1">
+              Used for two-factor authentication when you sign in. Standard
+              messaging rates may apply.
+            </p>
+          </div>
+        )}
         {error && <p className="text-red-600 text-sm">{error}</p>}
         <button className="btn-primary w-full" disabled={loading}>
           {loading ? 'Creating account…' : 'Create account'}

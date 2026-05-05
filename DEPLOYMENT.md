@@ -79,6 +79,9 @@ In the **Environment** tab, add:
 | `CLOUDINARY_CLOUD_NAME` | From your Cloudinary dashboard — Settings → API Keys |
 | `CLOUDINARY_API_KEY` | From your Cloudinary dashboard — Settings → API Keys |
 | `CLOUDINARY_API_SECRET` | From your Cloudinary dashboard — Settings → API Keys |
+| `TWILIO_ACCOUNT_SID` | From your Twilio Console — Account SID |
+| `TWILIO_AUTH_TOKEN` | From your Twilio Console — Auth Token |
+| `TWILIO_FROM_NUMBER` | Your Twilio phone number (e.g. `+15005550006`) |
 
 ### Step 5 — Deploy
 
@@ -135,6 +138,69 @@ product create/update flow is unchanged.
 > **Without Cloudinary configured** the file-picker upload returns a 503 error
 > and sellers can still paste a URL directly — backward compatibility is
 > preserved.
+
+---
+
+## Seller two-factor authentication (phone OTP)
+
+When a seller signs in, FlupFlap sends a 6-digit one-time code to their
+registered mobile number.  They must enter this code before the authenticated
+session is granted.  The feature is **scoped to SELLER accounts only** — buyers
+and admins use the normal single-factor login.
+
+### How it works
+
+1. Seller enters their email and password on the login page.
+2. The server validates the credentials and sends a 6-digit SMS code.
+3. Seller enters the code on the second step of the login page.
+4. The server verifies the code (10-minute expiry, 5-attempt limit, 60-second
+   resend cooldown) and grants the session.
+
+### Step 1 — Create a Twilio account
+
+Sign up for free at <https://www.twilio.com>.  You will need:
+
+- A **verified phone number** (Twilio trial) or a purchased number.
+- The **Account SID** and **Auth Token** from the
+  [Twilio Console](https://console.twilio.com).
+
+### Step 2 — Get a Twilio phone number
+
+In the Twilio Console go to **Phone Numbers → Manage → Buy a number** (or use
+your trial number for testing).  Copy the number in E.164 format, e.g.
+`+15005550006`.
+
+### Step 3 — Add the variables to Render
+
+| Variable | Value |
+|---|---|
+| `TWILIO_ACCOUNT_SID` | `ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` |
+| `TWILIO_AUTH_TOKEN` | your auth token |
+| `TWILIO_FROM_NUMBER` | your Twilio number in E.164 format, e.g. `+15005550006` |
+
+Redeploy once after adding the variables.
+
+### Dev / mock mode (no Twilio)
+
+If any of the three Twilio variables are absent, the app runs in **mock mode**:
+the OTP is logged to the server console (`[OTP DEV MODE]`) instead of being
+sent by SMS.  This lets you develop and test locally without a Twilio account.
+
+> **Important:** mock mode must never be used in production.  Always set all
+> three `TWILIO_*` variables in the Render environment before going live.
+
+### Testing seller sign-in locally
+
+1. Create a seller account (`role: SELLER`) via the signup page.  Supply any
+   phone number.
+2. Sign in with the seller's email and password.
+3. Watch the server console for the line:
+
+   ```
+   [OTP DEV MODE] To: +15005550006  Message: Your FlupFlap verification code is: 123456. …
+   ```
+
+4. Enter that 6-digit code on the verification screen to complete sign-in.
 
 ---
 
@@ -210,3 +276,6 @@ Demo accounts created by seed:
 | Stripe webhook `400` errors | `STRIPE_WEBHOOK_SECRET` missing or wrong | Re-copy the signing secret from Stripe and update the env var |
 | App loads but images are broken | Image host not in `next.config.js` | Add the hostname to `remotePatterns` in `next.config.js` |
 | Image upload returns "not configured" error | Cloudinary env vars missing | Add `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` in Render → Environment and redeploy |
+| Seller OTP code never arrives | Twilio env vars missing or wrong | Set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` in Render → Environment and redeploy |
+| Seller OTP arrives in server logs only | App running in mock/dev mode | Set all three `TWILIO_*` env vars in Render → Environment so real SMS is sent |
+| Seller login returns "No phone number on file" | Seller account was created before phone 2FA was added | Ask the seller to contact support to add their phone number to the account |

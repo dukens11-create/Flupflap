@@ -8,12 +8,20 @@ const schema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
   role: z.enum(['CUSTOMER', 'SELLER']).default('CUSTOMER'),
+  phone: z.string().optional(),
 });
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
     const data = schema.parse(body);
+
+    if (data.role === 'SELLER' && !data.phone?.trim()) {
+      return NextResponse.json(
+        { error: 'A mobile phone number is required for seller accounts.' },
+        { status: 400 },
+      );
+    }
 
     const existing = await prisma.user.findUnique({ where: { email: data.email.toLowerCase() } });
     if (existing) {
@@ -27,6 +35,7 @@ export async function POST(req: Request) {
         email: data.email.toLowerCase(),
         password,
         role: data.role,
+        phone: data.role === 'SELLER' ? (data.phone?.trim() ?? null) : null,
       },
     });
 
