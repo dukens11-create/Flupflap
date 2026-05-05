@@ -68,7 +68,7 @@ If you prefer to create the service manually, use **exactly** these settings:
 |---|---|
 | **Service type** | **Web Service** (not Static Site) |
 | **Runtime** | Node |
-| **Build command** | `npm install && npm run build` |
+| **Build command** | `npm install && npm run build && if [ -n "$DATABASE_URL" ]; then npx prisma db push --skip-generate; fi` |
 | **Start command** | `npm run start` |
 | **Publish directory** | *(leave completely blank — do not enter anything here)* |
 

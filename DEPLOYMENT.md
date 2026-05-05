@@ -55,7 +55,7 @@ Set these values exactly:
 | **Region** | Your preferred region |
 | **Branch** | `main` |
 | **Runtime** | Node |
-| **Build Command** | `npm install && npm run build` |
+| **Build Command** | `npm install && npm run build && if [ -n "$DATABASE_URL" ]; then npx prisma db push --skip-generate; fi` |
 | **Start Command** | `npm run start` |
 | **Publish Directory** | *(leave completely empty)* |
 
@@ -83,7 +83,8 @@ Click **Create Web Service**. Render will:
 1. Clone the repository
 2. Install npm dependencies
 3. Run `prisma generate && next build`
-4. Start the server with `next start`
+4. Apply the Prisma schema with `prisma db push` (if `DATABASE_URL` is set at build time)
+5. Start the server with `next start`
 
 A successful deploy shows the app live at your Render URL.
 
