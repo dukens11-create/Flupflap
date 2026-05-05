@@ -48,8 +48,9 @@ export async function POST(req: Request) {
     // both branches take roughly the same time, preventing timing side-channels
     // that could reveal whether an email address is registered in the system.
     // The goal is a CONSTANT (not random) execution time on the failure path.
+    // This is a pre-computed bcrypt hash (cost 8) used solely for timing parity.
     const timingAttackPreventionHash =
-      '$2b$08$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+      '$2b$08$/q5WhRImkX8WonE9ckvfMOUqkcgRD24wzjyJpBuDu3UnZ.XYRudFu';
     let passwordOk: boolean;
     if (user) {
       passwordOk = await bcrypt.compare(password, user.password);
