@@ -22,6 +22,9 @@ export async function POST(req: Request) {
     const buyerId: string = cs.metadata?.buyerId;
     const rawItems: string = cs.metadata?.items ?? '[]';
     const items: { productId: string; quantity: number }[] = JSON.parse(rawItems);
+    const rawPickupIds: string = cs.metadata?.pickupItemIds ?? '[]';
+    const pickupItemIds: string[] = JSON.parse(rawPickupIds);
+    const isPickupOrder: boolean = cs.metadata?.isPickup === 'true';
 
     if (!buyerId || !items.length) {
       return new NextResponse('Missing metadata', { status: 400 });
@@ -31,16 +34,22 @@ export async function POST(req: Request) {
     const existing = await prisma.order.findUnique({ where: { stripeCheckoutId: cs.id } });
     if (existing) return new NextResponse('Already processed', { status: 200 });
 
+    const pickupSet = new Set(pickupItemIds);
+
     const products = await prisma.product.findMany({
       where: { id: { in: items.map(i => i.productId) } },
     });
 
     const totalCents = products.reduce((sum, p) => {
       const qty = items.find(i => i.productId === p.id)?.quantity ?? 1;
-      return sum + (p.priceCents + p.shippingCents) * qty;
+      const isPickup = pickupSet.has(p.id);
+      return sum + (p.priceCents + (isPickup ? 0 : p.shippingCents)) * qty;
     }, 0);
 
     const shipping = cs.shipping_details ?? {};
+
+    // Gather pickup location from first pickup product for order record
+    const firstPickupProduct = products.find(p => pickupSet.has(p.id));
 
     const order = await prisma.order.create({
       data: {
@@ -52,6 +61,7 @@ export async function POST(req: Request) {
         }, 0),
         shippingCents: products.reduce((s, p) => {
           const qty = items.find(i => i.productId === p.id)?.quantity ?? 1;
+          if (pickupSet.has(p.id)) return s; // no shipping for pickup
           return s + p.shippingCents * qty;
         }, 0),
         platformFeeCents: platformFee(totalCents),
@@ -59,6 +69,9 @@ export async function POST(req: Request) {
         status: 'PAID',
         stripeCheckoutId: cs.id,
         stripePaymentIntentId: cs.payment_intent ?? null,
+        isPickup: isPickupOrder,
+        pickupCity: isPickupOrder ? (firstPickupProduct?.pickupCity ?? null) : null,
+        pickupState: isPickupOrder ? (firstPickupProduct?.pickupState ?? null) : null,
         shippingName: shipping?.name ?? null,
         shippingLine1: shipping?.address?.line1 ?? null,
         shippingLine2: shipping?.address?.line2 ?? null,

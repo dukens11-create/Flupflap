@@ -14,6 +14,10 @@ const schema = z.object({
   condition: z.string().min(1),
   imageUrl: z.string().url(),
   inventory: z.string().optional(),
+  pickupAvailable: z.string().optional(), // "true" when checkbox is checked
+  pickupCity: z.string().max(100).optional(),
+  pickupState: z.string().max(2).optional(),
+  pickupPostalCode: z.string().max(20).optional(),
 });
 
 export async function GET(req: Request) {
@@ -58,6 +62,10 @@ export async function POST(req: Request) {
         shippingCents: cents(data.shipping || '0'),
         inventory: Number(data.inventory || 1),
         status: 'PENDING',
+        pickupAvailable: data.pickupAvailable === 'true',
+        pickupCity: data.pickupCity || null,
+        pickupState: data.pickupState || null,
+        pickupPostalCode: data.pickupPostalCode || null,
       },
     });
 

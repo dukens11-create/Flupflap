@@ -14,6 +14,10 @@ const updateSchema = z.object({
   condition: z.string().min(1).optional(),
   imageUrl: z.string().url().optional(),
   inventory: z.string().optional(),
+  pickupAvailable: z.string().optional(), // "true" when checkbox is checked
+  pickupCity: z.string().max(100).optional(),
+  pickupState: z.string().max(2).optional(),
+  pickupPostalCode: z.string().max(20).optional(),
 });
 
 async function getSellerProduct(id: string, sellerId: string) {
@@ -69,6 +73,11 @@ export async function POST(
         ...(data.condition && { condition: data.condition }),
         ...(data.imageUrl && { imageUrl: data.imageUrl }),
         ...(data.inventory && { inventory: Number(data.inventory) }),
+        // Pickup fields — always written on form submit so we can clear them
+        pickupAvailable: data.pickupAvailable === 'true',
+        pickupCity: data.pickupCity || null,
+        pickupState: data.pickupState || null,
+        pickupPostalCode: data.pickupPostalCode || null,
         // Reset to PENDING on edit so admin can re-review
         status: 'PENDING',
       },
@@ -120,6 +129,10 @@ export async function PATCH(
         ...(data.condition && { condition: data.condition }),
         ...(data.imageUrl && { imageUrl: data.imageUrl }),
         ...(data.inventory && { inventory: Number(data.inventory) }),
+        ...(data.pickupAvailable !== undefined && { pickupAvailable: data.pickupAvailable === 'true' }),
+        ...(data.pickupCity !== undefined && { pickupCity: data.pickupCity || null }),
+        ...(data.pickupState !== undefined && { pickupState: data.pickupState || null }),
+        ...(data.pickupPostalCode !== undefined && { pickupPostalCode: data.pickupPostalCode || null }),
         status: 'PENDING',
       },
     });

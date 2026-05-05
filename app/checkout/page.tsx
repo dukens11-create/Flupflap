@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
@@ -11,6 +11,9 @@ interface CartItem {
   shippingCents: number;
   imageUrl: string;
   quantity: number;
+  pickupAvailable?: boolean;
+  pickupCity?: string;
+  pickupState?: string;
 }
 
 function dollars(cents: number) {
@@ -24,6 +27,8 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState('');
+  // Track which items the buyer chose pickup for (item id → true = pickup)
+  const [pickupChoices, setPickupChoices] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     try {
@@ -34,15 +39,36 @@ export default function CheckoutPage() {
     setLoading(false);
   }, []);
 
+  // Items that support pickup
+  const pickupEligibleIds = useMemo(
+    () => new Set(items.filter(i => i.pickupAvailable).map(i => i.id)),
+    [items],
+  );
+
+  const isPickup = useCallback(
+    (itemId: string): boolean => pickupEligibleIds.has(itemId) && !!pickupChoices[itemId],
+    [pickupEligibleIds, pickupChoices],
+  );
+
   const subtotal = useMemo(
     () => items.reduce((s, i) => s + i.priceCents * i.quantity, 0),
-    [items]
+    [items],
   );
   const shipping = useMemo(
-    () => items.reduce((s, i) => s + i.shippingCents * i.quantity, 0),
-    [items]
+    () =>
+      items.reduce((s, i) => {
+        // Skip shipping for items buyer chose to pick up
+        if (isPickup(i.id)) return s;
+        return s + i.shippingCents * i.quantity;
+      }, 0),
+    [items, isPickup],
   );
   const total = subtotal + shipping;
+
+  const pickupItemIds = useMemo(
+    () => items.filter(i => isPickup(i.id)).map(i => i.id),
+    [items, isPickup],
+  );
 
   async function handleCheckout() {
     if (!session?.user) {
@@ -57,6 +83,7 @@ export default function CheckoutPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           items: items.map(i => ({ productId: i.id, quantity: i.quantity })),
+          pickupItemIds,
         }),
       });
       const data = await res.json();
@@ -108,27 +135,58 @@ export default function CheckoutPage() {
         </div>
       )}
 
-      <div className="card p-5 mb-4 space-y-3">
+      <div className="card p-5 mb-4 space-y-4">
         {items.map(item => (
-          <div key={item.id} className="flex items-center gap-3">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={item.imageUrl}
-              alt={item.title}
-              className="w-14 h-14 object-cover rounded-lg flex-shrink-0"
-            />
-            <div className="flex-1 min-w-0">
-              <p className="font-medium truncate">{item.title}</p>
-              <p className="text-sm text-slate-500">
-                {dollars(item.priceCents)} × {item.quantity}
-                {item.shippingCents > 0 && (
-                  <span> · {dollars(item.shippingCents)} shipping</span>
-                )}
+          <div key={item.id}>
+            <div className="flex items-center gap-3">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={item.imageUrl}
+                alt={item.title}
+                className="w-14 h-14 object-cover rounded-lg flex-shrink-0"
+              />
+              <div className="flex-1 min-w-0">
+                <p className="font-medium truncate">{item.title}</p>
+                <p className="text-sm text-slate-500">
+                  {dollars(item.priceCents)} × {item.quantity}
+                  {!isPickup(item.id) && item.shippingCents > 0 && (
+                    <span> · {dollars(item.shippingCents)} shipping</span>
+                  )}
+                  {isPickup(item.id) && (
+                    <span className="text-green-700 font-medium"> · Free pickup</span>
+                  )}
+                </p>
+              </div>
+              <p className="font-semibold flex-shrink-0">
+                {dollars((item.priceCents + (isPickup(item.id) ? 0 : item.shippingCents)) * item.quantity)}
               </p>
             </div>
-            <p className="font-semibold flex-shrink-0">
-              {dollars((item.priceCents + item.shippingCents) * item.quantity)}
-            </p>
+            {/* Pickup / delivery selector */}
+            {pickupEligibleIds.has(item.id) && (
+              <div className="mt-2 flex gap-3 text-sm pl-[68px]">
+                <span className="text-slate-500 text-xs mr-1">Fulfillment:</span>
+                <label className="flex items-center gap-1 cursor-pointer">
+                  <input
+                    type="radio"
+                    name={`fulfillment-${item.id}`}
+                    checked={!isPickup(item.id)}
+                    onChange={() => setPickupChoices(prev => ({ ...prev, [item.id]: false }))}
+                  />
+                  <span>Delivery</span>
+                </label>
+                <label className="flex items-center gap-1 cursor-pointer text-green-700">
+                  <input
+                    type="radio"
+                    name={`fulfillment-${item.id}`}
+                    checked={isPickup(item.id)}
+                    onChange={() => setPickupChoices(prev => ({ ...prev, [item.id]: true }))}
+                  />
+                  <span>
+                    🏠 Pick up{item.pickupCity && item.pickupState ? ` in ${item.pickupCity}, ${item.pickupState}` : ''}
+                  </span>
+                </label>
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -148,9 +206,15 @@ export default function CheckoutPage() {
         </div>
       </div>
 
-      <p className="text-xs text-slate-500 mb-3">
-        You will be redirected to Stripe to complete your payment securely. Shipping address is collected at checkout.
-      </p>
+      {pickupItemIds.length > 0 && pickupItemIds.length === items.length ? (
+        <p className="text-xs text-slate-500 mb-3">
+          All items will be picked up in person. No shipping address needed. You will be redirected to Stripe to complete payment.
+        </p>
+      ) : (
+        <p className="text-xs text-slate-500 mb-3">
+          You will be redirected to Stripe to complete your payment securely. Shipping address is collected at checkout.
+        </p>
+      )}
 
       {error && (
         <p className="text-red-600 text-sm mb-3">{error}</p>

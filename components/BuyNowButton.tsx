@@ -2,7 +2,12 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-export default function BuyNowButton({ productId }: { productId: string }) {
+interface Props {
+  productId: string;
+  isPickup?: boolean;
+}
+
+export default function BuyNowButton({ productId, isPickup = false }: Props) {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
@@ -11,7 +16,7 @@ export default function BuyNowButton({ productId }: { productId: string }) {
     const res = await fetch('/api/checkout/buynow', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ productId }),
+      body: JSON.stringify({ productId, isPickup }),
     });
     const data = await res.json();
     if (data.url) {
@@ -24,7 +29,11 @@ export default function BuyNowButton({ productId }: { productId: string }) {
 
   return (
     <button onClick={handle} disabled={loading} className="btn-primary w-full">
-      {loading ? 'Redirecting…' : 'Buy now'}
+      {loading
+        ? 'Redirecting…'
+        : isPickup
+          ? '🏠 Buy now — Pick up locally'
+          : 'Buy now'}
     </button>
   );
 }

@@ -118,6 +118,55 @@ export default async function SellerEditPage({
             defaultValue={product.inventory}
           />
         </div>
+
+        {/* Pickup section */}
+        <fieldset className="border border-slate-200 rounded-xl p-4 space-y-3">
+          <legend className="text-sm font-semibold text-slate-700 px-1">Local Pickup (optional)</legend>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              name="pickupAvailable"
+              value="true"
+              defaultChecked={product.pickupAvailable}
+              className="rounded"
+            />
+            <span className="text-sm text-slate-700">This item is available for local pickup</span>
+          </label>
+          <p className="text-xs text-slate-500">
+            Only your city and state will be shown publicly — your exact address is never displayed.
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">City</label>
+              <input
+                name="pickupCity"
+                className="input"
+                placeholder="e.g. Brooklyn"
+                defaultValue={product.pickupCity ?? ''}
+              />
+            </div>
+            <div>
+              <label className="label">State</label>
+              <input
+                name="pickupState"
+                className="input"
+                placeholder="e.g. NY"
+                maxLength={2}
+                defaultValue={product.pickupState ?? ''}
+              />
+            </div>
+          </div>
+          <div>
+            <label className="label">ZIP / Postal code</label>
+            <input
+              name="pickupPostalCode"
+              className="input"
+              placeholder="e.g. 11201"
+              defaultValue={product.pickupPostalCode ?? ''}
+            />
+          </div>
+        </fieldset>
+
         <div className="flex gap-3">
           <a href="/seller" className="btn-outline flex-1 text-center">Cancel</a>
           <button className="btn-primary flex-1" type="submit">Save changes</button>
