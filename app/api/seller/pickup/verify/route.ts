@@ -16,7 +16,18 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { z } from 'zod';
+import crypto from 'crypto';
 
+/** Constant-time string comparison to prevent timing side-channels. */
+function safeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(a, 'utf8'), Buffer.from(b, 'utf8'));
+}
+
+// Pickup codes allow more attempts than login OTP (10 vs 5) because:
+// - The seller must be authenticated and must own a product in the order.
+// - The code only protects a specific in-person handoff, not a full session.
+// - Sellers may legitimately mistype digits at pickup, needing a few retries.
 const MAX_PICKUP_ATTEMPTS = 10;
 
 const schema = z.object({
@@ -77,7 +88,8 @@ export async function POST(req: Request) {
       );
     }
 
-    if (code.trim() !== order.pickupCode) {
+    // Use constant-time comparison to prevent timing side-channels.
+    if (!safeEqual(code.trim(), order.pickupCode)) {
       await prisma.order.update({
         where: { id: orderId },
         data: { pickupCodeAttempts: { increment: 1 } },

@@ -10,6 +10,9 @@ export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = { title: 'User Detail — Admin' };
 
+type ProductSummary = { id: string; title: string; status: string; priceCents: number; createdAt: Date };
+type ModerationLog = { id: string; action: string; reasonCategory: string | null; notes: string | null; createdAt: Date; admin: { name: string; email: string } };
+
 const REASON_LABELS: Record<string, string> = {
   misconduct_to_customer: 'Misconduct to customer',
   fake_product: 'Fake product',
@@ -245,7 +248,7 @@ export default async function AdminUserDetailPage({
             <p className="text-slate-500 text-sm">No listings.</p>
           ) : (
             <div className="space-y-2">
-              {(products as Array<{ id: string; title: string; status: string; priceCents: number; createdAt: Date }>).map(p => (
+              {(products as ProductSummary[]).map(p => (
                 <div key={p.id} className="border border-slate-100 rounded-xl p-3 flex items-center justify-between">
                   <div>
                     <p className="font-medium text-sm">{p.title}</p>
@@ -263,11 +266,11 @@ export default async function AdminUserDetailPage({
       {user.role === 'SELLER' && (
         <div className="card p-6 mb-6">
           <h2 className="text-lg font-bold mb-4">Moderation History</h2>
-          {(moderationLogs as Array<{ id: string; action: string; reasonCategory: string | null; notes: string | null; createdAt: Date; admin: { name: string; email: string } }>).length === 0 ? (
+          {(moderationLogs as ModerationLog[]).length === 0 ? (
             <p className="text-slate-500 text-sm">No moderation actions.</p>
           ) : (
             <div className="space-y-2">
-              {(moderationLogs as Array<{ id: string; action: string; reasonCategory: string | null; notes: string | null; createdAt: Date; admin: { name: string; email: string } }>).map(log => (
+              {(moderationLogs as ModerationLog[]).map(log => (
                 <div key={log.id} className="border border-slate-100 rounded-xl p-3 text-sm">
                   <div className="flex items-center justify-between mb-1">
                     <span className="font-semibold">{log.action}</span>
