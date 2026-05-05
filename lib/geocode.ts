@@ -43,7 +43,9 @@ export async function geocodeCity(
         // Nominatim policy requires a meaningful User-Agent
         'User-Agent': 'FlupFlap-Marketplace/1.0 (contact@flupflap.example.com)',
       },
-      next: { revalidate: 0 }, // always fresh; results are cached by Nominatim on their end
+      // City-level coordinates change rarely; cache for 24 hours to respect
+      // Nominatim rate limits while keeping data reasonably fresh.
+      next: { revalidate: 86400 },
     });
 
     if (!res.ok) return null;

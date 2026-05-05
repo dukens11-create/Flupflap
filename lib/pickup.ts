@@ -25,9 +25,8 @@ const BCRYPT_COST = 8;
 
 /** Generate a cryptographically secure 6-digit pickup code (100000–999999). */
 export function generatePickupCode(): string {
-  // randomInt(min, max) produces a uniform integer in [min, max).
-  // Using 100_000..1_000_000 guarantees exactly 6 significant digits
-  // with no leading-zero padding needed.
+  // randomInt(min, max) produces a uniform integer in [min, max) — note max is exclusive.
+  // Using 100_000..1_000_000 guarantees exactly 6 significant digits with no leading zeros.
   return String(crypto.randomInt(100_000, 1_000_000));
 }
 

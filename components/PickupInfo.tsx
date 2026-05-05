@@ -47,7 +47,9 @@ export default function PickupInfo({ pickupCity, pickupState, pickupLat, pickupL
           <span className="text-slate-600"> · {location}</span>
         )}
         {distance !== null && (
-          <span className="text-slate-500"> · ~{distance < 1 ? '< 1' : distance.toFixed(1)} mi from you</span>
+          <span className="text-slate-500" aria-label={`Distance from you: approximately ${distance < 1 ? 'less than 1' : distance.toFixed(1)} miles`}>
+            {' '}· ~{distance < 1 ? '< 1' : distance.toFixed(1)} mi from you
+          </span>
         )}
         {geoError && pickupLat !== null && (
           <span className="text-slate-400"> · allow location for distance</span>

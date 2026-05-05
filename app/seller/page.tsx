@@ -13,7 +13,12 @@ export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = { title: 'Seller Dashboard' };
 
-/** Order statuses that count as "fulfilled" for earnings calculations. */
+/**
+ * Order statuses that count as "fulfilled" for earnings calculations.
+ * READY_FOR_PICKUP is intentionally excluded — earnings are counted only
+ * after the handoff is confirmed (PICKED_UP), consistent with the treatment
+ * of PAID/SHIPPED/DELIVERED for non-pickup orders.
+ */
 const FULFILLED_STATUSES: OrderStatus[] = ['PAID', 'SHIPPED', 'DELIVERED', 'PICKED_UP'];
 
 function statusBadge(status: string) {

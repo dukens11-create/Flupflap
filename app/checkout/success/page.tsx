@@ -16,6 +16,7 @@ export default async function CheckoutSuccessPage({
   // Determine if this was a pickup order by checking the order record
   let isPickup = false;
   let pickupCode: string | null = null;
+  let lookupFailed = false;
   if (session_id) {
     try {
       const order = await prisma.order.findUnique({
@@ -26,7 +27,7 @@ export default async function CheckoutSuccessPage({
       pickupCode = order?.pickupCode ?? null;
     } catch (err) {
       console.error('[checkout/success] Failed to look up order:', err);
-      // Not critical — fall back to generic message
+      lookupFailed = true;
     }
   }
 
@@ -53,6 +54,11 @@ export default async function CheckoutSuccessPage({
                   Show this to the seller at handoff. You can also find it in your order details.
                 </p>
               </div>
+            )}
+            {!pickupCode && lookupFailed && (
+              <p className="text-sm text-slate-500 mb-4">
+                Check your <Link href="/orders" className="text-blue-600 underline">order details page</Link> for your pickup code.
+              </p>
             )}
           </>
         ) : (

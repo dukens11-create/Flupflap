@@ -22,7 +22,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { verifyPickupCode } from '@/lib/pickup';
-import { z } from 'zod';
+import { z, ZodError } from 'zod';
 
 const schema = z.object({
   orderId: z.string().min(1),
@@ -92,7 +92,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ ok: true, message: 'Pickup confirmed.' });
   } catch (err: unknown) {
-    if (err && typeof err === 'object' && 'name' in err && (err as { name: string }).name === 'ZodError') {
+    if (err instanceof ZodError) {
       return NextResponse.json({ error: 'Please enter a valid 6-digit code.' }, { status: 400 });
     }
     console.error('[seller/pickup/verify]', err);

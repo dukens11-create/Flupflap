@@ -41,7 +41,14 @@ export async function POST(req: Request) {
 
     // Pre-build a quantity map to avoid repeated O(n) lookups
     const qtyMap = new Map(items.map(i => [i.productId, i.quantity]));
-    const getQty = (productId: string) => qtyMap.get(productId) ?? 1;
+    const getQty = (productId: string) => {
+      const qty = qtyMap.get(productId);
+      if (qty === undefined) {
+        console.warn('[webhook] Product %s not found in items map — defaulting qty to 1', productId);
+        return 1;
+      }
+      return qty;
+    };
 
     const subtotalCents = products.reduce((sum, p) => sum + p.priceCents * getQty(p.id), 0);
 
