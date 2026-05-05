@@ -76,9 +76,14 @@ async function ProductGrid({ sp }: { sp: SearchParams }) {
           <p className="font-semibold text-slate-700 mb-1">Database schema not yet initialized</p>
           <p className="text-sm">
             The database is connected but the tables have not been created.{' '}
-            Run{' '}
-            <code className="font-mono text-xs bg-slate-100 px-1 rounded">npx prisma db push</code>{' '}
-            against your database, then redeploy.
+            If you deployed via Render, trigger a new deploy — the build command will apply the
+            schema automatically. If you set up the service manually, make sure your build command
+            includes{' '}
+            <code className="font-mono text-xs bg-slate-100 px-1 rounded">
+              {'if [ -n "$DATABASE_URL" ]; then npx prisma db push --skip-generate; fi'}
+            </code>{' '}
+            after{' '}
+            <code className="font-mono text-xs bg-slate-100 px-1 rounded">npm run build</code>.
           </p>
         </div>
       );
