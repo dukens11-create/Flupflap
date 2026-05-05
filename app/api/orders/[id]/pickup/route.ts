@@ -66,12 +66,14 @@ export async function POST(
 
     // Use constant-time comparison to prevent timing attacks on pickup codes.
     // Both buffers must be the same length for timingSafeEqual.
+    // Expected code is always 6 chars (see generatePickupCode). Provided code is
+    // clamped to 6 chars to ensure equal-length buffers.
     const expectedCode = order.pickupConfirmation.code.toUpperCase();
-    const providedCode = code.trim().toUpperCase().padEnd(6).slice(0, 6);
-    const expectedBuf = Buffer.from(expectedCode.padEnd(6).slice(0, 6), 'utf8');
-    const providedBuf = Buffer.from(providedCode, 'utf8');
+    const providedCode = code.trim().toUpperCase().slice(0, 6);
+    const expectedBuf = Buffer.from(expectedCode, 'utf8');
+    const providedBuf = Buffer.from(providedCode.padEnd(6), 'utf8');
 
-    if (!crypto.timingSafeEqual(expectedBuf, providedBuf)) {
+    if (expectedBuf.length !== providedBuf.length || !crypto.timingSafeEqual(expectedBuf, providedBuf)) {
       return NextResponse.json({ error: 'Incorrect pickup code.' }, { status: 400 });
     }
 

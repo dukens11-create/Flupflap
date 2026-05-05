@@ -105,7 +105,7 @@ export default function PickupDistance({ sellerLat, sellerLng, pickupCity, picku
                 type="text"
                 value={zipInput}
                 onChange={(e) => setZipInput(e.target.value)}
-                placeholder="Enter your ZIP code"
+                placeholder="5-digit ZIP"
                 maxLength={5}
                 className="input max-w-[160px] text-sm py-1"
               />

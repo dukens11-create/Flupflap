@@ -47,7 +47,9 @@ export async function POST(req: Request) {
       where: { id: { in: items.map(i => i.productId) } },
     });
 
-    // Determine if this is a pickup order (all items pickup, or at least one)
+    // Determine if this is a pickup order (any item marked as pickup).
+    // MVP limitation: mixed pickup/ship carts and multi-location pickup are not
+    // fully validated here — both are documented in DEPLOYMENT.md.
     const isPickup = items.some(i => i.isPickup);
 
     const subtotalCents = products.reduce((s, p) => {

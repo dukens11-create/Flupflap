@@ -211,7 +211,7 @@ model PickupConfirmation {
   id          String    @id @default(cuid())
   orderId     String    @unique
   order       Order     @relation(fields: [orderId], references: [id])
-  code        String    // 6-digit pickup code
+  code        String    // 6-character alphanumeric pickup code (unambiguous chars)
   confirmedAt DateTime?
   confirmedBy String?   // seller userId who verified the code
   createdAt   DateTime  @default(now())
