@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
+import ImageUpload from '@/components/ImageUpload';
 import type { Metadata } from 'next';
 
 export const dynamic = 'force-dynamic';
@@ -53,10 +54,7 @@ export default async function SellerNewPage() {
             </select>
           </div>
         </div>
-        <div>
-          <label className="label">Image URL</label>
-          <input name="imageUrl" type="url" className="input" placeholder="https://…" required />
-        </div>
+        <ImageUpload required />
         <div>
           <label className="label">Inventory (qty)</label>
           <input name="inventory" type="number" min="1" defaultValue="1" className="input" />
