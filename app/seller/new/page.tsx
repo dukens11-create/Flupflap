@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
+import { prisma } from '@/lib/db';
 import ImageUpload from '@/components/ImageUpload';
 import type { Metadata } from 'next';
 
@@ -15,6 +16,12 @@ export default async function SellerNewPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect('/login');
   if (session.user.role !== 'SELLER') redirect('/');
+
+  // Block restricted sellers from creating new listings
+  const dbUser = await prisma.user.findUnique({ where: { id: session.user.id } });
+  if (dbUser?.sellerStatus === 'SUSPENDED' || dbUser?.sellerStatus === 'BANNED') {
+    redirect('/seller');
+  }
 
   return (
     <main className="max-w-xl mx-auto">

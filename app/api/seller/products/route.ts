@@ -37,6 +37,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
+    // Block restricted sellers from creating new listings
+    const dbUser = await prisma.user.findUnique({ where: { id: session.user.id } });
+    if (dbUser?.sellerStatus === 'SUSPENDED' || dbUser?.sellerStatus === 'BANNED') {
+      return NextResponse.json({ error: 'Your seller account is currently restricted.' }, { status: 403 });
+    }
+
     const form = await req.formData();
     const data = schema.parse(Object.fromEntries(form.entries()));
 

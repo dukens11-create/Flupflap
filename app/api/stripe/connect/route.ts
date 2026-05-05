@@ -14,6 +14,11 @@ export async function GET() {
     const user = await prisma.user.findUnique({ where: { id: session.user.id } });
     if (!user) return NextResponse.redirect(new URL('/login', appUrl));
 
+    // Block restricted sellers from connecting/accessing Stripe payouts
+    if (user.sellerStatus === 'SUSPENDED' || user.sellerStatus === 'BANNED') {
+      return NextResponse.redirect(new URL('/seller', appUrl));
+    }
+
     // If already has an account, create a login link
     if (user.stripeAccountId) {
       const loginLink = await stripe.accounts.createLoginLink(user.stripeAccountId);

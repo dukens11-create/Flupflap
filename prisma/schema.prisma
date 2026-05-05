@@ -13,6 +13,12 @@ enum Role {
   ADMIN
 }
 
+enum SellerStatus {
+  ACTIVE
+  SUSPENDED
+  BANNED
+}
+
 enum ProductStatus {
   PENDING
   APPROVED
@@ -30,21 +36,26 @@ enum OrderStatus {
 }
 
 model User {
-  id                       String   @id @default(cuid())
+  id                       String        @id @default(cuid())
   name                     String
-  email                    String   @unique
+  email                    String        @unique
   password                 String
-  role                     Role     @default(CUSTOMER)
+  role                     Role          @default(CUSTOMER)
   phone                    String?
   stripeAccountId          String?
-  stripeOnboardingComplete Boolean  @default(false)
-  createdAt                DateTime @default(now())
+  stripeOnboardingComplete Boolean       @default(false)
+  sellerStatus             SellerStatus  @default(ACTIVE)
+  sellerStatusReason       String?
+  sellerStatusNotes        String?
+  createdAt                DateTime      @default(now())
   products                 Product[]
   orders                   Order[]
   addresses                Address[]
   accounts                 Account[]
   sessions                 Session[]
   sellerOtp                SellerOtp?
+  moderationLogsAsseller   SellerModerationLog[] @relation("ModeratedSeller")
+  moderationLogsAsAdmin    SellerModerationLog[] @relation("AdminModerator")
 }
 
 model SellerOtp {
@@ -162,4 +173,18 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+model SellerModerationLog {
+  id             String   @id @default(cuid())
+  sellerId       String
+  seller         User     @relation("ModeratedSeller", fields: [sellerId], references: [id])
+  adminId        String
+  admin          User     @relation("AdminModerator", fields: [adminId], references: [id])
+  action         String   // SUSPENDED | BANNED | REINSTATED
+  reasonCategory String?
+  notes          String?
+  createdAt      DateTime @default(now())
+
+  @@index([sellerId])
 }
