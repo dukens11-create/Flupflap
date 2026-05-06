@@ -6,6 +6,7 @@ import { calculateCommissionCents, calculateSellerNetCents, getMarketplaceSettin
 import type { CheckoutCommissionItem } from '@/lib/commission';
 import crypto from 'crypto';
 import Stripe from 'stripe';
+import { expirePromotions } from '@/lib/promotions';
 
 /** Generate a cryptographically secure 6-digit pickup confirmation code. */
 function generatePickupCode(): string {
@@ -42,6 +43,7 @@ export async function POST(req: Request) {
   }
 
   if (event.type === 'checkout.session.completed') {
+    await expirePromotions();
     const cs = event.data.object as any;
 
     // Handle promotion payments separately from product purchases
@@ -245,6 +247,22 @@ export async function POST(req: Request) {
 
     // Decrement inventory and mark as SOLD if qty reaches 0
     for (const item of orderItems) {
+      const activePromotion = await prisma.promotion.findFirst({
+        where: {
+          productId: item.product.id,
+          status: 'ACTIVE',
+          expiresAt: { gt: new Date() },
+        },
+      });
+      if (activePromotion) {
+        await prisma.promotion.update({
+          where: { id: activePromotion.id },
+          data: {
+            saleCount: { increment: item.quantity },
+            saleAmountCents: { increment: item.priceCents * item.quantity },
+          },
+        });
+      }
       const newInventory = Math.max(0, item.product.inventory - item.quantity);
       await prisma.product.update({
         where: { id: item.product.id },

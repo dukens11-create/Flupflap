@@ -6,6 +6,7 @@ import { dollars } from '@/lib/money';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import PromoteForm from './PromoteForm';
+import { expirePromotions, getPromotionPlans } from '@/lib/promotions';
 
 export const metadata: Metadata = { title: 'Promote Listing' };
 
@@ -51,10 +52,14 @@ export default async function SellerPromotePage({
   }
 
   // Check for an existing active promotion
+  await expirePromotions();
   const now = new Date();
-  const activePromotion = await prisma.promotion.findFirst({
-    where: { productId: id, status: 'ACTIVE', expiresAt: { gt: now } },
-  });
+  const [activePromotion, plans] = await Promise.all([
+    prisma.promotion.findFirst({
+      where: { productId: id, status: 'ACTIVE', expiresAt: { gt: now } },
+    }),
+    getPromotionPlans(),
+  ]);
 
   const formatDate = (d: Date) =>
     d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -67,7 +72,7 @@ export default async function SellerPromotePage({
 
       <h1 className="text-3xl font-black mb-2">Promote listing</h1>
       <p className="text-slate-500 text-sm mb-6">
-        Featured listings appear with a ⭐ badge and are highlighted across the marketplace.
+        Boosted listings appear higher in search results with a visible Sponsored badge.
       </p>
 
       {/* Product preview */}
@@ -83,16 +88,16 @@ export default async function SellerPromotePage({
       {activePromotion ? (
         <div className="card p-6 bg-green-50 border-green-200 text-center">
           <p className="text-3xl mb-3">⭐</p>
-          <p className="font-bold text-green-800 text-lg">Active promotion</p>
+          <p className="font-bold text-green-800 text-lg">Boost is active</p>
           <p className="text-sm text-green-700 mt-1">
-            This listing is featured until <strong>{activePromotion.expiresAt ? formatDate(activePromotion.expiresAt) : 'an upcoming date'}</strong>.
+            This listing is sponsored until <strong>{activePromotion.expiresAt ? formatDate(activePromotion.expiresAt) : 'an upcoming date'}</strong>.
           </p>
           <Link href="/seller" className="btn-outline mt-4">Back to dashboard</Link>
         </div>
       ) : (
         <>
           <h2 className="text-lg font-bold mb-3">Choose a promotion package</h2>
-          <PromoteForm productId={id} />
+          <PromoteForm productId={id} plans={plans} />
         </>
       )}
     </main>

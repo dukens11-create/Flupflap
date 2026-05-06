@@ -3,6 +3,7 @@ import { prisma, isDatabaseConfigured } from '@/lib/db';
 import ProductCard from '@/components/ProductCard';
 import BrowseFilters from '@/components/BrowseFilters';
 import type { Metadata } from 'next';
+import { expirePromotions } from '@/lib/promotions';
 
 export const dynamic = 'force-dynamic';
 
@@ -62,6 +63,7 @@ async function ProductGrid({ sp }: { sp: SearchParams }) {
 
   let products;
   try {
+    await expirePromotions();
     const now = new Date();
     products = await prisma.product.findMany({
       where,
@@ -75,11 +77,25 @@ async function ProductGrid({ sp }: { sp: SearchParams }) {
         },
       },
     });
+    const promotionIds = products
+      .map((product: any) => product.promotions[0]?.id)
+      .filter(Boolean);
+    if (promotionIds.length > 0) {
+      await prisma.$transaction(
+        promotionIds.map((promotionId: string) => (
+          prisma.promotion.update({
+            where: { id: promotionId },
+            data: { impressionCount: { increment: 1 } },
+          })
+        )),
+      );
+    }
     // Sort a copy: featured (active promotion) products appear first
     products = [...products].sort((productA: any, productB: any) => {
       const aFeatured = productA.promotions.length > 0 ? 1 : 0;
       const bFeatured = productB.promotions.length > 0 ? 1 : 0;
-      return bFeatured - aFeatured;
+      if (aFeatured !== bFeatured) return bFeatured - aFeatured;
+      return productB.createdAt.getTime() - productA.createdAt.getTime();
     });
   } catch (err: unknown) {
     // If tables don't exist yet (schema not initialized), show a clear actionable message
