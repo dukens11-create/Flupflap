@@ -124,6 +124,7 @@ export function buildCheckoutCommissionItems<
   const commissionItems = products.map((product) => {
     const quantity = items.find((item) => item.productId === product.id)?.quantity ?? 1;
     const priceTotalCents = product.priceCents * quantity;
+    // Product.shippingCents is stored as the per-unit shipping amount.
     const shippingCents = pickupSet.has(product.id) ? 0 : product.shippingCents;
     const resolved = resolveCommissionForSeller({
       seller: product.seller,

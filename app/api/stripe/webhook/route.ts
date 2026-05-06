@@ -227,7 +227,8 @@ export async function POST(req: Request) {
 
           for (const item of orderItems) {
             if (!item.product.seller.stripeOnboardingComplete || !item.product.seller.stripeAccountId) continue;
-            const transferAmount = item.sellerNetCents + (item.shippingCents * item.quantity);
+            const shippingPayoutCents = item.shippingCents * item.quantity;
+            const transferAmount = item.sellerNetCents + shippingPayoutCents;
             if (transferAmount <= 0) continue;
 
             const existingTransfer = sellerTransfers.get(item.product.seller.id);
