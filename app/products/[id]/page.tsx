@@ -9,6 +9,7 @@ import AddToCartButton from '@/components/AddToCartButton';
 import BuyNowButton from '@/components/BuyNowButton';
 import PickupDistance from '@/components/PickupDistance';
 import ContactSellerButton from '@/components/ContactSellerButton';
+import ReportItemButton from '@/components/ReportItemButton';
 import type { Metadata } from 'next';
 
 export const dynamic = 'force-dynamic';
@@ -103,6 +104,12 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
           {/* Contact seller — hidden for the seller's own listing */}
           {!isOwnListing && (
             <ContactSellerButton productId={product.id} />
+          )}
+          {/* Report item — hidden for the seller's own listing */}
+          {!isOwnListing && (
+            <div className="pt-1">
+              <ReportItemButton productId={product.id} />
+            </div>
           )}
         </div>
       </div>

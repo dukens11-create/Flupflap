@@ -45,6 +45,9 @@ export default async function AdminPage() {
   const totalUsersCount = await prisma.user.count({
     where: { role: { in: ['CUSTOMER', 'SELLER'] } },
   });
+  const openReportsCount = await prisma.productReport.count({
+    where: { status: 'OPEN' },
+  });
 
   return (
     <main className="max-w-5xl mx-auto">
@@ -56,6 +59,9 @@ export default async function AdminPage() {
         <div className="flex gap-2">
           <a href="/admin/users" className="btn-outline text-sm">Users →</a>
           <a href="/admin/sellers" className="btn-outline text-sm">Seller Management →</a>
+          <a href="/admin/reports" className={`text-sm ${openReportsCount > 0 ? 'btn bg-red-600 hover:bg-red-700 text-white' : 'btn-outline'}`}>
+            Reports {openReportsCount > 0 ? `(${openReportsCount})` : '→'}
+          </a>
         </div>
       </div>
 
@@ -78,7 +84,7 @@ export default async function AdminPage() {
         </a>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
         <a href="/admin/users" className="card p-5 flex items-center gap-4 hover:bg-slate-50 transition-colors">
           <div className="text-3xl">👥</div>
           <div>
@@ -91,6 +97,15 @@ export default async function AdminPage() {
           <div>
             <p className="font-bold text-slate-800">Seller Moderation</p>
             <p className="text-sm text-slate-500">Suspend or ban sellers for policy violations</p>
+          </div>
+        </a>
+        <a href="/admin/reports" className={`card p-5 flex items-center gap-4 hover:bg-slate-50 transition-colors ${openReportsCount > 0 ? 'border-red-200 bg-red-50' : ''}`}>
+          <div className="text-3xl">🚩</div>
+          <div>
+            <p className="font-bold text-slate-800">Product Reports</p>
+            <p className={`text-sm ${openReportsCount > 0 ? 'text-red-600 font-medium' : 'text-slate-500'}`}>
+              {openReportsCount > 0 ? `${openReportsCount} open report${openReportsCount !== 1 ? 's' : ''} need review` : 'No open reports'}
+            </p>
           </div>
         </a>
       </div>

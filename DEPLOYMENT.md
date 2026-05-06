@@ -377,6 +377,89 @@ The last five log entries are shown in the seller card on `/admin/sellers`.
 
 ---
 
+## Product reporting and moderation
+
+Authenticated users can report product listings they believe are fake,
+counterfeit, misleading, prohibited, fraudulent, or otherwise problematic.
+Admins can review those reports and take moderation action on the listing
+and/or the seller.
+
+### User-facing reporting flow
+
+1. Any signed-in user (who is **not** the seller of the listing) sees a
+   **"Report item"** link at the bottom of the product detail page.
+2. Clicking it opens an inline form where the user selects a reason and
+   optionally provides details.
+3. Report reasons:
+   - Fake / counterfeit item
+   - Misleading description
+   - Misleading photos
+   - Prohibited item
+   - Scam / fraud
+   - Item unavailable / deceptive availability
+   - Other
+4. Submitting a report calls `POST /api/products/[id]/report`.
+5. Duplicate suppression: one open report per **reporter / product / reason**
+   combination is enforced at the database level (`@@unique` constraint).
+   If the same reporter re-submits an identical reason, the notes are updated
+   rather than creating a second record.
+6. Reporters are not identified to the seller. Admin notes are private.
+
+### Admin moderation queue
+
+The queue is at `/admin/reports` and is linked from the Admin Dashboard.
+The dashboard nav highlights the Reports button in red when open reports exist.
+
+Admins can filter by status: **Open** / **Dismissed** / **Resolved**.
+
+For each open report, the admin sees:
+- Report reason and reporter-supplied notes
+- Product title, image, current status, and a link to view the listing
+- Seller name, email, and current seller status
+- Reporter name and email
+
+Admins can take the following actions:
+
+| Action | Effect |
+|---|---|
+| **Dismiss** | Marks report DISMISSED; no product/seller change |
+| **Mark resolved** | Marks report RESOLVED; no additional change |
+| **Hide / remove listing** | Sets `product.status = HIDDEN`; listing disappears from browse |
+| **Warn seller** | Logs a WARNED entry in `SellerModerationLog`; no status change |
+| **Suspend seller** | Sets `sellerStatus = SUSPENDED` + audit log |
+| **Ban seller** | Sets `sellerStatus = BANNED` (permanent) + audit log |
+
+All actions record the acting admin, timestamp, action taken, and any admin notes
+in the report record. Seller-level actions also appear in `SellerModerationLog`.
+
+### Product HIDDEN status
+
+`HIDDEN` is a new `ProductStatus` value used when a listing is removed via
+moderation. Hidden listings:
+- Are not shown in the browse/search product grid (only `APPROVED` listings appear).
+- Return a 404 on the product detail page, identical to rejected listings.
+- Are distinguishable from `REJECTED` (rejected during initial review) in the
+  admin database for audit purposes.
+
+### Schema additions
+
+- `ProductStatus` enum: added `HIDDEN` value.
+- `ReportStatus` enum: `OPEN | DISMISSED | RESOLVED`.
+- `ProductReport` model: stores product, seller (denormalized), reporter, reason,
+  notes, status, admin resolution fields, and timestamps.
+- `@@unique([reporterId, productId, reason])` enforces duplicate suppression.
+
+### Limitations
+
+- Evidence file attachments are not supported (text-based reporting only).
+  Cloudinary upload could be added in a future iteration.
+- Rate limiting beyond the per-reporter/product/reason uniqueness constraint is
+  not implemented. A Redis-based rate limiter could be added if abuse is observed.
+- Anonymous (unauthenticated) reporting is not supported; authentication is
+  required to submit a report.
+
+---
+
 ## Local pickup and buyer-to-seller distance
 
 Sellers can mark individual listings as available for local pickup. Buyers can
