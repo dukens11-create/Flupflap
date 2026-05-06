@@ -190,6 +190,9 @@ export async function POST(req: Request) {
       },
     });
 
+    // Single-seller checkouts that used payment_intent_data.transfer_data were
+    // already split automatically by Stripe, so only platform-held payments need
+    // manual post-payment transfers here.
     if (!snapshot?.directToSellerId && cs.payment_intent) {
       try {
         const paymentIntent = await stripe.paymentIntents.retrieve(String(cs.payment_intent), {

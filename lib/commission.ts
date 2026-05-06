@@ -59,7 +59,11 @@ export function formatCommissionPercent(bps: number) {
 function parseBootstrapCommissionPercent() {
   const raw = Number(process.env.PLATFORM_FEE_PERCENT ?? FALLBACK_DEFAULT_PERCENT);
   if (!Number.isFinite(raw)) return FALLBACK_DEFAULT_PERCENT;
-  return Math.min(DEFAULT_MAX_PERCENT, Math.max(DEFAULT_MIN_PERCENT, raw));
+  const clamped = Math.min(DEFAULT_MAX_PERCENT, Math.max(DEFAULT_MIN_PERCENT, raw));
+  if (clamped !== raw) {
+    console.warn(`[commission] PLATFORM_FEE_PERCENT=${raw} is outside the supported bootstrap range; using ${clamped}% instead.`);
+  }
+  return clamped;
 }
 
 export const DEFAULT_BOOTSTRAP_COMMISSION_BPS = percentToBasisPoints(parseBootstrapCommissionPercent());
