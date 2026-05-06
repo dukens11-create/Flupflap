@@ -80,9 +80,10 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   const itemsSoldCount = soldItems.reduce((s, i) => s + i.quantity, 0);
   const completedOrdersCount = new Set(soldItems.map(i => i.order.id)).size;
 
-  // Fetch Stripe balance for connected sellers
-  const stripeOnboarded = session.user.stripeOnboardingComplete;
-  const stripeAccountId = session.user.stripeAccountId;
+  // Fetch Stripe onboarding state from DB (not the JWT, which is set only at
+  // login and would be stale immediately after the seller returns from Stripe).
+  const stripeOnboarded = dbUser?.stripeOnboardingComplete ?? false;
+  const stripeAccountId = dbUser?.stripeAccountId ?? null;
   let stripeAvailableCents: number | null = null;
   let stripePendingCents: number | null = null;
   if (stripeOnboarded && stripeAccountId) {

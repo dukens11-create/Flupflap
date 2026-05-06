@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db';
 import { stripe } from '@/lib/stripe';
 import { platformFee, sellerPayout } from '@/lib/money';
 import crypto from 'crypto';
+import Stripe from 'stripe';
 
 /** Generate a cryptographically secure 6-digit pickup confirmation code. */
 function generatePickupCode(): string {
@@ -24,6 +25,19 @@ export async function POST(req: Request) {
   } catch (err: any) {
     console.error('[webhook] signature error:', err.message);
     return new NextResponse(`Webhook error: ${err.message}`, { status: 400 });
+  }
+
+  // Mark seller onboarding complete when Stripe confirms the connected account
+  // is fully set up and payouts are enabled.
+  if (event.type === 'account.updated') {
+    const account = event.data.object as Stripe.Account;
+    if (account.payouts_enabled) {
+      await prisma.user.updateMany({
+        where: { stripeAccountId: account.id },
+        data: { stripeOnboardingComplete: true },
+      });
+    }
+    return new NextResponse('ok', { status: 200 });
   }
 
   if (event.type === 'checkout.session.completed') {
