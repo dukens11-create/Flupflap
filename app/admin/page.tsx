@@ -42,9 +42,8 @@ export default async function AdminPage() {
   const restrictedSellersCount = await prisma.user.count({
     where: { role: 'SELLER', sellerStatus: { not: 'ACTIVE' } },
   });
-  const totalUsersCount = await prisma.user.count({
-    where: { role: { in: ['CUSTOMER', 'SELLER'] } },
-  });
+  const buyerCount = await prisma.user.count({ where: { role: 'CUSTOMER' } });
+  const sellerCount = await prisma.user.count({ where: { role: 'SELLER' } });
   const openReportsCount = await prisma.productReport.count({
     where: { status: 'OPEN' },
   });
@@ -85,13 +84,22 @@ export default async function AdminPage() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-        <a href="/admin/users" className="card p-5 flex items-center gap-4 hover:bg-slate-50 transition-colors">
+        <div className="card p-5 flex items-center gap-4">
           <div className="text-3xl">👥</div>
-          <div>
+          <div className="flex-1">
             <p className="font-bold text-slate-800">User Management</p>
-            <p className="text-sm text-slate-500">{totalUsersCount} buyer{totalUsersCount !== 1 ? 's' : ''} &amp; sellers — view accounts, orders, and support details</p>
+            <div className="flex gap-3 mt-1">
+              <a href="/admin/users?role=CUSTOMER" className="text-sm text-blue-600 hover:underline font-medium">
+                🛒 {buyerCount} buyer{buyerCount !== 1 ? 's' : ''}
+              </a>
+              <span className="text-slate-300">·</span>
+              <a href="/admin/users?role=SELLER" className="text-sm text-green-600 hover:underline font-medium">
+                🏪 {sellerCount} seller{sellerCount !== 1 ? 's' : ''}
+              </a>
+            </div>
           </div>
-        </a>
+          <a href="/admin/users" className="btn-outline text-xs py-1 px-3">View all →</a>
+        </div>
         <a href="/admin/sellers" className="card p-5 flex items-center gap-4 hover:bg-slate-50 transition-colors">
           <div className="text-3xl">🔒</div>
           <div>
@@ -114,7 +122,7 @@ export default async function AdminPage() {
         <section className="mb-8">
           <h2 className="text-xl font-bold mb-3">⏳ Pending Approval</h2>
           <div className="space-y-3">
-            {pending.map(p => (
+            {pending.map((p: (typeof pending)[number]) => (
               <div key={p.id} className="card p-4">
                 <div className="flex gap-4 items-start">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -145,7 +153,7 @@ export default async function AdminPage() {
       <section className="mb-8">
         <h2 className="text-xl font-bold mb-3">All Listings</h2>
         <div className="space-y-2">
-          {all.map(p => (
+          {all.map((p: (typeof all)[number]) => (
             <div key={p.id} className="card p-3 flex items-center justify-between gap-4">
               <div className="flex-1 min-w-0">
                 <p className="font-medium truncate">{p.title}</p>
@@ -160,7 +168,7 @@ export default async function AdminPage() {
       <section>
         <h2 className="text-xl font-bold mb-3">Recent Orders</h2>
         <div className="space-y-2">
-          {recentOrders.map(o => (
+          {recentOrders.map((o: (typeof recentOrders)[number]) => (
             <div key={o.id} className="card p-3 flex items-center justify-between gap-4">
               <div>
                 <p className="font-mono text-xs text-slate-400">{o.id.slice(-10)}</p>
