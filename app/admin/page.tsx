@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { dollars } from '@/lib/money';
 import { activePromotionWhere } from '@/lib/promotions';
+import { basisPointsToPercent, formatCommissionPercent, getMarketplaceSettings } from '@/lib/commission';
 import type { Metadata } from 'next';
 
 export const dynamic = 'force-dynamic';
@@ -20,38 +21,46 @@ function statusBadge(status: string) {
   return map[status] ?? 'badge-slate';
 }
 
-export default async function AdminPage() {
+export default async function AdminPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ commission?: string }>;
+}) {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect('/login');
   if (session.user.role !== 'ADMIN') redirect('/');
+  const sp = await searchParams;
 
-  const pending = await prisma.product.findMany({
-    where: { status: 'PENDING' },
-    include: { seller: { select: { name: true, email: true } } },
-    orderBy: { createdAt: 'asc' },
-  });
-  const all = await prisma.product.findMany({
-    orderBy: { createdAt: 'desc' },
-    take: 20,
-    include: { seller: { select: { name: true } } },
-  });
-  const recentOrders = await prisma.order.findMany({
-    orderBy: { createdAt: 'desc' },
-    take: 10,
-    include: { buyer: { select: { name: true, email: true } } },
-  });
-  const restrictedSellersCount = await prisma.user.count({
-    where: { role: 'SELLER', sellerStatus: { not: 'ACTIVE' } },
-  });
-  const buyerCount = await prisma.user.count({ where: { role: 'CUSTOMER' } });
-  const sellerCount = await prisma.user.count({ where: { role: 'SELLER' } });
-  const openReportsCount = await prisma.productReport.count({
-    where: { status: 'OPEN' },
-  });
   const now = new Date();
-  const activePromotionsCount = await prisma.promotion.count({
-    where: activePromotionWhere(now),
-  });
+  const [settings, pending, all, recentOrders, restrictedSellersCount, buyerCount, sellerCount, openReportsCount, activePromotionsCount] = await Promise.all([
+    getMarketplaceSettings(),
+    prisma.product.findMany({
+      where: { status: 'PENDING' },
+      include: { seller: { select: { name: true, email: true } } },
+      orderBy: { createdAt: 'asc' },
+    }),
+    prisma.product.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+      include: { seller: { select: { name: true } } },
+    }),
+    prisma.order.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+      include: { buyer: { select: { name: true, email: true } } },
+    }),
+    prisma.user.count({
+      where: { role: 'SELLER', sellerStatus: { not: 'ACTIVE' } },
+    }),
+    prisma.user.count({ where: { role: 'CUSTOMER' } }),
+    prisma.user.count({ where: { role: 'SELLER' } }),
+    prisma.productReport.count({
+      where: { status: 'OPEN' },
+    }),
+    prisma.promotion.count({
+      where: activePromotionWhere(now),
+    }),
+  ]);
 
   return (
     <main className="max-w-5xl mx-auto">
@@ -71,6 +80,18 @@ export default async function AdminPage() {
           </a>
         </div>
       </div>
+
+      {sp.commission === 'updated' && (
+        <div className="card p-4 mb-6 bg-green-50 border-green-200 text-green-800 text-sm">
+          ✅ Default seller commission updated successfully.
+        </div>
+      )}
+
+      {sp.commission === 'invalid' && (
+        <div className="card p-4 mb-6 bg-red-50 border-red-200 text-red-800 text-sm">
+          ❌ Enter a valid commission percentage between 0 and 100.
+        </div>
+      )}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
         <div className="card p-4 text-center">
@@ -134,6 +155,41 @@ export default async function AdminPage() {
           </div>
         </a>
       </div>
+
+      <section className="mb-8">
+        <div className="card p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <h2 className="text-xl font-bold">Marketplace Commission</h2>
+              <p className="text-sm text-slate-500 mt-1">
+                Default seller commission is currently {formatCommissionPercent(settings.defaultSellerCommissionBps)}.
+                Future seller plan overrides can replace this default per seller.
+              </p>
+            </div>
+            <form action="/api/admin/commission" method="POST" className="flex flex-col sm:flex-row gap-3 sm:items-end">
+              <label className="block">
+                <span className="label">Default commission %</span>
+                <input
+                  type="number"
+                  name="defaultSellerCommissionPercent"
+                  min="0"
+                  max="100"
+                  step="0.25"
+                  defaultValue={basisPointsToPercent(settings.defaultSellerCommissionBps)}
+                  className="input w-full sm:w-36"
+                  required
+                />
+              </label>
+              <button type="submit" className="btn-primary text-sm">
+                Save commission
+              </button>
+            </form>
+          </div>
+          <p className="text-xs text-slate-400 mt-3">
+            New checkout sessions will use the saved default automatically. Existing orders keep their stored commission snapshots for audit reporting.
+          </p>
+        </div>
+      </section>
 
       {pending.length > 0 && (
         <section className="mb-8">
