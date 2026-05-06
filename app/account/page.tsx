@@ -35,6 +35,12 @@ export default function AccountPage() {
   // onboarding state even if the JWT session hasn't been refreshed yet.
   const [stripeStatus, setStripeStatus] = useState<'not_started' | 'in_progress' | 'complete' | null>(null);
 
+  // Account deletion
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+
   // Load current phone info from server
   useEffect(() => {
     if (session?.user?.id) {
@@ -186,6 +192,30 @@ export default function AccountPage() {
     setEditingName(true);
     setNameError('');
     setNameSuccess('');
+  }
+
+  async function deleteAccount(e: React.FormEvent) {
+    e.preventDefault();
+    setDeleteError('');
+    setDeleteLoading(true);
+    try {
+      const res = await fetch('/api/account', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: deletePassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setDeleteError(data.error || 'Failed to delete account.');
+        setDeleteLoading(false);
+      } else {
+        // signOut redirects, so no need to reset loading state.
+        await signOut({ callbackUrl: '/' });
+      }
+    } catch {
+      setDeleteError('Network error. Please try again.');
+      setDeleteLoading(false);
+    }
   }
 
   return (
@@ -429,6 +459,54 @@ export default function AccountPage() {
         >
           Sign out
         </button>
+      </div>
+
+      {/* Danger zone */}
+      <div className="mt-10 border border-red-200 rounded-2xl p-6">
+        <h2 className="text-base font-bold text-red-700 mb-1">Danger Zone</h2>
+        <p className="text-sm text-slate-600 mb-4">
+          Permanently delete your account and all associated personal data. This action cannot be undone.
+        </p>
+        {!showDeleteConfirm ? (
+          <button
+            onClick={() => { setShowDeleteConfirm(true); setDeleteError(''); setDeletePassword(''); }}
+            className="text-sm font-medium text-red-600 border border-red-300 rounded-lg px-4 py-2 hover:bg-red-50 transition-colors"
+          >
+            Delete my account
+          </button>
+        ) : (
+          <form onSubmit={deleteAccount} className="space-y-3">
+            <p className="text-sm text-slate-700 font-medium">
+              Enter your password to confirm deletion:
+            </p>
+            <input
+              type="password"
+              className="input"
+              placeholder="Your current password"
+              value={deletePassword}
+              onChange={e => setDeletePassword(e.target.value)}
+              required
+              autoFocus
+            />
+            {deleteError && <p className="text-red-600 text-xs">{deleteError}</p>}
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                className="text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg px-4 py-2 transition-colors disabled:opacity-50"
+                disabled={deleteLoading}
+              >
+                {deleteLoading ? 'Deleting…' : 'Yes, permanently delete'}
+              </button>
+              <button
+                type="button"
+                className="btn-outline text-sm"
+                onClick={() => { setShowDeleteConfirm(false); setDeleteError(''); setDeletePassword(''); }}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
       </div>
     </main>
   );
