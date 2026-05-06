@@ -23,6 +23,7 @@ import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { createAndSendOtp } from '@/lib/otp';
+import { isSmsOtpEnabled } from '@/lib/feature-flags';
 
 const schema = z.object({
   email: z.string().email(),
@@ -53,8 +54,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid email or password.' }, { status: 401 });
     }
 
-    // Non-seller accounts: skip OTP — let the normal signIn() call proceed.
-    if (user.role !== 'SELLER') {
+    // Non-seller accounts and sellers when SMS OTP is disabled both skip the
+    // OTP challenge — let the normal signIn() call proceed directly.
+    // Re-enable OTP by setting ENABLE_SMS_OTP=true once Twilio A2P is approved.
+    if (user.role !== 'SELLER' || !isSmsOtpEnabled()) {
       return NextResponse.json({ step: 'signin' });
     }
 
