@@ -3,6 +3,7 @@ import CredentialsProvider from 'next-auth/providers/credentials';
 import bcrypt from 'bcryptjs';
 import { prisma } from './db';
 import { verifyOtp } from './otp';
+import { isSmsOtpEnabled } from './feature-flags';
 import type { NextAuthOptions } from 'next-auth';
 
 export const authOptions: NextAuthOptions = {
@@ -24,8 +25,8 @@ export const authOptions: NextAuthOptions = {
         const ok = await bcrypt.compare(credentials.password, user.password);
         if (!ok) return null;
 
-        // Sellers must supply a valid one-time code.
-        if (user.role === 'SELLER') {
+        // Sellers must supply a valid one-time code (when SMS OTP is enabled).
+        if (user.role === 'SELLER' && isSmsOtpEnabled()) {
           if (!credentials.otp) return null;
           const result = await verifyOtp(user.id, credentials.otp);
           if (!result.ok) return null;
