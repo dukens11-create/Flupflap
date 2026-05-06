@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { stripe, appUrl } from '@/lib/stripe';
+import { platformFee } from '@/lib/money';
 
 export async function POST(req: Request) {
   try {
@@ -12,7 +13,10 @@ export async function POST(req: Request) {
     }
 
     const { productId, isPickup = false } = await req.json() as { productId: string; isPickup?: boolean };
-    const product = await prisma.product.findUnique({ where: { id: productId } });
+    const product = await prisma.product.findUnique({
+      where: { id: productId },
+      include: { seller: { select: { stripeAccountId: true, stripeOnboardingComplete: true } } },
+    });
 
     if (!product || product.status !== 'APPROVED' || product.inventory <= 0) {
       return NextResponse.json({ error: 'Product not available.' }, { status: 400 });
@@ -23,6 +27,12 @@ export async function POST(req: Request) {
 
     // For pickup orders, only charge item price (no shipping)
     const unitAmount = actualPickup ? product.priceCents : product.priceCents + product.shippingCents;
+
+    // Wire funds to the seller's connected account when onboarding is complete,
+    // keeping only the platform fee for the platform.
+    const sellerStripeId = product.seller.stripeOnboardingComplete && product.seller.stripeAccountId
+      ? product.seller.stripeAccountId
+      : null;
 
     const stripeSession = await stripe.checkout.sessions.create({
       mode: 'payment',
@@ -45,6 +55,15 @@ export async function POST(req: Request) {
         : {
             shipping_address_collection: { allowed_countries: ['US', 'CA', 'GB', 'AU'] },
           }),
+      // Split the payment: platform keeps the fee, seller receives the rest.
+      ...(sellerStripeId
+        ? {
+            payment_intent_data: {
+              application_fee_amount: platformFee(unitAmount),
+              transfer_data: { destination: sellerStripeId },
+            },
+          }
+        : {}),
       metadata: {
         buyerId: session.user.id,
         items: JSON.stringify([{ productId: product.id, quantity: 1 }]),

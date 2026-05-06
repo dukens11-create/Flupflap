@@ -272,7 +272,7 @@ Sellers have a dedicated dashboard at `/seller` that shows:
 After deploying, register a webhook endpoint in the Stripe dashboard:
 
 - **Endpoint URL:** `https://<your-render-url>/api/stripe/webhook`
-- **Events to listen for:** `checkout.session.completed`
+- **Events to listen for:** `checkout.session.completed`, `account.updated`
 
 Copy the **Signing secret** and set it as `STRIPE_WEBHOOK_SECRET` in Render.
 
