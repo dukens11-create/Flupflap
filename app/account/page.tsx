@@ -207,13 +207,15 @@ export default function AccountPage() {
       const data = await res.json();
       if (!res.ok) {
         setDeleteError(data.error || 'Failed to delete account.');
+        setDeleteLoading(false);
       } else {
+        // signOut redirects, so no need to reset loading state.
         await signOut({ callbackUrl: '/' });
       }
     } catch {
       setDeleteError('Network error. Please try again.');
+      setDeleteLoading(false);
     }
-    setDeleteLoading(false);
   }
 
   return (

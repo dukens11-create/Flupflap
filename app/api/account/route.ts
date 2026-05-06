@@ -4,7 +4,6 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
-import crypto from 'crypto';
 
 const profileSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
@@ -90,6 +89,12 @@ export async function DELETE(req: Request) {
     }
 
     // Verify password before deletion
+    if (!user.password) {
+      return NextResponse.json(
+        { error: 'Password deletion is not available for accounts without a password set (e.g. OAuth-only accounts). Please contact support.' },
+        { status: 400 },
+      );
+    }
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) {
       return NextResponse.json({ error: 'Incorrect password.' }, { status: 400 });
@@ -149,13 +154,13 @@ export async function DELETE(req: Request) {
       // 8. Anonymise the user record so no personal data remains but FK
       //    integrity is preserved for orders and products owned by others.
       const ghost = `deleted+${userId}@deleted.invalid`;
-      const randomHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 12);
       await tx.user.update({
         where: { id: userId },
         data: {
           name: 'Deleted User',
           email: ghost,
-          password: randomHash,
+          // A non-bcrypt placeholder that can never match a real login attempt.
+          password: '!DELETED!',
           phone: null,
           phoneVerified: false,
           phoneVerifiedAt: null,
