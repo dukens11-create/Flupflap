@@ -49,7 +49,7 @@ export default async function AdminPage() {
   });
   const now = new Date();
   const activePromotionsCount = await prisma.promotion.count({
-    where: { status: 'ACTIVE', expiresAt: { gt: now } },
+    where: { status: 'ACTIVE', startsAt: { lte: now }, expiresAt: { gt: now } },
   });
 
   return (

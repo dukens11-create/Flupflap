@@ -69,7 +69,7 @@ async function ProductGrid({ sp }: { sp: SearchParams }) {
       take: 60,
       include: {
         promotions: {
-          where: { status: 'ACTIVE', expiresAt: { gt: now } },
+          where: { status: 'ACTIVE', startsAt: { lte: now }, expiresAt: { gt: now } },
           orderBy: { expiresAt: 'desc' },
           take: 1,
         },

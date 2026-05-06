@@ -4,12 +4,16 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { stripe, appUrl } from '@/lib/stripe';
 
-// Promotion packages available to sellers (duration → price in cents)
+// Promotion packages available to sellers (duration in days → price in cents)
 export const PROMOTION_PACKAGES: Record<number, number> = {
-  7: 499,   // $4.99 for 7 days
-  14: 799,  // $7.99 for 14 days
-  30: 1499, // $14.99 for 30 days
+  1: 399,   // $3.99 for 1 day
+  3: 899,   // $8.99 for 3 days
+  7: 1499,  // $14.99 for 7 days
+  14: 2499, // $24.99 for 14 days
+  30: 4499, // $44.99 for 30 days
 };
+
+export type PromotionAction = 'new' | 'renew' | 'change';
 
 export async function POST(req: Request) {
   try {
@@ -24,11 +28,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Your seller account is currently restricted.' }, { status: 403 });
     }
 
-    const { productId, durationDays } = await req.json() as { productId: string; durationDays: number };
+    const { productId, durationDays, action } = await req.json() as {
+      productId: string;
+      durationDays: number;
+      action?: PromotionAction;
+    };
+
+    const promotionAction: PromotionAction = action ?? 'new';
 
     const priceCents = PROMOTION_PACKAGES[durationDays];
     if (!priceCents) {
-      return NextResponse.json({ error: 'Invalid promotion duration. Choose 7, 14, or 30 days.' }, { status: 400 });
+      return NextResponse.json({ error: 'Invalid promotion duration. Choose 1, 3, 7, 14, or 30 days.' }, { status: 400 });
     }
 
     // Verify the product exists, is owned by this seller, and is APPROVED
@@ -40,20 +50,53 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Only approved products can be promoted.' }, { status: 400 });
     }
 
-    // Check if there is already an active promotion for this product
     const now = new Date();
+
+    // Find any current active promotion for this product
     const activePromotion = await prisma.promotion.findFirst({
       where: {
         productId,
+        sellerId: session.user.id,
         status: 'ACTIVE',
         expiresAt: { gt: now },
       },
     });
-    if (activePromotion) {
-      return NextResponse.json({ error: 'This product already has an active promotion.' }, { status: 400 });
+
+    // Validate action vs current state
+    if (promotionAction === 'new' && activePromotion) {
+      return NextResponse.json({ error: 'This product already has an active promotion. Use renew or change instead.' }, { status: 400 });
+    }
+    if (promotionAction === 'change' && !activePromotion) {
+      return NextResponse.json({ error: 'No active promotion found to change.' }, { status: 400 });
     }
 
-    // Create a pending promotion record before the Stripe session so we have an ID to pass as metadata
+    // Determine history link and scheduled start for this promotion
+    let renewedFromId: string | null = null;
+    let scheduledStartAt: Date | null = null;
+    let replacePromotionId: string | null = null;
+
+    if (promotionAction === 'renew') {
+      // Find the most recent promotion (active or expired) for history tracking
+      const lastPromo = await prisma.promotion.findFirst({
+        where: { productId, sellerId: session.user.id, status: { in: ['ACTIVE', 'EXPIRED'] } },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (lastPromo) {
+        renewedFromId = lastPromo.id;
+        // If renewing before expiry, schedule new promotion to start when current ends
+        if (lastPromo.status === 'ACTIVE' && lastPromo.expiresAt && lastPromo.expiresAt > now) {
+          scheduledStartAt = lastPromo.expiresAt;
+        }
+      }
+    }
+
+    if (promotionAction === 'change') {
+      // Record history and mark the active promotion for replacement on payment
+      renewedFromId = activePromotion!.id;
+      replacePromotionId = activePromotion!.id;
+    }
+
+    // Create the pending promotion record
     const promotion = await prisma.promotion.create({
       data: {
         productId,
@@ -61,8 +104,16 @@ export async function POST(req: Request) {
         status: 'PENDING_PAYMENT',
         durationDays,
         priceCents,
+        renewedFromId,
+        scheduledStartAt,
       },
     });
+
+    // Build human-readable description for the Stripe line item
+    const actionLabel =
+      promotionAction === 'renew' ? 'Renew promotion for' :
+      promotionAction === 'change' ? 'Change promotion duration for' :
+      'Promote';
 
     // Create a Stripe Checkout session for the promotion fee
     const stripeSession = await stripe.checkout.sessions.create({
@@ -73,8 +124,8 @@ export async function POST(req: Request) {
           price_data: {
             currency: 'usd',
             product_data: {
-              name: `Promote "${product.title}" for ${durationDays} day${durationDays !== 1 ? 's' : ''}`,
-              description: `Featured placement on FlupFlap Marketplace for ${durationDays} days`,
+              name: `${actionLabel} "${product.title}" — ${durationDays} day${durationDays !== 1 ? 's' : ''}`,
+              description: `Featured placement on FlupFlap Marketplace for ${durationDays} day${durationDays !== 1 ? 's' : ''}`,
             },
             unit_amount: priceCents,
           },
@@ -86,6 +137,8 @@ export async function POST(req: Request) {
       metadata: {
         type: 'promotion',
         promotionId: promotion.id,
+        promotionAction,
+        replacePromotionId: replacePromotionId ?? '',
         sellerId: session.user.id,
         productId,
         durationDays: String(durationDays),

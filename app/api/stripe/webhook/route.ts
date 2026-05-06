@@ -46,6 +46,9 @@ export async function POST(req: Request) {
     // Handle promotion payments separately from product purchases
     if (cs.metadata?.type === 'promotion') {
       const promotionId: string = cs.metadata?.promotionId;
+      const promotionAction: string = cs.metadata?.promotionAction ?? 'new';
+      const replacePromotionId: string = cs.metadata?.replacePromotionId ?? '';
+
       if (!promotionId) return new NextResponse('Missing promotionId', { status: 400 });
 
       // Avoid duplicate processing
@@ -53,10 +56,27 @@ export async function POST(req: Request) {
       if (!promo || promo.status === 'ACTIVE') return new NextResponse('Already processed', { status: 200 });
 
       const now = new Date();
-      const expiresAt = new Date(now.getTime() + promo.durationDays * 24 * 60 * 60 * 1000);
+
+      // For 'change': expire the old active promotion before activating the new one
+      if (promotionAction === 'change' && replacePromotionId) {
+        await prisma.promotion.update({
+          where: { id: replacePromotionId },
+          data: { status: 'EXPIRED' },
+        });
+      }
+
+      // Determine when the new promotion starts:
+      // - Pre-expiry renew: scheduledStartAt is set to the old promotion's expiresAt
+      // - All other cases (new, change, post-expiry renew): start immediately
+      const startsAt =
+        promo.scheduledStartAt && promo.scheduledStartAt > now
+          ? promo.scheduledStartAt
+          : now;
+      const expiresAt = new Date(startsAt.getTime() + promo.durationDays * 24 * 60 * 60 * 1000);
+
       await prisma.promotion.update({
         where: { id: promotionId },
-        data: { status: 'ACTIVE', startsAt: now, expiresAt },
+        data: { status: 'ACTIVE', startsAt, expiresAt },
       });
 
       return new NextResponse('ok', { status: 200 });

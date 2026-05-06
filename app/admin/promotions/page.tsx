@@ -29,7 +29,7 @@ export default async function AdminPromotionsPage() {
 
   const [activePromotions, pendingPromotions, recentExpired] = await Promise.all([
     prisma.promotion.findMany({
-      where: { status: 'ACTIVE', expiresAt: { gt: now } },
+      where: { status: 'ACTIVE', startsAt: { lte: now }, expiresAt: { gt: now } },
       include: {
         product: { select: { title: true, imageUrl: true, id: true } },
         seller: { select: { name: true, email: true } },

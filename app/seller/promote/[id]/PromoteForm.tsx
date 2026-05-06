@@ -3,14 +3,24 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { dollars } from '@/lib/money';
+import type { PromotionAction } from '@/app/api/seller/promote/route';
 
 const PACKAGES = [
-  { days: 7, priceCents: 499, label: '7 days', description: 'Great for fast-selling items' },
-  { days: 14, priceCents: 799, label: '14 days', description: 'Best for most sellers' },
-  { days: 30, priceCents: 1499, label: '30 days', description: 'Maximum exposure' },
+  { days: 1,  priceCents: 399,  label: '1 day',   description: 'Quick boost for time-sensitive items' },
+  { days: 3,  priceCents: 899,  label: '3 days',  description: 'Great for fast-selling items' },
+  { days: 7,  priceCents: 1499, label: '7 days',  description: 'Popular choice for most sellers' },
+  { days: 14, priceCents: 2499, label: '14 days', description: 'Extended visibility' },
+  { days: 30, priceCents: 4499, label: '30 days', description: 'Maximum exposure' },
 ];
 
-export default function PromoteForm({ productId }: { productId: string }) {
+interface PromoteFormProps {
+  productId: string;
+  mode: PromotionAction;
+  /** For pre-expiry renewals, the date the new promotion will start */
+  scheduledStart?: string | null;
+}
+
+export default function PromoteForm({ productId, mode, scheduledStart }: PromoteFormProps) {
   const [selected, setSelected] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -25,7 +35,7 @@ export default function PromoteForm({ productId }: { productId: string }) {
       const res = await fetch('/api/seller/promote', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ productId, durationDays: selected }),
+        body: JSON.stringify({ productId, durationDays: selected, action: mode }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -40,8 +50,23 @@ export default function PromoteForm({ productId }: { productId: string }) {
     }
   }
 
+  const submitLabel = mode === 'renew' ? 'Pay & Renew →' : mode === 'change' ? 'Pay & Change Duration →' : 'Pay & Promote →';
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {mode === 'renew' && scheduledStart && (
+        <div className="card p-3 bg-blue-50 border-blue-200 text-blue-700 text-sm">
+          ℹ️ Your current promotion is still active. The renewal will begin automatically on{' '}
+          <strong>{new Date(scheduledStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</strong>.
+        </div>
+      )}
+      {mode === 'change' && (
+        <div className="card p-3 bg-amber-50 border-amber-200 text-amber-700 text-sm">
+          ⚡ Changing duration will end your current promotion immediately and start a new one.
+          You will be charged the full price for the new duration.
+        </div>
+      )}
+
       <div className="space-y-3">
         {PACKAGES.map(pkg => (
           <label
@@ -76,11 +101,14 @@ export default function PromoteForm({ productId }: { productId: string }) {
         disabled={!selected || loading}
         className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {loading ? 'Redirecting to payment…' : 'Pay & Promote →'}
+        {loading ? 'Redirecting to payment…' : submitLabel}
       </button>
 
       <p className="text-xs text-slate-400 text-center">
-        Secure payment via Stripe. Promotion activates immediately after payment.
+        Secure payment via Stripe.{' '}
+        {mode === 'renew' && scheduledStart
+          ? 'Promotion activates on the scheduled date.'
+          : 'Promotion activates immediately after payment.'}
       </p>
     </form>
   );

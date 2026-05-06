@@ -54,7 +54,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
       orderBy: { createdAt: 'desc' },
       include: {
         promotions: {
-          where: { status: 'ACTIVE', expiresAt: { gt: new Date() } },
+          where: { status: { in: ['ACTIVE', 'EXPIRED'] } },
           orderBy: { expiresAt: 'desc' },
           take: 1,
         },
@@ -255,7 +255,14 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
         ) : (
           <div className="space-y-3">
             {products.map(p => {
-              const activePromo = p.promotions[0] ?? null;
+              const latestPromo = p.promotions[0] ?? null;
+              const now = new Date();
+              const activePromo =
+                latestPromo?.status === 'ACTIVE' && latestPromo.expiresAt && latestPromo.expiresAt > now
+                  ? latestPromo
+                  : null;
+              const expiredPromo =
+                !activePromo && latestPromo?.status === 'EXPIRED' ? latestPromo : null;
               return (
                 <div key={p.id} className="card p-4 flex items-center justify-between gap-4">
                   <div className="flex-1 min-w-0">
@@ -269,8 +276,21 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                   </div>
                   <span className={statusBadge(p.status)}>{p.status}</span>
                   <div className="flex gap-2 flex-shrink-0">
-                    {p.status === 'APPROVED' && !activePromo && !isRestricted && (
-                      <Link href={`/seller/promote/${p.id}`} className="btn bg-yellow-500 hover:bg-yellow-600 text-white text-xs py-1 px-2">⭐ Promote</Link>
+                    {p.status === 'APPROVED' && !isRestricted && (
+                      <>
+                        {activePromo && (
+                          <>
+                            <Link href={`/seller/promote/${p.id}?action=change`} className="btn bg-slate-500 hover:bg-slate-600 text-white text-xs py-1 px-2">⚡ Change</Link>
+                            <Link href={`/seller/promote/${p.id}?action=renew`} className="btn bg-green-500 hover:bg-green-600 text-white text-xs py-1 px-2">🔄 Renew</Link>
+                          </>
+                        )}
+                        {expiredPromo && (
+                          <Link href={`/seller/promote/${p.id}`} className="btn bg-yellow-500 hover:bg-yellow-600 text-white text-xs py-1 px-2">🔄 Re-promote</Link>
+                        )}
+                        {!activePromo && !expiredPromo && (
+                          <Link href={`/seller/promote/${p.id}`} className="btn bg-yellow-500 hover:bg-yellow-600 text-white text-xs py-1 px-2">⭐ Promote</Link>
+                        )}
+                      </>
                     )}
                     {p.status !== 'SOLD' && (
                       <Link href={`/seller/edit/${p.id}`} className="btn-outline text-xs py-1 px-2">Edit</Link>
