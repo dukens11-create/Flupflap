@@ -35,5 +35,5 @@ services:
       - key: NEXT_PUBLIC_APP_URL
         sync: false
       - key: PLATFORM_FEE_PERCENT
-        value: "3"
+        value: "7"
     healthCheckPath: /

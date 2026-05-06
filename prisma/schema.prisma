@@ -84,6 +84,9 @@ model User {
   reportsAboutSeller       ProductReport[] @relation("SellerReports")
   reportResolutions        ProductReport[] @relation("AdminReportResolutions")
   promotions               Promotion[]
+  sellerPlanId             String?
+  sellerPlan               SellerPlan?   @relation(fields: [sellerPlanId], references: [id])
+  checkoutSessionSnapshots CheckoutSessionSnapshot[]
 }
 
 model SellerOtp {
@@ -177,13 +180,19 @@ model Order {
 }
 
 model OrderItem {
-  id        String  @id @default(cuid())
-  orderId   String
-  order     Order   @relation(fields: [orderId], references: [id])
-  productId String
-  product   Product @relation(fields: [productId], references: [id])
-  priceCents Int
-  quantity   Int    @default(1)
+  id                String  @id @default(cuid())
+  orderId           String
+  order             Order   @relation(fields: [orderId], references: [id])
+  productId         String
+  product           Product @relation(fields: [productId], references: [id])
+  priceCents        Int
+  shippingCents     Int     @default(0)
+  quantity          Int     @default(1)
+  commissionRateBps Int     @default(700)
+  commissionFeeCents Int    @default(0)
+  sellerNetCents    Int     @default(0)
+  commissionSource  String  @default("DEFAULT")
+  commissionPlanCode String?
 }
 
 model Account {
@@ -358,4 +367,35 @@ model PromotionPlan {
   updatedAt    DateTime @updatedAt
 
   @@index([isActive, sortOrder])
+}
+
+model MarketplaceSettings {
+  id                         Int      @id @default(1)
+  defaultSellerCommissionBps Int      @default(700)
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+}
+
+model SellerPlan {
+  id                String   @id @default(cuid())
+  code              String   @unique
+  name              String
+  commissionRateBps Int?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  sellers           User[]
+}
+
+model CheckoutSessionSnapshot {
+  stripeCheckoutId   String   @id
+  buyerId            String
+  buyer              User     @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  items              Json
+  pickupItemIds      Json
+  commissionItems    Json
+  directToSellerId   String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([buyerId])
 }
