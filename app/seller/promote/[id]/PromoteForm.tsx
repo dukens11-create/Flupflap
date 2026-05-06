@@ -4,13 +4,14 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { dollars } from '@/lib/money';
 
-const PACKAGES = [
-  { days: 7, priceCents: 499, label: '7 days', description: 'Great for fast-selling items' },
-  { days: 14, priceCents: 799, label: '14 days', description: 'Best for most sellers' },
-  { days: 30, priceCents: 1499, label: '30 days', description: 'Maximum exposure' },
-];
+type PromotionPlan = {
+  durationDays: number;
+  priceCents: number;
+  label: string;
+  description: string | null;
+};
 
-export default function PromoteForm({ productId }: { productId: string }) {
+export default function PromoteForm({ productId, plans }: { productId: string; plans: PromotionPlan[] }) {
   const [selected, setSelected] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -43,26 +44,26 @@ export default function PromoteForm({ productId }: { productId: string }) {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-3">
-        {PACKAGES.map(pkg => (
+        {plans.map(plan => (
           <label
-            key={pkg.days}
+            key={plan.durationDays}
             className={`card p-4 flex items-center gap-4 cursor-pointer transition-colors ${
-              selected === pkg.days ? 'border-blue-500 bg-blue-50' : 'hover:bg-slate-50'
+              selected === plan.durationDays ? 'border-blue-500 bg-blue-50' : 'hover:bg-slate-50'
             }`}
           >
             <input
               type="radio"
               name="duration"
-              value={pkg.days}
-              checked={selected === pkg.days}
-              onChange={() => setSelected(pkg.days)}
+              value={plan.durationDays}
+              checked={selected === plan.durationDays}
+              onChange={() => setSelected(plan.durationDays)}
               className="accent-blue-600"
             />
             <div className="flex-1">
-              <p className="font-semibold text-slate-800">{pkg.label}</p>
-              <p className="text-sm text-slate-500">{pkg.description}</p>
+              <p className="font-semibold text-slate-800">{plan.label}</p>
+              <p className="text-sm text-slate-500">{plan.description}</p>
             </div>
-            <p className="font-black text-blue-700 text-lg">{dollars(pkg.priceCents)}</p>
+            <p className="font-black text-blue-700 text-lg">{dollars(plan.priceCents)}</p>
           </label>
         ))}
       </div>
@@ -80,7 +81,7 @@ export default function PromoteForm({ productId }: { productId: string }) {
       </button>
 
       <p className="text-xs text-slate-400 text-center">
-        Secure payment via Stripe. Promotion activates immediately after payment.
+        Secure payment via Stripe. Promotion activates only after payment is verified.
       </p>
     </form>
   );

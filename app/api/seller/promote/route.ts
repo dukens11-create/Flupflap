@@ -3,13 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { stripe, appUrl } from '@/lib/stripe';
-
-// Promotion packages available to sellers (duration → price in cents)
-export const PROMOTION_PACKAGES: Record<number, number> = {
-  7: 499,   // $4.99 for 7 days
-  14: 799,  // $7.99 for 14 days
-  30: 1499, // $14.99 for 30 days
-};
+import { expirePromotions, getPromotionLabel, getPromotionPlan } from '@/lib/promotions';
 
 export async function POST(req: Request) {
   try {
@@ -26,10 +20,11 @@ export async function POST(req: Request) {
 
     const { productId, durationDays } = await req.json() as { productId: string; durationDays: number };
 
-    const priceCents = PROMOTION_PACKAGES[durationDays];
-    if (!priceCents) {
-      return NextResponse.json({ error: 'Invalid promotion duration. Choose 7, 14, or 30 days.' }, { status: 400 });
+    const plan = await getPromotionPlan(durationDays);
+    if (!plan || !plan.isActive) {
+      return NextResponse.json({ error: 'Invalid promotion duration.' }, { status: 400 });
     }
+    const priceCents = plan.priceCents;
 
     // Verify the product exists, is owned by this seller, and is APPROVED
     const product = await prisma.product.findUnique({ where: { id: productId } });
@@ -41,6 +36,7 @@ export async function POST(req: Request) {
     }
 
     // Check if there is already an active promotion for this product
+    await expirePromotions();
     const now = new Date();
     const activePromotion = await prisma.promotion.findFirst({
       where: {
@@ -73,8 +69,8 @@ export async function POST(req: Request) {
           price_data: {
             currency: 'usd',
             product_data: {
-              name: `Promote "${product.title}" for ${durationDays} day${durationDays !== 1 ? 's' : ''}`,
-              description: `Featured placement on FlupFlap Marketplace for ${durationDays} days`,
+              name: `Promote "${product.title}" for ${getPromotionLabel(durationDays)}`,
+              description: `Boosted placement on FlupFlap Marketplace for ${getPromotionLabel(durationDays)}`,
             },
             unit_amount: priceCents,
           },

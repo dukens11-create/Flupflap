@@ -5,6 +5,7 @@ import { stripe } from '@/lib/stripe';
 import { platformFee, sellerPayout } from '@/lib/money';
 import crypto from 'crypto';
 import Stripe from 'stripe';
+import { expirePromotions } from '@/lib/promotions';
 
 /** Generate a cryptographically secure 6-digit pickup confirmation code. */
 function generatePickupCode(): string {
@@ -41,6 +42,7 @@ export async function POST(req: Request) {
   }
 
   if (event.type === 'checkout.session.completed') {
+    await expirePromotions();
     const cs = event.data.object as any;
 
     // Handle promotion payments separately from product purchases
@@ -135,6 +137,22 @@ export async function POST(req: Request) {
     // Decrement inventory and mark as SOLD if qty reaches 0
     for (const p of products) {
       const qty = items.find(i => i.productId === p.id)?.quantity ?? 1;
+      const activePromotion = await prisma.promotion.findFirst({
+        where: {
+          productId: p.id,
+          status: 'ACTIVE',
+          expiresAt: { gt: new Date() },
+        },
+      });
+      if (activePromotion) {
+        await prisma.promotion.update({
+          where: { id: activePromotion.id },
+          data: {
+            saleCount: { increment: qty },
+            saleAmountCents: { increment: p.priceCents * qty },
+          },
+        });
+      }
       const newInventory = Math.max(0, p.inventory - qty);
       await prisma.product.update({
         where: { id: p.id },

@@ -7,6 +7,7 @@ import { stripe } from '@/lib/stripe';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import PickupVerifyForm from '@/components/PickupVerifyForm';
+import { expirePromotions } from '@/lib/promotions';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,6 +49,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   const sellerStatus = dbUser?.sellerStatus ?? 'ACTIVE';
   const isRestricted = sellerStatus === 'SUSPENDED' || sellerStatus === 'BANNED';
 
+  await expirePromotions();
   const [products, orders, soldItems] = await Promise.all([
     prisma.product.findMany({
       where: { sellerId: session.user.id },
@@ -262,7 +264,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-semibold truncate">{p.title}</p>
                       {activePromo && (
-                        <span className="badge badge-blue flex-shrink-0">⭐ Featured until {activePromo.expiresAt ? activePromo.expiresAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}</span>
+                        <span className="badge badge-blue flex-shrink-0">Boosted until {activePromo.expiresAt ? activePromo.expiresAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}</span>
                       )}
                     </div>
                     <p className="text-sm text-slate-500">{p.condition} · {p.category} · {dollars(p.priceCents)}</p>

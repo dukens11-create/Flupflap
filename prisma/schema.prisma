@@ -331,6 +331,10 @@ model Promotion {
   status           PromotionStatus @default(PENDING_PAYMENT)
   durationDays     Int
   priceCents       Int
+  impressionCount  Int             @default(0)
+  clickCount       Int             @default(0)
+  saleCount        Int             @default(0)
+  saleAmountCents  Int             @default(0)
   stripeCheckoutId String?         @unique
   startsAt         DateTime?
   expiresAt        DateTime?
@@ -340,4 +344,18 @@ model Promotion {
   @@index([productId])
   @@index([sellerId])
   @@index([status])
+}
+
+model PromotionPlan {
+  id           String   @id @default(cuid())
+  durationDays Int      @unique
+  label        String
+  description  String?
+  priceCents   Int
+  isActive     Boolean  @default(true)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([isActive, sortOrder])
 }

@@ -8,7 +8,7 @@ export default function ProductCard({p}:{p:any}){
       <div className="relative h-52 bg-slate-100">
         <Image src={p.imageUrl} alt={p.title} fill className="object-cover"/>
         {isFeatured && (
-          <span className="absolute top-2 left-2 badge bg-yellow-400 text-yellow-900 text-xs font-bold shadow-sm">⭐ Featured</span>
+          <span className="absolute top-2 left-2 badge bg-yellow-400 text-yellow-900 text-xs font-bold shadow-sm">Sponsored</span>
         )}
       </div>
       <div className="p-4">

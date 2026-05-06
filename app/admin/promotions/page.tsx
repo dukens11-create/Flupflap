@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db';
 import { dollars } from '@/lib/money';
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import { expirePromotions, getPromotionLabel, getPromotionPlans } from '@/lib/promotions';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,9 +26,10 @@ export default async function AdminPromotionsPage() {
   if (!session?.user) redirect('/login');
   if (session.user.role !== 'ADMIN') redirect('/');
 
+  await expirePromotions();
   const now = new Date();
 
-  const [activePromotions, pendingPromotions, recentExpired] = await Promise.all([
+  const [activePromotions, pendingPromotions, recentExpired, promotionPlans] = await Promise.all([
     prisma.promotion.findMany({
       where: { status: 'ACTIVE', expiresAt: { gt: now } },
       include: {
@@ -54,6 +56,7 @@ export default async function AdminPromotionsPage() {
       orderBy: { updatedAt: 'desc' },
       take: 20,
     }),
+    getPromotionPlans(),
   ]);
 
   const formatDate = (d: Date | null) =>
@@ -64,10 +67,37 @@ export default async function AdminPromotionsPage() {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-black">Promotions</h1>
-          <p className="text-slate-500 text-sm">Paid featured listings across the marketplace</p>
+          <p className="text-slate-500 text-sm">Paid boosted listings across the marketplace</p>
         </div>
         <Link href="/admin" className="btn-outline text-sm">← Admin</Link>
       </div>
+
+      <section className="card p-5 mb-8">
+        <div className="mb-4">
+          <h2 className="text-xl font-bold">Promotion pricing</h2>
+          <p className="text-sm text-slate-500">Update seller promotion pricing from the admin dashboard.</p>
+        </div>
+        <form action="/api/admin/promotions/pricing" method="POST" className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            {promotionPlans.map(plan => (
+              <label key={plan.id} className="card p-4 block">
+                <span className="block font-semibold text-slate-800">{plan.label}</span>
+                <span className="block text-xs text-slate-500 mb-3">{plan.description}</span>
+                <span className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Price (USD)</span>
+                <input
+                  type="number"
+                  name={`price_${plan.durationDays}`}
+                  min="0"
+                  step="0.01"
+                  defaultValue={(plan.priceCents / 100).toFixed(2)}
+                  className="input w-full"
+                />
+              </label>
+            ))}
+          </div>
+          <button type="submit" className="btn-primary">Save pricing</button>
+        </form>
+      </section>
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4 mb-8">
@@ -102,7 +132,10 @@ export default async function AdminPromotionsPage() {
                     Seller: {promo.seller.name} ({promo.seller.email})
                   </p>
                   <p className="text-xs text-slate-400">
-                    {promo.durationDays}-day plan · {dollars(promo.priceCents)} · Expires {formatDate(promo.expiresAt)}
+                    {getPromotionLabel(promo.durationDays)} · {dollars(promo.priceCents)} · Expires {formatDate(promo.expiresAt)}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    {promo.impressionCount} impressions · {promo.clickCount} clicks · {promo.saleCount} sales ({dollars(promo.saleAmountCents)})
                   </p>
                 </div>
                 <span className={`badge ${statusBadge(promo.status)}`}>{promo.status}</span>
@@ -119,14 +152,14 @@ export default async function AdminPromotionsPage() {
           <h2 className="text-xl font-bold mb-3">⏳ Pending Payment ({pendingPromotions.length})</h2>
           <div className="space-y-2">
             {pendingPromotions.map(promo => (
-              <div key={promo.id} className="card p-4 flex items-center gap-4">
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold truncate">{promo.product.title}</p>
-                  <p className="text-xs text-slate-500">Seller: {promo.seller.name} ({promo.seller.email})</p>
-                  <p className="text-xs text-slate-400">{promo.durationDays}-day plan · {dollars(promo.priceCents)} · Created {formatDate(promo.createdAt)}</p>
+                <div key={promo.id} className="card p-4 flex items-center gap-4">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold truncate">{promo.product.title}</p>
+                    <p className="text-xs text-slate-500">Seller: {promo.seller.name} ({promo.seller.email})</p>
+                    <p className="text-xs text-slate-400">{getPromotionLabel(promo.durationDays)} · {dollars(promo.priceCents)} · Created {formatDate(promo.createdAt)}</p>
+                  </div>
+                  <span className={`badge ${statusBadge(promo.status)}`}>{promo.status}</span>
                 </div>
-                <span className={`badge ${statusBadge(promo.status)}`}>{promo.status}</span>
-              </div>
             ))}
           </div>
         </section>
@@ -138,14 +171,17 @@ export default async function AdminPromotionsPage() {
           <h2 className="text-xl font-bold mb-3">History (last 20)</h2>
           <div className="space-y-2">
             {recentExpired.map(promo => (
-              <div key={promo.id} className="card p-4 flex items-center gap-4">
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold truncate">{promo.product.title}</p>
-                  <p className="text-xs text-slate-500">Seller: {promo.seller.name}</p>
-                  <p className="text-xs text-slate-400">{promo.durationDays}-day plan · {dollars(promo.priceCents)} · Expired {formatDate(promo.expiresAt)}</p>
+                <div key={promo.id} className="card p-4 flex items-center gap-4">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold truncate">{promo.product.title}</p>
+                    <p className="text-xs text-slate-500">Seller: {promo.seller.name}</p>
+                    <p className="text-xs text-slate-400">{getPromotionLabel(promo.durationDays)} · {dollars(promo.priceCents)} · Expired {formatDate(promo.expiresAt)}</p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      {promo.impressionCount} impressions · {promo.clickCount} clicks · {promo.saleCount} sales ({dollars(promo.saleAmountCents)})
+                    </p>
+                  </div>
+                  <span className={`badge ${statusBadge(promo.status)}`}>{promo.status}</span>
                 </div>
-                <span className={`badge ${statusBadge(promo.status)}`}>{promo.status}</span>
-              </div>
             ))}
           </div>
         </section>
