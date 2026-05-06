@@ -62,10 +62,24 @@ async function ProductGrid({ sp }: { sp: SearchParams }) {
 
   let products;
   try {
+    const now = new Date();
     products = await prisma.product.findMany({
       where,
       orderBy: { createdAt: 'desc' },
       take: 60,
+      include: {
+        promotions: {
+          where: { status: 'ACTIVE', expiresAt: { gt: now } },
+          orderBy: { expiresAt: 'desc' },
+          take: 1,
+        },
+      },
+    });
+    // Sort a copy: featured (active promotion) products appear first
+    products = [...products].sort((productA: any, productB: any) => {
+      const aFeatured = productA.promotions.length > 0 ? 1 : 0;
+      const bFeatured = productB.promotions.length > 0 ? 1 : 0;
+      return bFeatured - aFeatured;
     });
   } catch (err: unknown) {
     // If tables don't exist yet (schema not initialized), show a clear actionable message
@@ -101,7 +115,9 @@ async function ProductGrid({ sp }: { sp: SearchParams }) {
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-      {products.map(p => <ProductCard key={p.id} p={p} />)}
+      {products.map((p: any) => (
+        <ProductCard key={p.id} p={{ ...p, activePromotion: p.promotions[0] ?? null }} />
+      ))}
     </div>
   );
 }

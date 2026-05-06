@@ -37,7 +37,7 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub?: s
   );
 }
 
-export default async function SellerPage({ searchParams }: { searchParams: Promise<{ created?: string; stripe?: string; updated?: string; deleted?: string }> }) {
+export default async function SellerPage({ searchParams }: { searchParams: Promise<{ created?: string; stripe?: string; updated?: string; deleted?: string; promoted?: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect('/login');
   if (session.user.role !== 'SELLER') redirect('/');
@@ -52,6 +52,13 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
     prisma.product.findMany({
       where: { sellerId: session.user.id },
       orderBy: { createdAt: 'desc' },
+      include: {
+        promotions: {
+          where: { status: 'ACTIVE', expiresAt: { gt: new Date() } },
+          orderBy: { expiresAt: 'desc' },
+          take: 1,
+        },
+      },
     }),
     prisma.order.findMany({
       where: { items: { some: { product: { sellerId: session.user.id } } } },
@@ -247,18 +254,31 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
           <div className="card p-6 text-slate-500">No listings yet. <Link href="/seller/new" className="text-blue-600 hover:underline">Create one</Link>.</div>
         ) : (
           <div className="space-y-3">
-            {products.map(p => (
-              <div key={p.id} className="card p-4 flex items-center justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold truncate">{p.title}</p>
-                  <p className="text-sm text-slate-500">{p.condition} · {p.category} · {dollars(p.priceCents)}</p>
+            {products.map(p => {
+              const activePromo = p.promotions[0] ?? null;
+              return (
+                <div key={p.id} className="card p-4 flex items-center justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-semibold truncate">{p.title}</p>
+                      {activePromo && (
+                        <span className="badge badge-blue flex-shrink-0">⭐ Featured until {activePromo.expiresAt ? activePromo.expiresAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}</span>
+                      )}
+                    </div>
+                    <p className="text-sm text-slate-500">{p.condition} · {p.category} · {dollars(p.priceCents)}</p>
+                  </div>
+                  <span className={statusBadge(p.status)}>{p.status}</span>
+                  <div className="flex gap-2 flex-shrink-0">
+                    {p.status === 'APPROVED' && !activePromo && !isRestricted && (
+                      <Link href={`/seller/promote/${p.id}`} className="btn bg-yellow-500 hover:bg-yellow-600 text-white text-xs py-1 px-2">⭐ Promote</Link>
+                    )}
+                    {p.status !== 'SOLD' && (
+                      <Link href={`/seller/edit/${p.id}`} className="btn-outline text-xs py-1 px-2">Edit</Link>
+                    )}
+                  </div>
                 </div>
-                <span className={statusBadge(p.status)}>{p.status}</span>
-                {p.status !== 'SOLD' && (
-                  <Link href={`/seller/edit/${p.id}`} className="btn-outline text-xs py-1 px-2 flex-shrink-0">Edit</Link>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>
