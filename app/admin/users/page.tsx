@@ -112,11 +112,11 @@ export default async function AdminUsersPage({
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 gap-4 mb-6">
-        <a href={tabHref('CUSTOMER')} className={`card p-4 text-center hover:bg-slate-50 transition-colors ${isBuyerTab ? 'border-blue-300 ring-2 ring-blue-100' : ''}`}>
+        <a href={tabHref('CUSTOMER')} aria-label="View buyer accounts" className={`card p-4 text-center hover:bg-slate-50 transition-colors ${isBuyerTab ? 'border-blue-300 ring-2 ring-blue-100' : ''}`}>
           <p className="text-3xl font-black text-blue-600">{buyerCount}</p>
           <p className="text-sm text-slate-500">🛒 Buyer{buyerCount !== 1 ? 's' : ''}</p>
         </a>
-        <a href={tabHref('SELLER')} className={`card p-4 text-center hover:bg-slate-50 transition-colors ${isSellerTab ? 'border-green-300 ring-2 ring-green-100' : ''}`}>
+        <a href={tabHref('SELLER')} aria-label="View seller accounts" className={`card p-4 text-center hover:bg-slate-50 transition-colors ${isSellerTab ? 'border-green-300 ring-2 ring-green-100' : ''}`}>
           <p className="text-3xl font-black text-green-600">{sellerCount}</p>
           <p className="text-sm text-slate-500">🏪 Seller{sellerCount !== 1 ? 's' : ''}</p>
         </a>
@@ -165,7 +165,7 @@ export default async function AdminUsersPage({
                 {isSellerTab && (
                   <th className="px-4 py-3 font-semibold text-slate-600 hidden sm:table-cell">Status</th>
                 )}
-                <th className="px-4 py-3 font-semibold text-slate-600 hidden sm:table-cell">Orders</th>
+                <th className="px-4 py-3 font-semibold text-slate-600 hidden sm:table-cell">{isBuyerTab ? 'Purchases' : isSellerTab ? 'Sales' : 'Orders'}</th>
                 {isSellerTab && (
                   <th className="px-4 py-3 font-semibold text-slate-600 hidden sm:table-cell">Listings</th>
                 )}
