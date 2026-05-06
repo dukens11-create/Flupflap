@@ -3,6 +3,7 @@ import { headers } from 'next/headers';
 import { prisma } from '@/lib/db';
 import { stripe } from '@/lib/stripe';
 import { calculateCommissionCents, calculateSellerNetCents, getMarketplaceSettings, resolveCommissionForSeller } from '@/lib/commission';
+import type { CheckoutCommissionItem } from '@/lib/commission';
 import crypto from 'crypto';
 import Stripe from 'stripe';
 
@@ -100,34 +101,10 @@ export async function POST(req: Request) {
         },
       }),
     ]);
-    const snapshotCommissionItems = ((snapshot?.commissionItems as Array<{
-      productId: string;
-      sellerId: string;
-      sellerStripeAccountId: string | null;
-      sellerStripeOnboardingComplete: boolean;
-      quantity: number;
-      priceCents: number;
-      shippingCents: number;
-      commissionRateBps: number;
-      commissionFeeCents: number;
-      sellerNetCents: number;
-      commissionSource: 'DEFAULT' | 'SELLER_PLAN';
-      commissionPlanCode: string | null;
-    }> | null) ?? []).map((item): [string, {
-      productId: string;
-      sellerId: string;
-      sellerStripeAccountId: string | null;
-      sellerStripeOnboardingComplete: boolean;
-      quantity: number;
-      priceCents: number;
-      shippingCents: number;
-      commissionRateBps: number;
-      commissionFeeCents: number;
-      sellerNetCents: number;
-      commissionSource: 'DEFAULT' | 'SELLER_PLAN';
-      commissionPlanCode: string | null;
-    }] => [item.productId, item]);
-    const commissionItemsByProductId = new Map(snapshotCommissionItems);
+    const snapshotCommissionItems = (snapshot?.commissionItems as CheckoutCommissionItem[] | null) ?? [];
+    const commissionItemsByProductId = new Map<string, CheckoutCommissionItem>(
+      snapshotCommissionItems.map((item) => [item.productId, item]),
+    );
     const productsById = new Map(products.map((product) => [product.id, product]));
 
     if (products.length !== items.length) {
