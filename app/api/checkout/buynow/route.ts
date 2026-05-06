@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { stripe, appUrl } from '@/lib/stripe';
-import { platformFee } from '@/lib/money';
+import { buildCheckoutCommissionItems, getMarketplaceSettings } from '@/lib/commission';
 
 export async function POST(req: Request) {
   try {
@@ -13,10 +13,22 @@ export async function POST(req: Request) {
     }
 
     const { productId, isPickup = false } = await req.json() as { productId: string; isPickup?: boolean };
-    const product = await prisma.product.findUnique({
+    const [settings, product] = await Promise.all([
+      getMarketplaceSettings(),
+      prisma.product.findUnique({
       where: { id: productId },
-      include: { seller: { select: { stripeAccountId: true, stripeOnboardingComplete: true } } },
-    });
+      include: {
+        seller: {
+          select: {
+            id: true,
+            stripeAccountId: true,
+            stripeOnboardingComplete: true,
+            sellerPlan: { select: { code: true, commissionRateBps: true } },
+          },
+        },
+      },
+    }),
+    ]);
 
     if (!product || product.status !== 'APPROVED' || product.inventory <= 0) {
       return NextResponse.json({ error: 'Product not available.' }, { status: 400 });
@@ -24,12 +36,16 @@ export async function POST(req: Request) {
 
     // Validate pickup is actually available if requested
     const actualPickup = isPickup && product.pickupAvailable;
-
-    // For pickup orders, only charge item price (no shipping)
-    const unitAmount = actualPickup ? product.priceCents : product.priceCents + product.shippingCents;
+    const { commissionItems, platformFeeCents, totalCents } = buildCheckoutCommissionItems(
+      [product],
+      [{ productId: product.id, quantity: 1 }],
+      actualPickup ? [product.id] : [],
+      settings.defaultSellerCommissionBps,
+    );
+    const [commissionItem] = commissionItems;
 
     // Wire funds to the seller's connected account when onboarding is complete,
-    // keeping only the platform fee for the platform.
+    // keeping only the platform commission for the platform.
     const sellerStripeId = product.seller.stripeOnboardingComplete && product.seller.stripeAccountId
       ? product.seller.stripeAccountId
       : null;
@@ -42,7 +58,7 @@ export async function POST(req: Request) {
           price_data: {
             currency: 'usd',
             product_data: { name: product.title, images: [product.imageUrl] },
-            unit_amount: unitAmount,
+            unit_amount: totalCents,
           },
           quantity: 1,
         },
@@ -59,7 +75,7 @@ export async function POST(req: Request) {
       ...(sellerStripeId
         ? {
             payment_intent_data: {
-              application_fee_amount: platformFee(unitAmount),
+              application_fee_amount: platformFeeCents,
               transfer_data: { destination: sellerStripeId },
             },
           }
@@ -69,6 +85,24 @@ export async function POST(req: Request) {
         items: JSON.stringify([{ productId: product.id, quantity: 1 }]),
         pickupItemIds: actualPickup ? JSON.stringify([product.id]) : JSON.stringify([]),
         isPickup: actualPickup ? 'true' : 'false',
+      },
+    });
+
+    await prisma.checkoutSessionSnapshot.upsert({
+      where: { stripeCheckoutId: stripeSession.id },
+      update: {
+        items: [{ productId: product.id, quantity: 1 }],
+        pickupItemIds: actualPickup ? [product.id] : [],
+        commissionItems: [commissionItem],
+        directToSellerId: sellerStripeId,
+      },
+      create: {
+        stripeCheckoutId: stripeSession.id,
+        buyerId: session.user.id,
+        items: [{ productId: product.id, quantity: 1 }],
+        pickupItemIds: actualPickup ? [product.id] : [],
+        commissionItems: [commissionItem],
+        directToSellerId: sellerStripeId,
       },
     });
 

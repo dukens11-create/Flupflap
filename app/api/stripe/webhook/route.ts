@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import { prisma } from '@/lib/db';
 import { stripe } from '@/lib/stripe';
-import { platformFee, sellerPayout } from '@/lib/money';
+import { calculateCommissionCents, calculateSellerNetCents, getMarketplaceSettings, resolveCommissionForSeller } from '@/lib/commission';
 import crypto from 'crypto';
 import Stripe from 'stripe';
 
@@ -61,32 +61,114 @@ export async function POST(req: Request) {
 
       return new NextResponse('ok', { status: 200 });
     }
-    const buyerId: string = cs.metadata?.buyerId;
+    const metadataBuyerId: string = cs.metadata?.buyerId;
     const rawItems: string = cs.metadata?.items ?? '[]';
-    const items: { productId: string; quantity: number }[] = JSON.parse(rawItems);
+    const metadataItems: { productId: string; quantity: number }[] = JSON.parse(rawItems);
     const rawPickupIds: string = cs.metadata?.pickupItemIds ?? '[]';
-    const pickupItemIds: string[] = JSON.parse(rawPickupIds);
-    const isPickupOrder: boolean = cs.metadata?.isPickup === 'true';
-
-    if (!buyerId || !items.length) {
-      return new NextResponse('Missing metadata', { status: 400 });
-    }
+    const metadataPickupItemIds: string[] = JSON.parse(rawPickupIds);
 
     // Avoid duplicate processing
     const existing = await prisma.order.findUnique({ where: { stripeCheckoutId: cs.id } });
     if (existing) return new NextResponse('Already processed', { status: 200 });
 
+    const snapshot = await prisma.checkoutSessionSnapshot.findUnique({
+      where: { stripeCheckoutId: cs.id },
+    });
+    const buyerId = snapshot?.buyerId ?? metadataBuyerId;
+    const items = (snapshot?.items as { productId: string; quantity: number }[] | null) ?? metadataItems;
+    const pickupItemIds = (snapshot?.pickupItemIds as string[] | null) ?? metadataPickupItemIds;
+    const isPickupOrder = pickupItemIds.length > 0;
+
+    if (!buyerId || !items.length) {
+      return new NextResponse('Missing metadata', { status: 400 });
+    }
     const pickupSet = new Set(pickupItemIds);
 
-    const products = await prisma.product.findMany({
-      where: { id: { in: items.map(i => i.productId) } },
+    const [settings, products] = await Promise.all([
+      getMarketplaceSettings(),
+      prisma.product.findMany({
+        where: { id: { in: items.map(i => i.productId) } },
+        include: {
+          seller: {
+            select: {
+              id: true,
+              stripeAccountId: true,
+              stripeOnboardingComplete: true,
+              sellerPlan: { select: { code: true, commissionRateBps: true } },
+            },
+          },
+        },
+      }),
+    ]);
+    const snapshotCommissionItems = ((snapshot?.commissionItems as Array<{
+      productId: string;
+      sellerId: string;
+      sellerStripeAccountId: string | null;
+      sellerStripeOnboardingComplete: boolean;
+      quantity: number;
+      priceCents: number;
+      shippingCents: number;
+      commissionRateBps: number;
+      commissionFeeCents: number;
+      sellerNetCents: number;
+      commissionSource: 'DEFAULT' | 'SELLER_PLAN';
+      commissionPlanCode: string | null;
+    }> | null) ?? []).map((item): [string, {
+      productId: string;
+      sellerId: string;
+      sellerStripeAccountId: string | null;
+      sellerStripeOnboardingComplete: boolean;
+      quantity: number;
+      priceCents: number;
+      shippingCents: number;
+      commissionRateBps: number;
+      commissionFeeCents: number;
+      sellerNetCents: number;
+      commissionSource: 'DEFAULT' | 'SELLER_PLAN';
+      commissionPlanCode: string | null;
+    }] => [item.productId, item]);
+    const commissionItemsByProductId = new Map(snapshotCommissionItems);
+    const productsById = new Map(products.map((product) => [product.id, product]));
+
+    if (products.length !== items.length) {
+      return new NextResponse('Missing products', { status: 400 });
+    }
+
+    const orderItems = items.map((item) => {
+      const product = productsById.get(item.productId);
+      if (!product) {
+        throw new Error(`Missing product for checkout item ${item.productId}`);
+      }
+
+      const fallbackCommission = resolveCommissionForSeller({
+        seller: product.seller,
+        defaultSellerCommissionBps: settings.defaultSellerCommissionBps,
+      });
+      const snapshotCommission = commissionItemsByProductId.get(product.id);
+      const quantity = item.quantity;
+      const priceCents = product.priceCents;
+      const shippingCents = pickupSet.has(product.id) ? 0 : product.shippingCents;
+      const priceTotalCents = priceCents * quantity;
+      const commissionRateBps = snapshotCommission?.commissionRateBps ?? fallbackCommission.commissionRateBps;
+      const commissionFeeCents = snapshotCommission?.commissionFeeCents ?? calculateCommissionCents(priceTotalCents, commissionRateBps);
+
+      return {
+        product,
+        quantity,
+        priceCents,
+        shippingCents,
+        commissionRateBps,
+        commissionFeeCents,
+        sellerNetCents: snapshotCommission?.sellerNetCents ?? calculateSellerNetCents(priceTotalCents, commissionRateBps),
+        commissionSource: snapshotCommission?.commissionSource ?? fallbackCommission.commissionSource,
+        commissionPlanCode: snapshotCommission?.commissionPlanCode ?? fallbackCommission.commissionPlanCode,
+      };
     });
 
-    const totalCents = products.reduce((sum, p) => {
-      const qty = items.find(i => i.productId === p.id)?.quantity ?? 1;
-      const isPickup = pickupSet.has(p.id);
-      return sum + (p.priceCents + (isPickup ? 0 : p.shippingCents)) * qty;
-    }, 0);
+    const subtotalCents = orderItems.reduce((sum, item) => sum + item.priceCents * item.quantity, 0);
+    const shippingTotalCents = orderItems.reduce((sum, item) => sum + item.shippingCents * item.quantity, 0);
+    const platformFeeCents = orderItems.reduce((sum, item) => sum + item.commissionFeeCents, 0);
+    const totalCents = subtotalCents + shippingTotalCents;
 
     const shipping = cs.shipping_details ?? {};
 
@@ -97,17 +179,10 @@ export async function POST(req: Request) {
       data: {
         buyerId,
         totalCents,
-        subtotalCents: products.reduce((s, p) => {
-          const qty = items.find(i => i.productId === p.id)?.quantity ?? 1;
-          return s + p.priceCents * qty;
-        }, 0),
-        shippingCents: products.reduce((s, p) => {
-          const qty = items.find(i => i.productId === p.id)?.quantity ?? 1;
-          if (pickupSet.has(p.id)) return s; // no shipping for pickup
-          return s + p.shippingCents * qty;
-        }, 0),
-        platformFeeCents: platformFee(totalCents),
-        sellerPayoutCents: sellerPayout(totalCents),
+        subtotalCents,
+        shippingCents: shippingTotalCents,
+        platformFeeCents,
+        sellerPayoutCents: totalCents - platformFeeCents,
         status: 'PAID',
         stripeCheckoutId: cs.id,
         stripePaymentIntentId: cs.payment_intent ?? null,
@@ -123,25 +198,85 @@ export async function POST(req: Request) {
         shippingPostalCode: shipping?.address?.postal_code ?? null,
         shippingCountry: shipping?.address?.country ?? null,
         items: {
-          create: products.map(p => ({
-            productId: p.id,
-            priceCents: p.priceCents,
-            quantity: items.find(i => i.productId === p.id)?.quantity ?? 1,
+          create: orderItems.map(item => ({
+            productId: item.product.id,
+            priceCents: item.priceCents,
+            shippingCents: item.shippingCents,
+            quantity: item.quantity,
+            commissionRateBps: item.commissionRateBps,
+            commissionFeeCents: item.commissionFeeCents,
+            sellerNetCents: item.sellerNetCents,
+            commissionSource: item.commissionSource,
+            commissionPlanCode: item.commissionPlanCode,
           })),
         },
       },
     });
 
+    if (!snapshot?.directToSellerId && cs.payment_intent) {
+      try {
+        const paymentIntent = await stripe.paymentIntents.retrieve(String(cs.payment_intent), {
+          expand: ['latest_charge'],
+        });
+        const sourceChargeId = typeof paymentIntent.latest_charge === 'string'
+          ? paymentIntent.latest_charge
+          : paymentIntent.latest_charge?.id;
+
+        if (sourceChargeId) {
+          const sellerTransfers = new Map<string, { destination: string; amount: number; sellerId: string }>();
+
+          for (const item of orderItems) {
+            if (!item.product.seller.stripeOnboardingComplete || !item.product.seller.stripeAccountId) continue;
+            const transferAmount = item.sellerNetCents + (item.shippingCents * item.quantity);
+            if (transferAmount <= 0) continue;
+
+            const existingTransfer = sellerTransfers.get(item.product.seller.id);
+            if (existingTransfer) {
+              existingTransfer.amount += transferAmount;
+            } else {
+              sellerTransfers.set(item.product.seller.id, {
+                destination: item.product.seller.stripeAccountId,
+                amount: transferAmount,
+                sellerId: item.product.seller.id,
+              });
+            }
+          }
+
+          for (const transfer of sellerTransfers.values()) {
+            await stripe.transfers.create({
+              amount: transfer.amount,
+              currency: 'usd',
+              destination: transfer.destination,
+              source_transaction: sourceChargeId,
+              transfer_group: `order_${order.id}`,
+              metadata: {
+                orderId: order.id,
+                sellerId: transfer.sellerId,
+                stripeCheckoutId: cs.id,
+              },
+            });
+          }
+        }
+      } catch (err) {
+        console.error('[webhook] transfer creation failed:', err);
+      }
+    }
+
     // Decrement inventory and mark as SOLD if qty reaches 0
-    for (const p of products) {
-      const qty = items.find(i => i.productId === p.id)?.quantity ?? 1;
-      const newInventory = Math.max(0, p.inventory - qty);
+    for (const item of orderItems) {
+      const newInventory = Math.max(0, item.product.inventory - item.quantity);
       await prisma.product.update({
-        where: { id: p.id },
+        where: { id: item.product.id },
         data: {
           inventory: newInventory,
           status: newInventory <= 0 ? 'SOLD' : undefined,
         },
+      });
+    }
+
+    if (snapshot) {
+      await prisma.checkoutSessionSnapshot.delete({
+        where: { stripeCheckoutId: snapshot.stripeCheckoutId },
       });
     }
   }

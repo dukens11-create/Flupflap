@@ -75,7 +75,7 @@ In the **Environment** tab, add:
 | `STRIPE_SECRET_KEY` | From your Stripe dashboard → Developers → API keys |
 | `STRIPE_PUBLISHABLE_KEY` | From your Stripe dashboard → Developers → API keys |
 | `STRIPE_WEBHOOK_SECRET` | From Stripe → Webhooks → your endpoint → Signing secret |
-| `PLATFORM_FEE_PERCENT` | `3` (or your desired commission %) |
+| `PLATFORM_FEE_PERCENT` | `7` bootstrap default for the first run |
 | `CLOUDINARY_CLOUD_NAME` | From your Cloudinary dashboard — Settings → API Keys |
 | `CLOUDINARY_API_KEY` | From your Cloudinary dashboard — Settings → API Keys |
 | `CLOUDINARY_API_SECRET` | From your Cloudinary dashboard — Settings → API Keys |
@@ -240,16 +240,16 @@ Sellers have a dedicated dashboard at `/seller` that shows:
 - **Earnings Summary** — aggregated stats from all completed orders:
   - Items sold (total quantity across paid/shipped/delivered orders)
   - Orders completed (count of distinct orders)
-  - Gross sales (sum of item prices before platform fee)
-  - Platform fees deducted (configurable via `PLATFORM_FEE_PERCENT`)
-  - Net earnings (gross minus platform fees)
+  - Gross sales (sum of item prices before commission)
+  - Platform fees deducted (using stored commission snapshots)
+  - Net earnings (gross minus commission)
 - **Stripe Balance** (only shown when the seller has completed Stripe Connect
   onboarding):
   - Available balance — funds ready for payout
   - Pending balance — funds not yet settled (typically 2-7 business days)
   - A link to the seller's Stripe Express dashboard for full payout history
 - **Sold Items table** — line-item list of every sold product with title, date,
-  quantity, amount, and order status.
+  quantity, item price, commission fee, net payout, and order status.
 - **Recent Orders** — full order view with a "Mark Shipped" action for orders
   in PAID status.
 
@@ -706,4 +706,3 @@ From the **Admin Dashboard** (`/admin`):
 - Click **"View →"** next to any user to open their detail page.
 - From a seller's detail page, click **"Seller Moderation →"** to go directly
   to the moderation panel for that seller.
-

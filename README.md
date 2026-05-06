@@ -1,6 +1,6 @@
 # FlupFlap Marketplace — Full Starter Build
 
-FlupFlap is a marketplace starter app like a small eBay: FlupFlap can sell items, public sellers can list new/used items, buyers can shop, and FlupFlap keeps a 3% marketplace commission.
+FlupFlap is a marketplace starter app like a small eBay: FlupFlap can sell items, public sellers can list new/used items, buyers can shop, and FlupFlap keeps a configurable marketplace commission (default 7%).
 
 ## Included now
 - Public home page and product browsing
@@ -14,7 +14,7 @@ FlupFlap is a marketplace starter app like a small eBay: FlupFlap can sell items
 - Buy-now checkout
 - Stripe Checkout payment routes
 - Stripe Connect Express onboarding route for seller payouts
-- 3% platform fee calculation
+- Configurable seller commission with Stripe Connect fee splitting
 - Stripe webhook route to mark orders paid and products sold
 - Shipping price fields, order tracking fields, and mark-shipped form
 - Order dashboard
@@ -85,7 +85,7 @@ Set these in **Environment → Environment Variables** in the Render dashboard:
 | `STRIPE_SECRET_KEY` | Stripe secret key |
 | `STRIPE_PUBLISHABLE_KEY` | Stripe publishable key |
 | `STRIPE_WEBHOOK_SECRET` | Secret from your Stripe webhook endpoint |
-| `PLATFORM_FEE_PERCENT` | Commission percentage (default `3`) |
+| `PLATFORM_FEE_PERCENT` | Bootstrap commission percentage for first run (default `7`) |
 
 ### Why the build succeeds but deployment fails
 
@@ -102,11 +102,13 @@ Listen for:
 - `checkout.session.completed`
 
 ## Commission
-The platform commission is controlled by:
+The initial default platform commission is bootstrapped from:
 
 ```env
-PLATFORM_FEE_PERCENT="3"
+PLATFORM_FEE_PERCENT="7"
 ```
+
+After setup, admins can change the live default commission from the admin dashboard. Each checkout stores commission snapshots on order items so seller earnings, Stripe Connect fee splits, and reporting stay consistent even if the default changes later.
 
 ## Image uploads
 This build supports image URLs by default. For production, connect Cloudinary, UploadThing, S3, or Vercel Blob and store the returned URL in `imageUrl`.

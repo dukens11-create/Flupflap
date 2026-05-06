@@ -2,7 +2,8 @@ import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
-import { dollars, platformFee } from '@/lib/money';
+import { dollars } from '@/lib/money';
+import { formatCommissionPercent, getMarketplaceSettings } from '@/lib/commission';
 import { stripe } from '@/lib/stripe';
 import Link from 'next/link';
 import type { Metadata } from 'next';
@@ -48,7 +49,8 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   const sellerStatus = dbUser?.sellerStatus ?? 'ACTIVE';
   const isRestricted = sellerStatus === 'SUSPENDED' || sellerStatus === 'BANNED';
 
-  const [products, orders, soldItems] = await Promise.all([
+  const [settings, products, orders, soldItems] = await Promise.all([
+    getMarketplaceSettings(),
     prisma.product.findMany({
       where: { sellerId: session.user.id },
       orderBy: { createdAt: 'desc' },
@@ -74,7 +76,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
       },
       include: {
         product: { select: { title: true, id: true } },
-        order: { select: { id: true, status: true, createdAt: true } },
+        order: { select: { id: true, status: true, createdAt: true, shippingCents: true } },
       },
       orderBy: { order: { createdAt: 'desc' } },
     }),
@@ -82,8 +84,8 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
 
   // Compute earnings from seller's completed order items
   const grossSalesCents = soldItems.reduce((s, i) => s + i.priceCents * i.quantity, 0);
-  const platformFeesCents = platformFee(grossSalesCents);
-  const netEarningsCents = grossSalesCents - platformFeesCents;
+  const platformFeesCents = soldItems.reduce((s, i) => s + i.commissionFeeCents, 0);
+  const netEarningsCents = soldItems.reduce((s, i) => s + i.sellerNetCents, 0);
   const itemsSoldCount = soldItems.reduce((s, i) => s + i.quantity, 0);
   const completedOrdersCount = new Set(soldItems.map(i => i.order.id)).size;
 
@@ -181,7 +183,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
           <StatCard label="Items Sold" value={String(itemsSoldCount)} sub="paid/shipped/delivered" />
           <StatCard label="Orders" value={String(completedOrdersCount)} sub="completed" />
           <StatCard label="Gross Sales" value={dollars(grossSalesCents)} sub="before fees" />
-          <StatCard label="Platform Fees" value={`−${dollars(platformFeesCents)}`} sub={`${Number(process.env.PLATFORM_FEE_PERCENT || 3)}% commission`} />
+          <StatCard label="Platform Fees" value={`−${dollars(platformFeesCents)}`} sub={`${formatCommissionPercent(settings.defaultSellerCommissionBps)} default commission`} />
           <StatCard label="Net Earnings" value={dollars(netEarningsCents)} sub="after fees" />
           {stripeOnboarded ? (
             stripeAvailableCents !== null ? (
@@ -223,7 +225,9 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                   <th className="px-4 py-3 font-semibold text-slate-600">Item</th>
                   <th className="px-4 py-3 font-semibold text-slate-600 hidden sm:table-cell">Date</th>
                   <th className="px-4 py-3 font-semibold text-slate-600 text-right">Qty</th>
-                  <th className="px-4 py-3 font-semibold text-slate-600 text-right">Amount</th>
+                  <th className="px-4 py-3 font-semibold text-slate-600 text-right">Item Price</th>
+                  <th className="px-4 py-3 font-semibold text-slate-600 text-right">Commission</th>
+                  <th className="px-4 py-3 font-semibold text-slate-600 text-right">Net Payout</th>
                   <th className="px-4 py-3 font-semibold text-slate-600 text-right">Status</th>
                 </tr>
               </thead>
@@ -236,6 +240,8 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                     </td>
                     <td className="px-4 py-3 text-right text-slate-700">{item.quantity}</td>
                     <td className="px-4 py-3 text-right font-semibold text-slate-800">{dollars(item.priceCents * item.quantity)}</td>
+                    <td className="px-4 py-3 text-right text-slate-700">−{dollars(item.commissionFeeCents)}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-green-700">{dollars(item.sellerNetCents)}</td>
                     <td className="px-4 py-3 text-right">
                       <span className={`badge ${orderStatusBadge(item.order.status)}`}>{item.order.status}</span>
                     </td>
