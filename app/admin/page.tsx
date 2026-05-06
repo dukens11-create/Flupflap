@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { dollars } from '@/lib/money';
+import { activePromotionWhere } from '@/lib/promotions';
 import { basisPointsToPercent, formatCommissionPercent, getMarketplaceSettings } from '@/lib/commission';
 import type { Metadata } from 'next';
 
@@ -57,7 +58,7 @@ export default async function AdminPage({
       where: { status: 'OPEN' },
     }),
     prisma.promotion.count({
-      where: { status: 'ACTIVE', expiresAt: { gt: now } },
+      where: activePromotionWhere(now),
     }),
   ]);
 

@@ -347,6 +347,13 @@ model Promotion {
   stripeCheckoutId String?         @unique
   startsAt         DateTime?
   expiresAt        DateTime?
+  // Scheduling: for pre-expiry renewals, startsAt is set to the old promotion's
+  // expiresAt so the new one activates automatically when the current one ends.
+  scheduledStartAt DateTime?
+  // History: references the previous promotion this was renewed/changed from
+  renewedFromId    String?
+  renewedFrom      Promotion?      @relation("PromotionHistory", fields: [renewedFromId], references: [id])
+  renewals         Promotion[]     @relation("PromotionHistory")
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
 

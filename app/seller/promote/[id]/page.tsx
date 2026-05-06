@@ -3,17 +3,19 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { dollars } from '@/lib/money';
+import { activePromotionWhere, expirePromotions, getPromotionPlans } from '@/lib/promotions';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import PromoteForm from './PromoteForm';
-import { expirePromotions, getPromotionPlans } from '@/lib/promotions';
 
 export const metadata: Metadata = { title: 'Promote Listing' };
 
 export default async function SellerPromotePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ action?: string }>;
 }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect('/login');
@@ -26,6 +28,7 @@ export default async function SellerPromotePage({
   }
 
   const { id } = await params;
+  const { action } = await searchParams;
   const product = await prisma.product.findUnique({ where: { id } });
 
   if (!product || product.sellerId !== session.user.id) {
@@ -51,18 +54,57 @@ export default async function SellerPromotePage({
     );
   }
 
-  // Check for an existing active promotion
   await expirePromotions();
   const now = new Date();
+
   const [activePromotion, plans] = await Promise.all([
     prisma.promotion.findFirst({
-      where: { productId: id, status: 'ACTIVE', expiresAt: { gt: now } },
+      where: {
+        ...activePromotionWhere(now),
+        productId: id,
+        sellerId: session.user.id,
+      },
+      orderBy: { expiresAt: 'desc' },
     }),
     getPromotionPlans(),
   ]);
 
+  // Find the most recent expired promotion (for renew flow)
+  const lastExpiredPromotion = activePromotion ? null : await prisma.promotion.findFirst({
+    where: {
+      productId: id,
+      sellerId: session.user.id,
+      status: 'EXPIRED',
+    },
+    orderBy: { expiresAt: 'desc' },
+  });
+
+  // Check if there's already a paid/scheduled renewal queued to start after the active promo
+  const scheduledRenewal = activePromotion ? await prisma.promotion.findFirst({
+    where: {
+      productId: id,
+      sellerId: session.user.id,
+      status: 'ACTIVE',
+      startsAt: { gt: now },
+    },
+    orderBy: { startsAt: 'asc' },
+  }) : null;
+
   const formatDate = (d: Date) =>
     d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+  // Determine the mode: URL param takes precedence, then infer from state
+  let mode: 'new' | 'renew' | 'change' =
+    action === 'change' && activePromotion ? 'change' :
+    action === 'renew' ? 'renew' :
+    activePromotion ? 'change' :  // default for active state
+    lastExpiredPromotion ? 'renew' :
+    'new';
+
+  // If the seller explicitly wants to change but there's no active promo, fall back to renew/new
+  if (mode === 'change' && !activePromotion) {
+    mode = lastExpiredPromotion ? 'renew' : 'new';
+  }
 
   return (
     <main className="max-w-xl mx-auto">
@@ -85,19 +127,105 @@ export default async function SellerPromotePage({
         </div>
       </div>
 
-      {activePromotion ? (
-        <div className="card p-6 bg-green-50 border-green-200 text-center">
-          <p className="text-3xl mb-3">⭐</p>
-          <p className="font-bold text-green-800 text-lg">Boost is active</p>
-          <p className="text-sm text-green-700 mt-1">
-            This listing is sponsored until <strong>{activePromotion.expiresAt ? formatDate(activePromotion.expiresAt) : 'an upcoming date'}</strong>.
-          </p>
-          <Link href="/seller" className="btn-outline mt-4">Back to dashboard</Link>
-        </div>
-      ) : (
+      {activePromotion && (
+        <>
+          {/* Active promotion status */}
+          <div className="card p-5 bg-green-50 border-green-200 mb-6">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xl">⭐</span>
+              <p className="font-bold text-green-800">Active promotion</p>
+            </div>
+            <p className="text-sm text-green-700">
+              This listing is featured until{' '}
+              <strong>{activePromotion.expiresAt ? formatDate(activePromotion.expiresAt) : '—'}</strong>
+              {' '}({activePromotion.durationDays}-day plan).
+            </p>
+            {scheduledRenewal && (
+              <p className="text-xs text-green-600 mt-2">
+                🔄 Renewal scheduled to begin {scheduledRenewal.startsAt ? formatDate(scheduledRenewal.startsAt) : '—'} for {scheduledRenewal.durationDays} days.
+              </p>
+            )}
+          </div>
+
+          {!scheduledRenewal && (
+            <>
+              {/* Tab-like navigation between change and renew early */}
+              <div className="flex gap-2 mb-5">
+                <Link
+                  href={`/seller/promote/${id}?action=change`}
+                  className={`flex-1 text-center text-sm font-semibold py-2 px-3 rounded-lg border transition-colors ${
+                    mode === 'change'
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  ⚡ Change Duration
+                </Link>
+                <Link
+                  href={`/seller/promote/${id}?action=renew`}
+                  className={`flex-1 text-center text-sm font-semibold py-2 px-3 rounded-lg border transition-colors ${
+                    mode === 'renew'
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  🔄 Renew Early
+                </Link>
+              </div>
+
+              {mode === 'change' && (
+                <>
+                  <h2 className="text-lg font-bold mb-1">Change promotion duration</h2>
+                  <p className="text-sm text-slate-500 mb-4">
+                    Select a new duration. Your current promotion ends immediately and the new one begins.
+                  </p>
+                  <PromoteForm productId={id} mode="change" plans={plans} />
+                </>
+              )}
+
+              {mode === 'renew' && (
+                <>
+                  <h2 className="text-lg font-bold mb-1">Renew promotion early</h2>
+                  <p className="text-sm text-slate-500 mb-4">
+                    Pay now and your next promotion begins automatically when the current one expires.
+                  </p>
+                  <PromoteForm
+                    productId={id}
+                    mode="renew"
+                    scheduledStart={activePromotion.expiresAt?.toISOString() ?? null}
+                    plans={plans}
+                  />
+                </>
+              )}
+            </>
+          )}
+
+          {scheduledRenewal && (
+            <p className="text-sm text-slate-500 text-center mt-4">
+              You already have a renewal scheduled. No further action is needed.
+            </p>
+          )}
+        </>
+      )}
+
+      {!activePromotion && lastExpiredPromotion && (
+        <>
+          <div className="card p-4 bg-slate-50 border-slate-200 mb-6 text-sm text-slate-600">
+            <p>
+              Your last promotion expired on{' '}
+              <strong>{lastExpiredPromotion.expiresAt ? formatDate(lastExpiredPromotion.expiresAt) : '—'}</strong>.
+              Renew it to get featured again.
+            </p>
+          </div>
+          <h2 className="text-lg font-bold mb-3">Renew promotion</h2>
+          <PromoteForm productId={id} mode="renew" plans={plans} />
+        </>
+      )}
+
+      {!activePromotion && !lastExpiredPromotion && (
         <>
           <h2 className="text-lg font-bold mb-3">Choose a promotion package</h2>
-          <PromoteForm productId={id} plans={plans} />
+          <PromoteForm productId={id} mode="new" plans={plans} />
         </>
       )}
     </main>

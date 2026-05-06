@@ -3,7 +3,9 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { stripe, appUrl } from '@/lib/stripe';
-import { expirePromotions, getPromotionLabel, getPromotionPlan } from '@/lib/promotions';
+import { activePromotionWhere, getPromotionLabel, getPromotionPlan } from '@/lib/promotions';
+
+export type PromotionAction = 'new' | 'renew' | 'change';
 
 export async function POST(req: Request) {
   try {
@@ -18,7 +20,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Your seller account is currently restricted.' }, { status: 403 });
     }
 
-    const { productId, durationDays } = await req.json() as { productId: string; durationDays: number };
+    const { productId, durationDays, action } = await req.json() as {
+      productId: string;
+      durationDays: number;
+      action?: PromotionAction;
+    };
+
+    const promotionAction: PromotionAction = action ?? 'new';
 
     const plan = await getPromotionPlan(durationDays);
     if (!plan || !plan.isActive) {
@@ -35,21 +43,62 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Only approved products can be promoted.' }, { status: 400 });
     }
 
-    // Check if there is already an active promotion for this product
-    await expirePromotions();
+
     const now = new Date();
+
+    // Find any current active promotion for this product using the shared helper
     const activePromotion = await prisma.promotion.findFirst({
       where: {
+        ...activePromotionWhere(now),
         productId,
-        status: 'ACTIVE',
-        expiresAt: { gt: now },
+        sellerId: session.user.id,
       },
     });
-    if (activePromotion) {
-      return NextResponse.json({ error: 'This product already has an active promotion.' }, { status: 400 });
+
+    // Validate action vs current state
+    if (promotionAction === 'new' && activePromotion) {
+      return NextResponse.json({ error: 'This product already has an active promotion. Use renew or change instead.' }, { status: 400 });
+    }
+    if (promotionAction === 'change' && !activePromotion) {
+      return NextResponse.json({ error: 'No active promotion found to change.' }, { status: 400 });
     }
 
-    // Create a pending promotion record before the Stripe session so we have an ID to pass as metadata
+    // Determine history link and scheduled start for this promotion
+    let renewedFromId: string | null = null;
+    let scheduledStartAt: Date | null = null;
+    let replacePromotionId: string | null = null;
+
+    if (promotionAction === 'renew') {
+      // Prefer the currently active promotion for history tracking (pre-expiry renew);
+      // fall back to the most recent expired promotion (post-expiry renew).
+      const lastPromo =
+        activePromotion ??
+        (await prisma.promotion.findFirst({
+          where: { productId, sellerId: session.user.id, status: 'EXPIRED' },
+          orderBy: { expiresAt: 'desc' },
+        }));
+      if (lastPromo) {
+        renewedFromId = lastPromo.id;
+        // If renewing before expiry, schedule new promotion to start when current ends
+        if (lastPromo.status === 'ACTIVE' && lastPromo.expiresAt && lastPromo.expiresAt > now) {
+          scheduledStartAt = lastPromo.expiresAt;
+        }
+      }
+    }
+
+    if (promotionAction === 'change') {
+      // renewedFromId: persisted in the DB Promotion record to preserve the history
+      // chain (who was this promotion changed from?).
+      // replacePromotionId: ephemeral Stripe metadata only — the webhook uses it to
+      // expire the old active promotion upon payment confirmation. It is never stored
+      // in the new promotion record itself.
+      // Both reference the same promotion ID because the old active promotion serves
+      // both roles simultaneously.
+      renewedFromId = activePromotion!.id;
+      replacePromotionId = activePromotion!.id;
+    }
+
+    // Create the pending promotion record
     const promotion = await prisma.promotion.create({
       data: {
         productId,
@@ -57,8 +106,16 @@ export async function POST(req: Request) {
         status: 'PENDING_PAYMENT',
         durationDays,
         priceCents,
+        renewedFromId,
+        scheduledStartAt,
       },
     });
+
+    // Build human-readable description for the Stripe line item
+    const actionLabel =
+      promotionAction === 'renew' ? 'Renew promotion for' :
+      promotionAction === 'change' ? 'Change promotion duration for' :
+      'Promote listing';
 
     // Create a Stripe Checkout session for the promotion fee
     const stripeSession = await stripe.checkout.sessions.create({
@@ -69,8 +126,8 @@ export async function POST(req: Request) {
           price_data: {
             currency: 'usd',
             product_data: {
-              name: `Promote "${product.title}" for ${getPromotionLabel(durationDays)}`,
-              description: `Boosted placement on FlupFlap Marketplace for ${getPromotionLabel(durationDays)}`,
+              name: `${actionLabel} "${product.title}" — ${getPromotionLabel(durationDays)}`,
+              description: `Featured placement on FlupFlap Marketplace for ${getPromotionLabel(durationDays)}`,
             },
             unit_amount: priceCents,
           },
@@ -82,6 +139,8 @@ export async function POST(req: Request) {
       metadata: {
         type: 'promotion',
         promotionId: promotion.id,
+        promotionAction,
+        replacePromotionId: replacePromotionId ?? '',
         sellerId: session.user.id,
         productId,
         durationDays: String(durationDays),

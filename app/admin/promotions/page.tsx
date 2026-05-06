@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { dollars } from '@/lib/money';
+import { activePromotionWhere } from '@/lib/promotions';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { expirePromotions, getPromotionLabel, getPromotionPlans } from '@/lib/promotions';
@@ -31,7 +32,7 @@ export default async function AdminPromotionsPage() {
 
   const [activePromotions, pendingPromotions, recentExpired, promotionPlans] = await Promise.all([
     prisma.promotion.findMany({
-      where: { status: 'ACTIVE', expiresAt: { gt: now } },
+      where: activePromotionWhere(now),
       include: {
         product: { select: { title: true, imageUrl: true, id: true } },
         seller: { select: { name: true, email: true } },

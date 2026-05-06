@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import { prisma, isDatabaseConfigured } from '@/lib/db';
 import ProductCard from '@/components/ProductCard';
 import BrowseFilters from '@/components/BrowseFilters';
+import { activePromotionWhere } from '@/lib/promotions';
 import type { Metadata } from 'next';
 import { expirePromotions } from '@/lib/promotions';
 
@@ -71,7 +72,7 @@ async function ProductGrid({ sp }: { sp: SearchParams }) {
       take: 60,
       include: {
         promotions: {
-          where: { status: 'ACTIVE', expiresAt: { gt: now } },
+          where: activePromotionWhere(now),
           orderBy: { expiresAt: 'desc' },
           take: 1,
         },
