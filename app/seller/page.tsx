@@ -258,7 +258,9 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
               const latestPromo = p.promotions[0] ?? null;
               const now = new Date();
               const activePromo =
-                latestPromo?.status === 'ACTIVE' && latestPromo.expiresAt && latestPromo.expiresAt > now
+                latestPromo?.status === 'ACTIVE' &&
+                latestPromo.startsAt && latestPromo.startsAt <= now &&
+                latestPromo.expiresAt && latestPromo.expiresAt > now
                   ? latestPromo
                   : null;
               const expiredPromo =

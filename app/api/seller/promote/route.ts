@@ -113,7 +113,7 @@ export async function POST(req: Request) {
     const actionLabel =
       promotionAction === 'renew' ? 'Renew promotion for' :
       promotionAction === 'change' ? 'Change promotion duration for' :
-      'Promote';
+      'Promote listing';
 
     // Create a Stripe Checkout session for the promotion fee
     const stripeSession = await stripe.checkout.sessions.create({
