@@ -33,7 +33,8 @@ export async function POST(req: Request) {
 
     const priceCents = PROMOTION_PACKAGES[durationDays];
     if (!priceCents) {
-      return NextResponse.json({ error: 'Invalid promotion duration. Choose 1, 3, 7, 14, or 30 days.' }, { status: 400 });
+      const validDays = Object.keys(PROMOTION_PACKAGES).join(', ');
+      return NextResponse.json({ error: `Invalid promotion duration. Choose one of: ${validDays} days.` }, { status: 400 });
     }
 
     // Verify the product exists, is owned by this seller, and is APPROVED
@@ -86,9 +87,13 @@ export async function POST(req: Request) {
     }
 
     if (promotionAction === 'change') {
-      // renewedFromId: stored in DB to preserve promotion history chain.
-      // replacePromotionId: passed in Stripe metadata so the webhook knows which
-      // active promotion to expire when payment confirms (same ID, distinct purpose).
+      // renewedFromId: persisted in the DB Promotion record to preserve the history
+      // chain (who was this promotion changed from?).
+      // replacePromotionId: ephemeral Stripe metadata only — the webhook uses it to
+      // expire the old active promotion upon payment confirmation. It is never stored
+      // in the new promotion record itself.
+      // Both reference the same promotion ID because the old active promotion serves
+      // both roles simultaneously.
       renewedFromId = activePromotion!.id;
       replacePromotionId = activePromotion!.id;
     }

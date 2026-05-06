@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { dollars, platformFee } from '@/lib/money';
+import { isPromotionActive } from '@/lib/promotions';
 import { stripe } from '@/lib/stripe';
 import Link from 'next/link';
 import type { Metadata } from 'next';
@@ -257,12 +258,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
             {products.map(p => {
               const latestPromo = p.promotions[0] ?? null;
               const now = new Date();
-              const activePromo =
-                latestPromo?.status === 'ACTIVE' &&
-                latestPromo.startsAt && latestPromo.startsAt <= now &&
-                latestPromo.expiresAt && latestPromo.expiresAt > now
-                  ? latestPromo
-                  : null;
+              const activePromo = isPromotionActive(latestPromo, now) ? latestPromo : null;
               const expiredPromo =
                 !activePromo && latestPromo?.status === 'EXPIRED' ? latestPromo : null;
               return (
