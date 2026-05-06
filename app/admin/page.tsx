@@ -47,6 +47,10 @@ export default async function AdminPage() {
   const openReportsCount = await prisma.productReport.count({
     where: { status: 'OPEN' },
   });
+  const now = new Date();
+  const activePromotionsCount = await prisma.promotion.count({
+    where: { status: 'ACTIVE', expiresAt: { gt: now } },
+  });
 
   return (
     <main className="max-w-5xl mx-auto">
@@ -60,6 +64,9 @@ export default async function AdminPage() {
           <a href="/admin/sellers" className="btn-outline text-sm">Seller Management →</a>
           <a href="/admin/reports" className={`text-sm ${openReportsCount > 0 ? 'btn bg-red-600 hover:bg-red-700 text-white' : 'btn-outline'}`}>
             Reports {openReportsCount > 0 ? `(${openReportsCount})` : '→'}
+          </a>
+          <a href="/admin/promotions" className="btn-outline text-sm">
+            Promotions {activePromotionsCount > 0 ? `(${activePromotionsCount})` : '→'}
           </a>
         </div>
       </div>
@@ -83,7 +90,7 @@ export default async function AdminPage() {
         </a>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <div className="card p-5 flex items-center gap-4">
           <div className="text-3xl">👥</div>
           <div className="flex-1">
@@ -113,6 +120,15 @@ export default async function AdminPage() {
             <p className="font-bold text-slate-800">Product Reports</p>
             <p className={`text-sm ${openReportsCount > 0 ? 'text-red-600 font-medium' : 'text-slate-500'}`}>
               {openReportsCount > 0 ? `${openReportsCount} open report${openReportsCount !== 1 ? 's' : ''} need review` : 'No open reports'}
+            </p>
+          </div>
+        </a>
+        <a href="/admin/promotions" className="card p-5 flex items-center gap-4 hover:bg-slate-50 transition-colors">
+          <div className="text-3xl">⭐</div>
+          <div>
+            <p className="font-bold text-slate-800">Paid Promotions</p>
+            <p className="text-sm text-slate-500">
+              {activePromotionsCount > 0 ? `${activePromotionsCount} active promotion${activePromotionsCount !== 1 ? 's' : ''}` : 'No active promotions'}
             </p>
           </div>
         </a>

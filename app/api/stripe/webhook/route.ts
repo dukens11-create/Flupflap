@@ -42,6 +42,25 @@ export async function POST(req: Request) {
 
   if (event.type === 'checkout.session.completed') {
     const cs = event.data.object as any;
+
+    // Handle promotion payments separately from product purchases
+    if (cs.metadata?.type === 'promotion') {
+      const promotionId: string = cs.metadata?.promotionId;
+      if (!promotionId) return new NextResponse('Missing promotionId', { status: 400 });
+
+      // Avoid duplicate processing
+      const promo = await prisma.promotion.findUnique({ where: { id: promotionId } });
+      if (!promo || promo.status === 'ACTIVE') return new NextResponse('Already processed', { status: 200 });
+
+      const now = new Date();
+      const expiresAt = new Date(now.getTime() + promo.durationDays * 24 * 60 * 60 * 1000);
+      await prisma.promotion.update({
+        where: { id: promotionId },
+        data: { status: 'ACTIVE', startsAt: now, expiresAt },
+      });
+
+      return new NextResponse('ok', { status: 200 });
+    }
     const buyerId: string = cs.metadata?.buyerId;
     const rawItems: string = cs.metadata?.items ?? '[]';
     const items: { productId: string; quantity: number }[] = JSON.parse(rawItems);
