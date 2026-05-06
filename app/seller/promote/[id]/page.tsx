@@ -85,7 +85,7 @@ export default async function SellerPromotePage({
           <p className="text-3xl mb-3">⭐</p>
           <p className="font-bold text-green-800 text-lg">Active promotion</p>
           <p className="text-sm text-green-700 mt-1">
-            This listing is featured until <strong>{formatDate(activePromotion.expiresAt!)}</strong>.
+            This listing is featured until <strong>{activePromotion.expiresAt ? formatDate(activePromotion.expiresAt) : 'an upcoming date'}</strong>.
           </p>
           <Link href="/seller" className="btn-outline mt-4">Back to dashboard</Link>
         </div>
