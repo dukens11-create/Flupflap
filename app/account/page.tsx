@@ -341,7 +341,7 @@ export default function AccountPage() {
                 <span className="text-slate-400 text-sm">Loading…</span>
               ) : stripeStatus === 'complete' ? (
                 <>
-                  <span className="badge-green badge">Connected</span>
+                  <span className="badge badge-green">Connected</span>
                   {' '}
                   <a href="/api/stripe/connect" className="text-xs text-blue-600 hover:underline ml-2">Manage →</a>
                 </>
