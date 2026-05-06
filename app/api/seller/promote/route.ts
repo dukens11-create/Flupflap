@@ -3,15 +3,10 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { stripe, appUrl } from '@/lib/stripe';
+import { PROMOTION_PACKAGES } from '@/lib/promotions';
 
-// Promotion packages available to sellers (duration in days → price in cents)
-export const PROMOTION_PACKAGES: Record<number, number> = {
-  1: 399,   // $3.99 for 1 day
-  3: 899,   // $8.99 for 3 days
-  7: 1499,  // $14.99 for 7 days
-  14: 2499, // $24.99 for 14 days
-  30: 4499, // $44.99 for 30 days
-};
+// Re-export so other modules can import from this route as before
+export { PROMOTION_PACKAGES };
 
 export type PromotionAction = 'new' | 'renew' | 'change';
 
@@ -91,7 +86,9 @@ export async function POST(req: Request) {
     }
 
     if (promotionAction === 'change') {
-      // Record history and mark the active promotion for replacement on payment
+      // renewedFromId: stored in DB to preserve promotion history chain.
+      // replacePromotionId: passed in Stripe metadata so the webhook knows which
+      // active promotion to expire when payment confirms (same ID, distinct purpose).
       renewedFromId = activePromotion!.id;
       replacePromotionId = activePromotion!.id;
     }

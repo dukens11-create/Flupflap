@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { dollars } from '@/lib/money';
+import { activePromotionWhere } from '@/lib/promotions';
 import type { Metadata } from 'next';
 
 export const dynamic = 'force-dynamic';
@@ -49,7 +50,7 @@ export default async function AdminPage() {
   });
   const now = new Date();
   const activePromotionsCount = await prisma.promotion.count({
-    where: { status: 'ACTIVE', startsAt: { lte: now }, expiresAt: { gt: now } },
+    where: activePromotionWhere(now),
   });
 
   return (

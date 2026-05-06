@@ -3,15 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { dollars } from '@/lib/money';
+import { PROMOTION_PACKAGE_LIST } from '@/lib/promotions';
 import type { PromotionAction } from '@/app/api/seller/promote/route';
-
-const PACKAGES = [
-  { days: 1,  priceCents: 399,  label: '1 day',   description: 'Quick boost for time-sensitive items' },
-  { days: 3,  priceCents: 899,  label: '3 days',  description: 'Great for fast-selling items' },
-  { days: 7,  priceCents: 1499, label: '7 days',  description: 'Popular choice for most sellers' },
-  { days: 14, priceCents: 2499, label: '14 days', description: 'Extended visibility' },
-  { days: 30, priceCents: 4499, label: '30 days', description: 'Maximum exposure' },
-];
 
 interface PromoteFormProps {
   productId: string;
@@ -50,7 +43,10 @@ export default function PromoteForm({ productId, mode, scheduledStart }: Promote
     }
   }
 
-  const submitLabel = mode === 'renew' ? 'Pay & Renew →' : mode === 'change' ? 'Pay & Change Duration →' : 'Pay & Promote →';
+  const submitLabel =
+    mode === 'renew' ? 'Pay & Renew →' :
+    mode === 'change' ? 'Pay & Change Duration →' :
+    'Pay & Promote →';
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -68,7 +64,7 @@ export default function PromoteForm({ productId, mode, scheduledStart }: Promote
       )}
 
       <div className="space-y-3">
-        {PACKAGES.map(pkg => (
+        {PROMOTION_PACKAGE_LIST.map(pkg => (
           <label
             key={pkg.days}
             className={`card p-4 flex items-center gap-4 cursor-pointer transition-colors ${

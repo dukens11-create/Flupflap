@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { dollars } from '@/lib/money';
+import { activePromotionWhere } from '@/lib/promotions';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import PromoteForm from './PromoteForm';
@@ -58,11 +59,9 @@ export default async function SellerPromotePage({
   // Find the currently running active promotion (started in the past, not yet expired)
   const activePromotion = await prisma.promotion.findFirst({
     where: {
+      ...activePromotionWhere(now),
       productId: id,
       sellerId: session.user.id,
-      status: 'ACTIVE',
-      startsAt: { lte: now },
-      expiresAt: { gt: now },
     },
     orderBy: { expiresAt: 'desc' },
   });
