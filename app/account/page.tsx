@@ -31,6 +31,10 @@ export default function AccountPage() {
   const [dbPhone, setDbPhone] = useState<string | null>(null);
   const [dbPhoneVerified, setDbPhoneVerified] = useState(false);
 
+  // Stripe status — fetched fresh from the DB so it reflects the latest
+  // onboarding state even if the JWT session hasn't been refreshed yet.
+  const [stripeStatus, setStripeStatus] = useState<'not_started' | 'in_progress' | 'complete' | null>(null);
+
   // Load current phone info from server
   useEffect(() => {
     if (session?.user?.id) {
@@ -43,6 +47,18 @@ export default function AccountPage() {
         .catch(() => null);
     }
   }, [session?.user?.id, phoneSuccess]);
+
+  // Load fresh Stripe onboarding status from the server (not the JWT)
+  useEffect(() => {
+    if (session?.user?.id && session.user.role === 'SELLER') {
+      fetch('/api/account/stripe-status')
+        .then(r => r.json())
+        .then(d => {
+          if (d.stripeStatus) setStripeStatus(d.stripeStatus);
+        })
+        .catch(() => null);
+    }
+  }, [session?.user?.id, session?.user?.role]);
 
   if (status === 'loading') {
     return (
@@ -57,7 +73,7 @@ export default function AccountPage() {
     return null;
   }
 
-  const { email, role, stripeOnboardingComplete } = session.user;
+  const { email, role } = session.user;
 
   async function saveName(e: React.FormEvent) {
     e.preventDefault();
@@ -321,10 +337,22 @@ export default function AccountPage() {
           <div>
             <p className="label">Stripe Payouts</p>
             <p className="font-medium">
-              {stripeOnboardingComplete ? (
-                <span className="badge-green badge">Connected</span>
+              {stripeStatus === null ? (
+                <span className="text-slate-400 text-sm">Loading…</span>
+              ) : stripeStatus === 'complete' ? (
+                <>
+                  <span className="badge badge-green">Connected</span>
+                  {' '}
+                  <a href="/api/stripe/connect" className="text-xs text-blue-600 hover:underline ml-2">Manage →</a>
+                </>
+              ) : stripeStatus === 'in_progress' ? (
+                <>
+                  <span className="badge badge-yellow">Setup in progress</span>
+                  {' '}
+                  <a href="/api/stripe/connect" className="text-xs text-blue-600 hover:underline ml-2">Resume setup →</a>
+                </>
               ) : (
-                <a href="/api/stripe/connect" className="text-blue-600 hover:underline">Connect Stripe →</a>
+                <a href="/api/stripe/connect" className="text-blue-600 hover:underline">Connect bank account →</a>
               )}
             </p>
           </div>
