@@ -19,13 +19,26 @@ export async function GET() {
       return NextResponse.redirect(new URL('/seller', appUrl));
     }
 
-    // If already has an account, create a login link
-    if (user.stripeAccountId) {
+    // If onboarding is fully complete, send seller to the Stripe Express dashboard
+    if (user.stripeAccountId && user.stripeOnboardingComplete) {
       const loginLink = await stripe.accounts.createLoginLink(user.stripeAccountId);
       return NextResponse.redirect(loginLink.url);
     }
 
-    // Create a new Stripe Connect Express account
+    // If the seller has a Stripe account but onboarding is not yet complete
+    // (e.g. they abandoned the flow mid-way), generate a fresh onboarding link
+    // so they can resume. createLoginLink is NOT valid for incomplete accounts.
+    if (user.stripeAccountId && !user.stripeOnboardingComplete) {
+      const accountLink = await stripe.accountLinks.create({
+        account: user.stripeAccountId,
+        refresh_url: `${appUrl}/api/stripe/connect`,
+        return_url: `${appUrl}/seller?stripe=connected`,
+        type: 'account_onboarding',
+      });
+      return NextResponse.redirect(accountLink.url);
+    }
+
+    // Create a new Stripe Connect Express account for this seller
     const account = await stripe.accounts.create({ type: 'express' });
 
     await prisma.user.update({
@@ -43,6 +56,6 @@ export async function GET() {
     return NextResponse.redirect(accountLink.url);
   } catch (err: any) {
     console.error('[stripe/connect]', err);
-    return NextResponse.redirect(new URL('/seller', appUrl));
+    return NextResponse.redirect(new URL('/seller?stripe=error', appUrl));
   }
 }

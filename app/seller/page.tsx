@@ -37,7 +37,7 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub?: s
   );
 }
 
-export default async function SellerPage({ searchParams }: { searchParams: Promise<{ created?: string; stripe?: string }> }) {
+export default async function SellerPage({ searchParams }: { searchParams: Promise<{ created?: string; stripe?: string; updated?: string; deleted?: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect('/login');
   if (session.user.role !== 'SELLER') redirect('/');
@@ -84,6 +84,8 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   // login and would be stale immediately after the seller returns from Stripe).
   const stripeOnboarded = dbUser?.stripeOnboardingComplete ?? false;
   const stripeAccountId = dbUser?.stripeAccountId ?? null;
+  // stripeInProgress: seller has started onboarding but not yet completed it
+  const stripeInProgress = !!stripeAccountId && !stripeOnboarded;
   let stripeAvailableCents: number | null = null;
   let stripePendingCents: number | null = null;
   if (stripeOnboarded && stripeAccountId) {
@@ -127,13 +129,13 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
         </div>
       )}
 
-      {(sp as any).updated && (
+      {sp.updated && (
         <div className="card p-4 mb-6 bg-green-50 border-green-200 text-green-800 text-sm">
           ✅ Listing updated and re-submitted for review.
         </div>
       )}
 
-      {(sp as any).deleted && (
+      {sp.deleted && (
         <div className="card p-4 mb-6 bg-slate-50 border-slate-200 text-slate-700 text-sm">
           🗑️ Listing deleted.
         </div>
@@ -145,10 +147,23 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
         </div>
       )}
 
-      {!isRestricted && !stripeOnboarded && (
-        <div className="card p-4 mb-6 bg-yellow-50 border-yellow-200 text-yellow-800 text-sm flex justify-between items-center">
+      {sp.stripe === 'error' && (
+        <div className="card p-4 mb-6 bg-red-50 border-red-200 text-red-800 text-sm">
+          ❌ Something went wrong connecting your Stripe account. Please try again or contact support.
+        </div>
+      )}
+
+      {!isRestricted && !stripeOnboarded && !stripeInProgress && (
+        <div className="card p-4 mb-6 bg-yellow-50 border-yellow-200 text-yellow-800 text-sm flex justify-between items-center gap-3">
           <span>⚠️ Connect your bank account via Stripe to receive payouts.</span>
-          <a href="/api/stripe/connect" className="btn-outline text-xs">Connect Stripe</a>
+          <a href="/api/stripe/connect" className="btn-outline text-xs flex-shrink-0">Connect bank account</a>
+        </div>
+      )}
+
+      {!isRestricted && stripeInProgress && (
+        <div className="card p-4 mb-6 bg-blue-50 border-blue-200 text-blue-800 text-sm flex justify-between items-center gap-3">
+          <span>🔄 Stripe setup in progress — complete your bank account details to receive payouts.</span>
+          <a href="/api/stripe/connect" className="btn-outline text-xs flex-shrink-0">Resume setup</a>
         </div>
       )}
 
