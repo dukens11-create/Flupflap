@@ -3,17 +3,24 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { dollars } from '@/lib/money';
-import { PROMOTION_PACKAGE_LIST } from '@/lib/promotions';
 import type { PromotionAction } from '@/app/api/seller/promote/route';
+
+type PromotionPlan = {
+  durationDays: number;
+  priceCents: number;
+  label: string;
+  description: string | null;
+};
 
 interface PromoteFormProps {
   productId: string;
   mode: PromotionAction;
   /** For pre-expiry renewals, the date the new promotion will start */
   scheduledStart?: string | null;
+  plans: PromotionPlan[];
 }
 
-export default function PromoteForm({ productId, mode, scheduledStart }: PromoteFormProps) {
+export default function PromoteForm({ productId, mode, scheduledStart, plans }: PromoteFormProps) {
   const [selected, setSelected] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -64,26 +71,26 @@ export default function PromoteForm({ productId, mode, scheduledStart }: Promote
       )}
 
       <div className="space-y-3">
-        {PROMOTION_PACKAGE_LIST.map(pkg => (
+        {plans.map(plan => (
           <label
-            key={pkg.days}
+            key={plan.durationDays}
             className={`card p-4 flex items-center gap-4 cursor-pointer transition-colors ${
-              selected === pkg.days ? 'border-blue-500 bg-blue-50' : 'hover:bg-slate-50'
+              selected === plan.durationDays ? 'border-blue-500 bg-blue-50' : 'hover:bg-slate-50'
             }`}
           >
             <input
               type="radio"
               name="duration"
-              value={pkg.days}
-              checked={selected === pkg.days}
-              onChange={() => setSelected(pkg.days)}
+              value={plan.durationDays}
+              checked={selected === plan.durationDays}
+              onChange={() => setSelected(plan.durationDays)}
               className="accent-blue-600"
             />
             <div className="flex-1">
-              <p className="font-semibold text-slate-800">{pkg.label}</p>
-              <p className="text-sm text-slate-500">{pkg.description}</p>
+              <p className="font-semibold text-slate-800">{plan.label}</p>
+              <p className="text-sm text-slate-500">{plan.description}</p>
             </div>
-            <p className="font-black text-blue-700 text-lg">{dollars(pkg.priceCents)}</p>
+            <p className="font-black text-blue-700 text-lg">{dollars(plan.priceCents)}</p>
           </label>
         ))}
       </div>

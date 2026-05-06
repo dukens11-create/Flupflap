@@ -1,24 +1,56 @@
-/**
- * Promotion packages available to sellers.
- * Key = duration in days, value = price in cents.
- * Admin pricing changes should be made here — this is the single source of truth.
- */
-export const PROMOTION_PACKAGES: Record<number, number> = {
-  1:  399,  // $3.99  for 1 day
-  3:  899,  // $8.99  for 3 days
-  7:  1499, // $14.99 for 7 days
-  14: 2499, // $24.99 for 14 days
-  30: 4499, // $44.99 for 30 days
-};
+import { prisma } from '@/lib/db';
 
-/** Ordered list of packages for UI rendering. */
-export const PROMOTION_PACKAGE_LIST = [
-  { days: 1,  priceCents: 399,  label: '1 day',   description: 'Quick boost for time-sensitive items' },
-  { days: 3,  priceCents: 899,  label: '3 days',  description: 'Great for fast-selling items' },
-  { days: 7,  priceCents: 1499, label: '7 days',  description: 'Popular choice for most sellers' },
-  { days: 14, priceCents: 2499, label: '14 days', description: 'Extended visibility' },
-  { days: 30, priceCents: 4499, label: '30 days', description: 'Maximum exposure' },
+export const DEFAULT_PROMOTION_PLANS = [
+  { durationDays: 1, label: '24 hours', description: 'Quick boost for newly listed items', priceCents: 399, sortOrder: 10 },
+  { durationDays: 3, label: '3 days', description: 'Weekend visibility for active shoppers', priceCents: 899, sortOrder: 20 },
+  { durationDays: 7, label: '7 days', description: 'Great for fast-selling items', priceCents: 1499, sortOrder: 30 },
+  { durationDays: 14, label: '14 days', description: 'Best for most sellers', priceCents: 2499, sortOrder: 40 },
+  { durationDays: 30, label: '30 days', description: 'Maximum exposure for premium listings', priceCents: 4499, sortOrder: 50 },
 ] as const;
+
+export function getPromotionLabel(durationDays: number): string {
+  return DEFAULT_PROMOTION_PLANS.find(plan => plan.durationDays === durationDays)?.label
+    ?? `${durationDays} day${durationDays === 1 ? '' : 's'}`;
+}
+
+export async function ensurePromotionPlans() {
+  await prisma.$transaction(
+    DEFAULT_PROMOTION_PLANS.map(plan => (
+      prisma.promotionPlan.upsert({
+        where: { durationDays: plan.durationDays },
+        update: {
+          label: plan.label,
+          description: plan.description,
+          sortOrder: plan.sortOrder,
+        },
+        create: plan,
+      })
+    )),
+  );
+}
+
+export async function getPromotionPlans() {
+  await ensurePromotionPlans();
+  return prisma.promotionPlan.findMany({
+    where: { isActive: true },
+    orderBy: { sortOrder: 'asc' },
+  });
+}
+
+export async function getPromotionPlan(durationDays: number) {
+  await ensurePromotionPlans();
+  return prisma.promotionPlan.findUnique({ where: { durationDays } });
+}
+
+export async function expirePromotions() {
+  return prisma.promotion.updateMany({
+    where: {
+      status: 'ACTIVE',
+      expiresAt: { lte: new Date() },
+    },
+    data: { status: 'EXPIRED' },
+  });
+}
 
 /**
  * Returns the Prisma `where` conditions for an "actually running" promotion:

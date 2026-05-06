@@ -11,6 +11,7 @@ import PickupDistance from '@/components/PickupDistance';
 import ContactSellerButton from '@/components/ContactSellerButton';
 import ReportItemButton from '@/components/ReportItemButton';
 import type { Metadata } from 'next';
+import { expirePromotions } from '@/lib/promotions';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,10 +23,18 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
 export default async function ProductPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  await expirePromotions();
   const [product, session] = await Promise.all([
     prisma.product.findUnique({
       where: { id },
-      include: { seller: { select: { id: true, name: true } } },
+      include: {
+        seller: { select: { id: true, name: true } },
+        promotions: {
+          where: { status: 'ACTIVE', expiresAt: { gt: new Date() } },
+          orderBy: { expiresAt: 'desc' },
+          take: 1,
+        },
+      },
     }),
     getServerSession(authOptions),
   ]);
@@ -34,6 +43,13 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
 
   // Hide the message button if the viewer is the seller of this product
   const isOwnListing = session?.user?.id === product.seller.id;
+  const activePromotion = product.promotions[0] ?? null;
+  if (activePromotion && !isOwnListing) {
+    await prisma.promotion.update({
+      where: { id: activePromotion.id },
+      data: { clickCount: { increment: 1 } },
+    });
+  }
 
   return (
     <main className="max-w-4xl mx-auto">
@@ -47,6 +63,9 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             <p className="text-xs uppercase text-slate-500 font-medium">
               {product.condition} · {product.category}
             </p>
+            {activePromotion && (
+              <span className="badge bg-yellow-400 text-yellow-900 text-xs font-bold mt-2 inline-flex">Boosted</span>
+            )}
             <h1 className="text-2xl font-black mt-1">{product.title}</h1>
             <p className="text-3xl font-black text-blue-700 mt-2">{dollars(product.priceCents)}</p>
             {product.pickupAvailable ? (

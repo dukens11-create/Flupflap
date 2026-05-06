@@ -3,10 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { stripe, appUrl } from '@/lib/stripe';
-import { PROMOTION_PACKAGES, activePromotionWhere } from '@/lib/promotions';
-
-// Re-export so other modules can import from this route as before
-export { PROMOTION_PACKAGES };
+import { activePromotionWhere, getPromotionLabel, getPromotionPlan } from '@/lib/promotions';
 
 export type PromotionAction = 'new' | 'renew' | 'change';
 
@@ -31,11 +28,11 @@ export async function POST(req: Request) {
 
     const promotionAction: PromotionAction = action ?? 'new';
 
-    const priceCents = PROMOTION_PACKAGES[durationDays];
-    if (!priceCents) {
-      const validDays = Object.keys(PROMOTION_PACKAGES).join(', ');
-      return NextResponse.json({ error: `Invalid promotion duration. Choose one of: ${validDays} days.` }, { status: 400 });
+    const plan = await getPromotionPlan(durationDays);
+    if (!plan || !plan.isActive) {
+      return NextResponse.json({ error: 'Invalid promotion duration.' }, { status: 400 });
     }
+    const priceCents = plan.priceCents;
 
     // Verify the product exists, is owned by this seller, and is APPROVED
     const product = await prisma.product.findUnique({ where: { id: productId } });
@@ -45,6 +42,7 @@ export async function POST(req: Request) {
     if (product.status !== 'APPROVED') {
       return NextResponse.json({ error: 'Only approved products can be promoted.' }, { status: 400 });
     }
+
 
     const now = new Date();
 
@@ -128,8 +126,8 @@ export async function POST(req: Request) {
           price_data: {
             currency: 'usd',
             product_data: {
-              name: `${actionLabel} "${product.title}" — ${durationDays} day${durationDays !== 1 ? 's' : ''}`,
-              description: `Featured placement on FlupFlap Marketplace for ${durationDays} day${durationDays !== 1 ? 's' : ''}`,
+              name: `${actionLabel} "${product.title}" — ${getPromotionLabel(durationDays)}`,
+              description: `Featured placement on FlupFlap Marketplace for ${getPromotionLabel(durationDays)}`,
             },
             unit_amount: priceCents,
           },

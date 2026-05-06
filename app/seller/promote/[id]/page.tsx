@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { dollars } from '@/lib/money';
-import { activePromotionWhere } from '@/lib/promotions';
+import { activePromotionWhere, expirePromotions, getPromotionPlans } from '@/lib/promotions';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import PromoteForm from './PromoteForm';
@@ -54,17 +54,20 @@ export default async function SellerPromotePage({
     );
   }
 
+  await expirePromotions();
   const now = new Date();
 
-  // Find the currently running active promotion (started in the past, not yet expired)
-  const activePromotion = await prisma.promotion.findFirst({
-    where: {
-      ...activePromotionWhere(now),
-      productId: id,
-      sellerId: session.user.id,
-    },
-    orderBy: { expiresAt: 'desc' },
-  });
+  const [activePromotion, plans] = await Promise.all([
+    prisma.promotion.findFirst({
+      where: {
+        ...activePromotionWhere(now),
+        productId: id,
+        sellerId: session.user.id,
+      },
+      orderBy: { expiresAt: 'desc' },
+    }),
+    getPromotionPlans(),
+  ]);
 
   // Find the most recent expired promotion (for renew flow)
   const lastExpiredPromotion = activePromotion ? null : await prisma.promotion.findFirst({
@@ -111,7 +114,7 @@ export default async function SellerPromotePage({
 
       <h1 className="text-3xl font-black mb-2">Promote listing</h1>
       <p className="text-slate-500 text-sm mb-6">
-        Featured listings appear with a ⭐ badge and are highlighted across the marketplace.
+        Boosted listings appear higher in search results with a visible Sponsored badge.
       </p>
 
       {/* Product preview */}
@@ -176,7 +179,7 @@ export default async function SellerPromotePage({
                   <p className="text-sm text-slate-500 mb-4">
                     Select a new duration. Your current promotion ends immediately and the new one begins.
                   </p>
-                  <PromoteForm productId={id} mode="change" />
+                  <PromoteForm productId={id} mode="change" plans={plans} />
                 </>
               )}
 
@@ -190,6 +193,7 @@ export default async function SellerPromotePage({
                     productId={id}
                     mode="renew"
                     scheduledStart={activePromotion.expiresAt?.toISOString() ?? null}
+                    plans={plans}
                   />
                 </>
               )}
@@ -214,14 +218,14 @@ export default async function SellerPromotePage({
             </p>
           </div>
           <h2 className="text-lg font-bold mb-3">Renew promotion</h2>
-          <PromoteForm productId={id} mode="renew" />
+          <PromoteForm productId={id} mode="renew" plans={plans} />
         </>
       )}
 
       {!activePromotion && !lastExpiredPromotion && (
         <>
           <h2 className="text-lg font-bold mb-3">Choose a promotion package</h2>
-          <PromoteForm productId={id} mode="new" />
+          <PromoteForm productId={id} mode="new" plans={plans} />
         </>
       )}
     </main>
