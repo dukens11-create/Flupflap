@@ -109,15 +109,8 @@ export async function POST(req: Request) {
       },
     });
 
-    await prisma.checkoutSessionSnapshot.upsert({
-      where: { stripeCheckoutId: stripeSession.id },
-      update: {
-        items,
-        pickupItemIds,
-        commissionItems,
-        directToSellerId: sellerStripeId,
-      },
-      create: {
+    await prisma.checkoutSessionSnapshot.create({
+      data: {
         stripeCheckoutId: stripeSession.id,
         buyerId: session.user.id,
         items,
