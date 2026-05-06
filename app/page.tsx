@@ -75,10 +75,10 @@ async function ProductGrid({ sp }: { sp: SearchParams }) {
         },
       },
     });
-    // Sort: featured (active promotion) products appear first
-    products.sort((a: any, b: any) => {
-      const aFeatured = a.promotions.length > 0 ? 1 : 0;
-      const bFeatured = b.promotions.length > 0 ? 1 : 0;
+    // Sort a copy: featured (active promotion) products appear first
+    products = [...products].sort((productA: any, productB: any) => {
+      const aFeatured = productA.promotions.length > 0 ? 1 : 0;
+      const bFeatured = productB.promotions.length > 0 ? 1 : 0;
       return bFeatured - aFeatured;
     });
   } catch (err: unknown) {
