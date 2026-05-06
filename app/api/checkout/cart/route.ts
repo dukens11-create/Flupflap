@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { stripe, appUrl } from '@/lib/stripe';
-import { platformFee } from '@/lib/money';
+import { buildCheckoutCommissionItems, getMarketplaceSettings } from '@/lib/commission';
 
 export async function POST(req: Request) {
   try {
@@ -19,24 +19,44 @@ export async function POST(req: Request) {
     const { items, pickupItemIds = [] } = body;
     if (!items?.length) return NextResponse.json({ error: 'Cart is empty.' }, { status: 400 });
 
-    const pickupSet = new Set(pickupItemIds);
-
-    const products = await prisma.product.findMany({
+    const [settings, products] = await Promise.all([
+      getMarketplaceSettings(),
+      prisma.product.findMany({
       where: {
         id: { in: items.map(i => i.productId) },
         status: 'APPROVED',
         inventory: { gt: 0 },
       },
-      include: { seller: { select: { stripeAccountId: true, stripeOnboardingComplete: true } } },
-    });
+      include: {
+        seller: {
+          select: {
+            id: true,
+            stripeAccountId: true,
+            stripeOnboardingComplete: true,
+            sellerPlan: { select: { code: true, commissionRateBps: true } },
+          },
+        },
+      },
+    }),
+    ]);
 
     if (!products.length) return NextResponse.json({ error: 'No valid products in cart.' }, { status: 400 });
 
+    const pickupSet = new Set(pickupItemIds);
+    const { commissionItems, platformFeeCents } = buildCheckoutCommissionItems(
+      products,
+      items,
+      pickupItemIds,
+      settings.defaultSellerCommissionBps,
+    );
+    const commissionItemsById = new Map(commissionItems.map((item) => [item.productId, item]));
+
     const lineItems = products.map(p => {
       const qty = items.find(i => i.productId === p.id)?.quantity ?? 1;
-      const isPickup = pickupSet.has(p.id);
-      // For pickup orders, only charge item price (no shipping fee)
-      const unitAmount = isPickup ? p.priceCents : p.priceCents + p.shippingCents;
+      const commissionItem = commissionItemsById.get(p.id);
+      const unitAmount = commissionItem
+        ? commissionItem.priceCents + commissionItem.shippingCents
+        : p.priceCents + (pickupSet.has(p.id) ? 0 : p.shippingCents);
       return {
         price_data: {
           currency: 'usd',
@@ -49,13 +69,6 @@ export async function POST(req: Request) {
 
     // If ALL items are pickup, don't collect a shipping address from Stripe
     const allPickup = products.every(p => pickupSet.has(p.id));
-
-    // Calculate total to determine the platform fee for split payments.
-    const totalCents = products.reduce((sum, p) => {
-      const qty = items.find(i => i.productId === p.id)?.quantity ?? 1;
-      const isPickup = pickupSet.has(p.id);
-      return sum + (p.priceCents + (isPickup ? 0 : p.shippingCents)) * qty;
-    }, 0);
 
     // Wire funds to the seller's connected account only when the entire cart
     // belongs to a single, fully-onboarded seller. Multi-seller carts have no
@@ -83,7 +96,7 @@ export async function POST(req: Request) {
       ...(sellerStripeId
         ? {
             payment_intent_data: {
-              application_fee_amount: platformFee(totalCents),
+              application_fee_amount: platformFeeCents,
               transfer_data: { destination: sellerStripeId },
             },
           }
@@ -93,6 +106,17 @@ export async function POST(req: Request) {
         items: JSON.stringify(items),
         pickupItemIds: JSON.stringify(pickupItemIds),
         isPickup: allPickup ? 'true' : 'false',
+      },
+    });
+
+    await prisma.checkoutSessionSnapshot.create({
+      data: {
+        stripeCheckoutId: stripeSession.id,
+        buyerId: session.user.id,
+        items,
+        pickupItemIds,
+        commissionItems,
+        directToSellerId: sellerStripeId,
       },
     });
 
