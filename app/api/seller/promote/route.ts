@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { stripe, appUrl } from '@/lib/stripe';
-import { PROMOTION_PACKAGES } from '@/lib/promotions';
+import { PROMOTION_PACKAGES, activePromotionWhere } from '@/lib/promotions';
 
 // Re-export so other modules can import from this route as before
 export { PROMOTION_PACKAGES };
@@ -48,13 +48,12 @@ export async function POST(req: Request) {
 
     const now = new Date();
 
-    // Find any current active promotion for this product
+    // Find any current active promotion for this product using the shared helper
     const activePromotion = await prisma.promotion.findFirst({
       where: {
+        ...activePromotionWhere(now),
         productId,
         sellerId: session.user.id,
-        status: 'ACTIVE',
-        expiresAt: { gt: now },
       },
     });
 
@@ -72,11 +71,14 @@ export async function POST(req: Request) {
     let replacePromotionId: string | null = null;
 
     if (promotionAction === 'renew') {
-      // Find the most recent promotion (active or expired) for history tracking
-      const lastPromo = await prisma.promotion.findFirst({
-        where: { productId, sellerId: session.user.id, status: { in: ['ACTIVE', 'EXPIRED'] } },
-        orderBy: { createdAt: 'desc' },
-      });
+      // Prefer the currently active promotion for history tracking (pre-expiry renew);
+      // fall back to the most recent expired promotion (post-expiry renew).
+      const lastPromo =
+        activePromotion ??
+        (await prisma.promotion.findFirst({
+          where: { productId, sellerId: session.user.id, status: 'EXPIRED' },
+          orderBy: { expiresAt: 'desc' },
+        }));
       if (lastPromo) {
         renewedFromId = lastPromo.id;
         // If renewing before expiry, schedule new promotion to start when current ends

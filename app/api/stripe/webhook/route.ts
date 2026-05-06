@@ -57,10 +57,17 @@ export async function POST(req: Request) {
 
       const now = new Date();
 
-      // For 'change': expire the old active promotion before activating the new one
+      // For 'change': expire the old active promotion before activating the new one.
+      // Verify ownership before expiring: the old promotion must belong to the same
+      // seller and product as the new promotion to prevent a malicious actor from
+      // expiring another seller's promotion via crafted metadata.
       if (promotionAction === 'change' && replacePromotionId) {
-        await prisma.promotion.update({
-          where: { id: replacePromotionId },
+        await prisma.promotion.updateMany({
+          where: {
+            id: replacePromotionId,
+            sellerId: promo.sellerId,
+            productId: promo.productId,
+          },
           data: { status: 'EXPIRED' },
         });
       }
