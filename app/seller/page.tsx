@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { dollars } from '@/lib/money';
 import { formatCommissionPercent, getMarketplaceSettings } from '@/lib/commission';
-import { classifyStripeError, getCurrentStripeMode, modeFromStripeLivemode, stripe } from '@/lib/stripe';
+import { classifyStripeError, getCurrentStripeMode, stripe } from '@/lib/stripe';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import PickupVerifyForm from '@/components/PickupVerifyForm';
@@ -104,7 +104,6 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   // current Stripe mode. This catches test-mode account IDs after switching
   // to live keys. If payouts are already enabled (e.g. the account.updated
   // webhook was missed), sync the DB and redirect with success status.
-  let stripeAccountStale = false;
   let stripeRuntimeIssueReason: string | null = null;
   if (stripeInProgress && stripeAccountId) {
     if (stripeAccountMode && currentStripeMode && stripeAccountMode !== currentStripeMode) {
@@ -116,13 +115,6 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
     }
     try {
       const acct = await stripe.accounts.retrieve(stripeAccountId);
-      const resolvedMode = modeFromStripeLivemode(acct.livemode);
-      if (stripeAccountMode !== resolvedMode) {
-        await prisma.user.update({
-          where: { id: session.user.id },
-          data: { stripeAccountMode: resolvedMode },
-        });
-      }
       if (acct.payouts_enabled) {
         // Missed webhook — sync the DB and show the connected banner.
         await prisma.user.update({
@@ -143,7 +135,6 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
         stripeRuntimeIssueReason = reason;
         console.error('[seller/page] stripe.accounts.retrieve error:', err);
       }
-      stripeAccountStale = reason === 'stale_account';
     }
   }
 
@@ -211,11 +202,15 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
 
       {sp.stripe === 'error' && (
         <div className="card p-4 mb-6 bg-red-50 border-red-200 text-red-800 text-sm">
-          {sp.reason === 'invalid_key' && '❌ Stripe keys are misconfigured on the platform. Please contact support/admin.'}
-          {sp.reason === 'platform_incomplete' && '❌ Stripe platform setup is incomplete. Please contact support/admin.'}
-          {sp.reason === 'stale_account' && '❌ Your saved Stripe account is no longer valid in this mode. Reconnect your payout account.'}
-          {!sp.reason && '❌ Something went wrong connecting your Stripe account. Please try again or contact support.'}
-          {sp.reason === 'stripe_error' && '❌ Stripe is temporarily unavailable. Please try again later.'}
+          {sp.reason === 'invalid_key'
+            ? '❌ Stripe keys are misconfigured on the platform. Please contact support/admin.'
+            : sp.reason === 'platform_incomplete'
+              ? '❌ Stripe platform setup is incomplete. Please contact support/admin.'
+              : sp.reason === 'stale_account'
+                ? '❌ Your saved Stripe account is no longer valid for this mode. Reconnect your payout account.'
+                : sp.reason === 'stripe_error'
+                  ? '❌ Stripe is temporarily unavailable. Please try again later.'
+                  : '❌ Something went wrong connecting your Stripe account. Please try again or contact support.'}
         </div>
       )}
 
@@ -224,11 +219,13 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
           {stripeRuntimeIssueReason === 'invalid_key' && '❌ Platform Stripe credentials are invalid. Please contact support/admin.'}
           {stripeRuntimeIssueReason === 'platform_incomplete' && '❌ Platform Stripe profile/setup is incomplete. Please contact support/admin.'}
           {stripeRuntimeIssueReason === 'stripe_error' && '❌ Stripe is temporarily unavailable. Please retry shortly.'}
+          {stripeRuntimeIssueReason === 'stale_account' && '❌ Stripe account data is stale. Please reconnect your payout account.'}
         </div>
       )}
 
       {/* Not started OR stale account that needs to be recreated */}
-      {!isRestricted && !stripeOnboarded && (!stripeInProgress || stripeAccountStale) && (
+      {/* Stale accounts are redirected/cleared before render, so this branch is only true for not-started onboarding. */}
+      {!isRestricted && !stripeOnboarded && !stripeInProgress && (
         <div className="card p-4 mb-6 bg-yellow-50 border-yellow-200 text-yellow-800 text-sm flex justify-between items-center gap-3">
           <span>⚠️ Connect your bank account via Stripe to receive payouts.</span>
           <a href="/api/stripe/connect" className="btn-outline text-xs flex-shrink-0">Connect bank account</a>
@@ -236,7 +233,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
       )}
 
       {/* Valid in-progress account — show resume prompt */}
-      {!isRestricted && stripeInProgress && !stripeAccountStale && (
+      {!isRestricted && stripeInProgress && (
         <div className="card p-4 mb-6 bg-blue-50 border-blue-200 text-blue-800 text-sm flex justify-between items-center gap-3">
           <span>🔄 Stripe setup in progress — complete your bank account details to receive payouts.</span>
           <a href="/api/stripe/connect" className="btn-outline text-xs flex-shrink-0">Resume setup</a>

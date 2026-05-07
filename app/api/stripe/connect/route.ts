@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
-import { appUrl, classifyStripeError, getCurrentStripeMode, modeFromStripeLivemode, stripe } from '@/lib/stripe';
+import { appUrl, classifyStripeError, getCurrentStripeMode, stripe } from '@/lib/stripe';
 
 export async function GET() {
   try {
@@ -73,15 +73,7 @@ export async function GET() {
       try {
         // Verify the account exists in the current Stripe mode before using it.
         // This detects test-mode account IDs when the app is now using live keys.
-        const existingAccount = await stripe.accounts.retrieve(effectiveAccountId);
-        const resolvedMode = modeFromStripeLivemode(existingAccount.livemode);
-        if (effectiveAccountMode !== resolvedMode) {
-          await prisma.user.update({
-            where: { id: user.id },
-            data: { stripeAccountMode: resolvedMode },
-          });
-          effectiveAccountMode = resolvedMode;
-        }
+        await stripe.accounts.retrieve(effectiveAccountId);
 
         const accountLink = await stripe.accountLinks.create({
           account: effectiveAccountId,
@@ -108,7 +100,7 @@ export async function GET() {
       where: { id: user.id },
       data: {
         stripeAccountId: account.id,
-        stripeAccountMode: currentMode ?? modeFromStripeLivemode(account.livemode),
+        stripeAccountMode: currentMode,
       },
     });
 

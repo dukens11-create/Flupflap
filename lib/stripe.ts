@@ -7,6 +7,12 @@ export type StripeErrorReason =
   | 'stale_account'
   | 'platform_incomplete'
   | 'stripe_error';
+export const STRIPE_ERROR_REASONS: StripeErrorReason[] = [
+  'invalid_key',
+  'stale_account',
+  'platform_incomplete',
+  'stripe_error',
+];
 
 type StripeErrorShape = {
   code?: unknown;
@@ -67,7 +73,7 @@ export function classifyStripeError(err: unknown): {
   }
 
   if (
-    /responsib(?:ility|le).*(?:loss|negative balance)/i.test(message)
+    /responsib(?:le|ility).*(?:loss|negative balance)/i.test(message)
     || /platform profile/i.test(message)
     || /connect platform/i.test(message)
   ) {
