@@ -92,8 +92,10 @@ model User {
   sellerPlan               SellerPlan?               @relation(fields: [sellerPlanId], references: [id])
   checkoutSessionSnapshots CheckoutSessionSnapshot[]
   // Seller subscription billing
-  stripeCustomerId              String?   @unique
-  subscriptionId                String?   @unique
+  // Keep these nullable identifiers non-unique so production `prisma db push`
+  // stays deploy-safe for existing databases with legacy duplicate values.
+  stripeCustomerId              String?
+  subscriptionId                String?
   subscriptionStatus            String?   // ACTIVE | INACTIVE | PAST_DUE | CANCELLED
   subscriptionCurrentPeriodEnd  DateTime?
   // Profile picture
