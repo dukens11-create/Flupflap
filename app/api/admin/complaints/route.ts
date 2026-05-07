@@ -19,7 +19,7 @@ export async function GET(req: Request) {
 
   const complaints = await prisma.buyerComplaint.findMany({
     where: { status },
-    orderBy: { createdAt: 'asc' },
+    orderBy: { createdAt: 'desc' },
     include: {
       buyer: { select: { id: true, name: true, email: true } },
       seller: { select: { id: true, name: true, email: true, sellerStatus: true } },
