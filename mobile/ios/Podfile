@@ -1,0 +1,3 @@
+include "Flutter" do |flutter_install_dir|
+  flutter_install_dir.pubspec_path = File.expand_path("..", flutter_install_dir.podspec_paths.first)
+end
