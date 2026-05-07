@@ -2,8 +2,9 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
-import { stripe, appUrl } from '@/lib/stripe';
+import { appUrl, classifyStripeError, getCurrentStripeMode, stripe } from '@/lib/stripe';
 import { buildCheckoutCommissionItems, getMarketplaceSettings } from '@/lib/commission';
+import { checkoutErrorResponse } from '@/lib/checkout-errors';
 
 export async function POST(req: Request) {
   try {
@@ -32,6 +33,7 @@ export async function POST(req: Request) {
           select: {
             id: true,
             stripeAccountId: true,
+            stripeAccountMode: true,
             stripeOnboardingComplete: true,
             sellerPlan: { select: { code: true, commissionRateBps: true } },
           },
@@ -75,11 +77,42 @@ export async function POST(req: Request) {
     // single destination, so those payments stay on the platform account.
     const uniqueSellerIds = new Set(products.map(p => p.sellerId));
     const isSingleSeller = uniqueSellerIds.size === 1;
-    const sellerStripeId = isSingleSeller
-      && products[0].seller.stripeOnboardingComplete
-      && products[0].seller.stripeAccountId
-      ? products[0].seller.stripeAccountId
-      : null;
+    const seller = isSingleSeller ? products[0].seller : null;
+    let sellerStripeId = seller?.stripeOnboardingComplete ? seller.stripeAccountId : null;
+    let sellerReconnectRequired = false;
+
+    if (seller && sellerStripeId) {
+      const currentMode = getCurrentStripeMode();
+      const hasModeMismatch = !!(
+        seller.stripeAccountMode
+        && currentMode
+        && seller.stripeAccountMode !== currentMode
+      );
+      if (hasModeMismatch) {
+        await prisma.user.update({
+          where: { id: seller.id },
+          data: { stripeAccountId: null, stripeAccountMode: null, stripeOnboardingComplete: false },
+        });
+        sellerStripeId = null;
+        sellerReconnectRequired = true;
+      } else {
+        try {
+          await stripe.accounts.retrieve(sellerStripeId);
+        } catch (err) {
+          const classified = classifyStripeError(err);
+          if (classified.reason === 'stale_account') {
+            await prisma.user.update({
+              where: { id: seller.id },
+              data: { stripeAccountId: null, stripeAccountMode: null, stripeOnboardingComplete: false },
+            });
+            sellerStripeId = null;
+            sellerReconnectRequired = true;
+          } else {
+            return checkoutErrorResponse(classified.reason);
+          }
+        }
+      }
+    }
 
     const stripeSession = await stripe.checkout.sessions.create({
       mode: 'payment',
@@ -120,9 +153,13 @@ export async function POST(req: Request) {
       },
     });
 
-    return NextResponse.json({ url: stripeSession.url });
+    return NextResponse.json({
+      url: stripeSession.url,
+      warningCode: sellerReconnectRequired ? 'seller_reconnect_required' : null,
+    });
   } catch (err: any) {
     console.error('[checkout/cart]', err);
-    return NextResponse.json({ error: 'Checkout failed.' }, { status: 500 });
+    const reason = classifyStripeError(err).reason;
+    return checkoutErrorResponse(reason);
   }
 }

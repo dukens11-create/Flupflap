@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import { prisma } from '@/lib/db';
-import { stripe } from '@/lib/stripe';
+import { getCurrentStripeMode, stripe } from '@/lib/stripe';
 import { calculateCommissionCents, calculateSellerNetCents, getMarketplaceSettings, resolveCommissionForSeller } from '@/lib/commission';
 import type { CheckoutCommissionItem } from '@/lib/commission';
 import crypto from 'crypto';
@@ -33,10 +33,14 @@ export async function POST(req: Request) {
   // is fully set up and payouts are enabled.
   if (event.type === 'account.updated') {
     const account = event.data.object as Stripe.Account;
+    const currentStripeMode = getCurrentStripeMode();
     if (account.payouts_enabled) {
       await prisma.user.updateMany({
         where: { stripeAccountId: account.id },
-        data: { stripeOnboardingComplete: true },
+        data: {
+          stripeOnboardingComplete: true,
+          stripeAccountMode: currentStripeMode,
+        },
       });
     }
     return new NextResponse('ok', { status: 200 });
