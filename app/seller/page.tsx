@@ -97,6 +97,39 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   const stripeAccountId = dbUser?.stripeAccountId ?? null;
   // stripeInProgress: seller has started onboarding but not yet completed it
   const stripeInProgress = !!stripeAccountId && !stripeOnboarded;
+
+  // When onboarding is in progress, verify the saved account exists in the
+  // current Stripe mode. This catches test-mode account IDs after switching
+  // to live keys. If payouts are already enabled (e.g. the account.updated
+  // webhook was missed), sync the DB and redirect with success status.
+  let stripeAccountStale = false;
+  if (stripeInProgress && stripeAccountId) {
+    try {
+      const acct = await stripe.accounts.retrieve(stripeAccountId);
+      if (acct.payouts_enabled) {
+        // Missed webhook — sync the DB and show the connected banner.
+        await prisma.user.update({
+          where: { id: session.user.id },
+          data: { stripeOnboardingComplete: true },
+        });
+        redirect('/seller?stripe=connected');
+      }
+    } catch (err) {
+      // Distinguish stale-account errors (expected during test→live migration)
+      // from unexpected Stripe API failures (network issues, rate limits, etc.).
+      const msg = typeof (err as any)?.message === 'string' ? (err as any).message : '';
+      const isNotFound =
+        (err as any)?.code === 'account_invalid' ||
+        (err as any)?.statusCode === 404 ||
+        msg.includes('No such account');
+      if (!isNotFound) {
+        console.error('[seller/page] stripe.accounts.retrieve error:', err);
+      }
+      // Either way, treat as stale so the UI shows the correct connect prompt.
+      stripeAccountStale = true;
+    }
+  }
+
   let stripeAvailableCents: number | null = null;
   let stripePendingCents: number | null = null;
   if (stripeOnboarded && stripeAccountId) {
@@ -164,14 +197,16 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
         </div>
       )}
 
-      {!isRestricted && !stripeOnboarded && !stripeInProgress && (
+      {/* Not started OR stale account that needs to be recreated */}
+      {!isRestricted && !stripeOnboarded && (!stripeInProgress || stripeAccountStale) && (
         <div className="card p-4 mb-6 bg-yellow-50 border-yellow-200 text-yellow-800 text-sm flex justify-between items-center gap-3">
           <span>⚠️ Connect your bank account via Stripe to receive payouts.</span>
           <a href="/api/stripe/connect" className="btn-outline text-xs flex-shrink-0">Connect bank account</a>
         </div>
       )}
 
-      {!isRestricted && stripeInProgress && (
+      {/* Valid in-progress account — show resume prompt */}
+      {!isRestricted && stripeInProgress && !stripeAccountStale && (
         <div className="card p-4 mb-6 bg-blue-50 border-blue-200 text-blue-800 text-sm flex justify-between items-center gap-3">
           <span>🔄 Stripe setup in progress — complete your bank account details to receive payouts.</span>
           <a href="/api/stripe/connect" className="btn-outline text-xs flex-shrink-0">Resume setup</a>
