@@ -117,6 +117,7 @@ export default function OrderFeedbackSection({
                     value={String(state.rating)}
                     onChange={(e) => setReviewState((prev) => ({ ...prev, [seller.id]: { ...prev[seller.id], rating: Number(e.target.value), success: '', error: '' } }))}
                     disabled={!canReview || state.loading}
+                    aria-label={`Rating for ${seller.name}`}
                   >
                     {[5, 4, 3, 2, 1].map((r) => (
                       <option key={r} value={r}>{'★'.repeat(r)}{'☆'.repeat(5 - r)} ({r})</option>
