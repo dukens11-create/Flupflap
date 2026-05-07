@@ -72,7 +72,11 @@ export function getStoredLineSubtotalCents(item: {
   priceCents: number;
   quantity: number;
 }) {
-  return item.lineSubtotalCents || (item.priceCents * item.quantity);
+  if (item.lineSubtotalCents === 0 && item.priceCents > 0 && item.quantity > 0) {
+    return item.priceCents * item.quantity;
+  }
+
+  return item.lineSubtotalCents;
 }
 
 export async function getMarketplaceSettings() {

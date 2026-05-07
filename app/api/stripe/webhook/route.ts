@@ -263,11 +263,11 @@ export async function POST(req: Request) {
       if (activePromotion) {
         await prisma.promotion.update({
           where: { id: activePromotion.id },
-            data: {
-              saleCount: { increment: item.quantity },
-              saleAmountCents: { increment: item.lineSubtotalCents },
-            },
-          });
+          data: {
+            saleCount: { increment: item.quantity },
+            saleAmountCents: { increment: item.lineSubtotalCents },
+          },
+        });
       }
       const newInventory = Math.max(0, item.product.inventory - item.quantity);
       await prisma.product.update({
