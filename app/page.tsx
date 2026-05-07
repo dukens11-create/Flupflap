@@ -5,9 +5,6 @@ import BrowseFilters from '@/components/BrowseFilters';
 import type { Metadata } from 'next';
 import { expirePromotions } from '@/lib/promotions';
 import { getServerTranslations } from '@/lib/i18n/server';
-import FlupFlapLogo from '@/components/FlupFlapLogo';
-import Link from 'next/link';
-import { Tag, Zap, BookOpen, Shirt, Armchair, Camera } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
@@ -147,62 +144,8 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const { t } = await getServerTranslations();
   return (
     <main>
-      {/* Hero section */}
-      <section className="-mx-4 sm:-mx-6 lg:-mx-8 -mt-6 mb-10 bg-gradient-to-br from-orange-50 via-white to-green-50 border-b border-slate-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 flex flex-col lg:flex-row items-center gap-10">
-          {/* Left – branding + CTA */}
-          <div className="flex-1 text-center lg:text-left">
-            <div className="flex justify-center lg:justify-start mb-6">
-              <FlupFlapLogo size="lg" />
-            </div>
-            <h1 className="text-3xl sm:text-4xl font-black text-slate-900 mb-4 leading-tight">
-              The Smarter Way to Buy&nbsp;and&nbsp;Sell
-            </h1>
-            <p className="text-lg text-slate-500 mb-8 max-w-md mx-auto lg:mx-0">
-              Discover great deals, trusted sellers, and easy selling in one place.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">
-              <Link
-                href="/signup"
-                className="btn-brand px-7 py-3 text-base rounded-xl font-bold shadow-sm"
-              >
-                Start Selling
-              </Link>
-              <a
-                href="#products"
-                className="btn-outline px-7 py-3 text-base rounded-xl font-bold"
-              >
-                Browse Deals
-              </a>
-            </div>
-          </div>
-
-          {/* Right – category showcase */}
-          <div className="flex-shrink-0 grid grid-cols-3 gap-3">
-            {[
-              { icon: Zap, label: 'Electronics', href: '/?category=Electronics', color: 'bg-orange-100 text-orange-600' },
-              { icon: Shirt, label: 'Clothing', href: '/?category=Clothing', color: 'bg-green-100 text-green-700' },
-              { icon: Armchair, label: 'Furniture', href: '/?category=Furniture', color: 'bg-amber-100 text-amber-700' },
-              { icon: BookOpen, label: 'Books', href: '/?category=Books', color: 'bg-sky-100 text-sky-700' },
-              { icon: Camera, label: 'Cameras', href: '/?category=Electronics', color: 'bg-purple-100 text-purple-700' },
-              { icon: Tag, label: 'Deals', href: '/', color: 'bg-rose-100 text-rose-600' },
-            ].map(({ icon: Icon, label, href, color }) => (
-              <Link
-                key={label}
-                href={href}
-                className={`flex flex-col items-center justify-center gap-2 rounded-2xl p-4 w-24 h-24 hover:scale-105 transition-transform ${color} bg-opacity-60`}
-              >
-                <Icon size={26} aria-hidden="true" />
-                <span className="text-xs font-semibold text-center leading-tight">{label}</span>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Browse section */}
-      <div id="products" className="mb-6">
-        <h2 className="text-2xl font-black">{t('home.title')}</h2>
+      <div className="mb-6">
+        <h1 className="text-3xl font-black">{t('home.title')}</h1>
         <p className="text-slate-500 mt-1">{t('home.subtitle')}</p>
       </div>
       <Suspense>

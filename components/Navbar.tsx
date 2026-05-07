@@ -5,7 +5,6 @@ import { ShoppingCart, Package, LayoutDashboard, LogIn, UserPlus, LogOut, User, 
 import LanguageSelector from '@/components/LanguageSelector';
 import { useI18n } from '@/components/I18nProvider';
 import { useEffect, useState } from 'react';
-import FlupFlapLogo from '@/components/FlupFlapLogo';
 
 function useCartCount() {
   const [count, setCount] = useState(0);
@@ -76,9 +75,7 @@ export default function Navbar() {
   return (
     <header className="bg-white border-b border-slate-200 sticky top-0 z-30">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center gap-4">
-        <Link href="/" className="mr-2 flex-shrink-0">
-          <FlupFlapLogo size="md" />
-        </Link>
+        <Link href="/" className="font-black text-xl text-blue-600 mr-2">FlupFlap</Link>
 
         <nav className="flex items-center gap-3 flex-1 text-sm font-medium text-slate-600">
           <Link href="/" className="hover:text-blue-600">{t('nav.browse')}</Link>
@@ -133,7 +130,7 @@ export default function Navbar() {
               <Link href="/login" className="flex items-center gap-1 hover:text-blue-600">
                 <LogIn size={16} /> {t('nav.login')}
               </Link>
-              <Link href="/signup" className="btn-brand flex items-center gap-1">
+              <Link href="/signup" className="btn-primary flex items-center gap-1">
                 <UserPlus size={14} /> {t('nav.signUp')}
               </Link>
             </>

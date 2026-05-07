@@ -10,9 +10,6 @@
   .btn-primary {
     @apply inline-flex items-center justify-center px-4 py-2 rounded-xl font-semibold text-sm transition-colors cursor-pointer bg-blue-600 hover:bg-blue-700 text-white;
   }
-  .btn-brand {
-    @apply inline-flex items-center justify-center px-4 py-2 rounded-xl font-semibold text-sm transition-colors cursor-pointer bg-orange-500 hover:bg-orange-600 text-white;
-  }
   .btn-dark {
     @apply inline-flex items-center justify-center px-4 py-2 rounded-xl font-semibold text-sm transition-colors cursor-pointer bg-slate-900 hover:bg-slate-800 text-white;
   }
