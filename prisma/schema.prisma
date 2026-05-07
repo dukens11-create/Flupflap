@@ -96,6 +96,8 @@ model User {
   subscriptionId                String?   @unique
   subscriptionStatus            String?   // ACTIVE | INACTIVE | PAST_DUE | CANCELLED
   subscriptionCurrentPeriodEnd  DateTime?
+  // Profile picture
+  image                         String?
 }
 
 model SellerOtp {
