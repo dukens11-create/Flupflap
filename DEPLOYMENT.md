@@ -197,7 +197,7 @@ Twilio-based seller OTP is now the default login behavior.  You can still
 temporarily allow sellers to sign in with email + password only by setting:
 
 ```
-ENABLE_SMS_OTP="false"
+ENABLE_SMS_OTP=false
 ```
 
 This bypasses the SMS challenge entirely so sellers are not locked out during a
@@ -211,8 +211,9 @@ changes are needed to re-enable it.
 2. Redeploy the app (or restart the process so the new env var takes effect).
 3. Sellers will be prompted for an SMS code on their next login.
 
-> If `ENABLE_SMS_OTP` is unset it defaults to **enabled**.  Set it explicitly
-> to `"false"` only when you need the temporary bypass.
+> If `ENABLE_SMS_OTP` is unset it defaults to **enabled**. Set it explicitly to
+> `false` only when you need the temporary bypass. Quoted values like `"false"`
+> are also supported.
 
 ### Testing seller sign-in locally
 

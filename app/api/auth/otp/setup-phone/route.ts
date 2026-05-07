@@ -25,6 +25,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { createAndSendOtp } from '@/lib/otp';
 import { normalizePhone } from '@/lib/phone';
+import { isSmsOtpEnabled } from '@/lib/feature-flags';
 
 const schema = z.object({
   email: z.string().email(),
@@ -70,6 +71,15 @@ export async function POST(req: Request) {
         role: user.role,
       });
       return NextResponse.json({ error: 'Phone setup is only available for seller accounts.' }, { status: 400 });
+    }
+
+    if (!isSmsOtpEnabled()) {
+      console.warn('[setup-phone] OTP skipped after phone setup attempt: feature flag disabled', {
+        userId: user.id,
+        role: user.role,
+        smsOtpEnabled: false,
+      });
+      return NextResponse.json({ step: 'signin' });
     }
 
     // Normalize to E.164 before saving and sending.
