@@ -98,10 +98,10 @@ export default async function OrderDetailPage({
                   {item.product.title}
                 </Link>
                 <p className="text-xs text-slate-500">
-                  Sold by {item.product.seller.name} · Qty: {item.quantity}
+                  Sold by {item.product.seller.name} · {dollars(item.priceCents)} each · Qty: {item.quantity}
                 </p>
               </div>
-              <p className="font-semibold flex-shrink-0">{dollars(item.priceCents * item.quantity)}</p>
+              <p className="font-semibold flex-shrink-0">{dollars(item.lineSubtotalCents || (item.priceCents * item.quantity))}</p>
             </div>
           ))}
         </div>

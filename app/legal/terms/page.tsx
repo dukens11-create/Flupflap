@@ -29,7 +29,7 @@ export default function TermsPage() {
 
       <section>
         <h2 className="text-xl font-bold mb-2">5. Fees and Commission</h2>
-        <p className="text-slate-700">FlupFlap charges a platform commission on each completed sale (currently 3%). This fee is deducted from the seller payout. Exact fee percentages may change with notice.</p>
+        <p className="text-slate-700">FlupFlap charges a 6% platform commission on each completed sale. This fee is deducted from the seller payout and stored with the paid order item for audit and payout reporting.</p>
       </section>
 
       <section>
@@ -61,4 +61,3 @@ export default function TermsPage() {
     </main>
   );
 }
-
