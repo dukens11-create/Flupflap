@@ -191,29 +191,28 @@ sent by SMS.  This lets you develop and test locally without a Twilio account.
 > preventing sellers from bypassing the second factor.  Always set all three
 > `TWILIO_*` variables in the Render environment before going live.
 
-### Temporarily disabling SMS OTP (Twilio A2P pending)
+### SMS OTP rollout / temporary disable switch
 
-While Twilio A2P 10DLC registration is under review, SMS delivery may not be
-reliable.  You can allow sellers to sign in with email + password only by
-setting:
+Twilio-based seller OTP is now the default login behavior.  You can still
+temporarily allow sellers to sign in with email + password only by setting:
 
 ```
 ENABLE_SMS_OTP="false"
 ```
 
-This bypasses the SMS challenge entirely so sellers are not locked out.  The
-entire OTP code path remains in the codebase — no code changes are needed to
-re-enable it.
+This bypasses the SMS challenge entirely so sellers are not locked out during a
+provider outage.  The entire OTP code path remains in the codebase — no code
+changes are needed to re-enable it.
 
-**To re-enable SMS OTP once Twilio approval is complete:**
+**To keep or restore Twilio-backed SMS OTP:**
 
-1. In your Render dashboard (or hosting environment), change `ENABLE_SMS_OTP`
-   to `"true"`.
+1. In your Render dashboard (or hosting environment), leave `ENABLE_SMS_OTP`
+   unset or set it to `"true"`.
 2. Redeploy the app (or restart the process so the new env var takes effect).
 3. Sellers will be prompted for an SMS code on their next login.
 
-> If `ENABLE_SMS_OTP` is unset it defaults to **disabled** (`false`).  Set it
-> explicitly to `"true"` to turn on the OTP requirement.
+> If `ENABLE_SMS_OTP` is unset it defaults to **enabled**.  Set it explicitly
+> to `"false"` only when you need the temporary bypass.
 
 ### Testing seller sign-in locally
 
@@ -229,7 +228,9 @@ re-enable it.
 4. Enter that 6-digit code on the verification screen to complete sign-in.
 
 > When `ENABLE_SMS_OTP=false`, steps 3–4 are skipped and the seller is signed
-> in immediately after entering their email and password.
+> in immediately after entering their email and password.  In the default
+> enabled state, local development still works because the OTP is logged to the
+> server console when Twilio credentials are absent.
 
 ---
 

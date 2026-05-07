@@ -54,9 +54,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid email or password.' }, { status: 401 });
     }
 
-    // Non-seller accounts and sellers when SMS OTP is disabled both skip the
-    // OTP challenge — let the normal signIn() call proceed directly.
-    // Re-enable OTP by setting ENABLE_SMS_OTP=true once Twilio A2P is approved.
+    // Non-seller accounts and sellers when SMS OTP is explicitly disabled both
+    // skip the OTP challenge — let the normal signIn() call proceed directly.
     if (user.role !== 'SELLER' || !isSmsOtpEnabled()) {
       return NextResponse.json({ step: 'signin' });
     }
