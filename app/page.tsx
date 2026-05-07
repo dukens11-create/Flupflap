@@ -8,10 +8,14 @@ import { getServerTranslations } from '@/lib/i18n/server';
 
 export const dynamic = 'force-dynamic';
 
-export const metadata: Metadata = {
-  title: 'FlupFlap — The Smarter Way to Buy and Sell',
-  description: 'FlupFlap — The Smarter Way to Buy and Sell. Browse, buy, and sell new & used items in your community.',
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const { t } = await getServerTranslations();
+  const slogan = t('home.slogan');
+  return {
+    title: slogan,
+    description: `${slogan}. ${t('home.subtitle')}`,
+  };
+}
 
 /**
  * Returns true when a Prisma/Postgres error indicates the schema has not been
