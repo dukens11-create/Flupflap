@@ -8,7 +8,10 @@ import { getServerTranslations } from '@/lib/i18n/server';
 
 export const dynamic = 'force-dynamic';
 
-export const metadata: Metadata = { title: 'Browse Products' };
+export const metadata: Metadata = {
+  title: 'FlupFlap — The Smarter Way to Buy and Sell',
+  description: 'FlupFlap — The Smarter Way to Buy and Sell. Browse, buy, and sell new & used items in your community.',
+};
 
 /**
  * Returns true when a Prisma/Postgres error indicates the schema has not been
@@ -146,6 +149,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
     <main>
       <div className="mb-6">
         <h1 className="text-3xl font-black">{t('home.title')}</h1>
+        <p className="text-blue-600 font-semibold mt-1">{t('home.slogan')}</p>
         <p className="text-slate-500 mt-1">{t('home.subtitle')}</p>
       </div>
       <Suspense>

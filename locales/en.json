@@ -21,6 +21,7 @@
   },
   "home": {
     "title": "FlupFlap Marketplace",
+    "slogan": "FlupFlap — The Smarter Way to Buy and Sell",
     "subtitle": "Buy and sell new & used items",
     "loadingProducts": "Loading products…",
     "noProducts": "No products found. Try adjusting your filters."
