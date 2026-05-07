@@ -26,5 +26,6 @@ declare module "next-auth/jwt" {
     role: Role;
     stripeAccountId?: string | null;
     stripeOnboardingComplete?: boolean;
+    image?: string | null;
   }
 }

@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -26,6 +26,12 @@ export default function AccountPage() {
   const [pwLoading, setPwLoading] = useState(false);
   const [pwError, setPwError] = useState('');
   const [pwSuccess, setPwSuccess] = useState('');
+
+  // Avatar upload
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarError, setAvatarError] = useState('');
+  const [avatarSuccess, setAvatarSuccess] = useState('');
 
   // Phone management
   const [phoneStep, setPhoneStep] = useState<'idle' | 'enter_phone' | 'enter_code'>('idle');
@@ -95,6 +101,61 @@ export default function AccountPage() {
   }
 
   const { email, role } = session.user;
+
+  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setAvatarError('');
+    setAvatarSuccess('');
+    setAvatarUploading(true);
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+      const res = await fetch('/api/account/avatar', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) {
+        setAvatarError(data.error ?? 'Upload failed.');
+      } else {
+        try {
+          await update(); // Refresh session so header/avatar reflects the change
+        } catch {
+          // update() failure is non-critical; the DB is already updated.
+        }
+        setAvatarSuccess('Profile photo updated!');
+      }
+    } catch {
+      setAvatarError('Network error. Please try again.');
+    } finally {
+      setAvatarUploading(false);
+      // Reset the input so the same file can be re-selected if needed
+      if (avatarInputRef.current) avatarInputRef.current.value = '';
+    }
+  }
+
+  async function removeAvatar() {
+    setAvatarError('');
+    setAvatarSuccess('');
+    setAvatarUploading(true);
+    try {
+      const res = await fetch('/api/account/avatar', { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) {
+        setAvatarError(data.error ?? 'Failed to remove photo.');
+      } else {
+        try {
+          await update();
+        } catch {
+          // update() failure is non-critical; the DB is already updated.
+        }
+        setAvatarSuccess('Profile photo removed.');
+      }
+    } catch {
+      setAvatarError('Network error. Please try again.');
+    } finally {
+      setAvatarUploading(false);
+    }
+  }
 
   async function saveName(e: React.FormEvent) {
     e.preventDefault();
@@ -261,6 +322,57 @@ export default function AccountPage() {
       )}
 
       <div className="card p-6 space-y-5 mb-6">
+        {/* Profile picture */}
+        <div>
+          <p className="label">Profile photo</p>
+          <div className="flex items-center gap-4 mt-1">
+            {session.user.image ? (
+              <img
+                src={session.user.image}
+                alt="Profile"
+                className="h-16 w-16 rounded-full object-cover border border-slate-200 shrink-0"
+              />
+            ) : (
+              <div className="h-16 w-16 rounded-full bg-slate-200 flex items-center justify-center shrink-0">
+                <span className="text-2xl text-slate-500 font-medium select-none">
+                  {session.user.name?.trim().charAt(0).toUpperCase() || '?'}
+                </span>
+              </div>
+            )}
+            <div className="space-y-1">
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                onChange={handleAvatarChange}
+                disabled={avatarUploading}
+                className="hidden"
+                id="avatar-upload"
+              />
+              <div className="flex gap-2 flex-wrap">
+                <label
+                  htmlFor="avatar-upload"
+                  className={`text-xs font-medium px-3 py-1.5 rounded-lg border border-slate-300 cursor-pointer hover:bg-slate-50 transition-colors ${avatarUploading ? 'opacity-50 pointer-events-none' : ''}`}
+                >
+                  {avatarUploading ? 'Uploading…' : session.user.image ? 'Change photo' : 'Upload photo'}
+                </label>
+                {session.user.image && !avatarUploading && (
+                  <button
+                    type="button"
+                    onClick={removeAvatar}
+                    className="text-xs text-red-600 hover:underline"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+              <p className="text-xs text-slate-400">JPEG, PNG, WebP or GIF · max 5 MB</p>
+            </div>
+          </div>
+          {avatarError && <p className="text-red-600 text-xs mt-2">{avatarError}</p>}
+          {avatarSuccess && <p className="text-green-600 text-xs mt-2">{avatarSuccess}</p>}
+        </div>
+
         {/* Name */}
         <div>
           <p className="label">Name</p>

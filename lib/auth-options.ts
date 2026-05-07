@@ -54,12 +54,24 @@ export const authOptions: NextAuthOptions = {
     })
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       if (user) {
         token.id = user.id;
         token.role = (user as any).role;
         token.stripeAccountId = (user as any).stripeAccountId;
         token.stripeOnboardingComplete = (user as any).stripeOnboardingComplete;
+        token.image = (user as any).image ?? null;
+      }
+      // On session update (e.g. after avatar upload) re-fetch image from DB.
+      if (trigger === 'update') {
+        const dbUser = await prisma.user.findUnique({
+          where: { id: token.id as string },
+          select: { image: true, name: true },
+        });
+        if (dbUser) {
+          token.image = dbUser.image ?? null;
+          token.name = dbUser.name;
+        }
       }
       return token;
     },
@@ -69,6 +81,7 @@ export const authOptions: NextAuthOptions = {
         session.user.role = token.role as any;
         session.user.stripeAccountId = token.stripeAccountId as any;
         session.user.stripeOnboardingComplete = Boolean(token.stripeOnboardingComplete);
+        session.user.image = (token.image as string | null) ?? null;
       }
       return session;
     }

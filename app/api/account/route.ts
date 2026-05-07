@@ -187,6 +187,7 @@ export async function DELETE(req: Request) {
           stripeAccountId: null,
           stripeAccountMode: null,
           stripeOnboardingComplete: false,
+          image: null,
           deletedAt: new Date(),
           deletionReason: reason,
           deletionReasonOther: reason === 'other' ? (otherDetails ?? null) : null,
