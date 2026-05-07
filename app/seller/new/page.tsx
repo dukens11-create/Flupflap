@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db';
 import ImageUpload from '@/components/ImageUpload';
 import type { Metadata } from 'next';
 import { isSubscriptionActive } from '@/lib/subscription';
+import { syncSellerSubscriptionFromStripe } from '@/lib/subscription-sync';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,7 +26,26 @@ export default async function SellerNewPage() {
   }
 
   // Require an active subscription to list items
-  if (!dbUser || !isSubscriptionActive(dbUser)) {
+  if (!dbUser) {
+    redirect('/seller?subscribe=1');
+  }
+
+  let effectiveUser = dbUser;
+  if (!isSubscriptionActive(effectiveUser) && effectiveUser.stripeCustomerId) {
+    try {
+      const synced = await syncSellerSubscriptionFromStripe(effectiveUser.id);
+      if (synced) {
+        effectiveUser = {
+          ...effectiveUser,
+          ...synced,
+        };
+      }
+    } catch (err) {
+      console.error('[seller/new] subscription recovery sync failed:', err);
+    }
+  }
+
+  if (!isSubscriptionActive(effectiveUser)) {
     redirect('/seller?subscribe=1');
   }
 

@@ -10,6 +10,7 @@ import type { Metadata } from 'next';
 import PickupVerifyForm from '@/components/PickupVerifyForm';
 import { expirePromotions } from '@/lib/promotions';
 import { isSubscriptionActive, SELLER_SUBSCRIPTION_PRICE_LABEL } from '@/lib/subscription';
+import { syncSellerSubscriptionFromStripe } from '@/lib/subscription-sync';
 import SubscriptionButton from '@/components/SubscriptionButton';
 
 export const dynamic = 'force-dynamic';
@@ -66,7 +67,20 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   const sp = await searchParams;
 
   // Fetch full user to check seller status (session JWT may be stale)
-  const dbUser = await prisma.user.findUnique({ where: { id: session.user.id } });
+  let dbUser = await prisma.user.findUnique({ where: { id: session.user.id } });
+  if (sp.subscribed && dbUser && !isSubscriptionActive(dbUser) && dbUser.stripeCustomerId) {
+    try {
+      const synced = await syncSellerSubscriptionFromStripe(dbUser.id);
+      if (synced) {
+        dbUser = {
+          ...dbUser,
+          ...synced,
+        };
+      }
+    } catch (err) {
+      console.error('[seller/page] subscription recovery sync failed:', err);
+    }
+  }
   const sellerStatus = dbUser?.sellerStatus ?? 'ACTIVE';
   const isRestricted = sellerStatus === 'SUSPENDED' || sellerStatus === 'BANNED';
   const subscriptionActive = dbUser ? isSubscriptionActive(dbUser) : false;
@@ -260,9 +274,14 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
         </div>
       )}
 
-      {sp.subscribed && (
+      {sp.subscribed && subscriptionActive && (
         <div className="card p-4 mb-6 bg-green-50 border-green-200 text-green-800 text-sm">
           🎉 Subscription activated! You can now list and sell items on FlupFlap.
+        </div>
+      )}
+      {sp.subscribed && !subscriptionActive && (
+        <div className="card p-4 mb-6 bg-blue-50 border-blue-200 text-blue-900 text-sm">
+          ✅ Payment received. Your subscription activation is still syncing. Please refresh in a few seconds.
         </div>
       )}
 

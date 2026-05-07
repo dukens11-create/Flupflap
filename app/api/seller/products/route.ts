@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db';
 import { cents } from '@/lib/money';
 import { z } from 'zod';
 import { isSubscriptionActive } from '@/lib/subscription';
+import { syncSellerSubscriptionFromStripe } from '@/lib/subscription-sync';
 
 const schema = z.object({
   title: z.string().min(3),
@@ -49,7 +50,24 @@ export async function POST(req: Request) {
     }
 
     // Require an active subscription to list items
-    if (!dbUser || !isSubscriptionActive(dbUser)) {
+    if (!dbUser) {
+      return NextResponse.json({ error: 'An active seller subscription is required to list items.' }, { status: 403 });
+    }
+    let effectiveUser = dbUser;
+    if (!isSubscriptionActive(effectiveUser) && effectiveUser.stripeCustomerId) {
+      try {
+        const synced = await syncSellerSubscriptionFromStripe(effectiveUser.id);
+        if (synced) {
+          effectiveUser = {
+            ...effectiveUser,
+            ...synced,
+          };
+        }
+      } catch (err) {
+        console.error('[seller/products POST] subscription recovery sync failed:', err);
+      }
+    }
+    if (!isSubscriptionActive(effectiveUser)) {
       return NextResponse.json({ error: 'An active seller subscription is required to list items.' }, { status: 403 });
     }
 
