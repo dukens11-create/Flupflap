@@ -108,14 +108,10 @@ export function resolveCommissionForSeller({
   seller: SellerLike;
   defaultSellerCommissionBps: number;
 }) {
-  const sellerPlan = seller.sellerPlan;
-
   return {
     commissionRateBps: defaultSellerCommissionBps,
     commissionSource: 'DEFAULT' as const,
-    commissionPlanCode: sellerPlan?.commissionRateBps === defaultSellerCommissionBps
-      ? sellerPlan.code
-      : null,
+    commissionPlanCode: null,
   };
 }
 
