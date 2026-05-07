@@ -7,6 +7,8 @@ import { getCloudinary, isCloudinaryConfigured } from '@/lib/cloudinary';
 const AVATAR_FOLDER = 'flupflap/avatars';
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
+const AVATAR_WIDTH = 400;
+const AVATAR_HEIGHT = 400;
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
@@ -59,7 +61,7 @@ export async function POST(req: Request) {
             folder: AVATAR_FOLDER,
             resource_type: 'image',
             // Crop to a square, centered on the face if detected.
-            transformation: [{ width: 400, height: 400, crop: 'fill', gravity: 'auto' }],
+            transformation: [{ width: AVATAR_WIDTH, height: AVATAR_HEIGHT, crop: 'fill', gravity: 'auto' }],
           },
           (err, res) => {
             if (err || !res) reject(err ?? new Error('No result from Cloudinary'));

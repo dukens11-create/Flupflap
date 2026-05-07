@@ -117,7 +117,11 @@ export default function AccountPage() {
       if (!res.ok) {
         setAvatarError(data.error ?? 'Upload failed.');
       } else {
-        await update(); // Refresh session so header/avatar reflects the change
+        try {
+          await update(); // Refresh session so header/avatar reflects the change
+        } catch {
+          // update() failure is non-critical; the DB is already updated.
+        }
         setAvatarSuccess('Profile photo updated!');
       }
     } catch {
@@ -139,7 +143,11 @@ export default function AccountPage() {
       if (!res.ok) {
         setAvatarError(data.error ?? 'Failed to remove photo.');
       } else {
-        await update();
+        try {
+          await update();
+        } catch {
+          // update() failure is non-critical; the DB is already updated.
+        }
         setAvatarSuccess('Profile photo removed.');
       }
     } catch {
@@ -327,7 +335,7 @@ export default function AccountPage() {
             ) : (
               <div className="h-16 w-16 rounded-full bg-slate-200 flex items-center justify-center shrink-0">
                 <span className="text-2xl text-slate-500 font-medium select-none">
-                  {session.user.name?.charAt(0).toUpperCase() ?? '?'}
+                  {session.user.name?.trim().charAt(0).toUpperCase() || '?'}
                 </span>
               </div>
             )}
