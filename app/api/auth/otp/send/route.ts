@@ -54,14 +54,29 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid email or password.' }, { status: 401 });
     }
 
-    // Non-seller accounts and sellers when SMS OTP is explicitly disabled both
-    // skip the OTP challenge — let the normal signIn() call proceed directly.
-    if (user.role !== 'SELLER' || !isSmsOtpEnabled()) {
+    if (user.role !== 'SELLER') {
+      console.info('[otp/send] OTP skipped: non-seller role', {
+        userId: user.id,
+        role: user.role,
+      });
+      return NextResponse.json({ step: 'signin' });
+    }
+
+    if (!isSmsOtpEnabled()) {
+      console.warn('[otp/send] OTP skipped: feature flag disabled', {
+        userId: user.id,
+        role: user.role,
+        enableSmsOtp: process.env.ENABLE_SMS_OTP ?? '(unset)',
+      });
       return NextResponse.json({ step: 'signin' });
     }
 
     // Seller but no phone registered — route to phone setup flow.
     if (!user.phone) {
+      console.info('[otp/send] Seller requires phone setup before OTP', {
+        userId: user.id,
+        role: user.role,
+      });
       return NextResponse.json({ step: 'add_phone' });
     }
 
@@ -69,29 +84,38 @@ export async function POST(req: Request) {
 
     if (!result.ok) {
       if (result.error === 'rate_limited') {
+        console.info('[otp/send] OTP blocked by resend cooldown', { userId: user.id });
         return NextResponse.json(
           { error: 'Please wait 60 seconds before requesting another code.' },
           { status: 429 },
         );
       }
       if (result.error === 'invalid_phone') {
+        console.warn('[otp/send] OTP blocked: invalid normalized phone', { userId: user.id });
         return NextResponse.json(
           { error: 'Your phone number on file appears to be invalid. Please update it in account settings.' },
           { status: 400 },
         );
       }
-      console.error('[otp/send] OTP send failed for user', user.id);
+      console.error('[otp/send] OTP send failed after Twilio attempt', { userId: user.id });
       return NextResponse.json(
-        { error: 'Failed to send verification code. Please try again.' },
+        { error: 'Failed to send verification code. Please check your phone number or contact support.' },
         { status: 500 },
       );
     }
 
+    console.info('[otp/send] OTP send succeeded', {
+      userId: user.id,
+      maskedPhone: result.maskedPhone,
+    });
     return NextResponse.json({ step: 'otp', maskedPhone: result.maskedPhone });
   } catch (err: any) {
     if (err?.name === 'ZodError') {
       return NextResponse.json({ error: 'Invalid input.' }, { status: 400 });
     }
+    console.error('[otp/send] Unexpected server error', {
+      error: err?.message ?? 'unknown_error',
+    });
     return NextResponse.json({ error: 'Server error.' }, { status: 500 });
   }
 }

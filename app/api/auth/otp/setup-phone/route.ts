@@ -65,12 +65,22 @@ export async function POST(req: Request) {
     }
 
     if (user.role !== 'SELLER') {
+      console.info('[setup-phone] Rejected phone setup for non-seller role', {
+        userId: user.id,
+        role: user.role,
+      });
       return NextResponse.json({ error: 'Phone setup is only available for seller accounts.' }, { status: 400 });
     }
 
     // Normalize to E.164 before saving and sending.
     const normalizedPhone = normalizePhone(phone);
     if (!normalizedPhone) {
+      const digitsOnly = phone.replace(/\D/g, '');
+      console.warn('[setup-phone] Invalid phone entered for seller OTP setup', {
+        userId: user.id,
+        digitsLength: digitsOnly.length,
+        hadPlusPrefix: phone.trim().startsWith('+'),
+      });
       return NextResponse.json(
         { error: 'Invalid phone number. Please include your country code (e.g. +1 for US/Canada).' },
         { status: 400 },
@@ -87,23 +97,31 @@ export async function POST(req: Request) {
 
     if (!result.ok) {
       if (result.error === 'rate_limited') {
+        console.info('[setup-phone] OTP blocked by resend cooldown', { userId: user.id });
         return NextResponse.json(
           { error: 'Please wait 60 seconds before requesting another code.' },
           { status: 429 },
         );
       }
-      console.error('[setup-phone] OTP send failed for user', user.id);
+      console.error('[setup-phone] OTP send failed after phone save', { userId: user.id });
       return NextResponse.json(
         { error: 'Failed to send verification code. Please check your phone number and try again.' },
         { status: 500 },
       );
     }
 
+    console.info('[setup-phone] OTP send succeeded after phone setup', {
+      userId: user.id,
+      maskedPhone: result.maskedPhone,
+    });
     return NextResponse.json({ step: 'otp', maskedPhone: result.maskedPhone });
   } catch (err: any) {
     if (err?.name === 'ZodError') {
       return NextResponse.json({ error: err.errors[0]?.message || 'Invalid input.' }, { status: 400 });
     }
+    console.error('[setup-phone] Unexpected server error', {
+      error: err?.message ?? 'unknown_error',
+    });
     return NextResponse.json({ error: 'Server error.' }, { status: 500 });
   }
 }
