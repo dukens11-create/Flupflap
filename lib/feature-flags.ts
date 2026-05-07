@@ -3,13 +3,13 @@
  *
  * ENABLE_SMS_OTP
  *   Controls whether seller accounts must complete a Twilio SMS OTP challenge
- *   during login.  Set to "true" once Twilio A2P registration is approved and
- *   SMS delivery is verified.
+ *   during login.  With Twilio now approved, OTP is enabled by default and may
+ *   be temporarily disabled only by explicitly setting the flag to "false".
  *
- *   "true"  — OTP is required for all seller sign-ins (full two-factor login).
- *   "false" or unset — OTP step is skipped; sellers sign in with email +
- *             password only.  Use only while Twilio registration is pending.
+ *   "true" or unset — OTP is required for all seller sign-ins (full two-factor login).
+ *   "false"         — OTP step is skipped; sellers sign in with email +
+ *                     password only.  Use only as a temporary emergency fallback.
  */
 export function isSmsOtpEnabled(): boolean {
-  return process.env.ENABLE_SMS_OTP === 'true';
+  return process.env.ENABLE_SMS_OTP?.trim().toLowerCase() !== 'false';
 }
