@@ -71,8 +71,22 @@ export async function POST(req: Request) {
       return checkoutErrorResponse('stale_account');
     }
     try {
-      await stripe.accounts.retrieve(sellerStripeId);
-    } catch (err) {
+      const sellerAccount = await stripe.accounts.retrieve(sellerStripeId);
+      if (!sellerAccount.charges_enabled || !sellerAccount.payouts_enabled) {
+        const missingCapabilities = [
+          !sellerAccount.charges_enabled ? 'charges' : null,
+          !sellerAccount.payouts_enabled ? 'payouts' : null,
+        ].filter(Boolean).join(' and ');
+        await prisma.user.update({
+          where: { id: product.seller.id },
+          data: { stripeOnboardingComplete: false },
+        });
+        return NextResponse.json(
+          { error: `Seller Stripe ${missingCapabilities} capability is not ready. Please try again later.`, code: 'seller_reconnect_required' },
+          { status: 503 },
+        );
+      }
+    } catch (err: unknown) {
       const classified = classifyStripeError(err);
       if (classified.reason === 'stale_account') {
         await prisma.user.update({
@@ -138,7 +152,7 @@ export async function POST(req: Request) {
       url: stripeSession.url,
       warningCode: null,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[checkout/buynow]', err);
     const reason = classifyStripeError(err).reason;
     return checkoutErrorResponse(reason);

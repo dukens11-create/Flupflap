@@ -39,6 +39,24 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub?: s
   );
 }
 
+function stripeAccountStatus(account: {
+  charges_enabled?: boolean;
+  payouts_enabled?: boolean;
+  requirements?: {
+    currently_due?: string[] | null;
+    past_due?: string[] | null;
+    disabled_reason?: string | null;
+  } | null;
+}) {
+  return {
+    chargesEnabled: !!account.charges_enabled,
+    payoutsEnabled: !!account.payouts_enabled,
+    requirementsDue: account.requirements?.currently_due ?? [],
+    requirementsPastDue: account.requirements?.past_due ?? [],
+    disabledReason: account.requirements?.disabled_reason ?? null,
+  };
+}
+
 export default async function SellerPage({ searchParams }: { searchParams: Promise<{ created?: string; stripe?: string; reason?: string; updated?: string; deleted?: string; promoted?: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect('/login');
@@ -120,11 +138,12 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
     }
     try {
       const acct = await stripe.accounts.retrieve(stripeAccountId);
-      stripeChargesEnabled = !!acct.charges_enabled;
-      stripePayoutsEnabled = !!acct.payouts_enabled;
-      stripeRequirementsDue = acct.requirements?.currently_due ?? [];
-      stripeRequirementsPastDue = acct.requirements?.past_due ?? [];
-      stripeDisabledReason = acct.requirements?.disabled_reason ?? null;
+      const status = stripeAccountStatus(acct);
+      stripeChargesEnabled = status.chargesEnabled;
+      stripePayoutsEnabled = status.payoutsEnabled;
+      stripeRequirementsDue = status.requirementsDue;
+      stripeRequirementsPastDue = status.requirementsPastDue;
+      stripeDisabledReason = status.disabledReason;
       if (acct.payouts_enabled) {
         // Missed webhook — sync the DB and show the connected banner.
         await prisma.user.update({
@@ -153,11 +172,12 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   if (stripeOnboarded && stripeAccountId) {
     try {
       const acct = await stripe.accounts.retrieve(stripeAccountId);
-      stripeChargesEnabled = !!acct.charges_enabled;
-      stripePayoutsEnabled = !!acct.payouts_enabled;
-      stripeRequirementsDue = acct.requirements?.currently_due ?? [];
-      stripeRequirementsPastDue = acct.requirements?.past_due ?? [];
-      stripeDisabledReason = acct.requirements?.disabled_reason ?? null;
+      const status = stripeAccountStatus(acct);
+      stripeChargesEnabled = status.chargesEnabled;
+      stripePayoutsEnabled = status.payoutsEnabled;
+      stripeRequirementsDue = status.requirementsDue;
+      stripeRequirementsPastDue = status.requirementsPastDue;
+      stripeDisabledReason = status.disabledReason;
 
       const balance = await stripe.balance.retrieve(
         {} as any,
@@ -295,7 +315,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
             Stripe balance reflects your connected account. <a href="/api/stripe/connect" className="text-blue-500 hover:underline">Open Stripe dashboard →</a>
           </p>
         )}
-        {stripeAccountId && (stripeChargesEnabled !== null || stripePayoutsEnabled !== null) && (
+        {stripeAccountId && stripeChargesEnabled !== null && stripePayoutsEnabled !== null && (
           <p className="text-xs text-slate-500 mt-2">
             Stripe status: charges {stripeChargesEnabled ? 'enabled' : 'disabled'} · payouts {stripePayoutsEnabled ? 'enabled' : 'disabled'}
             {stripeDisabledReason ? ` · ${stripeDisabledReason.replaceAll('_', ' ')}` : ''}
