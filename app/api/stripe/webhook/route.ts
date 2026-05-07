@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import { prisma } from '@/lib/db';
-import { stripe } from '@/lib/stripe';
+import { modeFromStripeLivemode, stripe } from '@/lib/stripe';
 import { calculateCommissionCents, calculateSellerNetCents, getMarketplaceSettings, resolveCommissionForSeller } from '@/lib/commission';
 import type { CheckoutCommissionItem } from '@/lib/commission';
 import crypto from 'crypto';
@@ -36,7 +36,10 @@ export async function POST(req: Request) {
     if (account.payouts_enabled) {
       await prisma.user.updateMany({
         where: { stripeAccountId: account.id },
-        data: { stripeOnboardingComplete: true },
+        data: {
+          stripeOnboardingComplete: true,
+          stripeAccountMode: modeFromStripeLivemode(account.livemode),
+        },
       });
     }
     return new NextResponse('ok', { status: 200 });

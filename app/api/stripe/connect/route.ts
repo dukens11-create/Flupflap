@@ -2,23 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
-import { stripe, appUrl } from '@/lib/stripe';
-
-/**
- * Returns true when a Stripe API error indicates the connected account does
- * not exist in the current Stripe mode — for example, a test-mode account ID
- * used after switching to live keys, or a previously-deleted account.
- */
-function isStaleAccountError(err: unknown): boolean {
-  if (typeof err !== 'object' || err === null) return false;
-  const e = err as Record<string, unknown>;
-  const msg = typeof e.message === 'string' ? e.message : '';
-  return (
-    e.code === 'account_invalid' ||
-    e.statusCode === 404 ||
-    msg.includes('No such account')
-  );
-}
+import { appUrl, classifyStripeError, getCurrentStripeMode, modeFromStripeLivemode, stripe } from '@/lib/stripe';
 
 export async function GET() {
   try {
@@ -37,7 +21,9 @@ export async function GET() {
 
     // Track effective state — may be reset if a stale/invalid account is detected.
     let effectiveAccountId: string | null = user.stripeAccountId;
+    let effectiveAccountMode: string | null = user.stripeAccountMode;
     let onboardingComplete: boolean = user.stripeOnboardingComplete;
+    const currentMode = getCurrentStripeMode();
 
     /**
      * Clears a stale Stripe connected-account ID from the DB and resets the
@@ -51,11 +37,17 @@ export async function GET() {
       );
       await prisma.user.update({
         where: { id: user.id },
-        data: { stripeAccountId: null, stripeOnboardingComplete: false },
+        data: { stripeAccountId: null, stripeAccountMode: null, stripeOnboardingComplete: false },
       });
       effectiveAccountId = null;
+      effectiveAccountMode = null;
       onboardingComplete = false;
     };
+
+    // Proactively invalidate connected accounts saved under a different Stripe mode.
+    if (effectiveAccountId && effectiveAccountMode && currentMode && effectiveAccountMode !== currentMode) {
+      await clearStaleAccount();
+    }
 
     // If onboarding is fully complete, send seller to the Stripe Express dashboard.
     if (effectiveAccountId && onboardingComplete) {
@@ -63,7 +55,7 @@ export async function GET() {
         const loginLink = await stripe.accounts.createLoginLink(effectiveAccountId);
         return NextResponse.redirect(loginLink.url);
       } catch (err: unknown) {
-        if (isStaleAccountError(err)) {
+        if (classifyStripeError(err).reason === 'stale_account') {
           // Account was created in a different Stripe mode (e.g. test → live).
           // Clear it and fall through to create a fresh account below.
           await clearStaleAccount();
@@ -81,7 +73,15 @@ export async function GET() {
       try {
         // Verify the account exists in the current Stripe mode before using it.
         // This detects test-mode account IDs when the app is now using live keys.
-        await stripe.accounts.retrieve(effectiveAccountId);
+        const existingAccount = await stripe.accounts.retrieve(effectiveAccountId);
+        const resolvedMode = modeFromStripeLivemode(existingAccount.livemode);
+        if (effectiveAccountMode !== resolvedMode) {
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { stripeAccountMode: resolvedMode },
+          });
+          effectiveAccountMode = resolvedMode;
+        }
 
         const accountLink = await stripe.accountLinks.create({
           account: effectiveAccountId,
@@ -91,7 +91,7 @@ export async function GET() {
         });
         return NextResponse.redirect(accountLink.url);
       } catch (err: unknown) {
-        if (isStaleAccountError(err)) {
+        if (classifyStripeError(err).reason === 'stale_account') {
           // Account not found in this Stripe mode — clear it and fall through
           // to create a fresh account below.
           await clearStaleAccount();
@@ -106,7 +106,10 @@ export async function GET() {
 
     await prisma.user.update({
       where: { id: user.id },
-      data: { stripeAccountId: account.id },
+      data: {
+        stripeAccountId: account.id,
+        stripeAccountMode: currentMode ?? modeFromStripeLivemode(account.livemode),
+      },
     });
 
     const accountLink = await stripe.accountLinks.create({
@@ -119,6 +122,7 @@ export async function GET() {
     return NextResponse.redirect(accountLink.url);
   } catch (err: unknown) {
     console.error('[stripe/connect]', err);
-    return NextResponse.redirect(new URL('/seller?stripe=error', appUrl));
+    const reason = classifyStripeError(err).reason;
+    return NextResponse.redirect(new URL(`/seller?stripe=error&reason=${reason}`, appUrl));
   }
 }

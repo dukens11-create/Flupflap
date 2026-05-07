@@ -1,13 +1,16 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useSession, signOut } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ACCOUNT_DELETION_REASON_LABELS, type AccountDeletionReason } from '@/lib/account-deletion';
 
 export default function AccountPage() {
   const { data: session, status, update } = useSession();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const stripeState = searchParams.get('stripe');
+  const stripeReason = searchParams.get('reason');
 
   const [editingName, setEditingName] = useState(false);
   const [name, setName] = useState('');
@@ -236,6 +239,15 @@ export default function AccountPage() {
   return (
     <main className="max-w-md mx-auto">
       <h1 className="text-3xl font-black mb-6">My Account</h1>
+
+      {session.user.role === 'SELLER' && stripeState === 'error' && (
+        <div className="card p-4 mb-6 bg-red-50 border-red-200 text-red-800 text-sm">
+          {stripeReason === 'stale_account' && '❌ Your connected Stripe account is outdated for the current mode. Reconnect payouts below.'}
+          {stripeReason === 'invalid_key' && '❌ Platform Stripe credentials are invalid. Please contact support/admin.'}
+          {stripeReason === 'platform_incomplete' && '❌ Platform Stripe setup is incomplete. Please contact support/admin.'}
+          {(!stripeReason || stripeReason === 'stripe_error') && '❌ Stripe is temporarily unavailable. Please try again later.'}
+        </div>
+      )}
 
       <div className="card p-6 space-y-5 mb-6">
         {/* Name */}

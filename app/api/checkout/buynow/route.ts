@@ -2,8 +2,27 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
-import { stripe, appUrl } from '@/lib/stripe';
+import { appUrl, classifyStripeError, getCurrentStripeMode, modeFromStripeLivemode, stripe, type StripeErrorReason } from '@/lib/stripe';
 import { buildCheckoutCommissionItems, getMarketplaceSettings } from '@/lib/commission';
+
+function checkoutErrorResponse(reason: StripeErrorReason) {
+  if (reason === 'stale_account') {
+    return NextResponse.json(
+      { error: 'Seller payout account needs reconnection. Please try again shortly.', code: 'seller_reconnect_required' },
+      { status: 503 },
+    );
+  }
+  if (reason === 'invalid_key' || reason === 'platform_incomplete') {
+    return NextResponse.json(
+      { error: 'Payments are temporarily unavailable due to platform Stripe configuration.', code: 'platform_incomplete' },
+      { status: 503 },
+    );
+  }
+  return NextResponse.json(
+    { error: 'Checkout is temporarily unavailable. Please try again later.', code: 'stripe_unavailable' },
+    { status: 503 },
+  );
+}
 
 export async function POST(req: Request) {
   try {
@@ -22,6 +41,7 @@ export async function POST(req: Request) {
           select: {
             id: true,
             stripeAccountId: true,
+            stripeAccountMode: true,
             stripeOnboardingComplete: true,
             sellerPlan: { select: { code: true, commissionRateBps: true } },
           },
@@ -46,9 +66,50 @@ export async function POST(req: Request) {
 
     // Wire funds to the seller's connected account when onboarding is complete,
     // keeping only the platform commission for the platform.
-    const sellerStripeId = product.seller.stripeOnboardingComplete && product.seller.stripeAccountId
+    let sellerStripeId = product.seller.stripeOnboardingComplete && product.seller.stripeAccountId
       ? product.seller.stripeAccountId
       : null;
+    let sellerReconnectRequired = false;
+    const currentMode = getCurrentStripeMode();
+
+    if (sellerStripeId) {
+      const hasModeMismatch = !!(
+        product.seller.stripeAccountMode
+        && currentMode
+        && product.seller.stripeAccountMode !== currentMode
+      );
+      if (hasModeMismatch) {
+        await prisma.user.update({
+          where: { id: product.seller.id },
+          data: { stripeAccountId: null, stripeAccountMode: null, stripeOnboardingComplete: false },
+        });
+        sellerStripeId = null;
+        sellerReconnectRequired = true;
+      } else {
+        try {
+          const connectedAccount = await stripe.accounts.retrieve(sellerStripeId);
+          const resolvedMode = modeFromStripeLivemode(connectedAccount.livemode);
+          if (product.seller.stripeAccountMode !== resolvedMode) {
+            await prisma.user.update({
+              where: { id: product.seller.id },
+              data: { stripeAccountMode: resolvedMode },
+            });
+          }
+        } catch (err) {
+          const classified = classifyStripeError(err);
+          if (classified.reason === 'stale_account') {
+            await prisma.user.update({
+              where: { id: product.seller.id },
+              data: { stripeAccountId: null, stripeAccountMode: null, stripeOnboardingComplete: false },
+            });
+            sellerStripeId = null;
+            sellerReconnectRequired = true;
+          } else {
+            return checkoutErrorResponse(classified.reason);
+          }
+        }
+      }
+    }
 
     const stripeSession = await stripe.checkout.sessions.create({
       mode: 'payment',
@@ -99,9 +160,13 @@ export async function POST(req: Request) {
       },
     });
 
-    return NextResponse.json({ url: stripeSession.url });
+    return NextResponse.json({
+      url: stripeSession.url,
+      warningCode: sellerReconnectRequired ? 'seller_reconnect_required' : null,
+    });
   } catch (err: any) {
     console.error('[checkout/buynow]', err);
-    return NextResponse.json({ error: 'Checkout failed.' }, { status: 500 });
+    const reason = classifyStripeError(err).reason;
+    return checkoutErrorResponse(reason);
   }
 }

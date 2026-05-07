@@ -1,6 +1,19 @@
 import Stripe from 'stripe';
 
 let _stripe: Stripe | null = null;
+export type StripeMode = 'test' | 'live';
+export type StripeErrorReason =
+  | 'invalid_key'
+  | 'stale_account'
+  | 'platform_incomplete'
+  | 'stripe_error';
+
+type StripeErrorShape = {
+  code?: unknown;
+  statusCode?: unknown;
+  type?: unknown;
+  message?: unknown;
+};
 
 function getStripe(): Stripe {
   if (!_stripe) {
@@ -11,6 +24,57 @@ function getStripe(): Stripe {
     _stripe = new Stripe(key, { apiVersion: '2024-06-20' as any });
   }
   return _stripe;
+}
+
+export function getCurrentStripeMode(): StripeMode | null {
+  const key = process.env.STRIPE_SECRET_KEY ?? '';
+  if (key.startsWith('sk_live_')) return 'live';
+  if (key.startsWith('sk_test_')) return 'test';
+  return null;
+}
+
+export function modeFromStripeLivemode(livemode: boolean): StripeMode {
+  return livemode ? 'live' : 'test';
+}
+
+export function classifyStripeError(err: unknown): {
+  reason: StripeErrorReason;
+  message: string;
+  code?: string;
+  statusCode?: number;
+} {
+  const e = (typeof err === 'object' && err !== null ? err : {}) as StripeErrorShape;
+  const code = typeof e.code === 'string' ? e.code : undefined;
+  const statusCode = typeof e.statusCode === 'number' ? e.statusCode : undefined;
+  const type = typeof e.type === 'string' ? e.type : '';
+  const message = typeof e.message === 'string' ? e.message : 'Stripe request failed.';
+
+  if (
+    type === 'StripeAuthenticationError'
+    || code === 'api_key_expired'
+    || /invalid api key/i.test(message)
+    || /provided api key/i.test(message)
+  ) {
+    return { reason: 'invalid_key', message, code, statusCode };
+  }
+
+  if (
+    code === 'account_invalid'
+    || statusCode === 404
+    || /no such account/i.test(message)
+  ) {
+    return { reason: 'stale_account', message, code, statusCode };
+  }
+
+  if (
+    /responsib(?:ility|le).*(?:loss|negative balance)/i.test(message)
+    || /platform profile/i.test(message)
+    || /connect platform/i.test(message)
+  ) {
+    return { reason: 'platform_incomplete', message, code, statusCode };
+  }
+
+  return { reason: 'stripe_error', message, code, statusCode };
 }
 
 // Lazily-initialized singleton — does NOT construct the Stripe client until the

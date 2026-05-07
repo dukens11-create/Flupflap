@@ -185,6 +185,7 @@ export async function DELETE(req: Request) {
           phoneVerified: false,
           phoneVerifiedAt: null,
           stripeAccountId: null,
+          stripeAccountMode: null,
           stripeOnboardingComplete: false,
           deletedAt: new Date(),
           deletionReason: reason,

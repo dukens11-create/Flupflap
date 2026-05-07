@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { dollars } from '@/lib/money';
 import { formatCommissionPercent, getMarketplaceSettings } from '@/lib/commission';
-import { stripe } from '@/lib/stripe';
+import { classifyStripeError, getCurrentStripeMode, modeFromStripeLivemode, stripe } from '@/lib/stripe';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import PickupVerifyForm from '@/components/PickupVerifyForm';
@@ -39,7 +39,7 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub?: s
   );
 }
 
-export default async function SellerPage({ searchParams }: { searchParams: Promise<{ created?: string; stripe?: string; updated?: string; deleted?: string; promoted?: string }> }) {
+export default async function SellerPage({ searchParams }: { searchParams: Promise<{ created?: string; stripe?: string; reason?: string; updated?: string; deleted?: string; promoted?: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect('/login');
   if (session.user.role !== 'SELLER') redirect('/');
@@ -95,6 +95,8 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   // login and would be stale immediately after the seller returns from Stripe).
   const stripeOnboarded = dbUser?.stripeOnboardingComplete ?? false;
   const stripeAccountId = dbUser?.stripeAccountId ?? null;
+  const stripeAccountMode = dbUser?.stripeAccountMode ?? null;
+  const currentStripeMode = getCurrentStripeMode();
   // stripeInProgress: seller has started onboarding but not yet completed it
   const stripeInProgress = !!stripeAccountId && !stripeOnboarded;
 
@@ -103,9 +105,24 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   // to live keys. If payouts are already enabled (e.g. the account.updated
   // webhook was missed), sync the DB and redirect with success status.
   let stripeAccountStale = false;
+  let stripeRuntimeIssueReason: string | null = null;
   if (stripeInProgress && stripeAccountId) {
+    if (stripeAccountMode && currentStripeMode && stripeAccountMode !== currentStripeMode) {
+      await prisma.user.update({
+        where: { id: session.user.id },
+        data: { stripeAccountId: null, stripeAccountMode: null, stripeOnboardingComplete: false },
+      });
+      redirect('/seller?stripe=error&reason=stale_account');
+    }
     try {
       const acct = await stripe.accounts.retrieve(stripeAccountId);
+      const resolvedMode = modeFromStripeLivemode(acct.livemode);
+      if (stripeAccountMode !== resolvedMode) {
+        await prisma.user.update({
+          where: { id: session.user.id },
+          data: { stripeAccountMode: resolvedMode },
+        });
+      }
       if (acct.payouts_enabled) {
         // Missed webhook — sync the DB and show the connected banner.
         await prisma.user.update({
@@ -115,18 +132,18 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
         redirect('/seller?stripe=connected');
       }
     } catch (err) {
-      // Distinguish stale-account errors (expected during test→live migration)
-      // from unexpected Stripe API failures (network issues, rate limits, etc.).
-      const msg = typeof (err as any)?.message === 'string' ? (err as any).message : '';
-      const isNotFound =
-        (err as any)?.code === 'account_invalid' ||
-        (err as any)?.statusCode === 404 ||
-        msg.includes('No such account');
-      if (!isNotFound) {
+      const reason = classifyStripeError(err).reason;
+      if (reason === 'stale_account') {
+        await prisma.user.update({
+          where: { id: session.user.id },
+          data: { stripeAccountId: null, stripeAccountMode: null, stripeOnboardingComplete: false },
+        });
+        redirect('/seller?stripe=error&reason=stale_account');
+      } else {
+        stripeRuntimeIssueReason = reason;
         console.error('[seller/page] stripe.accounts.retrieve error:', err);
       }
-      // Either way, treat as stale so the UI shows the correct connect prompt.
-      stripeAccountStale = true;
+      stripeAccountStale = reason === 'stale_account';
     }
   }
 
@@ -143,6 +160,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
       stripePendingCents = (balance.pending as Array<{ currency: string; amount: number }>)
         .reduce((s, b) => s + (b.currency === 'usd' ? b.amount : 0), 0);
     } catch {
+      stripeRuntimeIssueReason = stripeRuntimeIssueReason ?? 'stripe_error';
       // Stripe not available or account not fully set up; balances remain null
     }
   }
@@ -193,7 +211,19 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
 
       {sp.stripe === 'error' && (
         <div className="card p-4 mb-6 bg-red-50 border-red-200 text-red-800 text-sm">
-          ❌ Something went wrong connecting your Stripe account. Please try again or contact support.
+          {sp.reason === 'invalid_key' && '❌ Stripe keys are misconfigured on the platform. Please contact support/admin.'}
+          {sp.reason === 'platform_incomplete' && '❌ Stripe platform setup is incomplete. Please contact support/admin.'}
+          {sp.reason === 'stale_account' && '❌ Your saved Stripe account is no longer valid in this mode. Reconnect your payout account.'}
+          {!sp.reason && '❌ Something went wrong connecting your Stripe account. Please try again or contact support.'}
+          {sp.reason === 'stripe_error' && '❌ Stripe is temporarily unavailable. Please try again later.'}
+        </div>
+      )}
+
+      {stripeRuntimeIssueReason && (
+        <div className="card p-4 mb-6 bg-red-50 border-red-200 text-red-800 text-sm">
+          {stripeRuntimeIssueReason === 'invalid_key' && '❌ Platform Stripe credentials are invalid. Please contact support/admin.'}
+          {stripeRuntimeIssueReason === 'platform_incomplete' && '❌ Platform Stripe profile/setup is incomplete. Please contact support/admin.'}
+          {stripeRuntimeIssueReason === 'stripe_error' && '❌ Stripe is temporarily unavailable. Please retry shortly.'}
         </div>
       )}
 
