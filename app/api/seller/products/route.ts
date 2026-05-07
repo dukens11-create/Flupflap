@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { cents } from '@/lib/money';
 import { z } from 'zod';
+import { isSubscriptionActive } from '@/lib/subscription';
 
 const schema = z.object({
   title: z.string().min(3),
@@ -45,6 +46,11 @@ export async function POST(req: Request) {
     const dbUser = await prisma.user.findUnique({ where: { id: session.user.id } });
     if (dbUser?.sellerStatus === 'SUSPENDED' || dbUser?.sellerStatus === 'BANNED') {
       return NextResponse.json({ error: 'Your seller account is currently restricted.' }, { status: 403 });
+    }
+
+    // Require an active subscription to list items
+    if (!isSubscriptionActive(dbUser ?? {})) {
+      return NextResponse.json({ error: 'An active seller subscription is required to list items.' }, { status: 403 });
     }
 
     const form = await req.formData();

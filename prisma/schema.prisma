@@ -91,6 +91,11 @@ model User {
   sellerPlanId             String?
   sellerPlan               SellerPlan?   @relation(fields: [sellerPlanId], references: [id])
   checkoutSessionSnapshots CheckoutSessionSnapshot[]
+  // Seller subscription billing
+  stripeCustomerId              String?   @unique
+  subscriptionId                String?   @unique
+  subscriptionStatus            String?   // ACTIVE | INACTIVE | PAST_DUE | CANCELLED
+  subscriptionCurrentPeriodEnd  DateTime?
 }
 
 model SellerOtp {

@@ -9,6 +9,8 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import PickupVerifyForm from '@/components/PickupVerifyForm';
 import { expirePromotions } from '@/lib/promotions';
+import { isSubscriptionActive, SELLER_SUBSCRIPTION_PRICE_LABEL } from '@/lib/subscription';
+import SubscriptionButton from '@/components/SubscriptionButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -57,7 +59,7 @@ function stripeAccountStatus(account: {
   };
 }
 
-export default async function SellerPage({ searchParams }: { searchParams: Promise<{ created?: string; stripe?: string; reason?: string; updated?: string; deleted?: string; promoted?: string }> }) {
+export default async function SellerPage({ searchParams }: { searchParams: Promise<{ created?: string; stripe?: string; reason?: string; updated?: string; deleted?: string; promoted?: string; subscribed?: string; subscribe?: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect('/login');
   if (session.user.role !== 'SELLER') redirect('/');
@@ -67,6 +69,9 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   const dbUser = await prisma.user.findUnique({ where: { id: session.user.id } });
   const sellerStatus = dbUser?.sellerStatus ?? 'ACTIVE';
   const isRestricted = sellerStatus === 'SUSPENDED' || sellerStatus === 'BANNED';
+  const subscriptionActive = isSubscriptionActive(dbUser ?? {});
+  const subscriptionPeriodEnd = dbUser?.subscriptionCurrentPeriodEnd ?? null;
+  const subscriptionStatus = dbUser?.subscriptionStatus ?? null;
 
   await expirePromotions();
   const [settings, products, orders, soldItems] = await Promise.all([
@@ -200,7 +205,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
           <h1 className="text-3xl font-black">Seller Dashboard</h1>
           <p className="text-slate-500 text-sm">Welcome back, {session.user.name}</p>
         </div>
-        {!isRestricted && <Link href="/seller/new" className="btn-primary">+ New listing</Link>}
+        {!isRestricted && subscriptionActive && <Link href="/seller/new" className="btn-primary">+ New listing</Link>}
       </div>
 
       {isRestricted && (
@@ -213,9 +218,51 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
         </div>
       )}
 
+      {/* ── Seller Subscription ── */}
+      {!isRestricted && !subscriptionActive && (
+        <div className="card p-5 mb-6 bg-amber-50 border-amber-300 text-amber-900">
+          <p className="font-semibold mb-1">
+            {subscriptionStatus === 'PAST_DUE'
+              ? '⚠️ Your seller subscription payment failed.'
+              : subscriptionStatus === 'CANCELLED'
+                ? '⚠️ Your seller subscription has been cancelled.'
+                : '🔒 Seller subscription required.'}
+          </p>
+          <p className="text-sm mb-3">
+            {subscriptionStatus === 'PAST_DUE'
+              ? 'Please update your payment method to continue listing items on FlupFlap.'
+              : subscriptionStatus === 'CANCELLED'
+                ? 'Reactivate your plan to create new listings and sell on FlupFlap.'
+                : `A ${SELLER_SUBSCRIPTION_PRICE_LABEL} subscription is required to list and sell items on FlupFlap.`}
+          </p>
+          <SubscriptionButton
+            hasBillingAccount={!!dbUser?.stripeCustomerId}
+            status={subscriptionStatus}
+          />
+        </div>
+      )}
+
+      {!isRestricted && subscriptionActive && (
+        <div className="card p-4 mb-6 bg-green-50 border-green-200 text-green-800 text-sm flex justify-between items-center gap-3">
+          <span>
+            ✅ Seller subscription active
+            {subscriptionPeriodEnd
+              ? ` — renews ${subscriptionPeriodEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+              : ''}
+          </span>
+          <SubscriptionButton hasBillingAccount={!!dbUser?.stripeCustomerId} status={subscriptionStatus} manage />
+        </div>
+      )}
+
       {sp.created && (
         <div className="card p-4 mb-6 bg-green-50 border-green-200 text-green-800 text-sm">
           ✅ Product submitted for review! It will appear publicly once approved by an admin.
+        </div>
+      )}
+
+      {sp.subscribed && (
+        <div className="card p-4 mb-6 bg-green-50 border-green-200 text-green-800 text-sm">
+          🎉 Subscription activated! You can now list and sell items on FlupFlap.
         </div>
       )}
 
@@ -368,7 +415,11 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
       <section className="mb-8">
         <h2 className="text-xl font-bold mb-3">My Listings</h2>
         {products.length === 0 ? (
-          <div className="card p-6 text-slate-500">No listings yet. <Link href="/seller/new" className="text-blue-600 hover:underline">Create one</Link>.</div>
+          <div className="card p-6 text-slate-500">
+            {subscriptionActive
+              ? <span>No listings yet. <Link href="/seller/new" className="text-blue-600 hover:underline">Create one</Link>.</span>
+              : 'No listings yet. Subscribe to start selling.'}
+          </div>
         ) : (
           <div className="space-y-3">
             {products.map(p => {

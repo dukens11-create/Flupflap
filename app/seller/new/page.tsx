@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import ImageUpload from '@/components/ImageUpload';
 import type { Metadata } from 'next';
+import { isSubscriptionActive } from '@/lib/subscription';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,6 +22,11 @@ export default async function SellerNewPage() {
   const dbUser = await prisma.user.findUnique({ where: { id: session.user.id } });
   if (dbUser?.sellerStatus === 'SUSPENDED' || dbUser?.sellerStatus === 'BANNED') {
     redirect('/seller');
+  }
+
+  // Require an active subscription to list items
+  if (!isSubscriptionActive(dbUser ?? {})) {
+    redirect('/seller?subscribe=1');
   }
 
   return (
