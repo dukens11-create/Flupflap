@@ -87,7 +87,6 @@ export async function POST(
         data: {
           category,
           description,
-          updatedAt: new Date(),
         },
       });
     } else {
