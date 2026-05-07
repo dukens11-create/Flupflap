@@ -115,6 +115,7 @@ FlupFlap uses a seller-only Stripe subscription for listing eligibility:
 - Access rule: only sellers with an active subscription can create new listings
 - If subscription becomes inactive (`past_due`, cancelled, expired, unpaid), new listing creation is blocked
 - Existing listings remain visible even if subscription later lapses
+- After Stripe Checkout returns to `/seller?subscribed=1`, FlupFlap runs a server-side Stripe recovery sync for the signed-in seller if DB status is stale (webhook delay/miss fallback)
 - Free trial: none
 
 ## Commission
