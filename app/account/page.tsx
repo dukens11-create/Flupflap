@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { ACCOUNT_DELETION_REASON_LABELS, type AccountDeletionReason } from '@/lib/account-deletion';
 
 export default function AccountPage() {
   const { data: session, status, update } = useSession();
@@ -38,6 +39,8 @@ export default function AccountPage() {
   // Account deletion
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deletePassword, setDeletePassword] = useState('');
+  const [deleteReason, setDeleteReason] = useState<AccountDeletionReason | ''>('');
+  const [deleteOtherDetails, setDeleteOtherDetails] = useState('');
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState('');
 
@@ -197,12 +200,24 @@ export default function AccountPage() {
   async function deleteAccount(e: React.FormEvent) {
     e.preventDefault();
     setDeleteError('');
+    if (!deleteReason) {
+      setDeleteError('Please choose a deletion reason.');
+      return;
+    }
+    if (deleteReason === 'other' && !deleteOtherDetails.trim()) {
+      setDeleteError('Please provide details when selecting Other.');
+      return;
+    }
     setDeleteLoading(true);
     try {
       const res = await fetch('/api/account', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: deletePassword }),
+        body: JSON.stringify({
+          password: deletePassword,
+          reason: deleteReason,
+          otherDetails: deleteReason === 'other' ? deleteOtherDetails.trim() : undefined,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -467,15 +482,51 @@ export default function AccountPage() {
         <p className="text-sm text-slate-600 mb-4">
           Permanently delete your account and all associated personal data. This action cannot be undone.
         </p>
-        {!showDeleteConfirm ? (
+        {role === 'ADMIN' ? (
+          <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+            Admin accounts cannot be deleted.
+          </div>
+        ) : !showDeleteConfirm ? (
           <button
-            onClick={() => { setShowDeleteConfirm(true); setDeleteError(''); setDeletePassword(''); }}
+            onClick={() => {
+              setShowDeleteConfirm(true);
+              setDeleteError('');
+              setDeletePassword('');
+              setDeleteReason('');
+              setDeleteOtherDetails('');
+            }}
             className="text-sm font-medium text-red-600 border border-red-300 rounded-lg px-4 py-2 hover:bg-red-50 transition-colors"
           >
             Delete my account
           </button>
         ) : (
           <form onSubmit={deleteAccount} className="space-y-3">
+            <fieldset className="space-y-2">
+              <legend className="text-sm text-slate-700 font-medium">Why are you deleting your account?</legend>
+              {Object.entries(ACCOUNT_DELETION_REASON_LABELS).map(([value, label]) => (
+                <label key={value} className="flex items-center gap-2 text-sm text-slate-700">
+                  <input
+                    type="radio"
+                    name="deleteReason"
+                    value={value}
+                    checked={deleteReason === value}
+                    onChange={() => setDeleteReason(value as AccountDeletionReason)}
+                    required
+                  />
+                  <span>{label}</span>
+                </label>
+              ))}
+            </fieldset>
+            {deleteReason === 'other' && (
+              <textarea
+                className="input min-h-24"
+                placeholder="Please tell us why you're leaving"
+                value={deleteOtherDetails}
+                onChange={e => setDeleteOtherDetails(e.target.value)}
+                required
+                maxLength={500}
+              />
+            )}
             <p className="text-sm text-slate-700 font-medium">
               Enter your password to confirm deletion:
             </p>
@@ -500,7 +551,13 @@ export default function AccountPage() {
               <button
                 type="button"
                 className="btn-outline text-sm"
-                onClick={() => { setShowDeleteConfirm(false); setDeleteError(''); setDeletePassword(''); }}
+                onClick={() => {
+                  setShowDeleteConfirm(false);
+                  setDeleteError('');
+                  setDeletePassword('');
+                  setDeleteReason('');
+                  setDeleteOtherDetails('');
+                }}
               >
                 Cancel
               </button>
@@ -511,4 +568,3 @@ export default function AccountPage() {
     </main>
   );
 }
-

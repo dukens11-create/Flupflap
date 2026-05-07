@@ -60,6 +60,9 @@ model User {
   phone                    String?
   stripeAccountId          String?
   stripeOnboardingComplete Boolean       @default(false)
+  deletedAt                DateTime?
+  deletionReason           String?
+  deletionReasonOther      String?
   sellerStatus             SellerStatus  @default(ACTIVE)
   sellerStatusReason       String?
   sellerStatusNotes        String?
