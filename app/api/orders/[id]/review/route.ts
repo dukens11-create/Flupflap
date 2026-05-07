@@ -3,12 +3,12 @@ import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
-import { REVIEWABLE_ORDER_STATUSES } from '@/lib/order-feedback';
+import { FEEDBACK_TEXT_MAX_LENGTH, REVIEWABLE_ORDER_STATUSES, REVIEW_COMMENT_MIN_LENGTH } from '@/lib/order-feedback';
 
 const schema = z.object({
   sellerId: z.string().min(1),
   rating: z.number().int().min(1).max(5),
-  comment: z.string().trim().min(3).max(2000),
+  comment: z.string().trim().min(REVIEW_COMMENT_MIN_LENGTH).max(FEEDBACK_TEXT_MAX_LENGTH),
 });
 
 export async function POST(

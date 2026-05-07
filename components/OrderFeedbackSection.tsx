@@ -1,7 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { COMPLAINT_CATEGORIES, COMPLAINT_CATEGORY_LABELS, REVIEWABLE_ORDER_STATUSES } from '@/lib/order-feedback';
+import {
+  COMPLAINT_CATEGORIES,
+  COMPLAINT_CATEGORY_LABELS,
+  COMPLAINT_DESCRIPTION_MIN_LENGTH,
+  FEEDBACK_TEXT_MAX_LENGTH,
+  REVIEWABLE_ORDER_STATUSES,
+  REVIEW_COMMENT_MIN_LENGTH,
+} from '@/lib/order-feedback';
 
 type SellerOption = { id: string; name: string };
 type ExistingReview = { sellerId: string; rating: number; comment: string };
@@ -118,7 +125,7 @@ export default function OrderFeedbackSection({
                   <textarea
                     className="input resize-none"
                     rows={3}
-                    maxLength={2000}
+                    maxLength={FEEDBACK_TEXT_MAX_LENGTH}
                     placeholder="Share your experience with this seller..."
                     value={state.comment}
                     onChange={(e) => setReviewState((prev) => ({ ...prev, [seller.id]: { ...prev[seller.id], comment: e.target.value, success: '', error: '' } }))}
@@ -130,7 +137,7 @@ export default function OrderFeedbackSection({
                     type="button"
                     className="btn-primary text-sm"
                     onClick={() => submitReview(seller.id)}
-                    disabled={!canReview || state.loading || state.comment.trim().length < 3}
+                    disabled={!canReview || state.loading || state.comment.trim().length < REVIEW_COMMENT_MIN_LENGTH}
                   >
                     {state.loading ? 'Saving…' : 'Save review'}
                   </button>
@@ -173,7 +180,7 @@ export default function OrderFeedbackSection({
                   <textarea
                     className="input resize-none"
                     rows={3}
-                    maxLength={2000}
+                    maxLength={FEEDBACK_TEXT_MAX_LENGTH}
                     placeholder="Describe what happened..."
                     value={state.description}
                     onChange={(e) => setComplaintState((prev) => ({ ...prev, [seller.id]: { ...prev[seller.id], description: e.target.value, success: '', error: '' } }))}
@@ -185,7 +192,7 @@ export default function OrderFeedbackSection({
                     type="button"
                     className="btn bg-red-600 hover:bg-red-700 text-white text-sm"
                     onClick={() => submitComplaint(seller.id)}
-                    disabled={state.loading || !state.category || state.description.trim().length < 5}
+                    disabled={state.loading || !state.category || state.description.trim().length < COMPLAINT_DESCRIPTION_MIN_LENGTH}
                   >
                     {state.loading ? 'Submitting…' : 'Submit complaint'}
                   </button>

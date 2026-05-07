@@ -1,4 +1,7 @@
 export const REVIEWABLE_ORDER_STATUSES = ['DELIVERED', 'PICKED_UP'] as const;
+export const REVIEW_COMMENT_MIN_LENGTH = 3;
+export const COMPLAINT_DESCRIPTION_MIN_LENGTH = 5;
+export const FEEDBACK_TEXT_MAX_LENGTH = 2000;
 
 export const COMPLAINT_CATEGORIES = [
   'item_not_as_described',

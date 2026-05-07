@@ -3,12 +3,12 @@ import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
-import { COMPLAINT_CATEGORIES } from '@/lib/order-feedback';
+import { COMPLAINT_CATEGORIES, COMPLAINT_DESCRIPTION_MIN_LENGTH, FEEDBACK_TEXT_MAX_LENGTH } from '@/lib/order-feedback';
 
 const schema = z.object({
   sellerId: z.string().min(1),
   category: z.enum(COMPLAINT_CATEGORIES),
-  description: z.string().trim().min(5).max(2000),
+  description: z.string().trim().min(COMPLAINT_DESCRIPTION_MIN_LENGTH).max(FEEDBACK_TEXT_MAX_LENGTH),
 });
 
 const ALLOWED_COMPLAINT_STATUSES = new Set([
@@ -60,6 +60,24 @@ export async function POST(
       return NextResponse.json({ error: 'Seller is not part of this order.' }, { status: 400 });
     }
 
+    const existingComplaint = await prisma.buyerComplaint.findUnique({
+      where: {
+        buyerId_sellerId_orderId: {
+          buyerId: session.user.id,
+          sellerId,
+          orderId,
+        },
+      },
+      select: { status: true },
+    });
+
+    if (existingComplaint && existingComplaint.status !== 'OPEN') {
+      return NextResponse.json(
+        { error: 'This complaint is already under admin review.' },
+        { status: 409 },
+      );
+    }
+
     await prisma.buyerComplaint.upsert({
       where: {
         buyerId_sellerId_orderId: {
@@ -78,11 +96,6 @@ export async function POST(
       update: {
         category,
         description,
-        status: 'OPEN',
-        adminId: null,
-        adminAction: null,
-        adminNotes: null,
-        resolvedAt: null,
         updatedAt: new Date(),
       },
     });
