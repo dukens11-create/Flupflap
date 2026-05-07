@@ -59,7 +59,7 @@ export async function POST(req: Request) {
         userId: user.id,
         role: user.role,
       });
-      return NextResponse.json({ step: 'signin', reason: 'non_seller' });
+      return NextResponse.json({ step: 'signin' });
     }
 
     if (!isSmsOtpEnabled()) {
@@ -68,7 +68,7 @@ export async function POST(req: Request) {
         role: user.role,
         enableSmsOtp: process.env.ENABLE_SMS_OTP ?? '(unset)',
       });
-      return NextResponse.json({ step: 'signin', reason: 'otp_disabled' });
+      return NextResponse.json({ step: 'signin' });
     }
 
     // Seller but no phone registered — route to phone setup flow.
@@ -77,7 +77,7 @@ export async function POST(req: Request) {
         userId: user.id,
         role: user.role,
       });
-      return NextResponse.json({ step: 'add_phone', reason: 'missing_phone' });
+      return NextResponse.json({ step: 'add_phone' });
     }
 
     const result = await createAndSendOtp(user.id, user.phone);
@@ -99,7 +99,7 @@ export async function POST(req: Request) {
       }
       console.error('[otp/send] OTP send failed after Twilio attempt', { userId: user.id });
       return NextResponse.json(
-        { error: 'Failed to send verification code. Please verify your phone number and try again.' },
+        { error: 'Failed to send verification code. Please check your phone number or contact support.' },
         { status: 500 },
       );
     }

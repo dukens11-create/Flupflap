@@ -54,7 +54,7 @@ export async function sendSms(to: string, body: string): Promise<void> {
         'TWILIO_ACCOUNT_SID',
         'TWILIO_AUTH_TOKEN',
         'TWILIO_FROM_NUMBER',
-      ] as const;
+      ];
       const missingVars = requiredVars.filter((name) => !process.env[name]);
       // In production without Twilio configured, refuse to proceed so the
       // operator is alerted immediately rather than silently skipping 2FA.
@@ -90,8 +90,7 @@ export async function sendSms(to: string, body: string): Promise<void> {
     console.info('[SMS] Message accepted by Twilio', {
       to: maskPhoneForLogs(to),
       from: maskPhoneForLogs(process.env.TWILIO_FROM_NUMBER!),
-      messageSid: message.sid,
-      status: message.status,
+      sidSuffix: message.sid?.slice(-6),
     });
   } catch (err) {
     logSmsError(to, err);
