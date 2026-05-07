@@ -21,7 +21,7 @@ export function I18nProvider({ children, initialLocale }: { children: React.Reac
     } catch {
       // ignore storage errors
     }
-  }, []);
+  }, [locale]);
 
   useEffect(() => {
     document.documentElement.lang = locale;

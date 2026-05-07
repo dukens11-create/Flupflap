@@ -1,8 +1,5 @@
 import Link from 'next/link';
-import type { Metadata } from 'next';
 import { getServerTranslations } from '@/lib/i18n/server';
-
-export const metadata: Metadata = { title: 'Page Not Found' };
 
 export default async function NotFound() {
   const { t } = await getServerTranslations();
