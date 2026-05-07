@@ -51,52 +51,41 @@ export async function POST(req: Request) {
     let sellerStripeId = product.seller.stripeOnboardingComplete ? product.seller.stripeAccountId : null;
     const currentMode = getCurrentStripeMode();
 
-    if (!sellerStripeId) {
-      return NextResponse.json(
-        { error: 'Seller payout account is not ready. Please try again later.', code: 'seller_reconnect_required' },
-        { status: 503 },
+    if (sellerStripeId) {
+      const hasModeMismatch = !!(
+        product.seller.stripeAccountMode
+        && currentMode
+        && product.seller.stripeAccountMode !== currentMode
       );
-    }
-
-    const hasModeMismatch = !!(
-      product.seller.stripeAccountMode
-      && currentMode
-      && product.seller.stripeAccountMode !== currentMode
-    );
-    if (hasModeMismatch) {
-      await prisma.user.update({
-        where: { id: product.seller.id },
-        data: { stripeAccountId: null, stripeAccountMode: null, stripeOnboardingComplete: false },
-      });
-      return checkoutErrorResponse('stale_account');
-    }
-    try {
-      const sellerAccount = await stripe.accounts.retrieve(sellerStripeId);
-      if (!sellerAccount.charges_enabled || !sellerAccount.payouts_enabled) {
-        const missingCapabilities = [
-          !sellerAccount.charges_enabled ? 'charges' : null,
-          !sellerAccount.payouts_enabled ? 'payouts' : null,
-        ].filter(Boolean).join(' and ');
-        await prisma.user.update({
-          where: { id: product.seller.id },
-          data: { stripeOnboardingComplete: false },
-        });
-        return NextResponse.json(
-          { error: `Seller Stripe ${missingCapabilities} capability is not ready. Please try again later.`, code: 'seller_reconnect_required' },
-          { status: 503 },
-        );
-      }
-    } catch (err: unknown) {
-      const classified = classifyStripeError(err);
-      if (classified.reason === 'stale_account') {
+      if (hasModeMismatch) {
         await prisma.user.update({
           where: { id: product.seller.id },
           data: { stripeAccountId: null, stripeAccountMode: null, stripeOnboardingComplete: false },
         });
+        sellerStripeId = null;
       } else {
-        return checkoutErrorResponse(classified.reason);
+        try {
+          const sellerAccount = await stripe.accounts.retrieve(sellerStripeId);
+          if (!sellerAccount.charges_enabled || !sellerAccount.payouts_enabled) {
+            await prisma.user.update({
+              where: { id: product.seller.id },
+              data: { stripeOnboardingComplete: false },
+            });
+            sellerStripeId = null;
+          }
+        } catch (err: unknown) {
+          const classified = classifyStripeError(err);
+          if (classified.reason === 'stale_account') {
+            await prisma.user.update({
+              where: { id: product.seller.id },
+              data: { stripeAccountId: null, stripeAccountMode: null, stripeOnboardingComplete: false },
+            });
+            sellerStripeId = null;
+          } else {
+            return checkoutErrorResponse(classified.reason);
+          }
+        }
       }
-      return checkoutErrorResponse('stale_account');
     }
 
     const stripeSession = await stripe.checkout.sessions.create({
