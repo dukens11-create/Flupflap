@@ -3,8 +3,10 @@ import { Suspense, useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { useI18n } from '@/components/I18nProvider';
 
 function LoginForm() {
+  const { t } = useI18n();
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get('callbackUrl') ?? '/';
@@ -39,7 +41,7 @@ function LoginForm() {
     setLoading(false);
 
     if (!res.ok) {
-      setError(data.error ?? 'Invalid email or password.');
+      setError(data.error ?? t('login.invalidCredentials'));
       return;
     }
 
@@ -58,7 +60,7 @@ function LoginForm() {
       // Non-seller: sign in directly
       const result = await signIn('credentials', { email, password, redirect: false });
       if (result?.error) {
-        setError('Invalid email or password.');
+        setError(t('login.invalidCredentials'));
       } else {
         router.push(callbackUrl);
         router.refresh();
@@ -85,13 +87,13 @@ function LoginForm() {
     setLoading(false);
 
     if (!res.ok) {
-      setError(data.error ?? 'Failed to save phone number.');
+      setError(data.error ?? t('login.failedSavePhone'));
       return;
     }
 
     if (data.step === 'signin') {
       if (!pendingEmail || !pendingPassword) {
-        setError('Login information not found. Please try again.');
+        setError(t('login.missingLoginInfo'));
         setStep('credentials');
         return;
       }
@@ -102,7 +104,7 @@ function LoginForm() {
       });
 
       if (result?.error) {
-        setError('Invalid email or password.');
+        setError(t('login.invalidCredentials'));
       } else {
         router.push(callbackUrl);
         router.refresh();
@@ -133,7 +135,7 @@ function LoginForm() {
     setLoading(false);
 
     if (result?.error) {
-      setError('Invalid or expired code. Please try again.');
+      setError(t('login.invalidCode'));
     } else {
       router.push(callbackUrl);
       router.refresh();
@@ -152,7 +154,7 @@ function LoginForm() {
     const data = await res.json();
     setLoading(false);
     if (!res.ok) {
-      setError(data.error ?? 'Failed to resend code.');
+      setError(data.error ?? t('login.failedResendCode'));
     } else {
       setError('');
     }
@@ -167,11 +169,10 @@ function LoginForm() {
     return (
       <form onSubmit={submitPhone} className="card p-6 mt-6 space-y-4">
         <p className="text-sm text-slate-600">
-          Seller accounts require a phone number for two-step sign-in. Please add
-          your phone number to continue. A verification code will be sent to it.
+          {t('login.addPhoneIntro')}
         </p>
         <div>
-          <label className="label">Phone number</label>
+          <label className="label">{t('login.phoneNumber')}</label>
           <input
             name="phone"
             type="tel"
@@ -180,13 +181,12 @@ function LoginForm() {
             required
           />
           <p className="text-xs text-slate-400 mt-1">
-            Country code recommended (e.g. +1 for US/Canada, +44 for UK).
-            10-digit US numbers without a country code are also accepted.
+            {t('login.phoneHint')}
           </p>
         </div>
         {error && <p className="text-red-600 text-sm">{error}</p>}
         <button className="btn-primary w-full" disabled={loading}>
-          {loading ? 'Sending code…' : 'Send verification code'}
+          {loading ? t('login.sendingCode') : t('login.sendVerificationCode')}
         </button>
         <div className="text-right">
           <button
@@ -194,7 +194,7 @@ function LoginForm() {
             className="text-sm text-slate-500 hover:text-blue-600"
             onClick={handleBackToCredentials}
           >
-            Back
+            {t('login.back')}
           </button>
         </div>
       </form>
@@ -205,12 +205,10 @@ function LoginForm() {
     return (
       <form onSubmit={submitOtp} className="card p-6 mt-6 space-y-4">
         <p className="text-sm text-slate-600">
-          We sent a 6-digit verification code to{' '}
-          <span className="font-semibold">{maskedPhone}</span>. Enter it below to
-          complete sign-in.
+          {t('login.otpIntro', { phone: maskedPhone || '***' })}
         </p>
         <div>
-          <label className="label">Verification code</label>
+          <label className="label">{t('login.verificationCode')}</label>
           <input
             name="otp"
             type="text"
@@ -225,7 +223,7 @@ function LoginForm() {
         </div>
         {error && <p className="text-red-600 text-sm">{error}</p>}
         <button className="btn-primary w-full" disabled={loading}>
-          {loading ? 'Verifying…' : 'Verify & Sign in'}
+          {loading ? t('login.verifying') : t('login.verifyAndSignIn')}
         </button>
         <div className="flex justify-between text-sm text-slate-500">
           <button
@@ -234,14 +232,14 @@ function LoginForm() {
             onClick={resendOtp}
             disabled={loading}
           >
-            Resend code
+            {t('login.resendCode')}
           </button>
           <button
             type="button"
             className="hover:text-blue-600"
             onClick={handleBackToCredentials}
           >
-            Back
+            {t('login.back')}
           </button>
         </div>
       </form>
@@ -251,20 +249,20 @@ function LoginForm() {
   return (
     <form onSubmit={submitCredentials} className="card p-6 mt-6 space-y-4">
       <div>
-        <label className="label">Email</label>
+        <label className="label">{t('login.email')}</label>
         <input name="email" type="email" className="input" placeholder="you@example.com" required />
       </div>
       <div>
-        <label className="label">Password</label>
-        <input name="password" type="password" className="input" placeholder="Password" required />
+        <label className="label">{t('login.password')}</label>
+        <input name="password" type="password" className="input" placeholder={t('login.password')} required />
       </div>
       {error && <p className="text-red-600 text-sm">{error}</p>}
       <button className="btn-primary w-full" disabled={loading}>
-        {loading ? 'Signing in…' : 'Sign in'}
+        {loading ? t('login.signingIn') : t('login.signIn')}
       </button>
       <div className="text-center">
         <Link href="/forgot-password" className="text-sm text-slate-500 hover:text-blue-600">
-          Forgot your password?
+          {t('login.forgotPassword')}
         </Link>
       </div>
     </form>
@@ -272,15 +270,16 @@ function LoginForm() {
 }
 
 export default function LoginPage() {
+  const { t } = useI18n();
   return (
     <main className="mx-auto max-w-md px-4 py-10">
-      <h1 className="text-3xl font-black">Sign in</h1>
+      <h1 className="text-3xl font-black">{t('login.title')}</h1>
       <Suspense fallback={<div className="card p-6 mt-6 h-48 animate-pulse bg-slate-100 rounded-2xl" />}>
         <LoginForm />
       </Suspense>
       <p className="text-center text-sm text-slate-500 mt-4">
-        Don&apos;t have an account?{' '}
-        <Link href="/signup" className="text-blue-600 hover:underline">Sign up</Link>
+        {t('login.noAccount')}{' '}
+        <Link href="/signup" className="text-blue-600 hover:underline">{t('login.signUp')}</Link>
       </p>
     </main>
   );

@@ -2,17 +2,19 @@ import type { Metadata } from 'next';
 import './globals.css';
 import Providers from '@/components/Providers';
 import Navbar from '@/components/Navbar';
+import { getServerTranslations } from '@/lib/i18n/server';
 
 export const metadata: Metadata = {
   title: { default: 'FlupFlap Marketplace', template: '%s | FlupFlap' },
   description: 'Buy and sell new & used items on FlupFlap Marketplace.',
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const { locale, t } = await getServerTranslations();
   return (
-    <html lang="en">
+    <html lang={locale}>
       <body className="bg-slate-50 text-slate-900 min-h-screen">
-        <Providers>
+        <Providers initialLocale={locale}>
           <Navbar />
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             {children}
@@ -20,10 +22,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <footer className="mt-16 border-t border-slate-200 bg-white text-sm text-slate-500">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-wrap gap-4">
               <span className="font-bold text-slate-700">FlupFlap</span>
-              <a href="/legal/terms" className="hover:underline">Terms</a>
-              <a href="/legal/privacy" className="hover:underline">Privacy</a>
-              <a href="/legal/seller-agreement" className="hover:underline">Seller Agreement</a>
-              <a href="/legal/refund" className="hover:underline">Refund Policy</a>
+              <a href="/legal/terms" className="hover:underline">{t('footer.terms')}</a>
+              <a href="/legal/privacy" className="hover:underline">{t('footer.privacy')}</a>
+              <a href="/legal/seller-agreement" className="hover:underline">{t('footer.sellerAgreement')}</a>
+              <a href="/legal/refund" className="hover:underline">{t('footer.refundPolicy')}</a>
               <span className="ml-auto">© {new Date().getFullYear()} FlupFlap</span>
             </div>
           </footer>

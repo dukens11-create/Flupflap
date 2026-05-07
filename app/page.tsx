@@ -4,6 +4,7 @@ import ProductCard from '@/components/ProductCard';
 import BrowseFilters from '@/components/BrowseFilters';
 import type { Metadata } from 'next';
 import { expirePromotions } from '@/lib/promotions';
+import { getServerTranslations } from '@/lib/i18n/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,7 +36,7 @@ interface SearchParams {
   maxPrice?: string;
 }
 
-async function ProductGrid({ sp }: { sp: SearchParams }) {
+async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?: Record<string, string | number>) => string }) {
   const where: any = { status: 'APPROVED' };
   if (sp.q) where.title = { contains: sp.q, mode: 'insensitive' };
   if (sp.category) where.category = sp.category;
@@ -124,7 +125,7 @@ async function ProductGrid({ sp }: { sp: SearchParams }) {
   if (!products.length) {
     return (
       <div className="card p-10 text-center text-slate-500">
-        No products found. Try adjusting your filters.
+        {t('home.noProducts')}
       </div>
     );
   }
@@ -140,17 +141,18 @@ async function ProductGrid({ sp }: { sp: SearchParams }) {
 
 export default async function HomePage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const sp = await searchParams;
+  const { t } = await getServerTranslations();
   return (
     <main>
       <div className="mb-6">
-        <h1 className="text-3xl font-black">FlupFlap Marketplace</h1>
-        <p className="text-slate-500 mt-1">Buy and sell new &amp; used items</p>
+        <h1 className="text-3xl font-black">{t('home.title')}</h1>
+        <p className="text-slate-500 mt-1">{t('home.subtitle')}</p>
       </div>
       <Suspense>
         <BrowseFilters />
       </Suspense>
-      <Suspense fallback={<p className="text-slate-500">Loading products…</p>}>
-        <ProductGrid sp={sp} />
+      <Suspense fallback={<p className="text-slate-500">{t('home.loadingProducts')}</p>}>
+        <ProductGrid sp={sp} t={t} />
       </Suspense>
     </main>
   );

@@ -1,0 +1,107 @@
+{
+  "nav": {
+    "browse": "Browse",
+    "dashboard": "Dashboard",
+    "listItem": "List Item",
+    "admin": "Admin",
+    "cart": "Cart",
+    "orders": "Orders",
+    "messages": "Messages",
+    "account": "Account",
+    "logout": "Logout",
+    "login": "Login",
+    "signUp": "Sign up",
+    "language": "Language"
+  },
+  "footer": {
+    "terms": "Terms",
+    "privacy": "Privacy",
+    "sellerAgreement": "Seller Agreement",
+    "refundPolicy": "Refund Policy"
+  },
+  "home": {
+    "title": "FlupFlap Marketplace",
+    "subtitle": "Buy and sell new & used items",
+    "loadingProducts": "Loading products…",
+    "noProducts": "No products found. Try adjusting your filters."
+  },
+  "filters": {
+    "searchPlaceholder": "Search products…",
+    "allCategories": "All categories",
+    "anyCondition": "Any condition",
+    "minPrice": "Min $",
+    "maxPrice": "Max $",
+    "clearFilters": "Clear filters",
+    "categories": {
+      "Electronics": "Electronics",
+      "Clothing": "Clothing",
+      "Furniture": "Furniture",
+      "Books": "Books",
+      "Toys": "Toys",
+      "Sports": "Sports",
+      "Collectibles": "Collectibles",
+      "Other": "Other"
+    },
+    "conditions": {
+      "New": "New",
+      "Like New": "Like New",
+      "Used": "Used",
+      "For Parts": "For Parts"
+    }
+  },
+  "product": {
+    "sponsored": "Sponsored",
+    "shipping": "Shipping {amount}",
+    "pickupIn": "🏠 Pickup in {location}",
+    "viewItem": "View item"
+  },
+  "login": {
+    "title": "Sign in",
+    "noAccount": "Don't have an account?",
+    "signUp": "Sign up",
+    "email": "Email",
+    "password": "Password",
+    "forgotPassword": "Forgot your password?",
+    "signingIn": "Signing in…",
+    "signIn": "Sign in",
+    "invalidCredentials": "Invalid email or password.",
+    "addPhoneIntro": "Seller accounts require a phone number for two-step sign-in. Please add your phone number to continue. A verification code will be sent to it.",
+    "phoneNumber": "Phone number",
+    "phoneHint": "Country code recommended (e.g. +1 for US/Canada, +44 for UK). 10-digit US numbers without a country code are also accepted.",
+    "sendingCode": "Sending code…",
+    "sendVerificationCode": "Send verification code",
+    "back": "Back",
+    "otpIntro": "We sent a 6-digit verification code to {phone}. Enter it below to complete sign-in.",
+    "verificationCode": "Verification code",
+    "verifying": "Verifying…",
+    "verifyAndSignIn": "Verify & Sign in",
+    "resendCode": "Resend code",
+    "invalidCode": "Invalid or expired code. Please try again.",
+    "failedSavePhone": "Failed to save phone number.",
+    "missingLoginInfo": "Login information not found. Please try again.",
+    "failedResendCode": "Failed to resend code."
+  },
+  "signup": {
+    "title": "Create account",
+    "fullName": "Full name",
+    "password": "Password",
+    "passwordPlaceholder": "Minimum 8 characters",
+    "accountType": "Account type",
+    "customerOption": "Customer – I want to buy",
+    "sellerOption": "Seller – I want to sell",
+    "mobilePhone": "Mobile phone number",
+    "phoneHelp": "Used for two-factor authentication when you sign in. Standard messaging rates may apply.",
+    "creatingAccount": "Creating account…",
+    "createAccount": "Create account",
+    "alreadyHave": "Already have an account?",
+    "signIn": "Sign in",
+    "signupFailed": "Signup failed"
+  },
+  "notFound": {
+    "metaTitle": "Page Not Found",
+    "title": "Page not found",
+    "description": "The page you're looking for doesn't exist or may have been moved.",
+    "goMarketplace": "Go to marketplace",
+    "viewCart": "View your cart"
+  }
+}

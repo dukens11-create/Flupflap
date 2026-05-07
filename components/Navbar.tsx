@@ -2,6 +2,8 @@
 import Link from 'next/link';
 import { signOut, useSession } from 'next-auth/react';
 import { ShoppingCart, Package, LayoutDashboard, LogIn, UserPlus, LogOut, User, MessageCircle } from 'lucide-react';
+import LanguageSelector from '@/components/LanguageSelector';
+import { useI18n } from '@/components/I18nProvider';
 import { useEffect, useState } from 'react';
 
 function useCartCount() {
@@ -68,6 +70,7 @@ export default function Navbar() {
   const role = session?.user?.role;
   const cartCount = useCartCount();
   const unreadMessages = useUnreadMessages(!!session?.user);
+  const { t } = useI18n();
 
   return (
     <header className="bg-white border-b border-slate-200 sticky top-0 z-30">
@@ -75,23 +78,24 @@ export default function Navbar() {
         <Link href="/" className="font-black text-xl text-blue-600 mr-2">FlupFlap</Link>
 
         <nav className="flex items-center gap-3 flex-1 text-sm font-medium text-slate-600">
-          <Link href="/" className="hover:text-blue-600">Browse</Link>
+          <Link href="/" className="hover:text-blue-600">{t('nav.browse')}</Link>
           {role === 'SELLER' && (
             <>
-              <Link href="/seller" className="hover:text-blue-600">Dashboard</Link>
-              <Link href="/seller/new" className="hover:text-blue-600">List Item</Link>
+              <Link href="/seller" className="hover:text-blue-600">{t('nav.dashboard')}</Link>
+              <Link href="/seller/new" className="hover:text-blue-600">{t('nav.listItem')}</Link>
             </>
           )}
           {role === 'ADMIN' && (
             <Link href="/admin" className="hover:text-blue-600 flex items-center gap-1">
-              <LayoutDashboard size={14} /> Admin
+              <LayoutDashboard size={14} /> {t('nav.admin')}
             </Link>
           )}
         </nav>
 
         <div className="flex items-center gap-2 text-sm font-medium">
+          <LanguageSelector />
           <Link href="/cart" className="relative flex items-center gap-1 hover:text-blue-600">
-            <ShoppingCart size={16} /> Cart
+            <ShoppingCart size={16} /> {t('nav.cart')}
             {cartCount > 0 && (
               <span className="absolute -top-2 -right-3 bg-blue-600 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
                 {cartCount}
@@ -101,10 +105,10 @@ export default function Navbar() {
           {session?.user ? (
             <>
               <Link href="/orders" className="flex items-center gap-1 hover:text-blue-600">
-                <Package size={16} /> Orders
+                <Package size={16} /> {t('nav.orders')}
               </Link>
               <Link href="/messages" className="relative flex items-center gap-1 hover:text-blue-600">
-                <MessageCircle size={16} /> Messages
+                <MessageCircle size={16} /> {t('nav.messages')}
                 {unreadMessages > 0 && (
                   <span className="absolute -top-2 -right-3 bg-blue-600 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
                     {unreadMessages}
@@ -112,22 +116,22 @@ export default function Navbar() {
                 )}
               </Link>
               <Link href="/account" className="flex items-center gap-1 hover:text-blue-600">
-                <User size={16} /> Account
+                <User size={16} /> {t('nav.account')}
               </Link>
               <button
                 onClick={() => signOut({ callbackUrl: '/' })}
                 className="flex items-center gap-1 hover:text-red-600"
               >
-                <LogOut size={16} /> Logout
+                <LogOut size={16} /> {t('nav.logout')}
               </button>
             </>
           ) : (
             <>
               <Link href="/login" className="flex items-center gap-1 hover:text-blue-600">
-                <LogIn size={16} /> Login
+                <LogIn size={16} /> {t('nav.login')}
               </Link>
               <Link href="/signup" className="btn-primary flex items-center gap-1">
-                <UserPlus size={14} /> Sign up
+                <UserPlus size={14} /> {t('nav.signUp')}
               </Link>
             </>
           )}
