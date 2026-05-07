@@ -23,7 +23,7 @@ import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { createAndSendOtp } from '@/lib/otp';
-import { isSmsOtpEnabled } from '@/lib/feature-flags';
+import { isSmsOtpEnabled, SELLER_OTP_FORCE_DISABLED } from '@/lib/feature-flags';
 
 const schema = z.object({
   email: z.string().email(),
@@ -62,11 +62,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ step: 'signin' });
     }
 
-    if (!isSmsOtpEnabled()) {
-      console.warn('[otp/send] OTP skipped: feature flag disabled', {
+    if (SELLER_OTP_FORCE_DISABLED || !isSmsOtpEnabled()) {
+      console.warn('[otp/send] Seller OTP forcibly bypassed: pending Twilio A2P 10DLC approval', {
         userId: user.id,
         role: user.role,
-        smsOtpEnabled: false,
+        reason: SELLER_OTP_FORCE_DISABLED
+          ? 'SELLER_OTP_FORCE_DISABLED=true (pending Twilio A2P 10DLC approval)'
+          : 'feature flag ENABLE_SMS_OTP=false',
       });
       return NextResponse.json({ step: 'signin' });
     }

@@ -34,3 +34,19 @@ export function isSmsOtpEnabled(): boolean {
 
   return !['false', '0', 'off', 'no'].includes(normalized);
 }
+
+/**
+ * SELLER_OTP_FORCE_DISABLED
+ *
+ * Hard-disables seller SMS OTP in code, regardless of the ENABLE_SMS_OTP
+ * environment variable, until Twilio A2P 10DLC campaign approval is complete.
+ *
+ * Background: Twilio is rejecting outbound SMS with error 30034
+ * (US A2P 10DLC – Message from an Unregistered Number), causing sellers to be
+ * locked out because OTP codes are never delivered.
+ *
+ * TODO: Set this to false and redeploy once Twilio A2P 10DLC approval is confirmed.
+ *       After setting to false, also verify ENABLE_SMS_OTP=true in the hosting
+ *       environment before redeploying.
+ */
+export const SELLER_OTP_FORCE_DISABLED = true;
