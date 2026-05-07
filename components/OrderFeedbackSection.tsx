@@ -7,6 +7,7 @@ import {
   COMPLAINT_DESCRIPTION_MIN_LENGTH,
   COMPLAINT_STATUS_LABELS,
   FEEDBACK_TEXT_MAX_LENGTH,
+  REVIEW_RATINGS,
   REVIEWABLE_ORDER_STATUSES,
   REVIEW_COMMENT_MIN_LENGTH,
 } from '@/lib/order-feedback';
@@ -102,7 +103,7 @@ export default function OrderFeedbackSection({
   return (
     <div className="space-y-4">
       <div className="card p-5">
-        <h2 className="font-bold mb-1">Rate your seller</h2>
+        <h2 className="font-bold mb-1">{sellers.length > 1 ? 'Rate your sellers' : 'Rate your seller'}</h2>
         {!canReview && (
           <p className="text-xs text-slate-500 mb-3">
             Reviews are available once the order is delivered or picked up.
@@ -122,7 +123,7 @@ export default function OrderFeedbackSection({
                     disabled={!canReview || state.loading}
                     aria-label={`Rating for ${seller.name}`}
                   >
-                    {[5, 4, 3, 2, 1].map((r) => (
+                    {REVIEW_RATINGS.map((r) => (
                       <option key={r} value={r}>{r} {r === 1 ? 'star' : 'stars'}</option>
                     ))}
                   </select>

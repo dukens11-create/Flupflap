@@ -5,8 +5,8 @@ export const COMPLAINT_ELIGIBLE_ORDER_STATUSES = [
   'DELIVERED',
   'READY_FOR_PICKUP',
   'PICKED_UP',
-  'REFUNDED',
 ] as const;
+export const REVIEW_RATINGS = [5, 4, 3, 2, 1] as const;
 export const REVIEW_COMMENT_MIN_LENGTH = 3;
 export const COMPLAINT_DESCRIPTION_MIN_LENGTH = 5;
 export const FEEDBACK_TEXT_MAX_LENGTH = 2000;
