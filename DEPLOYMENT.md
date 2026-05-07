@@ -299,9 +299,10 @@ npm install && npm run build && \
   if [ -n "$DATABASE_URL" ]; then npx prisma db push --skip-generate; fi
 ```
 
-`prisma db push` is **non-destructive and idempotent** — it creates any missing tables
-without dropping or resetting existing data, so it is safe to run on every deploy.
-If `DATABASE_URL` is not set at build time the `db push` step is skipped automatically.
+`prisma db push` is safe for additive schema sync and will stop if Prisma detects
+potentially destructive changes. Do **not** force `--accept-data-loss` in production
+deploy commands. If `DATABASE_URL` is not set at build time the `db push` step is skipped
+automatically.
 
 ### Manual schema setup (first deploy without Blueprint, or DATABASE_URL added after build)
 
