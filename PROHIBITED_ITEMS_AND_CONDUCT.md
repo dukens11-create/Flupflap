@@ -1,6 +1,6 @@
 # FlupFlap Prohibited Items & Conduct Policy
 
-Effective Date: [Insert Date]
+Effective Date: 2026-05-07
 
 FlupFlap is committed to maintaining a safe, respectful, and lawful marketplace for all users. To protect our community, certain items, content, and conduct are strictly prohibited on the platform.
 
