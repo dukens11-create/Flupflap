@@ -49,7 +49,12 @@ export async function createAndSendOtp(
   // Normalize to E.164 so the SMS provider receives a well-formed number.
   const normalizedPhone = normalizePhone(phone);
   if (!normalizedPhone) {
-    console.error('[OTP] Invalid phone number supplied', { userId, phone });
+    const digitsOnly = phone.replace(/\D/g, '');
+    console.error('[OTP] Invalid phone number supplied', {
+      userId,
+      digitsLength: digitsOnly.length,
+      hadPlusPrefix: phone.trim().startsWith('+'),
+    });
     return { ok: false, error: 'invalid_phone' };
   }
 
@@ -79,6 +84,11 @@ export async function createAndSendOtp(
       normalizedPhone,
       `Your FlupFlap verification code is: ${code}. It expires in ${OTP_EXPIRY_MINUTES} minutes.`,
     );
+    console.info('[OTP] OTP SMS handed off to provider', {
+      userId,
+      maskedPhone,
+      expiryMinutes: OTP_EXPIRY_MINUTES,
+    });
   } catch (err) {
     // Log the error with actionable details before cleaning up.
     console.error('[OTP] SMS send failed', {

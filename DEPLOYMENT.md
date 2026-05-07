@@ -340,8 +340,12 @@ Demo accounts created by seed:
 | Stripe webhook `400` errors | `STRIPE_WEBHOOK_SECRET` missing or wrong | Re-copy the signing secret from Stripe and update the env var |
 | App loads but images are broken | Image host not in `next.config.js` | Add the hostname to `remotePatterns` in `next.config.js` |
 | Image upload returns "not configured" error | Cloudinary env vars missing | Add `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` in Render → Environment and redeploy |
+| Seller login returns `step: "signin"` from `/api/auth/otp/send` | OTP feature disabled or account is not a seller | Check server logs for `[otp/send] OTP skipped: ...`; set `ENABLE_SMS_OTP=true` (or unset) to require seller OTP |
+| Seller login returns `step: "add_phone"` from `/api/auth/otp/send` | Seller account has no phone on file | Complete `/api/auth/otp/setup-phone`; logs show `[otp/send] Seller requires phone setup before OTP` |
+| Seller OTP send returns 400 invalid phone | Saved seller phone fails normalization | Update seller phone in E.164 format; logs include `[otp/send] OTP blocked: invalid normalized phone` |
 | Seller OTP code never arrives | Twilio env vars missing or wrong | Set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` in Render → Environment and redeploy |
 | Seller OTP arrives in server logs only | App running in mock/dev mode | Set all three `TWILIO_*` env vars in Render → Environment so real SMS is sent |
+| Seller OTP send fails with 500 | Twilio config/API failure | Review `[SMS] Twilio is not configured...`, `[SMS] Failed to send message`, or `[SMS] Message accepted by Twilio` log events |
 
 ---
 

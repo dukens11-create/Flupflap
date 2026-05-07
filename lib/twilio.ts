@@ -20,11 +20,18 @@ function isTwilioConfigured(): boolean {
   );
 }
 
+function maskPhoneForLogs(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length < 4) return '****';
+  return `***-***-${digits.slice(-4)}`;
+}
+
 /** Log a structured error for actionable server-side diagnostics. */
 function logSmsError(to: string, err: unknown): void {
   const errObj = err as any;
   console.error('[SMS] Failed to send message', {
-    to,
+    to: maskPhoneForLogs(to),
+    from: maskPhoneForLogs(process.env.TWILIO_FROM_NUMBER ?? ''),
     env: process.env.NODE_ENV,
     twilioConfigured: isTwilioConfigured(),
     errorCode: errObj?.code,
@@ -43,13 +50,23 @@ function logSmsError(to: string, err: unknown): void {
 export async function sendSms(to: string, body: string): Promise<void> {
   if (!isTwilioConfigured()) {
     if (process.env.NODE_ENV === 'production') {
+      const requiredVars = [
+        'TWILIO_ACCOUNT_SID',
+        'TWILIO_AUTH_TOKEN',
+        'TWILIO_FROM_NUMBER',
+      ] as const;
+      const missingVars = requiredVars.filter((name) => !process.env[name]);
       // In production without Twilio configured, refuse to proceed so the
       // operator is alerted immediately rather than silently skipping 2FA.
       const err = new Error(
         '[SMS] Twilio is not configured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, ' +
         'and TWILIO_FROM_NUMBER environment variables.',
       );
-      console.error(err.message, { to, env: process.env.NODE_ENV });
+      console.error(err.message, {
+        to: maskPhoneForLogs(to),
+        env: process.env.NODE_ENV,
+        missingVars,
+      });
       throw err;
     }
     // Dev / mock mode — logs OTP to console for local development only.
@@ -65,10 +82,16 @@ export async function sendSms(to: string, body: string): Promise<void> {
     process.env.TWILIO_AUTH_TOKEN!,
   );
   try {
-    await client.messages.create({
+    const message = await client.messages.create({
       to,
       from: process.env.TWILIO_FROM_NUMBER!,
       body,
+    });
+    console.info('[SMS] Message accepted by Twilio', {
+      to: maskPhoneForLogs(to),
+      from: maskPhoneForLogs(process.env.TWILIO_FROM_NUMBER!),
+      messageSid: message.sid,
+      status: message.status,
     });
   } catch (err) {
     logSmsError(to, err);
