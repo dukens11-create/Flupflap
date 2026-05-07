@@ -46,9 +46,106 @@ export async function POST(req: Request) {
     return new NextResponse('ok', { status: 200 });
   }
 
+  // ── Seller subscription: keep status in sync across renewals / cancellations ──
+  if (event.type === 'customer.subscription.updated' || event.type === 'customer.subscription.deleted') {
+    const sub = event.data.object as any;
+    const customerId: string = sub.customer;
+
+    const statusMap: Record<string, string> = {
+      active: 'ACTIVE',
+      past_due: 'PAST_DUE',
+      unpaid: 'PAST_DUE',
+      canceled: 'CANCELLED',
+      incomplete: 'INACTIVE',
+      incomplete_expired: 'INACTIVE',
+      trialing: 'ACTIVE',
+      paused: 'INACTIVE',
+    };
+    const newStatus = statusMap[sub.status as string] ?? 'INACTIVE';
+    const periodEnd = sub.current_period_end ? new Date(sub.current_period_end * 1000) : null;
+
+    await prisma.user.updateMany({
+      where: { stripeCustomerId: customerId },
+      data: {
+        subscriptionStatus: newStatus,
+        subscriptionId: sub.id,
+        ...(periodEnd ? { subscriptionCurrentPeriodEnd: periodEnd } : {}),
+      },
+    });
+
+    return new NextResponse('ok', { status: 200 });
+  }
+
+  // ── Seller subscription: mark PAST_DUE on failed invoice payment ─────────────
+  if (event.type === 'invoice.payment_failed') {
+    const invoice = event.data.object as any;
+    const customerId: string = invoice.customer;
+    if (invoice.subscription) {
+      await prisma.user.updateMany({
+        where: { stripeCustomerId: customerId },
+        data: { subscriptionStatus: 'PAST_DUE' },
+      });
+    }
+    return new NextResponse('ok', { status: 200 });
+  }
+
+  // ── Seller subscription: mark ACTIVE on successful invoice payment ────────────
+  if (event.type === 'invoice.payment_succeeded') {
+    const invoice = event.data.object as any;
+    const customerId: string = invoice.customer;
+    if (invoice.subscription) {
+      // Retrieve updated subscription period
+      let periodEnd: Date | null = null;
+      try {
+        const sub = await stripe.subscriptions.retrieve(invoice.subscription as string);
+        periodEnd = new Date((sub as any).current_period_end * 1000);
+      } catch {
+        // Non-fatal
+      }
+      await prisma.user.updateMany({
+        where: { stripeCustomerId: customerId },
+        data: {
+          subscriptionStatus: 'ACTIVE',
+          ...(periodEnd ? { subscriptionCurrentPeriodEnd: periodEnd } : {}),
+        },
+      });
+    }
+    return new NextResponse('ok', { status: 200 });
+  }
+
+  // ── Stripe Connect: seller onboarding ────────────────────────────────────────
   if (event.type === 'checkout.session.completed') {
     await expirePromotions();
     const cs = event.data.object as any;
+
+    // Handle seller subscription enrollment
+    if (cs.metadata?.type === 'seller_subscription') {
+      const sellerId: string = cs.metadata?.sellerId;
+      if (!sellerId) return new NextResponse('Missing sellerId', { status: 400 });
+
+      // Retrieve the Stripe subscription to get period details
+      const subscriptionId: string | null = cs.subscription ?? null;
+      let periodEnd: Date | null = null;
+      if (subscriptionId) {
+        try {
+          const sub = await stripe.subscriptions.retrieve(subscriptionId);
+          periodEnd = new Date((sub as any).current_period_end * 1000);
+        } catch {
+          // Non-fatal — status will be synced via customer.subscription.updated
+        }
+      }
+
+      await prisma.user.update({
+        where: { id: sellerId },
+        data: {
+          subscriptionStatus: 'ACTIVE',
+          subscriptionId: subscriptionId ?? undefined,
+          subscriptionCurrentPeriodEnd: periodEnd ?? undefined,
+        },
+      });
+
+      return new NextResponse('ok', { status: 200 });
+    }
 
     // Handle promotion payments separately from product purchases
     if (cs.metadata?.type === 'promotion') {
