@@ -6,6 +6,7 @@ import { dollars } from '@/lib/money';
 import { getStoredLineSubtotalCents } from '@/lib/commission';
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import OrderFeedbackSection from '@/components/OrderFeedbackSection';
 
 export const metadata: Metadata = { title: 'Order Details' };
 
@@ -58,7 +59,7 @@ export default async function OrderDetailPage({
               id: true,
               title: true,
               imageUrl: true,
-              seller: { select: { name: true } },
+              seller: { select: { id: true, name: true } },
             },
           },
         },
@@ -67,6 +68,23 @@ export default async function OrderDetailPage({
   });
 
   if (!order) notFound();
+
+  const [existingReviews, existingComplaints] = session.user.role === 'ADMIN'
+    ? [[], []]
+    : await Promise.all([
+      prisma.sellerReview.findMany({
+        where: { orderId: order.id, buyerId: session.user.id },
+        select: { sellerId: true, rating: true, comment: true },
+      }),
+      prisma.buyerComplaint.findMany({
+        where: { orderId: order.id, buyerId: session.user.id },
+        select: { sellerId: true, category: true, description: true, status: true },
+      }),
+    ]);
+
+  const sellers = Array.from(
+    new Map(order.items.map((item) => [item.product.seller.id, { id: item.product.seller.id, name: item.product.seller.name }])).values(),
+  );
 
   return (
     <main className="max-w-2xl mx-auto">
@@ -198,6 +216,18 @@ export default async function OrderDetailPage({
             📦 {order.shippingCarrier && <strong>{order.shippingCarrier}: </strong>}
             {order.trackingNumber}
           </p>
+        </div>
+      )}
+
+      {session.user.role !== 'ADMIN' && sellers.length > 0 && (
+        <div className="mb-4">
+          <OrderFeedbackSection
+            orderId={order.id}
+            orderStatus={order.status}
+            sellers={sellers}
+            existingReviews={existingReviews}
+            existingComplaints={existingComplaints}
+          />
         </div>
       )}
 
