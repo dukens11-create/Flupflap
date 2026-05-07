@@ -90,6 +90,11 @@ function LoginForm() {
     }
 
     if (data.step === 'signin') {
+      if (!pendingEmail || !pendingPassword) {
+        setError('Session expired. Please sign in again.');
+        setStep('credentials');
+        return;
+      }
       const result = await signIn('credentials', {
         email: pendingEmail,
         password: pendingPassword,

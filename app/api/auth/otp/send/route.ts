@@ -66,7 +66,7 @@ export async function POST(req: Request) {
       console.warn('[otp/send] OTP skipped: feature flag disabled', {
         userId: user.id,
         role: user.role,
-        enableSmsOtp: process.env.ENABLE_SMS_OTP ?? '(unset)',
+        smsOtpEnabled: false,
       });
       return NextResponse.json({ step: 'signin' });
     }

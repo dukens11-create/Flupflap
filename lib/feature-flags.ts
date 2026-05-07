@@ -16,11 +16,14 @@ export function isSmsOtpEnabled(): boolean {
   const raw = process.env.ENABLE_SMS_OTP;
   if (!raw) return true;
 
-  const normalized = raw
-    .trim()
-    .replace(/^(['"])(.*)\1$/, '$2')
-    .trim()
-    .toLowerCase();
+  let normalized = raw.trim();
+  for (let i = 0; i < 2; i += 1) {
+    const startsWithDoubleQuote = normalized.startsWith('"') && normalized.endsWith('"');
+    const startsWithSingleQuote = normalized.startsWith("'") && normalized.endsWith("'");
+    if (!startsWithDoubleQuote && !startsWithSingleQuote) break;
+    normalized = normalized.slice(1, -1).trim();
+  }
+  normalized = normalized.toLowerCase();
 
   return !['false', '0', 'off', 'no'].includes(normalized);
 }

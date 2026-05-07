@@ -31,7 +31,7 @@ export const authOptions: NextAuthOptions = {
             console.warn('[auth] Seller OTP bypassed: feature flag disabled', {
               userId: user.id,
               role: user.role,
-              enableSmsOtp: process.env.ENABLE_SMS_OTP ?? '(unset)',
+              smsOtpEnabled: false,
             });
           } else {
             if (!credentials.otp) return null;
