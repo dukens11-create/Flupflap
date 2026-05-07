@@ -32,6 +32,8 @@ export type CheckoutCommissionItem = {
   quantity: number;
   priceCents: number;
   shippingCents: number;
+  // Persist item price × quantity from checkout/payment time so later listing
+  // price edits do not change historical commission reporting.
   lineSubtotalCents: number;
   commissionRateBps: number;
   commissionFeeCents: number;
@@ -73,6 +75,14 @@ export function calculateCommissionCents(amountCents: number, commissionRateBps:
 
 export function calculateSellerNetCents(amountCents: number, commissionRateBps: number) {
   return amountCents - calculateCommissionCents(amountCents, commissionRateBps);
+}
+
+export function getStoredLineSubtotalCents(item: {
+  lineSubtotalCents: number;
+  priceCents: number;
+  quantity: number;
+}) {
+  return item.lineSubtotalCents || (item.priceCents * item.quantity);
 }
 
 export async function getMarketplaceSettings() {
