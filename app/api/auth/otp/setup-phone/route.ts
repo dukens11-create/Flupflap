@@ -25,7 +25,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { createAndSendOtp } from '@/lib/otp';
 import { normalizePhone } from '@/lib/phone';
-import { isSmsOtpEnabled } from '@/lib/feature-flags';
+import { isSmsOtpEnabled, SELLER_OTP_FORCE_DISABLED } from '@/lib/feature-flags';
 
 const schema = z.object({
   email: z.string().email(),
@@ -73,11 +73,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Phone setup is only available for seller accounts.' }, { status: 400 });
     }
 
-    if (!isSmsOtpEnabled()) {
-      console.warn('[setup-phone] OTP skipped after phone setup attempt: feature flag disabled', {
+    if (SELLER_OTP_FORCE_DISABLED || !isSmsOtpEnabled()) {
+      console.warn('[setup-phone] Seller OTP forcibly bypassed: pending Twilio A2P 10DLC approval', {
         userId: user.id,
         role: user.role,
-        smsOtpEnabled: false,
+        reason: SELLER_OTP_FORCE_DISABLED
+          ? 'SELLER_OTP_FORCE_DISABLED=true (pending Twilio A2P 10DLC approval)'
+          : 'feature flag ENABLE_SMS_OTP=false',
       });
       return NextResponse.json({ step: 'signin' });
     }
