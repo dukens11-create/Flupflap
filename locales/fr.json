@@ -21,6 +21,7 @@
   },
   "home": {
     "title": "Marketplace FlupFlap",
+    "slogan": "FlupFlap — La façon plus intelligente d'acheter et de vendre",
     "subtitle": "Achetez et vendez des articles neufs et d'occasion",
     "loadingProducts": "Chargement des produits…",
     "noProducts": "Aucun produit trouvé. Essayez d'ajuster vos filtres."
