@@ -1,3 +1,4 @@
+import Stripe from 'stripe';
 import { prisma } from '@/lib/db';
 import { stripe } from '@/lib/stripe';
 
@@ -56,7 +57,7 @@ export async function syncSellerSubscriptionFromStripe(userId: string): Promise<
   const subs = await stripe.subscriptions.list({
     customer: user.stripeCustomerId,
     status: 'all',
-    limit: 10,
+    limit: 100,
   });
 
   const bestSub = [...subs.data].sort((a, b) => {
@@ -70,9 +71,7 @@ export async function syncSellerSubscriptionFromStripe(userId: string): Promise<
     ? (STRIPE_SUBSCRIPTION_STATUS_MAP[bestSub.status] ?? 'INACTIVE')
     : 'INACTIVE';
   const subscriptionId = bestSub?.id ?? null;
-  const subscriptionCurrentPeriodEnd = (bestSub as any)?.current_period_end
-    ? new Date((bestSub as any).current_period_end * 1000)
-    : null;
+  const subscriptionCurrentPeriodEnd = getSubscriptionPeriodEnd(bestSub);
 
   await prisma.user.updateMany({
     where: { id: userId, stripeCustomerId: user.stripeCustomerId },
@@ -84,4 +83,10 @@ export async function syncSellerSubscriptionFromStripe(userId: string): Promise<
   });
 
   return { subscriptionStatus, subscriptionId, subscriptionCurrentPeriodEnd };
+}
+
+function getSubscriptionPeriodEnd(subscription: Stripe.Subscription | undefined): Date | null {
+  if (!subscription) return null;
+  const value = (subscription as unknown as Record<string, unknown>)['current_period_end'];
+  return typeof value === 'number' ? new Date(value * 1000) : null;
 }
