@@ -1,13 +1,10 @@
-const FALLBACK_DEFAULT_PERCENT = 6;
 const FIXED_COMMISSION_PERCENT = 6;
 
 export function dollars(cents:number){ return `$${(cents/100).toFixed(2)}`; }
 export function cents(amount:string|number){ return Math.round(Number(amount) * 100); }
 
 function defaultCommissionRateBps() {
-  const rawPercent = Number(process.env.PLATFORM_FEE_PERCENT ?? FALLBACK_DEFAULT_PERCENT);
-  const percent = Number.isFinite(rawPercent) ? FIXED_COMMISSION_PERCENT : FALLBACK_DEFAULT_PERCENT;
-  return Math.round(percent * 100);
+  return Math.round(FIXED_COMMISSION_PERCENT * 100);
 }
 
 export function platformFee(cents:number, commissionRateBps:number = defaultCommissionRateBps()){ return Math.round((cents * commissionRateBps) / 10_000); }

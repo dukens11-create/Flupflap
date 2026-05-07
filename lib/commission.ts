@@ -1,6 +1,5 @@
 import { prisma } from '@/lib/db';
 
-const FALLBACK_DEFAULT_PERCENT = 6;
 const FIXED_COMMISSION_PERCENT = 6;
 const MARKETPLACE_SETTINGS_ID = 1;
 
@@ -58,16 +57,7 @@ export function formatCommissionPercent(bps: number) {
   return `${formatPercentValue(basisPointsToPercent(bps))}%`;
 }
 
-function parseBootstrapCommissionPercent() {
-  const raw = Number(process.env.PLATFORM_FEE_PERCENT ?? FALLBACK_DEFAULT_PERCENT);
-  if (!Number.isFinite(raw)) return FIXED_COMMISSION_PERCENT;
-  if (raw !== FIXED_COMMISSION_PERCENT) {
-    console.warn(`[commission] PLATFORM_FEE_PERCENT=${raw} is overridden by the fixed ${FIXED_COMMISSION_PERCENT}% marketplace commission.`);
-  }
-  return FIXED_COMMISSION_PERCENT;
-}
-
-export const DEFAULT_BOOTSTRAP_COMMISSION_BPS = percentToBasisPoints(parseBootstrapCommissionPercent());
+export const DEFAULT_BOOTSTRAP_COMMISSION_BPS = percentToBasisPoints(FIXED_COMMISSION_PERCENT);
 
 export function calculateCommissionCents(amountCents: number, commissionRateBps: number) {
   return Math.round((amountCents * commissionRateBps) / 10_000);
