@@ -100,6 +100,22 @@ After deploying or while using Stripe CLI locally, point Stripe webhooks to:
 
 Listen for:
 - `checkout.session.completed`
+- `account.updated`
+- `customer.subscription.updated`
+- `customer.subscription.deleted`
+- `invoice.payment_succeeded`
+- `invoice.payment_failed`
+
+## Seller subscription
+
+FlupFlap uses a seller-only Stripe subscription for listing eligibility:
+
+- Price: **$4.99/month**
+- Billing: monthly recurring Stripe subscription
+- Access rule: only sellers with an active subscription can create new listings
+- If subscription becomes inactive (`past_due`, cancelled, expired, unpaid), new listing creation is blocked
+- Existing listings remain visible even if subscription later lapses
+- Free trial: none
 
 ## Commission
 The initial default platform commission is bootstrapped from:
