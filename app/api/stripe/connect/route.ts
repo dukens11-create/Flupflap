@@ -113,8 +113,13 @@ export async function GET() {
 
     return NextResponse.redirect(accountLink.url);
   } catch (err: unknown) {
-    console.error('[stripe/connect]', err);
-    const reason = classifyStripeError(err).reason;
-    return NextResponse.redirect(new URL(`/seller?stripe=error&reason=${reason}`, appUrl));
+    const classified = classifyStripeError(err);
+    console.error('[stripe/connect] Error:', {
+      reason: classified.reason,
+      message: classified.message,
+      code: classified.code,
+      statusCode: classified.statusCode,
+    });
+    return NextResponse.redirect(new URL(`/seller?stripe=error&reason=${classified.reason}`, appUrl));
   }
 }

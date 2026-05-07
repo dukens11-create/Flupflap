@@ -21,11 +21,18 @@ type StripeErrorShape = {
   message?: unknown;
 };
 
+function isStripeSecretKey(value: string): boolean {
+  return value.startsWith('sk_live_') || value.startsWith('sk_test_');
+}
+
 function getStripe(): Stripe {
   if (!_stripe) {
-    const key = process.env.STRIPE_SECRET_KEY;
+    const key = (process.env.STRIPE_SECRET_KEY ?? '').trim();
     if (!key) {
       throw new Error('[stripe] STRIPE_SECRET_KEY is not set. Configure it before making Stripe API calls.');
+    }
+    if (!isStripeSecretKey(key)) {
+      throw new Error('[stripe] STRIPE_SECRET_KEY is invalid. It must start with sk_live_ or sk_test_.');
     }
     _stripe = new Stripe(key, { apiVersion: '2024-06-20' as any });
   }
@@ -60,6 +67,8 @@ export function classifyStripeError(err: unknown): {
     || code === 'api_key_expired'
     || /invalid api key/i.test(message)
     || /provided api key/i.test(message)
+    || /STRIPE_SECRET_KEY .* not set/i.test(message)
+    || /STRIPE_SECRET_KEY .* invalid/i.test(message)
   ) {
     return { reason: 'invalid_key', message, code, statusCode };
   }
@@ -68,12 +77,14 @@ export function classifyStripeError(err: unknown): {
     code === 'account_invalid'
     || statusCode === 404
     || /no such account/i.test(message)
+    || /not connected to your platform/i.test(message)
   ) {
     return { reason: 'stale_account', message, code, statusCode };
   }
 
   if (
     /responsib(?:le|ility).*(?:loss|negative balance)/i.test(message)
+    || /managing losses for connected accounts/i.test(message)
     || /platform profile/i.test(message)
     || /connect platform/i.test(message)
   ) {
