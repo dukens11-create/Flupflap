@@ -73,7 +73,7 @@ export async function POST(
       },
     });
 
-    return NextResponse.json({ ok: true }, { status: 201 });
+    return NextResponse.json({ ok: true });
   } catch (err) {
     console.error('[orders/[id]/review POST]', err);
     return NextResponse.json({ error: 'Failed to submit review.' }, { status: 500 });

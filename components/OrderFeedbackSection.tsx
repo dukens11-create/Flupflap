@@ -13,6 +13,8 @@ import {
 type SellerOption = { id: string; name: string };
 type ExistingReview = { sellerId: string; rating: number; comment: string };
 type ExistingComplaint = { sellerId: string; category: string; description: string; status: string };
+type ReviewFormState = { rating: number; comment: string; loading: boolean; error: string; success: string };
+type ComplaintFormState = { category: string; description: string; loading: boolean; error: string; success: string };
 
 export default function OrderFeedbackSection({
   orderId,
@@ -27,7 +29,7 @@ export default function OrderFeedbackSection({
   existingReviews: ExistingReview[];
   existingComplaints: ExistingComplaint[];
 }) {
-  const [reviewState, setReviewState] = useState<Record<string, { rating: number; comment: string; loading: boolean; error: string; success: string }>>(() =>
+  const [reviewState, setReviewState] = useState<Record<string, ReviewFormState>>(() =>
     Object.fromEntries(
       sellers.map((s) => {
         const existing = existingReviews.find((r) => r.sellerId === s.id);
@@ -35,7 +37,7 @@ export default function OrderFeedbackSection({
       }),
     ),
   );
-  const [complaintState, setComplaintState] = useState<Record<string, { category: string; description: string; loading: boolean; error: string; success: string }>>(() =>
+  const [complaintState, setComplaintState] = useState<Record<string, ComplaintFormState>>(() =>
     Object.fromEntries(
       sellers.map((s) => {
         const existing = existingComplaints.find((c) => c.sellerId === s.id);

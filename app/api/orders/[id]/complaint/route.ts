@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { ReportStatus } from '@prisma/client';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
@@ -67,7 +68,7 @@ export async function POST(
       select: { status: true },
     });
 
-    if (existingComplaint && existingComplaint.status !== 'OPEN') {
+    if (existingComplaint && existingComplaint.status !== ReportStatus.OPEN) {
       return NextResponse.json(
         { error: 'This complaint is already under admin review.' },
         { status: 409 },
@@ -101,7 +102,7 @@ export async function POST(
       });
     }
 
-    return NextResponse.json({ ok: true }, { status: 201 });
+    return NextResponse.json({ ok: true });
   } catch (err) {
     console.error('[orders/[id]/complaint POST]', err);
     return NextResponse.json({ error: 'Failed to submit complaint.' }, { status: 500 });
