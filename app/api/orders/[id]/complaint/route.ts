@@ -3,22 +3,18 @@ import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
-import { COMPLAINT_CATEGORIES, COMPLAINT_DESCRIPTION_MIN_LENGTH, FEEDBACK_TEXT_MAX_LENGTH } from '@/lib/order-feedback';
+import {
+  COMPLAINT_CATEGORIES,
+  COMPLAINT_DESCRIPTION_MIN_LENGTH,
+  COMPLAINT_ELIGIBLE_ORDER_STATUSES,
+  FEEDBACK_TEXT_MAX_LENGTH,
+} from '@/lib/order-feedback';
 
 const schema = z.object({
   sellerId: z.string().min(1),
   category: z.enum(COMPLAINT_CATEGORIES),
   description: z.string().trim().min(COMPLAINT_DESCRIPTION_MIN_LENGTH).max(FEEDBACK_TEXT_MAX_LENGTH),
 });
-
-const ALLOWED_COMPLAINT_STATUSES = new Set([
-  'PAID',
-  'SHIPPED',
-  'DELIVERED',
-  'READY_FOR_PICKUP',
-  'PICKED_UP',
-  'REFUNDED',
-]);
 
 export async function POST(
   req: Request,
@@ -51,7 +47,7 @@ export async function POST(
       return NextResponse.json({ error: 'Order not found.' }, { status: 404 });
     }
 
-    if (!ALLOWED_COMPLAINT_STATUSES.has(order.status)) {
+    if (!COMPLAINT_ELIGIBLE_ORDER_STATUSES.includes(order.status as (typeof COMPLAINT_ELIGIBLE_ORDER_STATUSES)[number])) {
       return NextResponse.json({ error: 'Complaints can only be submitted for paid orders.' }, { status: 400 });
     }
 
@@ -78,27 +74,32 @@ export async function POST(
       );
     }
 
-    await prisma.buyerComplaint.upsert({
-      where: {
-        buyerId_sellerId_orderId: {
+    if (existingComplaint) {
+      await prisma.buyerComplaint.update({
+        where: {
+          buyerId_sellerId_orderId: {
+            buyerId: session.user.id,
+            sellerId,
+            orderId,
+          },
+        },
+        data: {
+          category,
+          description,
+          updatedAt: new Date(),
+        },
+      });
+    } else {
+      await prisma.buyerComplaint.create({
+        data: {
           buyerId: session.user.id,
           sellerId,
           orderId,
+          category,
+          description,
         },
-      },
-      create: {
-        buyerId: session.user.id,
-        sellerId,
-        orderId,
-        category,
-        description,
-      },
-      update: {
-        category,
-        description,
-        updatedAt: new Date(),
-      },
-    });
+      });
+    }
 
     return NextResponse.json({ ok: true }, { status: 201 });
   } catch (err) {

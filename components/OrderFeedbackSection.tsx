@@ -120,7 +120,7 @@ export default function OrderFeedbackSection({
                     aria-label={`Rating for ${seller.name}`}
                   >
                     {[5, 4, 3, 2, 1].map((r) => (
-                      <option key={r} value={r}>{'★'.repeat(r)}{'☆'.repeat(5 - r)} ({r})</option>
+                      <option key={r} value={r}>{r} {r === 1 ? 'star' : 'stars'}</option>
                     ))}
                   </select>
                   <textarea
