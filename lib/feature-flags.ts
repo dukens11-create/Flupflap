@@ -1,3 +1,12 @@
+const MAX_QUOTE_UNWRAP_PASSES = 2; // supports values like '"false"' from dashboard copy/paste.
+
+function hasMatchingWrapperQuotes(value: string): boolean {
+  return (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  );
+}
+
 /**
  * Feature flags — read from environment variables at runtime.
  *
@@ -17,10 +26,8 @@ export function isSmsOtpEnabled(): boolean {
   if (!raw) return true;
 
   let normalized = raw.trim();
-  for (let i = 0; i < 2; i += 1) {
-    const startsWithDoubleQuote = normalized.startsWith('"') && normalized.endsWith('"');
-    const startsWithSingleQuote = normalized.startsWith("'") && normalized.endsWith("'");
-    if (!startsWithDoubleQuote && !startsWithSingleQuote) break;
+  for (let i = 0; i < MAX_QUOTE_UNWRAP_PASSES; i += 1) {
+    if (!hasMatchingWrapperQuotes(normalized)) break;
     normalized = normalized.slice(1, -1).trim();
   }
   normalized = normalized.toLowerCase();

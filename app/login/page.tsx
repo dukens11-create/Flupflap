@@ -91,7 +91,7 @@ function LoginForm() {
 
     if (data.step === 'signin') {
       if (!pendingEmail || !pendingPassword) {
-        setError('Session expired. Please sign in again.');
+        setError('Login information not found. Please try again.');
         setStep('credentials');
         return;
       }
