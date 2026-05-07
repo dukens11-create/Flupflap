@@ -1,0 +1,107 @@
+{
+  "nav": {
+    "browse": "Explorar",
+    "dashboard": "Panel",
+    "listItem": "Publicar artículo",
+    "admin": "Administración",
+    "cart": "Carrito",
+    "orders": "Pedidos",
+    "messages": "Mensajes",
+    "account": "Cuenta",
+    "logout": "Cerrar sesión",
+    "login": "Iniciar sesión",
+    "signUp": "Registrarse",
+    "language": "Idioma"
+  },
+  "footer": {
+    "terms": "Términos",
+    "privacy": "Privacidad",
+    "sellerAgreement": "Acuerdo de vendedor",
+    "refundPolicy": "Política de reembolso"
+  },
+  "home": {
+    "title": "Marketplace de FlupFlap",
+    "subtitle": "Compra y vende artículos nuevos y usados",
+    "loadingProducts": "Cargando productos…",
+    "noProducts": "No se encontraron productos. Intenta ajustar los filtros."
+  },
+  "filters": {
+    "searchPlaceholder": "Buscar productos…",
+    "allCategories": "Todas las categorías",
+    "anyCondition": "Cualquier estado",
+    "minPrice": "Mín $",
+    "maxPrice": "Máx $",
+    "clearFilters": "Limpiar filtros",
+    "categories": {
+      "Electronics": "Electrónica",
+      "Clothing": "Ropa",
+      "Furniture": "Muebles",
+      "Books": "Libros",
+      "Toys": "Juguetes",
+      "Sports": "Deportes",
+      "Collectibles": "Coleccionables",
+      "Other": "Otro"
+    },
+    "conditions": {
+      "New": "Nuevo",
+      "Like New": "Como nuevo",
+      "Used": "Usado",
+      "For Parts": "Para piezas"
+    }
+  },
+  "product": {
+    "sponsored": "Patrocinado",
+    "shipping": "Envío {amount}",
+    "pickupIn": "🏠 Recogida en {location}",
+    "viewItem": "Ver artículo"
+  },
+  "login": {
+    "title": "Iniciar sesión",
+    "noAccount": "¿No tienes una cuenta?",
+    "signUp": "Registrarse",
+    "email": "Correo electrónico",
+    "password": "Contraseña",
+    "forgotPassword": "¿Olvidaste tu contraseña?",
+    "signingIn": "Iniciando sesión…",
+    "signIn": "Iniciar sesión",
+    "invalidCredentials": "Correo o contraseña inválidos.",
+    "addPhoneIntro": "Las cuentas de vendedor requieren un número de teléfono para el inicio de sesión en dos pasos. Agrega tu número para continuar. Se enviará un código de verificación.",
+    "phoneNumber": "Número de teléfono",
+    "phoneHint": "Se recomienda código de país (p. ej., +1 para EE. UU./Canadá, +44 para Reino Unido). También se aceptan números de 10 dígitos de EE. UU. sin código de país.",
+    "sendingCode": "Enviando código…",
+    "sendVerificationCode": "Enviar código de verificación",
+    "back": "Atrás",
+    "otpIntro": "Enviamos un código de verificación de 6 dígitos a {phone}. Ingresa el código para completar el inicio de sesión.",
+    "verificationCode": "Código de verificación",
+    "verifying": "Verificando…",
+    "verifyAndSignIn": "Verificar e iniciar sesión",
+    "resendCode": "Reenviar código",
+    "invalidCode": "Código inválido o expirado. Inténtalo de nuevo.",
+    "failedSavePhone": "No se pudo guardar el número de teléfono.",
+    "missingLoginInfo": "No se encontró la información de inicio de sesión. Inténtalo de nuevo.",
+    "failedResendCode": "No se pudo reenviar el código."
+  },
+  "signup": {
+    "title": "Crear cuenta",
+    "fullName": "Nombre completo",
+    "password": "Contraseña",
+    "passwordPlaceholder": "Mínimo 8 caracteres",
+    "accountType": "Tipo de cuenta",
+    "customerOption": "Comprador – Quiero comprar",
+    "sellerOption": "Vendedor – Quiero vender",
+    "mobilePhone": "Número de teléfono móvil",
+    "phoneHelp": "Se usa para autenticación de dos factores cuando inicias sesión. Pueden aplicarse tarifas de mensajería.",
+    "creatingAccount": "Creando cuenta…",
+    "createAccount": "Crear cuenta",
+    "alreadyHave": "¿Ya tienes una cuenta?",
+    "signIn": "Iniciar sesión",
+    "signupFailed": "Error al registrarse"
+  },
+  "notFound": {
+    "metaTitle": "Página no encontrada",
+    "title": "Página no encontrada",
+    "description": "La página que buscas no existe o pudo haberse movido.",
+    "goMarketplace": "Ir al marketplace",
+    "viewCart": "Ver tu carrito"
+  }
+}

@@ -4,6 +4,7 @@ FlupFlap is a marketplace starter app like a small eBay: FlupFlap can sell items
 
 ## Included now
 - Public home page and product browsing
+- Multilingual UI support (English, Español, Français) with language selector
 - Product detail pages
 - Search and filters: keyword, category, condition, min/max price
 - Customer/seller signup and login with NextAuth Credentials
@@ -39,6 +40,13 @@ npm run dev
 ```
 
 Open: http://localhost:3000
+
+## Language support
+
+- Supported languages: `en`, `es`, `fr`
+- Default language: English (`en`)
+- Users can switch language from the header selector
+- Selected language is persisted in localStorage and a cookie (`flupflap_locale`)
 
 ## Demo accounts
 - Admin: `admin@flupflap.com`
