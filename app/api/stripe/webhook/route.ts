@@ -128,27 +128,28 @@ export async function POST(req: Request) {
         defaultSellerCommissionBps: settings.defaultSellerCommissionBps,
       });
       const snapshotCommission = commissionItemsByProductId.get(product.id);
-      const quantity = item.quantity;
-      const priceCents = product.priceCents;
-      const shippingCents = pickupSet.has(product.id) ? 0 : product.shippingCents;
-      const priceTotalCents = priceCents * quantity;
+      const quantity = snapshotCommission?.quantity ?? item.quantity;
+      const priceCents = snapshotCommission?.priceCents ?? product.priceCents;
+      const shippingCents = snapshotCommission?.shippingCents ?? (pickupSet.has(product.id) ? 0 : product.shippingCents);
+      const lineSubtotalCents = snapshotCommission?.lineSubtotalCents ?? (priceCents * quantity);
       const commissionRateBps = snapshotCommission?.commissionRateBps ?? fallbackCommission.commissionRateBps;
-      const commissionFeeCents = snapshotCommission?.commissionFeeCents ?? calculateCommissionCents(priceTotalCents, commissionRateBps);
+      const commissionFeeCents = snapshotCommission?.commissionFeeCents ?? calculateCommissionCents(lineSubtotalCents, commissionRateBps);
 
       return {
         product,
         quantity,
         priceCents,
         shippingCents,
+        lineSubtotalCents,
         commissionRateBps,
         commissionFeeCents,
-        sellerNetCents: snapshotCommission?.sellerNetCents ?? calculateSellerNetCents(priceTotalCents, commissionRateBps),
+        sellerNetCents: snapshotCommission?.sellerNetCents ?? calculateSellerNetCents(lineSubtotalCents, commissionRateBps),
         commissionSource: snapshotCommission?.commissionSource ?? fallbackCommission.commissionSource,
         commissionPlanCode: snapshotCommission?.commissionPlanCode ?? fallbackCommission.commissionPlanCode,
       };
     });
 
-    const subtotalCents = orderItems.reduce((sum, item) => sum + item.priceCents * item.quantity, 0);
+    const subtotalCents = orderItems.reduce((sum, item) => sum + item.lineSubtotalCents, 0);
     const shippingTotalCents = orderItems.reduce((sum, item) => sum + item.shippingCents * item.quantity, 0);
     const platformFeeCents = orderItems.reduce((sum, item) => sum + item.commissionFeeCents, 0);
     const totalCents = subtotalCents + shippingTotalCents;
@@ -186,6 +187,7 @@ export async function POST(req: Request) {
             priceCents: item.priceCents,
             shippingCents: item.shippingCents,
             quantity: item.quantity,
+            lineSubtotalCents: item.lineSubtotalCents,
             commissionRateBps: item.commissionRateBps,
             commissionFeeCents: item.commissionFeeCents,
             sellerNetCents: item.sellerNetCents,
@@ -263,7 +265,7 @@ export async function POST(req: Request) {
           where: { id: activePromotion.id },
           data: {
             saleCount: { increment: item.quantity },
-            saleAmountCents: { increment: item.priceCents * item.quantity },
+            saleAmountCents: { increment: item.lineSubtotalCents },
           },
         });
       }

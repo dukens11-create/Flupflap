@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { dollars } from '@/lib/money';
-import { basisPointsToPercent, formatCommissionPercent, getMarketplaceSettings } from '@/lib/commission';
+import { formatCommissionPercent, getMarketplaceSettings } from '@/lib/commission';
 import type { Metadata } from 'next';
 
 export const dynamic = 'force-dynamic';
@@ -156,39 +156,24 @@ export default async function AdminPage({
       </div>
 
       <section className="mb-8">
-        <div className="card p-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <h2 className="text-xl font-bold">Marketplace Commission</h2>
-              <p className="text-sm text-slate-500 mt-1">
-                Default seller commission is currently {formatCommissionPercent(settings.defaultSellerCommissionBps)}.
-                Future seller plan overrides can replace this default per seller.
-              </p>
+          <div className="card p-5">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <h2 className="text-xl font-bold">Marketplace Commission</h2>
+                <p className="text-sm text-slate-500 mt-1">
+                  FlupFlap keeps a fixed {formatCommissionPercent(settings.defaultSellerCommissionBps)} commission on each paid seller item.
+                  Order items store the rate, subtotal, fee, and seller net amount at payment time for later payout reporting.
+                </p>
+              </div>
+              <div className="card px-4 py-3 bg-slate-50 border-slate-200 text-sm text-slate-600">
+                Fixed commission: <span className="font-semibold text-slate-900">{formatCommissionPercent(settings.defaultSellerCommissionBps)}</span>
+              </div>
             </div>
-            <form action="/api/admin/commission" method="POST" className="flex flex-col sm:flex-row gap-3 sm:items-end">
-              <label className="block">
-                <span className="label">Default commission %</span>
-                <input
-                  type="number"
-                  name="defaultSellerCommissionPercent"
-                  min="0"
-                  max="100"
-                  step="0.25"
-                  defaultValue={basisPointsToPercent(settings.defaultSellerCommissionBps)}
-                  className="input w-full sm:w-36"
-                  required
-                />
-              </label>
-              <button type="submit" className="btn-primary text-sm">
-                Save commission
-              </button>
-            </form>
+            <p className="text-xs text-slate-400 mt-3">
+              New checkout sessions and paid orders automatically use the fixed 6% commission. Existing orders keep their stored commission snapshots for audit reporting.
+            </p>
           </div>
-          <p className="text-xs text-slate-400 mt-3">
-            New checkout sessions will use the saved default automatically. Existing orders keep their stored commission snapshots for audit reporting.
-          </p>
-        </div>
-      </section>
+        </section>
 
       {pending.length > 0 && (
         <section className="mb-8">

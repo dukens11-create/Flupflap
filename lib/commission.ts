@@ -1,8 +1,6 @@
 import { prisma } from '@/lib/db';
 
-const FALLBACK_DEFAULT_PERCENT = 7;
-const DEFAULT_MIN_PERCENT = 6;
-const DEFAULT_MAX_PERCENT = 8;
+const FIXED_COMMISSION_PERCENT = 6;
 const MARKETPLACE_SETTINGS_ID = 1;
 
 type SellerPlanLike = {
@@ -33,6 +31,9 @@ export type CheckoutCommissionItem = {
   quantity: number;
   priceCents: number;
   shippingCents: number;
+  // Persist item price × quantity from checkout/payment time so later listing
+  // price edits do not change historical commission reporting.
+  lineSubtotalCents: number;
   commissionRateBps: number;
   commissionFeeCents: number;
   sellerNetCents: number;
@@ -56,17 +57,7 @@ export function formatCommissionPercent(bps: number) {
   return `${formatPercentValue(basisPointsToPercent(bps))}%`;
 }
 
-function parseBootstrapCommissionPercent() {
-  const raw = Number(process.env.PLATFORM_FEE_PERCENT ?? FALLBACK_DEFAULT_PERCENT);
-  if (!Number.isFinite(raw)) return FALLBACK_DEFAULT_PERCENT;
-  const clamped = Math.min(DEFAULT_MAX_PERCENT, Math.max(DEFAULT_MIN_PERCENT, raw));
-  if (clamped !== raw) {
-    console.warn(`[commission] PLATFORM_FEE_PERCENT=${raw} is outside the supported bootstrap range; using ${clamped}% instead.`);
-  }
-  return clamped;
-}
-
-export const DEFAULT_BOOTSTRAP_COMMISSION_BPS = percentToBasisPoints(parseBootstrapCommissionPercent());
+export const DEFAULT_BOOTSTRAP_COMMISSION_BPS = percentToBasisPoints(FIXED_COMMISSION_PERCENT);
 
 export function calculateCommissionCents(amountCents: number, commissionRateBps: number) {
   return Math.round((amountCents * commissionRateBps) / 10_000);
@@ -76,15 +67,42 @@ export function calculateSellerNetCents(amountCents: number, commissionRateBps: 
   return amountCents - calculateCommissionCents(amountCents, commissionRateBps);
 }
 
+export function getStoredLineSubtotalCents(item: {
+  lineSubtotalCents: number;
+  priceCents: number;
+  quantity: number;
+}) {
+  if (item.lineSubtotalCents === 0 && item.priceCents > 0 && item.quantity > 0) {
+    return item.priceCents * item.quantity;
+  }
+
+  return item.lineSubtotalCents;
+}
+
 export async function getMarketplaceSettings() {
-  return prisma.marketplaceSettings.upsert({
+  const existing = await prisma.marketplaceSettings.findUnique({
     where: { id: MARKETPLACE_SETTINGS_ID },
-    update: {},
-    create: {
-      id: MARKETPLACE_SETTINGS_ID,
-      defaultSellerCommissionBps: DEFAULT_BOOTSTRAP_COMMISSION_BPS,
-    },
   });
+
+  if (!existing) {
+    return prisma.marketplaceSettings.create({
+      data: {
+        id: MARKETPLACE_SETTINGS_ID,
+        defaultSellerCommissionBps: DEFAULT_BOOTSTRAP_COMMISSION_BPS,
+      },
+    });
+  }
+
+  if (existing.defaultSellerCommissionBps !== DEFAULT_BOOTSTRAP_COMMISSION_BPS) {
+    return prisma.marketplaceSettings.update({
+      where: { id: MARKETPLACE_SETTINGS_ID },
+      data: {
+        defaultSellerCommissionBps: DEFAULT_BOOTSTRAP_COMMISSION_BPS,
+      },
+    });
+  }
+
+  return existing;
 }
 
 export function resolveCommissionForSeller({
@@ -94,14 +112,6 @@ export function resolveCommissionForSeller({
   seller: SellerLike;
   defaultSellerCommissionBps: number;
 }) {
-  if (seller.sellerPlan?.commissionRateBps != null) {
-    return {
-      commissionRateBps: seller.sellerPlan.commissionRateBps,
-      commissionSource: 'SELLER_PLAN' as const,
-      commissionPlanCode: seller.sellerPlan.code,
-    };
-  }
-
   return {
     commissionRateBps: defaultSellerCommissionBps,
     commissionSource: 'DEFAULT' as const,
@@ -127,14 +137,14 @@ export function buildCheckoutCommissionItems<
 
   const commissionItems = products.map((product) => {
     const quantity = items.find((item) => item.productId === product.id)?.quantity ?? 1;
-    const priceTotalCents = product.priceCents * quantity;
+    const lineSubtotalCents = product.priceCents * quantity;
     // Product.shippingCents is stored as the per-unit shipping amount.
     const shippingCents = pickupSet.has(product.id) ? 0 : product.shippingCents;
     const resolved = resolveCommissionForSeller({
       seller: product.seller,
       defaultSellerCommissionBps,
     });
-    const commissionFeeCents = calculateCommissionCents(priceTotalCents, resolved.commissionRateBps);
+    const commissionFeeCents = calculateCommissionCents(lineSubtotalCents, resolved.commissionRateBps);
 
     return {
       productId: product.id,
@@ -144,15 +154,16 @@ export function buildCheckoutCommissionItems<
       quantity,
       priceCents: product.priceCents,
       shippingCents,
+      lineSubtotalCents,
       commissionRateBps: resolved.commissionRateBps,
       commissionFeeCents,
-      sellerNetCents: calculateSellerNetCents(priceTotalCents, resolved.commissionRateBps),
+      sellerNetCents: calculateSellerNetCents(lineSubtotalCents, resolved.commissionRateBps),
       commissionSource: resolved.commissionSource,
       commissionPlanCode: resolved.commissionPlanCode,
     } satisfies CheckoutCommissionItem;
   });
 
-  const subtotalCents = commissionItems.reduce((sum, item) => sum + item.priceCents * item.quantity, 0);
+  const subtotalCents = commissionItems.reduce((sum, item) => sum + item.lineSubtotalCents, 0);
   const shippingTotalCents = commissionItems.reduce((sum, item) => sum + item.shippingCents * item.quantity, 0);
   const platformFeeCents = commissionItems.reduce((sum, item) => sum + item.commissionFeeCents, 0);
   const totalCents = subtotalCents + shippingTotalCents;

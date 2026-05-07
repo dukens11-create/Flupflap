@@ -52,24 +52,24 @@ enum OrderStatus {
 }
 
 model User {
-  id                       String        @id @default(cuid())
+  id                       String                    @id @default(cuid())
   name                     String
-  email                    String        @unique
+  email                    String                    @unique
   password                 String
-  role                     Role          @default(CUSTOMER)
+  role                     Role                      @default(CUSTOMER)
   phone                    String?
   stripeAccountId          String?
   stripeAccountMode        String?
-  stripeOnboardingComplete Boolean       @default(false)
+  stripeOnboardingComplete Boolean                   @default(false)
   deletedAt                DateTime?
   deletionReason           String?
   deletionReasonOther      String?
-  sellerStatus             SellerStatus  @default(ACTIVE)
+  sellerStatus             SellerStatus              @default(ACTIVE)
   sellerStatusReason       String?
   sellerStatusNotes        String?
-  phoneVerified            Boolean       @default(false)
+  phoneVerified            Boolean                   @default(false)
   phoneVerifiedAt          DateTime?
-  createdAt                DateTime      @default(now())
+  createdAt                DateTime                  @default(now())
   products                 Product[]
   orders                   Order[]
   addresses                Address[]
@@ -77,19 +77,19 @@ model User {
   sessions                 Session[]
   sellerOtp                SellerOtp?
   phoneVerificationToken   PhoneVerificationToken?
-  moderationLogsAsSeller   SellerModerationLog[] @relation("ModeratedSeller")
-  moderationLogsAsAdmin    SellerModerationLog[] @relation("AdminModerator")
-  adminAccessLogs          AdminAccessLog[] @relation("AdminAccessor")
-  accessedByAdminLogs      AdminAccessLog[] @relation("AccessedUser")
-  buyerConversations       Conversation[] @relation("BuyerConversations")
-  sellerConversations      Conversation[] @relation("SellerConversations")
-  sentMessages             Message[]      @relation("SentMessages")
-  reportsFiled             ProductReport[] @relation("ReporterReports")
-  reportsAboutSeller       ProductReport[] @relation("SellerReports")
-  reportResolutions        ProductReport[] @relation("AdminReportResolutions")
+  moderationLogsAsSeller   SellerModerationLog[]     @relation("ModeratedSeller")
+  moderationLogsAsAdmin    SellerModerationLog[]     @relation("AdminModerator")
+  adminAccessLogs          AdminAccessLog[]          @relation("AdminAccessor")
+  accessedByAdminLogs      AdminAccessLog[]          @relation("AccessedUser")
+  buyerConversations       Conversation[]            @relation("BuyerConversations")
+  sellerConversations      Conversation[]            @relation("SellerConversations")
+  sentMessages             Message[]                 @relation("SentMessages")
+  reportsFiled             ProductReport[]           @relation("ReporterReports")
+  reportsAboutSeller       ProductReport[]           @relation("SellerReports")
+  reportResolutions        ProductReport[]           @relation("AdminReportResolutions")
   promotions               Promotion[]
   sellerPlanId             String?
-  sellerPlan               SellerPlan?   @relation(fields: [sellerPlanId], references: [id])
+  sellerPlan               SellerPlan?               @relation(fields: [sellerPlanId], references: [id])
   checkoutSessionSnapshots CheckoutSessionSnapshot[]
 }
 
@@ -104,26 +104,26 @@ model SellerOtp {
 }
 
 model Product {
-  id               String        @id @default(cuid())
+  id               String          @id @default(cuid())
   title            String
   description      String
   priceCents       Int
   condition        String
   category         String
   imageUrl         String
-  inventory        Int           @default(1)
-  shippingCents    Int           @default(0)
-  status           ProductStatus @default(PENDING)
+  inventory        Int             @default(1)
+  shippingCents    Int             @default(0)
+  status           ProductStatus   @default(PENDING)
   sellerId         String
-  seller           User          @relation(fields: [sellerId], references: [id])
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  seller           User            @relation(fields: [sellerId], references: [id])
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
   orderItems       OrderItem[]
   conversations    Conversation[]
   reports          ProductReport[]
   promotions       Promotion[]
   // Pickup fields
-  pickupAvailable  Boolean       @default(false)
+  pickupAvailable  Boolean         @default(false)
   pickupCity       String?
   pickupState      String?
   pickupPostalCode String?
@@ -175,7 +175,7 @@ model Order {
   pickupState           String?
   // Pickup confirmation
   pickupCode            String?
-  pickupCodeAttempts    Int       @default(0)
+  pickupCodeAttempts    Int         @default(0)
   pickupConfirmedAt     DateTime?
   pickupConfirmedById   String?
   createdAt             DateTime    @default(now())
@@ -184,18 +184,19 @@ model Order {
 }
 
 model OrderItem {
-  id                String  @id @default(cuid())
-  orderId           String
-  order             Order   @relation(fields: [orderId], references: [id])
-  productId         String
-  product           Product @relation(fields: [productId], references: [id])
-  priceCents        Int
-  shippingCents     Int     @default(0)
-  quantity          Int     @default(1)
-  commissionRateBps Int     @default(700)
-  commissionFeeCents Int    @default(0)
-  sellerNetCents    Int     @default(0)
-  commissionSource  String  @default("DEFAULT")
+  id                 String  @id @default(cuid())
+  orderId            String
+  order              Order   @relation(fields: [orderId], references: [id])
+  productId          String
+  product            Product @relation(fields: [productId], references: [id])
+  priceCents         Int
+  shippingCents      Int     @default(0)
+  quantity           Int     @default(1)
+  lineSubtotalCents  Int     @default(0)
+  commissionRateBps  Int     @default(600)
+  commissionFeeCents Int     @default(0)
+  sellerNetCents     Int     @default(0)
+  commissionSource   String  @default("DEFAULT")
   commissionPlanCode String?
 }
 
@@ -239,7 +240,7 @@ model SellerModerationLog {
   seller         User     @relation("ModeratedSeller", fields: [sellerId], references: [id])
   adminId        String
   admin          User     @relation("AdminModerator", fields: [adminId], references: [id])
-  action         String   // SUSPENDED | BANNED | REINSTATED
+  action         String // SUSPENDED | BANNED | REINSTATED
   reasonCategory String?
   notes          String?
   createdAt      DateTime @default(now())
@@ -308,23 +309,23 @@ model Message {
 // ── Product Reporting ─────────────────────────────────────────────────────────
 
 model ProductReport {
-  id           String       @id @default(cuid())
-  productId    String
-  product      Product      @relation(fields: [productId], references: [id])
-  reporterId   String
-  reporter     User         @relation("ReporterReports", fields: [reporterId], references: [id])
-  sellerId     String
-  seller       User         @relation("SellerReports", fields: [sellerId], references: [id])
-  reason       String
-  notes        String?
-  status       ReportStatus @default(OPEN)
-  adminId      String?
-  admin        User?        @relation("AdminReportResolutions", fields: [adminId], references: [id])
-  adminAction  String?
-  adminNotes   String?
-  resolvedAt   DateTime?
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  id          String       @id @default(cuid())
+  productId   String
+  product     Product      @relation(fields: [productId], references: [id])
+  reporterId  String
+  reporter    User         @relation("ReporterReports", fields: [reporterId], references: [id])
+  sellerId    String
+  seller      User         @relation("SellerReports", fields: [sellerId], references: [id])
+  reason      String
+  notes       String?
+  status      ReportStatus @default(OPEN)
+  adminId     String?
+  admin       User?        @relation("AdminReportResolutions", fields: [adminId], references: [id])
+  adminAction String?
+  adminNotes  String?
+  resolvedAt  DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 
   // One open report per reporter/product/reason (prevent spam)
   @@unique([reporterId, productId, reason])
@@ -375,7 +376,7 @@ model PromotionPlan {
 
 model MarketplaceSettings {
   id                         Int      @id @default(1)
-  defaultSellerCommissionBps Int      @default(700)
+  defaultSellerCommissionBps Int      @default(600)
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
 }
@@ -391,15 +392,15 @@ model SellerPlan {
 }
 
 model CheckoutSessionSnapshot {
-  stripeCheckoutId   String   @id
-  buyerId            String
-  buyer              User     @relation(fields: [buyerId], references: [id], onDelete: Cascade)
-  items              Json
-  pickupItemIds      Json
-  commissionItems    Json
-  directToSellerId   String?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  stripeCheckoutId String   @id
+  buyerId          String
+  buyer            User     @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  items            Json
+  pickupItemIds    Json
+  commissionItems  Json
+  directToSellerId String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   @@index([buyerId])
 }

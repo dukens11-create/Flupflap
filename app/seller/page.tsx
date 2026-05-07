@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { dollars } from '@/lib/money';
-import { formatCommissionPercent, getMarketplaceSettings } from '@/lib/commission';
+import { formatCommissionPercent, getMarketplaceSettings, getStoredLineSubtotalCents } from '@/lib/commission';
 import { classifyStripeError, getCurrentStripeMode, stripe } from '@/lib/stripe';
 import Link from 'next/link';
 import type { Metadata } from 'next';
@@ -103,7 +103,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   ]);
 
   // Compute earnings from seller's completed order items
-  const grossSalesCents = soldItems.reduce((s, i) => s + i.priceCents * i.quantity, 0);
+  const grossSalesCents = soldItems.reduce((s, i) => s + getStoredLineSubtotalCents(i), 0);
   const platformFeesCents = soldItems.reduce((s, i) => s + i.commissionFeeCents, 0);
   const netEarningsCents = soldItems.reduce((s, i) => s + i.sellerNetCents, 0);
   const itemsSoldCount = soldItems.reduce((s, i) => s + i.quantity, 0);
@@ -336,7 +336,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                   <th className="px-4 py-3 font-semibold text-slate-600">Item</th>
                   <th className="px-4 py-3 font-semibold text-slate-600 hidden sm:table-cell">Date</th>
                   <th className="px-4 py-3 font-semibold text-slate-600 text-right">Qty</th>
-                  <th className="px-4 py-3 font-semibold text-slate-600 text-right">Item Price</th>
+                  <th className="px-4 py-3 font-semibold text-slate-600 text-right">Subtotal</th>
                   <th className="px-4 py-3 font-semibold text-slate-600 text-right">Commission</th>
                   <th className="px-4 py-3 font-semibold text-slate-600 text-right">Net Payout</th>
                   <th className="px-4 py-3 font-semibold text-slate-600 text-right">Status</th>
@@ -350,8 +350,14 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                       {item.order.createdAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                     </td>
                     <td className="px-4 py-3 text-right text-slate-700">{item.quantity}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-slate-800">{dollars(item.priceCents * item.quantity)}</td>
-                    <td className="px-4 py-3 text-right text-slate-700">−{dollars(item.commissionFeeCents)}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-slate-800">
+                      <div>{dollars(getStoredLineSubtotalCents(item))}</div>
+                      <div className="text-xs font-normal text-slate-500">{dollars(item.priceCents)} each</div>
+                    </td>
+                    <td className="px-4 py-3 text-right text-slate-700">
+                      <div>−{dollars(item.commissionFeeCents)}</div>
+                      <div className="text-xs text-slate-500">{formatCommissionPercent(item.commissionRateBps)}</div>
+                    </td>
                     <td className="px-4 py-3 text-right font-semibold text-green-700">{dollars(item.sellerNetCents)}</td>
                     <td className="px-4 py-3 text-right">
                       <span className={`badge ${orderStatusBadge(item.order.status)}`}>{item.order.status}</span>

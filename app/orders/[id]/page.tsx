@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { dollars } from '@/lib/money';
+import { getStoredLineSubtotalCents } from '@/lib/commission';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 
@@ -98,10 +99,10 @@ export default async function OrderDetailPage({
                   {item.product.title}
                 </Link>
                 <p className="text-xs text-slate-500">
-                  Sold by {item.product.seller.name} · Qty: {item.quantity}
+                  Sold by {item.product.seller.name} · {dollars(item.priceCents)} each · Qty: {item.quantity}
                 </p>
               </div>
-              <p className="font-semibold flex-shrink-0">{dollars(item.priceCents * item.quantity)}</p>
+              <p className="font-semibold flex-shrink-0">{dollars(getStoredLineSubtotalCents(item))}</p>
             </div>
           ))}
         </div>
