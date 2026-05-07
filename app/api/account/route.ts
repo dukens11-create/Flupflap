@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
+import { ACCOUNT_DELETION_REASONS } from '@/lib/account-deletion';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 
@@ -59,6 +60,16 @@ export async function PATCH(req: Request) {
 
 const deleteSchema = z.object({
   password: z.string().min(1, 'Password is required to confirm account deletion.'),
+  reason: z.enum(ACCOUNT_DELETION_REASONS, { message: 'Please choose a deletion reason.' }),
+  otherDetails: z.string().trim().max(500, 'Please keep details under 500 characters.').optional(),
+}).superRefine((value, ctx) => {
+  if (value.reason === 'other' && !value.otherDetails) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['otherDetails'],
+      message: 'Please provide details when selecting Other.',
+    });
+  }
 });
 
 /**
@@ -79,13 +90,22 @@ export async function DELETE(req: Request) {
     }
 
     const body = await req.json();
-    const { password } = deleteSchema.parse(body);
+    const { password, reason, otherDetails } = deleteSchema.parse(body);
 
     const userId = session.user.id;
 
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, password: true, role: true },
+    });
     if (!user) {
       return NextResponse.json({ error: 'User not found.' }, { status: 404 });
+    }
+    if (user.role === 'ADMIN') {
+      return NextResponse.json(
+        { error: 'Admin accounts cannot be deleted.' },
+        { status: 403 },
+      );
     }
 
     // Verify password before deletion
@@ -166,6 +186,9 @@ export async function DELETE(req: Request) {
           phoneVerifiedAt: null,
           stripeAccountId: null,
           stripeOnboardingComplete: false,
+          deletedAt: new Date(),
+          deletionReason: reason,
+          deletionReasonOther: reason === 'other' ? otherDetails! : null,
         },
       });
     });
