@@ -87,6 +87,11 @@ model User {
   reportsFiled             ProductReport[]           @relation("ReporterReports")
   reportsAboutSeller       ProductReport[]           @relation("SellerReports")
   reportResolutions        ProductReport[]           @relation("AdminReportResolutions")
+  sellerReviewsGiven       SellerReview[]            @relation("SellerReviewsGiven")
+  sellerReviewsReceived    SellerReview[]            @relation("SellerReviewsReceived")
+  buyerComplaintsFiled     BuyerComplaint[]          @relation("BuyerComplaintsFiled")
+  buyerComplaintsAgainst   BuyerComplaint[]          @relation("BuyerComplaintsAgainst")
+  buyerComplaintResolutions BuyerComplaint[]         @relation("AdminComplaintResolutions")
   promotions               Promotion[]
   sellerPlanId             String?
   sellerPlan               SellerPlan?               @relation(fields: [sellerPlanId], references: [id])
@@ -190,6 +195,8 @@ model Order {
   createdAt             DateTime    @default(now())
   updatedAt             DateTime    @updatedAt
   items                 OrderItem[]
+  sellerReviews         SellerReview[]
+  buyerComplaints       BuyerComplaint[]
 }
 
 model OrderItem {
@@ -341,6 +348,53 @@ model ProductReport {
   @@index([productId])
   @@index([sellerId])
   @@index([status])
+}
+
+// ── Seller Reviews & Buyer Complaints ──────────────────────────────────────────
+
+model SellerReview {
+  id        String   @id @default(cuid())
+  buyerId   String
+  buyer     User     @relation("SellerReviewsGiven", fields: [buyerId], references: [id])
+  sellerId  String
+  seller    User     @relation("SellerReviewsReceived", fields: [sellerId], references: [id])
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id])
+  rating    Int
+  comment   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // One review per buyer/seller/order combination
+  @@unique([buyerId, sellerId, orderId])
+  @@index([sellerId, createdAt])
+  @@index([orderId])
+}
+
+model BuyerComplaint {
+  id          String       @id @default(cuid())
+  buyerId     String
+  buyer       User         @relation("BuyerComplaintsFiled", fields: [buyerId], references: [id])
+  sellerId    String
+  seller      User         @relation("BuyerComplaintsAgainst", fields: [sellerId], references: [id])
+  orderId     String
+  order       Order        @relation(fields: [orderId], references: [id])
+  category    String
+  description String
+  status      ReportStatus @default(OPEN)
+  adminId     String?
+  admin       User?        @relation("AdminComplaintResolutions", fields: [adminId], references: [id])
+  adminAction String?
+  adminNotes  String?
+  resolvedAt  DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  // One complaint per buyer/seller/order combination
+  @@unique([buyerId, sellerId, orderId])
+  @@index([status, createdAt])
+  @@index([sellerId])
+  @@index([orderId])
 }
 
 // ── Product Promotions ────────────────────────────────────────────────────────

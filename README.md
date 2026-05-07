@@ -18,6 +18,7 @@ FlupFlap is a marketplace starter app like a small eBay: FlupFlap can sell items
 - Stripe webhook route to mark orders paid and products sold
 - Shipping price fields, order tracking fields, and mark-shipped form
 - Order dashboard
+- Buyer seller-reviews and buyer complaint submission flow from orders
 - Prisma PostgreSQL schema with users, products, orders, order items, addresses, auth sessions
 - Starter legal pages: Terms, Privacy, Seller Agreement, Refund Policy
 - Demo seed data
