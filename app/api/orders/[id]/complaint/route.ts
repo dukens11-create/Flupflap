@@ -70,7 +70,7 @@ export async function POST(
 
     if (existingComplaint && existingComplaint.status !== ReportStatus.OPEN) {
       return NextResponse.json(
-        { error: 'This complaint is already under admin review.' },
+        { error: 'This complaint has already been reviewed and cannot be modified.' },
         { status: 409 },
       );
     }

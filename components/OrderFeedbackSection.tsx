@@ -5,6 +5,7 @@ import {
   COMPLAINT_CATEGORIES,
   COMPLAINT_CATEGORY_LABELS,
   COMPLAINT_DESCRIPTION_MIN_LENGTH,
+  COMPLAINT_STATUS_LABELS,
   FEEDBACK_TEXT_MAX_LENGTH,
   REVIEWABLE_ORDER_STATUSES,
   REVIEW_COMMENT_MIN_LENGTH,
@@ -166,7 +167,11 @@ export default function OrderFeedbackSection({
               <div key={seller.id} className="rounded-xl border border-slate-200 p-3">
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <p className="text-sm font-semibold">{seller.name}</p>
-                  {existing?.status && <span className="badge badge-yellow">{existing.status}</span>}
+                  {existing?.status && (
+                    <span className="badge badge-yellow">
+                      {COMPLAINT_STATUS_LABELS[existing.status] ?? existing.status}
+                    </span>
+                  )}
                 </div>
                 <div className="grid sm:grid-cols-[220px_1fr] gap-2">
                   <select

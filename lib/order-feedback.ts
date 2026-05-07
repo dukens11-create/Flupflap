@@ -36,3 +36,9 @@ export const COMPLAINT_CATEGORY_LABELS: Record<(typeof COMPLAINT_CATEGORIES)[num
   fraud_scam: 'Fraud / scam',
   other: 'Other',
 };
+
+export const COMPLAINT_STATUS_LABELS: Record<string, string> = {
+  OPEN: 'Open',
+  DISMISSED: 'Dismissed',
+  RESOLVED: 'Resolved',
+};
