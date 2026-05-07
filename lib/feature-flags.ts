@@ -26,7 +26,7 @@ export function isSmsOtpEnabled(): boolean {
   if (!raw) return true;
 
   let normalized = raw.trim();
-  for (let pass = 0; pass < MAX_QUOTE_UNWRAP_PASSES; pass += 1) {
+  for (let iteration = 0; iteration < MAX_QUOTE_UNWRAP_PASSES; iteration += 1) {
     if (!hasMatchingWrapperQuotes(normalized)) break;
     normalized = normalized.slice(1, -1).trim();
   }
