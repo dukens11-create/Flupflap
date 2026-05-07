@@ -39,6 +39,24 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub?: s
   );
 }
 
+function stripeAccountStatus(account: {
+  charges_enabled?: boolean;
+  payouts_enabled?: boolean;
+  requirements?: {
+    currently_due?: string[] | null;
+    past_due?: string[] | null;
+    disabled_reason?: string | null;
+  } | null;
+}) {
+  return {
+    chargesEnabled: !!account.charges_enabled,
+    payoutsEnabled: !!account.payouts_enabled,
+    requirementsDue: account.requirements?.currently_due ?? [],
+    requirementsPastDue: account.requirements?.past_due ?? [],
+    disabledReason: account.requirements?.disabled_reason ?? null,
+  };
+}
+
 export default async function SellerPage({ searchParams }: { searchParams: Promise<{ created?: string; stripe?: string; reason?: string; updated?: string; deleted?: string; promoted?: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect('/login');
@@ -99,6 +117,11 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   const currentStripeMode = getCurrentStripeMode();
   // stripeInProgress: seller has started onboarding but not yet completed it
   const stripeInProgress = !!stripeAccountId && !stripeOnboarded;
+  let stripeChargesEnabled: boolean | null = null;
+  let stripePayoutsEnabled: boolean | null = null;
+  let stripeRequirementsDue: string[] = [];
+  let stripeRequirementsPastDue: string[] = [];
+  let stripeDisabledReason: string | null = null;
 
   // When onboarding is in progress, verify the saved account exists in the
   // current Stripe mode. This catches test-mode account IDs after switching
@@ -115,6 +138,12 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
     }
     try {
       const acct = await stripe.accounts.retrieve(stripeAccountId);
+      const status = stripeAccountStatus(acct);
+      stripeChargesEnabled = status.chargesEnabled;
+      stripePayoutsEnabled = status.payoutsEnabled;
+      stripeRequirementsDue = status.requirementsDue;
+      stripeRequirementsPastDue = status.requirementsPastDue;
+      stripeDisabledReason = status.disabledReason;
       if (acct.payouts_enabled) {
         // Missed webhook — sync the DB and show the connected banner.
         await prisma.user.update({
@@ -142,6 +171,14 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   let stripePendingCents: number | null = null;
   if (stripeOnboarded && stripeAccountId) {
     try {
+      const acct = await stripe.accounts.retrieve(stripeAccountId);
+      const status = stripeAccountStatus(acct);
+      stripeChargesEnabled = status.chargesEnabled;
+      stripePayoutsEnabled = status.payoutsEnabled;
+      stripeRequirementsDue = status.requirementsDue;
+      stripeRequirementsPastDue = status.requirementsPastDue;
+      stripeDisabledReason = status.disabledReason;
+
       const balance = await stripe.balance.retrieve(
         {} as any,
         { stripeAccount: stripeAccountId },
@@ -235,7 +272,11 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
       {/* Valid in-progress account — show resume prompt */}
       {!isRestricted && stripeInProgress && (
         <div className="card p-4 mb-6 bg-blue-50 border-blue-200 text-blue-800 text-sm flex justify-between items-center gap-3">
-          <span>🔄 Stripe setup in progress — complete your bank account details to receive payouts.</span>
+          <span>
+            🔄 Stripe setup in progress — complete your bank account details to receive payouts.
+            {stripeRequirementsDue.length > 0 && ` ${stripeRequirementsDue.length} requirement(s) still due.`}
+            {stripeRequirementsPastDue.length > 0 && ` ${stripeRequirementsPastDue.length} requirement(s) are past due.`}
+          </span>
           <a href="/api/stripe/connect" className="btn-outline text-xs flex-shrink-0">Resume setup</a>
         </div>
       )}
@@ -272,6 +313,12 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
         {stripeOnboarded && (
           <p className="text-xs text-slate-400">
             Stripe balance reflects your connected account. <a href="/api/stripe/connect" className="text-blue-500 hover:underline">Open Stripe dashboard →</a>
+          </p>
+        )}
+        {stripeAccountId && stripeChargesEnabled !== null && stripePayoutsEnabled !== null && (
+          <p className="text-xs text-slate-500 mt-2">
+            Stripe status: charges {stripeChargesEnabled ? 'enabled' : 'disabled'} · payouts {stripePayoutsEnabled ? 'enabled' : 'disabled'}
+            {stripeDisabledReason ? ` · ${stripeDisabledReason.replaceAll('_', ' ')}` : ''}
           </p>
         )}
       </section>

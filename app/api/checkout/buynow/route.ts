@@ -49,39 +49,54 @@ export async function POST(req: Request) {
     // Wire funds to the seller's connected account when onboarding is complete,
     // keeping only the platform commission for the platform.
     let sellerStripeId = product.seller.stripeOnboardingComplete ? product.seller.stripeAccountId : null;
-    let sellerReconnectRequired = false;
     const currentMode = getCurrentStripeMode();
 
-    if (sellerStripeId) {
-      const hasModeMismatch = !!(
-        product.seller.stripeAccountMode
-        && currentMode
-        && product.seller.stripeAccountMode !== currentMode
+    if (!sellerStripeId) {
+      return NextResponse.json(
+        { error: 'Seller payout account is not ready. Please try again later.', code: 'seller_reconnect_required' },
+        { status: 503 },
       );
-      if (hasModeMismatch) {
+    }
+
+    const hasModeMismatch = !!(
+      product.seller.stripeAccountMode
+      && currentMode
+      && product.seller.stripeAccountMode !== currentMode
+    );
+    if (hasModeMismatch) {
+      await prisma.user.update({
+        where: { id: product.seller.id },
+        data: { stripeAccountId: null, stripeAccountMode: null, stripeOnboardingComplete: false },
+      });
+      return checkoutErrorResponse('stale_account');
+    }
+    try {
+      const sellerAccount = await stripe.accounts.retrieve(sellerStripeId);
+      if (!sellerAccount.charges_enabled || !sellerAccount.payouts_enabled) {
+        const missingCapabilities = [
+          !sellerAccount.charges_enabled ? 'charges' : null,
+          !sellerAccount.payouts_enabled ? 'payouts' : null,
+        ].filter(Boolean).join(' and ');
+        await prisma.user.update({
+          where: { id: product.seller.id },
+          data: { stripeOnboardingComplete: false },
+        });
+        return NextResponse.json(
+          { error: `Seller Stripe ${missingCapabilities} capability is not ready. Please try again later.`, code: 'seller_reconnect_required' },
+          { status: 503 },
+        );
+      }
+    } catch (err: unknown) {
+      const classified = classifyStripeError(err);
+      if (classified.reason === 'stale_account') {
         await prisma.user.update({
           where: { id: product.seller.id },
           data: { stripeAccountId: null, stripeAccountMode: null, stripeOnboardingComplete: false },
         });
-        sellerStripeId = null;
-        sellerReconnectRequired = true;
       } else {
-        try {
-          await stripe.accounts.retrieve(sellerStripeId);
-        } catch (err) {
-          const classified = classifyStripeError(err);
-          if (classified.reason === 'stale_account') {
-            await prisma.user.update({
-              where: { id: product.seller.id },
-              data: { stripeAccountId: null, stripeAccountMode: null, stripeOnboardingComplete: false },
-            });
-            sellerStripeId = null;
-            sellerReconnectRequired = true;
-          } else {
-            return checkoutErrorResponse(classified.reason);
-          }
-        }
+        return checkoutErrorResponse(classified.reason);
       }
+      return checkoutErrorResponse('stale_account');
     }
 
     const stripeSession = await stripe.checkout.sessions.create({
@@ -135,9 +150,9 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       url: stripeSession.url,
-      warningCode: sellerReconnectRequired ? 'seller_reconnect_required' : null,
+      warningCode: null,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[checkout/buynow]', err);
     const reason = classifyStripeError(err).reason;
     return checkoutErrorResponse(reason);
