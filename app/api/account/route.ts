@@ -188,7 +188,7 @@ export async function DELETE(req: Request) {
           stripeOnboardingComplete: false,
           deletedAt: new Date(),
           deletionReason: reason,
-          deletionReasonOther: reason === 'other' ? otherDetails! : null,
+          deletionReasonOther: reason === 'other' ? (otherDetails ?? null) : null,
         },
       });
     });
