@@ -1,0 +1,44 @@
+name: flupflap
+description: FlupFlap Marketplace — buy and sell new & used items on the go.
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Navigation
+  go_router: ^14.2.0
+
+  # State management
+  provider: ^6.1.2
+
+  # HTTP
+  http: ^1.2.1
+
+  # Secure token storage
+  flutter_secure_storage: ^9.2.2
+
+  # Image loading & caching
+  cached_network_image: ^3.3.1
+
+  # External URLs (Stripe checkout)
+  url_launcher: ^6.3.0
+
+  # Local persistence
+  shared_preferences: ^2.3.2
+
+  # Icons
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/

@@ -1,0 +1,49 @@
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+pubspec.lock
+
+# Android
+android/.gradle/
+android/captures/
+android/gradlew
+android/gradlew.bat
+android/local.properties
+android/key.properties
+android/app/debug.keystore
+android/app/release.keystore
+**/GeneratedPluginRegistrant.java
+
+# iOS
+ios/.symlinks/
+ios/Flutter/
+ios/Pods/
+ios/Runner.xcworkspace/
+ios/Runner/GeneratedPluginRegistrant.m
+ios/Runner/GeneratedPluginRegistrant.h
+*.mode1v3
+*.mode2v3
+*.moved-aside
+*.pbxuser
+!default.pbxuser
+*.perspectivev3
+!default.perspectivev3
+xcuserdata
+*.xccheckout
+*.xcscmblueprint
+DerivedData
+
+# macOS
+macos/Flutter/
+
+# Web
+web/
+
+# Misc
+*.iml
+*.log
+*.pyc
+local.properties
