@@ -25,7 +25,7 @@ export default async function SellerNewPage() {
   }
 
   // Require an active subscription to list items
-  if (!isSubscriptionActive(dbUser ?? {})) {
+  if (!dbUser || !isSubscriptionActive(dbUser)) {
     redirect('/seller?subscribe=1');
   }
 

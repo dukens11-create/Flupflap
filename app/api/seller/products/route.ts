@@ -49,7 +49,7 @@ export async function POST(req: Request) {
     }
 
     // Require an active subscription to list items
-    if (!isSubscriptionActive(dbUser ?? {})) {
+    if (!dbUser || !isSubscriptionActive(dbUser)) {
       return NextResponse.json({ error: 'An active seller subscription is required to list items.' }, { status: 403 });
     }
 

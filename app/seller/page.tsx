@@ -69,7 +69,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   const dbUser = await prisma.user.findUnique({ where: { id: session.user.id } });
   const sellerStatus = dbUser?.sellerStatus ?? 'ACTIVE';
   const isRestricted = sellerStatus === 'SUSPENDED' || sellerStatus === 'BANNED';
-  const subscriptionActive = isSubscriptionActive(dbUser ?? {});
+  const subscriptionActive = dbUser ? isSubscriptionActive(dbUser) : false;
   const subscriptionPeriodEnd = dbUser?.subscriptionCurrentPeriodEnd ?? null;
   const subscriptionStatus = dbUser?.subscriptionStatus ?? null;
 
