@@ -2,6 +2,10 @@ import Stripe from 'stripe';
 import { prisma } from '@/lib/db';
 import { stripe } from '@/lib/stripe';
 
+// Stripe list API max is 100. Sellers typically have one active subscription,
+// but we allow enough history for cancellations/reactivations during recovery.
+const SUBSCRIPTION_SYNC_LIST_LIMIT = 100;
+
 const STRIPE_SUBSCRIPTION_STATUS_MAP: Record<string, string> = {
   active: 'ACTIVE',
   trialing: 'ACTIVE',
@@ -33,6 +37,9 @@ type SyncedSubscriptionState = {
 /**
  * Recovers seller subscription state from Stripe if local DB status is stale.
  * Uses the signed-in seller's stored Stripe customer as source of truth.
+ *
+ * @param userId Seller user id from the authenticated server session.
+ * @returns Updated subscription fields, or null when the user no longer exists.
  */
 export async function syncSellerSubscriptionFromStripe(userId: string): Promise<SyncedSubscriptionState | null> {
   const user = await prisma.user.findUnique({
@@ -57,8 +64,24 @@ export async function syncSellerSubscriptionFromStripe(userId: string): Promise<
   const subs = await stripe.subscriptions.list({
     customer: user.stripeCustomerId,
     status: 'all',
-    limit: 100,
+    limit: SUBSCRIPTION_SYNC_LIST_LIMIT,
   });
+
+  if (subs.data.length === 0) {
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        subscriptionStatus: 'INACTIVE',
+        subscriptionId: null,
+        subscriptionCurrentPeriodEnd: null,
+      },
+    });
+    return {
+      subscriptionStatus: 'INACTIVE',
+      subscriptionId: null,
+      subscriptionCurrentPeriodEnd: null,
+    };
+  }
 
   const bestSub = [...subs.data].sort((a, b) => {
     const rankA = STRIPE_STATUS_PRIORITY[a.status] ?? 99;
@@ -67,14 +90,12 @@ export async function syncSellerSubscriptionFromStripe(userId: string): Promise<
     return b.created - a.created;
   })[0];
 
-  const subscriptionStatus = bestSub
-    ? (STRIPE_SUBSCRIPTION_STATUS_MAP[bestSub.status] ?? 'INACTIVE')
-    : 'INACTIVE';
-  const subscriptionId = bestSub?.id ?? null;
+  const subscriptionStatus = STRIPE_SUBSCRIPTION_STATUS_MAP[bestSub.status] ?? 'INACTIVE';
+  const subscriptionId = bestSub.id;
   const subscriptionCurrentPeriodEnd = getSubscriptionPeriodEnd(bestSub);
 
-  await prisma.user.updateMany({
-    where: { id: userId, stripeCustomerId: user.stripeCustomerId },
+  await prisma.user.update({
+    where: { id: userId },
     data: {
       subscriptionStatus,
       subscriptionId,
@@ -87,6 +108,7 @@ export async function syncSellerSubscriptionFromStripe(userId: string): Promise<
 
 function getSubscriptionPeriodEnd(subscription: Stripe.Subscription | undefined): Date | null {
   if (!subscription) return null;
-  const value = (subscription as unknown as Record<string, unknown>)['current_period_end'];
+  if (!('current_period_end' in subscription)) return null;
+  const value = subscription.current_period_end;
   return typeof value === 'number' ? new Date(value * 1000) : null;
 }

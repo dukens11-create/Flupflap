@@ -69,7 +69,10 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
 
   // Fetch full user to check seller status (session JWT may be stale)
   let dbUser = await prisma.user.findUnique({ where: { id: session.user.id } });
-  if (subscribedFromCheckout && dbUser && !isSubscriptionActive(dbUser) && dbUser.stripeCustomerId) {
+  const hasStoredSubscriptionCustomer = !!dbUser?.stripeCustomerId;
+  const subscriptionLooksInactive = dbUser ? !isSubscriptionActive(dbUser) : false;
+  const shouldAttemptSubscriptionRecovery = subscribedFromCheckout && hasStoredSubscriptionCustomer && subscriptionLooksInactive;
+  if (shouldAttemptSubscriptionRecovery && dbUser) {
     try {
       const synced = await syncSellerSubscriptionFromStripe(dbUser.id);
       if (synced) {
