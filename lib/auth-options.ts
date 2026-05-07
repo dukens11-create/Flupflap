@@ -26,16 +26,24 @@ export const authOptions: NextAuthOptions = {
         if (!ok) return null;
 
         // Sellers must supply a valid one-time code (when SMS OTP is enabled).
-        if (user.role === 'SELLER' && isSmsOtpEnabled()) {
-          if (!credentials.otp) return null;
-          const result = await verifyOtp(user.id, credentials.otp);
-          if (!result.ok) return null;
-          // Mark phone as verified on first successful OTP sign-in.
-          if (user.phone && !user.phoneVerified) {
-            await prisma.user.update({
-              where: { id: user.id },
-              data: { phoneVerified: true, phoneVerifiedAt: new Date() },
-            }).catch(() => null);
+        if (user.role === 'SELLER') {
+          if (!isSmsOtpEnabled()) {
+            console.warn('[auth] Seller OTP bypassed: feature flag disabled', {
+              userId: user.id,
+              role: user.role,
+              enableSmsOtp: process.env.ENABLE_SMS_OTP ?? '(unset)',
+            });
+          } else {
+            if (!credentials.otp) return null;
+            const result = await verifyOtp(user.id, credentials.otp);
+            if (!result.ok) return null;
+            // Mark phone as verified on first successful OTP sign-in.
+            if (user.phone && !user.phoneVerified) {
+              await prisma.user.update({
+                where: { id: user.id },
+                data: { phoneVerified: true, phoneVerifiedAt: new Date() },
+              }).catch(() => null);
+            }
           }
         }
 

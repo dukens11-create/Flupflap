@@ -89,6 +89,22 @@ function LoginForm() {
       return;
     }
 
+    if (data.step === 'signin') {
+      const result = await signIn('credentials', {
+        email: pendingEmail,
+        password: pendingPassword,
+        redirect: false,
+      });
+
+      if (result?.error) {
+        setError('Invalid email or password.');
+      } else {
+        router.push(callbackUrl);
+        router.refresh();
+      }
+      return;
+    }
+
     setMaskedPhone(data.maskedPhone ?? '');
     setStep('otp');
   }
@@ -264,4 +280,3 @@ export default function LoginPage() {
     </main>
   );
 }
-
