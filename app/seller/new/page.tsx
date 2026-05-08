@@ -6,6 +6,7 @@ import ImageUpload from '@/components/ImageUpload';
 import type { Metadata } from 'next';
 import { isSubscriptionActive } from '@/lib/subscription';
 import { syncSellerSubscriptionFromStripe } from '@/lib/subscription-sync';
+import { isSellerVerificationApproved } from '@/lib/seller-verification';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,6 +24,14 @@ export default async function SellerNewPage() {
   const dbUser = await prisma.user.findUnique({ where: { id: session.user.id } });
   if (dbUser?.sellerStatus === 'SUSPENDED' || dbUser?.sellerStatus === 'BANNED') {
     redirect('/seller');
+  }
+
+  const verification = await prisma.sellerVerification.findUnique({
+    where: { sellerId: session.user.id },
+    select: { status: true },
+  });
+  if (!isSellerVerificationApproved(verification?.status)) {
+    redirect('/seller?verification=required');
   }
 
   // Require an active subscription to list items

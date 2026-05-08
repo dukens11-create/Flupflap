@@ -6,6 +6,7 @@ import { cents } from '@/lib/money';
 import { z } from 'zod';
 import { isSubscriptionActive } from '@/lib/subscription';
 import { syncSellerSubscriptionFromStripe } from '@/lib/subscription-sync';
+import { isSellerVerificationApproved } from '@/lib/seller-verification';
 
 const schema = z.object({
   title: z.string().min(3),
@@ -47,6 +48,17 @@ export async function POST(req: Request) {
     const dbUser = await prisma.user.findUnique({ where: { id: session.user.id } });
     if (dbUser?.sellerStatus === 'SUSPENDED' || dbUser?.sellerStatus === 'BANNED') {
       return NextResponse.json({ error: 'Your seller account is currently restricted.' }, { status: 403 });
+    }
+
+    const verification = await prisma.sellerVerification.findUnique({
+      where: { sellerId: session.user.id },
+      select: { status: true },
+    });
+    if (!isSellerVerificationApproved(verification?.status)) {
+      return NextResponse.json(
+        { error: 'Submit and pass seller verification before listing products.' },
+        { status: 403 },
+      );
     }
 
     // Require an active subscription to list items

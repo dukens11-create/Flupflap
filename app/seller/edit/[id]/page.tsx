@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import ImageUpload from '@/components/ImageUpload';
 import type { Metadata } from 'next';
+import { isSellerVerificationApproved } from '@/lib/seller-verification';
 
 export const metadata: Metadata = { title: 'Edit Listing' };
 
@@ -23,6 +24,14 @@ export default async function SellerEditPage({
   const dbUser = await prisma.user.findUnique({ where: { id: session.user.id } });
   if (dbUser?.sellerStatus === 'SUSPENDED' || dbUser?.sellerStatus === 'BANNED') {
     redirect('/seller');
+  }
+
+  const verification = await prisma.sellerVerification.findUnique({
+    where: { sellerId: session.user.id },
+    select: { status: true },
+  });
+  if (!isSellerVerificationApproved(verification?.status)) {
+    redirect('/seller?verification=required');
   }
 
   const { id } = await params;
