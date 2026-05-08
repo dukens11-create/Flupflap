@@ -53,19 +53,6 @@ function factorClasses(impact: number) {
   return 'border-slate-200 bg-white text-slate-700';
 }
 
-function formatAccountAge(days: number) {
-  if (days < 1) return 'Joined today';
-  if (days === 1) return 'Joined 1 day ago';
-  if (days < 30) return `Joined ${days} days ago`;
-
-  const months = Math.floor(days / 30);
-  if (months === 1) return 'Joined 1 month ago';
-  if (months < 12) return `Joined ${months} months ago`;
-
-  const years = Math.floor(months / 12);
-  return years === 1 ? 'Joined 1 year ago' : `Joined ${years} years ago`;
-}
-
 function pluralize(count: number, singular: string, plural = `${singular}s`) {
   return `${count} ${count === 1 ? singular : plural}`;
 }
@@ -168,7 +155,7 @@ export default async function AdminSellersPage({
       };
     })
     .sort((a, b) => (
-      Number(b.risk.requiresReview) - Number(a.risk.requiresReview)
+      (b.risk.requiresReview ? 1 : 0) - (a.risk.requiresReview ? 1 : 0)
       || b.risk.score - a.risk.score
       || b.createdAt.getTime() - a.createdAt.getTime()
     ));
@@ -317,7 +304,6 @@ export default async function AdminSellersPage({
                   <p className="text-sm text-slate-500">{seller.email}</p>
                   <p className="text-xs text-slate-400 mt-0.5">
                     {pluralize(seller.products.length, 'listing')} ·{' '}
-                    {formatAccountAge(seller.risk.metrics.accountAgeDays)} ·{' '}
                     Joined {seller.createdAt.toLocaleDateString('en-US', DEFAULT_DATE_FORMAT_OPTIONS)}
                   </p>
                   {seller.sellerStatusReason && seller.sellerStatus !== 'ACTIVE' && (
