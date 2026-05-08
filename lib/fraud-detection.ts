@@ -70,7 +70,7 @@ function overlapScore(a: string, b: string) {
 function median(values: number[]) {
   if (values.length === 0) return null;
   const sorted = [...values].sort((a, b) => a - b);
-  if (sorted.length === 1) return sorted[0] ?? null;
+  if (sorted.length === 1) return sorted[0];
   const middle = Math.floor(sorted.length / 2);
   const middleValue = sorted[middle];
   if (middleValue === undefined) return null;
@@ -143,7 +143,7 @@ export function getListingRiskAssessment(
       code: 'duplicate_listing',
       label: 'Likely duplicate listing',
       detail: crossSellerClone
-        ? 'This listing closely matches another seller listing in title, description, or photo.'
+        ? 'This listing closely matches another seller\'s listing in title, description, or photo.'
         : 'This listing closely matches another recent listing from the same seller.',
       score: crossSellerClone ? 70 : 60,
       severity: crossSellerClone ? 'HIGH' : 'MEDIUM',

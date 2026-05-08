@@ -11,7 +11,6 @@ const VALID_ACTIONS = [
   'suspend_seller',
   'ban_seller',
 ] as const;
-const STATUS_CHANGING_ACTIONS = ['suspend_seller', 'ban_seller'] as const;
 
 const REPORT_REASON_TO_MODERATION_REASON: Record<string, string> = {
   scam_fraud: 'fraud',
@@ -62,7 +61,7 @@ export async function POST(
           notes: data.adminNotes ?? null,
         },
       });
-    } else if ((STATUS_CHANGING_ACTIONS as readonly string[]).includes(data.action)) {
+    } else if (data.action === 'suspend_seller' || data.action === 'ban_seller') {
       const sellerAction = data.action === 'ban_seller' ? 'BANNED' : 'SUSPENDED';
 
       await prisma.user.update({

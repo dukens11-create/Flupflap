@@ -25,8 +25,26 @@ const updateSchema = z.object({
   pickupPostalCode: z.string().max(20).optional(),
 });
 
+type ProductUpdateInput = z.infer<typeof updateSchema>;
+
 async function getSellerProduct(id: string, sellerId: string) {
   return prisma.product.findFirst({ where: { id, sellerId } });
+}
+
+function buildListingRiskCandidate(
+  sellerId: string,
+  existing: NonNullable<Awaited<ReturnType<typeof getSellerProduct>>>,
+  data: ProductUpdateInput,
+) {
+  return {
+    sellerId,
+    title: data.title ?? existing.title,
+    description: data.description ?? existing.description,
+    priceCents: data.price ? cents(data.price) : existing.priceCents,
+    category: data.category ?? existing.category,
+    condition: data.condition ?? existing.condition,
+    imageUrl: data.imageUrl ?? existing.imageUrl,
+  };
 }
 
 /** POST handles both edits (_method=update) and deletes (_method=delete) via HTML forms */
@@ -78,15 +96,7 @@ export async function POST(
     const raw = Object.fromEntries(form.entries());
     const data = updateSchema.parse(raw);
     const riskAssessment = await getListingRiskAssessmentForCandidate(
-      {
-        sellerId: session.user.id,
-        title: data.title ?? existing.title,
-        description: data.description ?? existing.description,
-        priceCents: data.price ? cents(data.price) : existing.priceCents,
-        category: data.category ?? existing.category,
-        condition: data.condition ?? existing.condition,
-        imageUrl: data.imageUrl ?? existing.imageUrl,
-      },
+      buildListingRiskCandidate(session.user.id, existing, data),
       id,
     );
 
@@ -159,15 +169,7 @@ export async function PATCH(
     const body: unknown = await req.json();
     const data = updateSchema.parse(body);
     const riskAssessment = await getListingRiskAssessmentForCandidate(
-      {
-        sellerId: session.user.id,
-        title: data.title ?? existing.title,
-        description: data.description ?? existing.description,
-        priceCents: data.price ? cents(data.price) : existing.priceCents,
-        category: data.category ?? existing.category,
-        condition: data.condition ?? existing.condition,
-        imageUrl: data.imageUrl ?? existing.imageUrl,
-      },
+      buildListingRiskCandidate(session.user.id, existing, data),
       id,
     );
 
