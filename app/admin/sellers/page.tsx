@@ -102,7 +102,7 @@ export default async function AdminSellersPage({
                   </div>
                   <p className="text-sm text-slate-500">{seller.email}</p>
                   <p className="text-xs text-slate-400 mt-0.5">
-                     {seller._count.products} listing{seller._count.products !== 1 ? 's' : ''} ·
+                    {seller._count.products} listing{seller._count.products !== 1 ? 's' : ''} ·
                     Joined {seller.createdAt.toLocaleDateString('en-US', DATE_FORMAT_OPTIONS)}
                   </p>
                   {seller.sellerStatusReason && seller.sellerStatus !== 'ACTIVE' && (
