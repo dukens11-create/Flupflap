@@ -54,15 +54,15 @@
     "featuredSubtitle": "Una cuadrícula responsiva con filtros, mejor espaciado y comparación más rápida entre dispositivos.",
     "trustBadges": {
       "verifiedSellers": {
-        "title": "Verified Sellers",
+        "title": "Vendedores verificados",
         "description": "Las insignias de vendedor destacan anuncios confiables y ayudan a comprar con mayor seguridad."
       },
       "securePayments": {
-        "title": "Secure Payments",
+        "title": "Pagos seguros",
         "description": "Los flujos de pago protegidos mantienen cada compra simple y segura."
       },
       "buyerProtection": {
-        "title": "Buyer Protection",
+        "title": "Protección al comprador",
         "description": "Los mensajes de confianza refuerzan transacciones más seguras desde la búsqueda hasta la entrega."
       }
     },

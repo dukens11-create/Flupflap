@@ -54,15 +54,15 @@
     "featuredSubtitle": "Une grille responsive avec filtres, un espacement plus propre et une comparaison plus rapide sur tous les appareils.",
     "trustBadges": {
       "verifiedSellers": {
-        "title": "Verified Sellers",
+        "title": "Vendeurs vérifiés",
         "description": "Les badges vendeur mettent en avant les annonces fiables et aident les acheteurs à décider plus sereinement."
       },
       "securePayments": {
-        "title": "Secure Payments",
+        "title": "Paiements sécurisés",
         "description": "Les parcours de paiement protégés gardent chaque achat fluide et sécurisé."
       },
       "buyerProtection": {
-        "title": "Buyer Protection",
+        "title": "Protection acheteur",
         "description": "Des messages de confiance clairs renforcent des transactions plus sûres de la recherche à la livraison."
       }
     },

@@ -13,6 +13,13 @@ export const MESSAGE_DUPLICATE_WINDOW_MINUTES = 2;
 export const SELLER_RESPONSE_LOOKBACK_DAYS = 90;
 export const SELLER_RESPONSE_WINDOW_HOURS = 24;
 
+type SellerResponseStats = {
+  respondedCount: number;
+  eligibleCount: number;
+  awaitingReplyCount: number;
+  responseRate: number | null;
+};
+
 function minutesAgo(minutes: number) {
   return new Date(Date.now() - minutes * 60 * 1000);
 }
@@ -125,7 +132,10 @@ export async function getMessageSpamError({
   return null;
 }
 
-export async function getSellerResponseStats(sellerId: string) {
+export async function getSellerResponseStatsForSellers(sellerIds: string[]) {
+  const uniqueSellerIds = [...new Set(sellerIds.filter(Boolean))];
+  if (!uniqueSellerIds.length) return new Map<string, SellerResponseStats>();
+
   const now = Date.now();
   const lookbackStart = new Date(
     now - SELLER_RESPONSE_LOOKBACK_DAYS * 24 * 60 * 60 * 1000,
@@ -133,10 +143,11 @@ export async function getSellerResponseStats(sellerId: string) {
 
   const conversations = await prisma.conversation.findMany({
     where: {
-      sellerId,
+      sellerId: { in: uniqueSellerIds },
       updatedAt: { gte: lookbackStart },
     },
     select: {
+      sellerId: true,
       id: true,
       buyerId: true,
       messages: {
@@ -146,18 +157,29 @@ export async function getSellerResponseStats(sellerId: string) {
     },
   });
 
-  let eligibleCount = 0;
-  let respondedCount = 0;
-  let awaitingReplyCount = 0;
+  const statsBySeller = new Map<string, SellerResponseStats>(
+    uniqueSellerIds.map((sellerId) => [
+      sellerId,
+      {
+        respondedCount: 0,
+        eligibleCount: 0,
+        awaitingReplyCount: 0,
+        responseRate: null,
+      },
+    ]),
+  );
 
   for (const conversation of conversations) {
+    const sellerStats = statsBySeller.get(conversation.sellerId);
+    if (!sellerStats) continue;
+
     const firstBuyerMessage = conversation.messages.find(
       (message) => message.senderId === conversation.buyerId,
     );
     const lastMessage = conversation.messages[conversation.messages.length - 1];
 
     if (lastMessage && lastMessage.senderId === conversation.buyerId) {
-      awaitingReplyCount += 1;
+      sellerStats.awaitingReplyCount += 1;
     }
 
     if (!firstBuyerMessage || firstBuyerMessage.createdAt < lookbackStart) {
@@ -166,7 +188,7 @@ export async function getSellerResponseStats(sellerId: string) {
 
     const sellerReply = conversation.messages.find(
       (message) =>
-        message.senderId === sellerId &&
+        message.senderId === conversation.sellerId &&
         message.createdAt > firstBuyerMessage.createdAt,
     );
 
@@ -175,19 +197,31 @@ export async function getSellerResponseStats(sellerId: string) {
       SELLER_RESPONSE_WINDOW_HOURS * 60 * 60 * 1000;
 
     if (sellerReply || now >= responseDeadline) {
-      eligibleCount += 1;
+      sellerStats.eligibleCount += 1;
 
       if (sellerReply && sellerReply.createdAt.getTime() <= responseDeadline) {
-        respondedCount += 1;
+        sellerStats.respondedCount += 1;
       }
     }
   }
 
-  return {
-    respondedCount,
-    eligibleCount,
-    awaitingReplyCount,
-    responseRate:
-      eligibleCount > 0 ? Math.round((respondedCount / eligibleCount) * 100) : null,
-  };
+  for (const stats of statsBySeller.values()) {
+    stats.responseRate =
+      stats.eligibleCount > 0
+        ? Math.round((stats.respondedCount / stats.eligibleCount) * 100)
+        : null;
+  }
+
+  return statsBySeller;
+}
+
+export async function getSellerResponseStats(sellerId: string) {
+  return (
+    (await getSellerResponseStatsForSellers([sellerId])).get(sellerId) ?? {
+      respondedCount: 0,
+      eligibleCount: 0,
+      awaitingReplyCount: 0,
+      responseRate: null,
+    }
+  );
 }

@@ -7,7 +7,7 @@ import type { Metadata } from 'next';
 import { expirePromotions } from '@/lib/promotions';
 import { getServerTranslations } from '@/lib/i18n/server';
 import { ArrowRight, BadgeCheck, CreditCard, ShieldCheck, Sparkles } from 'lucide-react';
-import { getSellerResponseStats } from '@/lib/messages';
+import { getSellerResponseStatsForSellers } from '@/lib/messages';
 
 export const dynamic = 'force-dynamic';
 
@@ -148,11 +148,7 @@ async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?
   }
 
   const sellerIds = [...new Set(products.map((product: any) => product.sellerId))];
-  const sellerResponseRates = new Map(
-    await Promise.all(
-      sellerIds.map(async (sellerId: string) => [sellerId, (await getSellerResponseStats(sellerId)).responseRate] as const),
-    ),
-  );
+  const sellerResponseRates = await getSellerResponseStatsForSellers(sellerIds);
 
   return (
     <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
@@ -162,7 +158,7 @@ async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?
           p={{
             ...p,
             activePromotion: p.promotions[0] ?? null,
-            sellerResponseRate: sellerResponseRates.get(p.sellerId) ?? null,
+            sellerResponseRate: sellerResponseRates.get(p.sellerId)?.responseRate ?? null,
           }}
         />
       ))}
