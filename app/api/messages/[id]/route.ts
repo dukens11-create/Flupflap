@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { evaluateMessageModeration, formatBlockedMessage } from '@/lib/moderation';
+import { NotificationType } from '@prisma/client';
+import { createNotification } from '@/lib/notifications';
 import { z } from 'zod';
 
 const MESSAGE_MAX_LENGTH = 2000;
@@ -128,6 +130,16 @@ export async function POST(
       data: { updatedAt: new Date() },
     }),
   ]);
+
+  const recipientId = conversation.buyerId === userId ? conversation.sellerId : conversation.buyerId;
+  await createNotification({
+    userId: recipientId,
+    type: NotificationType.MESSAGE,
+    title: 'New message in your conversation',
+    body: trimmedBody.length > 120 ? `${trimmedBody.slice(0, 117)}...` : trimmedBody,
+    link: `/messages/${conversation.id}`,
+    data: { conversationId: conversation.id },
+  });
 
   return NextResponse.json({ messageId: message.id }, { status: 201 });
 }
