@@ -13,6 +13,16 @@ export interface CatalogSearchParams {
 
 const CATALOG_CACHE_TTL_SECONDS = Number(process.env.CATALOG_CACHE_TTL_SECONDS ?? 60);
 
+function catalogSearchCacheKey(sp: CatalogSearchParams) {
+  return JSON.stringify({
+    q: sp.q ?? '',
+    category: sp.category ?? '',
+    condition: sp.condition ?? '',
+    minPrice: sp.minPrice ?? '',
+    maxPrice: sp.maxPrice ?? '',
+  });
+}
+
 function buildApprovedProductWhere(sp: CatalogSearchParams): Prisma.ProductWhereInput {
   const where: Prisma.ProductWhereInput = { status: 'APPROVED' };
 
@@ -30,6 +40,7 @@ function buildApprovedProductWhere(sp: CatalogSearchParams): Prisma.ProductWhere
 
 export async function getCachedCatalogProducts(sp: CatalogSearchParams) {
   const where = buildApprovedProductWhere(sp);
+  const cacheKey = catalogSearchCacheKey(sp);
 
   const loadProducts = unstable_cache(
     async (inputWhere: Prisma.ProductWhereInput) =>
@@ -45,7 +56,7 @@ export async function getCachedCatalogProducts(sp: CatalogSearchParams) {
           },
         },
       }),
-    ['catalog-products'],
+    ['catalog-products', cacheKey],
     { revalidate: CATALOG_CACHE_TTL_SECONDS, tags: [PRODUCTS_CACHE_TAG] },
   );
 

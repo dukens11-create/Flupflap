@@ -13,7 +13,7 @@ import ReportItemButton from '@/components/ReportItemButton';
 import type { Metadata } from 'next';
 import { getCachedApprovedProduct } from '@/lib/catalog';
 import { getOptimizedImageUrl } from '@/lib/images';
-import { enqueuePromotionMetrics, schedulePromotionExpirationSweep } from '@/lib/promotion-metrics-queue';
+import { runPromotionMaintenance } from '@/lib/promotion-metrics-queue';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,12 +37,11 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
   const activePromotion = product.promotions[0] ?? null;
   if (activePromotion && !isOwnListing) {
     after(async () => {
-      await schedulePromotionExpirationSweep();
-      await enqueuePromotionMetrics('click', [activePromotion.id]);
+      await runPromotionMaintenance('click', [activePromotion.id]);
     });
   } else {
     after(async () => {
-      await schedulePromotionExpirationSweep();
+      await runPromotionMaintenance();
     });
   }
 

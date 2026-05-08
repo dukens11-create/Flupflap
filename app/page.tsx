@@ -6,7 +6,7 @@ import BrowseFilters from '@/components/BrowseFilters';
 import type { Metadata } from 'next';
 import { getServerTranslations } from '@/lib/i18n/server';
 import { getCachedCatalogProducts, type CatalogSearchParams } from '@/lib/catalog';
-import { enqueuePromotionMetrics, schedulePromotionExpirationSweep } from '@/lib/promotion-metrics-queue';
+import { runPromotionMaintenance } from '@/lib/promotion-metrics-queue';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,12 +54,11 @@ async function ProductGrid({ sp, t }: { sp: CatalogSearchParams; t: (key: string
       .filter(Boolean);
     if (promotionIds.length > 0) {
       after(async () => {
-        await schedulePromotionExpirationSweep();
-        await enqueuePromotionMetrics('impression', promotionIds);
+        await runPromotionMaintenance('impression', promotionIds);
       });
     } else {
       after(async () => {
-        await schedulePromotionExpirationSweep();
+        await runPromotionMaintenance();
       });
     }
     // Sort a copy: featured (active promotion) products appear first

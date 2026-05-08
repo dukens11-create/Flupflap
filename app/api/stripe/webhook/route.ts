@@ -476,6 +476,8 @@ export async function POST(req: Request) {
     });
     const activePromotionByProductId = new Map<string, string>();
     for (const promotion of activePromotions) {
+      // `activePromotions` is ordered by latest expiry first so the first row for a
+      // product is the currently most relevant active promotion we want to update.
       if (!activePromotionByProductId.has(promotion.productId)) {
         activePromotionByProductId.set(promotion.productId, promotion.id);
       }

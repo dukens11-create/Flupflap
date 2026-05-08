@@ -1,4 +1,5 @@
 const cdnUrl = process.env.NEXT_PUBLIC_CDN_URL?.replace(/\/$/, '');
+const THIRTY_DAYS_IN_SECONDS = 60 * 60 * 24 * 30;
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -9,7 +10,7 @@ const nextConfig = {
   images: {
     remotePatterns: [{ protocol: 'https', hostname: '**' }],
     formats: ['image/avif', 'image/webp'],
-    minimumCacheTTL: 60 * 60 * 24 * 30,
+    minimumCacheTTL: THIRTY_DAYS_IN_SECONDS,
     deviceSizes: [640, 750, 828, 1080, 1200, 1600, 1920, 2048],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
   },

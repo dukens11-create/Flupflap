@@ -53,9 +53,16 @@ export async function enqueuePromotionMetrics(type: PromotionMetricType, promoti
   }
 
   if (!state.flushTimer) {
-    state.flushTimer = setTimeout(() => {
+    const pendingTimer = setTimeout(() => {
       void flushPromotionMetricsQueue();
     }, FLUSH_DELAY_MS);
+
+    if (state.flushTimer) {
+      clearTimeout(pendingTimer);
+      return;
+    }
+
+    state.flushTimer = pendingTimer;
   }
 }
 
@@ -135,4 +142,12 @@ export async function schedulePromotionExpirationSweep() {
     });
 
   return state.expirationSweepPromise;
+}
+
+export async function runPromotionMaintenance(type?: PromotionMetricType, promotionIds: string[] = []) {
+  await schedulePromotionExpirationSweep();
+
+  if (type && promotionIds.length) {
+    await enqueuePromotionMetrics(type, promotionIds);
+  }
 }
