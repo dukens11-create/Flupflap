@@ -78,7 +78,7 @@ export function getReturnWindowState({
     return {
       title: 'No routine returns',
       detail: 'This seller does not offer a standard return window. Buyers can still open a dispute for delivery or item-condition problems.',
-      closesAt: null as Date | null,
+      closesAt: null,
       isOpen: false,
     };
   }
@@ -94,7 +94,7 @@ export function getReturnWindowState({
     return {
       title: `${returnWindowDays}-day return window`,
       detail: 'The return window starts once the order is marked delivered or picked up.',
-      closesAt: null as Date | null,
+      closesAt: null,
       isOpen: false,
     };
   }

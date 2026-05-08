@@ -28,8 +28,6 @@ const STATUS_LABELS: Record<string, string> = {
   PICKED_UP: 'Picked Up',
 };
 
-const DISPUTE_ERROR_STATES = ['exists', 'not-eligible', 'invalid', 'error', 'not-found'];
-
 function statusBadge(status: string) {
   const map: Record<string, string> = {
     PENDING: 'badge-yellow',
@@ -103,7 +101,7 @@ export default async function OrderDetailPage({
           Your request has been submitted to the seller. If needed, FlupFlap can review the dispute and make the final refund decision.
         </div>
       )}
-      {DISPUTE_ERROR_STATES.includes(sp.dispute ?? '') && (
+      {['exists', 'not-eligible', 'invalid', 'error', 'not-found'].includes(sp.dispute ?? '') && (
         <div className="card p-4 mb-4 bg-red-50 border-red-200 text-red-800 text-sm">
           {sp.dispute === 'exists' && 'A request already exists for that order item.'}
           {sp.dispute === 'not-eligible' && 'This order is not ready for a dispute yet.'}

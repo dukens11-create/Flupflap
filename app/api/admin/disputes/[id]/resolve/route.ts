@@ -23,7 +23,7 @@ export async function POST(
     const form = await req.formData();
     const data = schema.parse({
       action: form.get('action'),
-      adminNotes: (form.get('adminNotes') as string | null)?.trim() || undefined,
+      adminNotes: form.get('adminNotes')?.toString().trim() || undefined,
     });
 
     const dispute = await prisma.orderItemDispute.findUnique({ where: { id } });
