@@ -31,7 +31,7 @@ class AppConstants {
   static const String subscriptionPriceDisplay = '\$4.99/month';
 
   // Platform commission rate for display (truth lives in MarketplaceSettings).
-  static const double commissionRate = 0.0299;
+  static const double commissionRate = 0.07;
 
   // Pagination defaults
   static const int productsPerPage = 20;

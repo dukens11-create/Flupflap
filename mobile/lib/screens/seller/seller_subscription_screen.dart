@@ -185,7 +185,7 @@ class _SubscriptionBody extends StatelessWidget {
           ),
           _Feature(
             icon: Icons.sell_outlined,
-            title: 'Only 2.99% commission',
+            title: 'Only 7% commission',
             subtitle: 'A small platform fee keeps FlupFlap running.',
           ),
           _Feature(

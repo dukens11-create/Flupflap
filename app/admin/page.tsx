@@ -277,7 +277,7 @@ export default async function AdminPage({
               </div>
             </div>
             <p className="text-xs text-slate-400 mt-3">
-              New checkout sessions and paid orders automatically use the fixed 2.99% commission. Existing orders keep their stored commission snapshots for audit reporting.
+              New checkout sessions and paid orders automatically use the fixed 7% commission. Existing orders keep their stored commission snapshots for audit reporting.
             </p>
           </div>
         </section>

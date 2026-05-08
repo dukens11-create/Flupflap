@@ -30,7 +30,7 @@ export default function SellerAgreementPage() {
 
       <section>
         <h2 className="text-xl font-bold mb-2">4. Fees and Payouts</h2>
-        <p className="text-slate-700">FlupFlap deducts a 2.99% platform commission from each sale. That commission is stored on the paid order item alongside the seller net amount, and payouts are processed via Stripe Connect to your connected bank account. You must complete Stripe onboarding before receiving payouts.</p>
+        <p className="text-slate-700">FlupFlap deducts a 7% platform commission from each sale. That commission is stored on the paid order item alongside the seller net amount, and payouts are processed via Stripe Connect to your connected bank account. You must complete Stripe onboarding before receiving payouts.</p>
       </section>
 
       <section>
