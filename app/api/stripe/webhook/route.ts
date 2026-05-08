@@ -471,6 +471,9 @@ export async function POST(req: Request) {
             (sum, sellerItem) => sum + sellerItem.sellerNetCents + (sellerItem.shippingCents * sellerItem.quantity),
             0,
           );
+          const payoutAmountLabel = sellerNetCents > 0
+            ? `$${(sellerNetCents / 100).toFixed(2)}`
+            : 'A payout';
 
           return [
             item.product.seller.id,
@@ -487,7 +490,7 @@ export async function POST(req: Request) {
                 userId: item.product.seller.id,
                 type: NotificationType.PAYOUT,
                 title: 'Seller payout pending',
-                body: `${sellerNetCents > 0 ? `$${(sellerNetCents / 100).toFixed(2)}` : 'A payout'} will move through Stripe for this sale.`,
+                body: `${payoutAmountLabel} will move through Stripe for this sale.`,
                 link: '/seller',
                 data: { orderId: order.id, sellerNetCents },
               },
