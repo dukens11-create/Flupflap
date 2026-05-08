@@ -14,6 +14,7 @@ import { expirePromotions } from '@/lib/promotions';
 import { isSubscriptionActive, SELLER_SUBSCRIPTION_PRICE_LABEL } from '@/lib/subscription';
 import { syncSellerSubscriptionFromStripe } from '@/lib/subscription-sync';
 import SubscriptionButton from '@/components/SubscriptionButton';
+import { getInboxConversations, getSellerResponseStats, SELLER_RESPONSE_WINDOW_HOURS } from '@/lib/messages';
 import {
   getDefaultSellerKycProvider,
   isSellerVerificationApproved,
@@ -187,6 +188,12 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   const revenueThisWeekCents = soldItemsThisWeek.reduce((s, i) => s + i.sellerNetCents, 0);
   const revenueThisMonthCents = soldItemsThisMonth.reduce((s, i) => s + i.sellerNetCents, 0);
   const verificationApproved = isSellerVerificationApproved(verificationSubmission);
+  const inboxConversations = await getInboxConversations(session.user.id);
+  const unreadInboxCount = inboxConversations.reduce(
+    (sum, conversation) => sum + conversation.unreadCount,
+    0,
+  );
+  const sellerResponseStats = await getSellerResponseStats(session.user.id);
   let emptyListingsMessage: ReactNode = 'No listings yet. Subscribe to start selling.';
   if (subscriptionActive && verificationApproved) {
     emptyListingsMessage = (
@@ -578,6 +585,17 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
         </div>
       )}
 
+      {unreadInboxCount > 0 && (
+        <div className="card p-4 mb-6 bg-blue-50 border-blue-200 text-blue-900 text-sm flex justify-between items-center gap-3">
+          <span>
+            You have {unreadInboxCount} unread buyer message{unreadInboxCount === 1 ? '' : 's'} waiting in your inbox.
+          </span>
+          <Link href="/messages" className="btn-outline text-xs flex-shrink-0">
+            Open inbox
+          </Link>
+        </div>
+      )}
+
       {subscribedFromCheckout && subscriptionActive && (
         <div className="card p-4 mb-6 bg-green-50 border-green-200 text-green-800 text-sm">
           🎉 Subscription activated! You can now list and sell items on FlupFlap.
@@ -705,6 +723,24 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
           <StatCard label="Total Items Sold" value={String(itemsSoldCount)} sub="all time (paid orders)" />
           <StatCard label="Revenue This Week" value={dollars(revenueThisWeekCents)} sub="net payout after fees" />
           <StatCard label="Revenue This Month" value={dollars(revenueThisMonthCents)} sub="net payout after fees" />
+          <StatCard
+            label="Response Rate"
+            value={
+              sellerResponseStats.responseRate === null
+                ? '—'
+                : `${sellerResponseStats.responseRate}%`
+            }
+            sub={
+              sellerResponseStats.responseRate === null
+                ? 'needs more inbox history'
+                : `${sellerResponseStats.respondedCount}/${sellerResponseStats.eligibleCount} buyer inquiries replied to within ${SELLER_RESPONSE_WINDOW_HOURS}h`
+            }
+          />
+          <StatCard
+            label="Awaiting Replies"
+            value={String(sellerResponseStats.awaitingReplyCount)}
+            sub="conversations where the latest message is from a buyer"
+          />
         </div>
         {products.length === 0 && soldItems.length === 0 && (
           <p className="text-xs text-slate-400 mt-3">Statistics will populate once you have listings and sales.</p>

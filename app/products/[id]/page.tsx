@@ -14,6 +14,7 @@ import ReportItemButton from '@/components/ReportItemButton';
 import ReportSellerButton from '@/components/ReportSellerButton';
 import type { Metadata } from 'next';
 import { expirePromotions } from '@/lib/promotions';
+import { getSellerResponseStats, SELLER_RESPONSE_WINDOW_HOURS } from '@/lib/messages';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,6 +53,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
       data: { clickCount: { increment: 1 } },
     });
   }
+  const sellerResponseStats = await getSellerResponseStats(product.seller.id);
 
   return (
     <main className="max-w-4xl mx-auto">
@@ -75,7 +77,19 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             ) : (
               <p className="text-sm text-slate-500">+ {dollars(product.shippingCents)} shipping</p>
             )}
-            <p className="text-xs text-slate-400 mt-1">Sold by {product.seller.name}</p>
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+              <p>Sold by {product.seller.name}</p>
+              {sellerResponseStats.responseRate !== null ? (
+                <span className="badge badge-green">
+                  {sellerResponseStats.responseRate}% response rate
+                </span>
+              ) : (
+                <span className="badge badge-slate">Not enough data</span>
+              )}
+            </div>
+            <p className="text-xs text-slate-500 mt-2">
+              Based on buyer messages from the last 90 days and replies sent within {SELLER_RESPONSE_WINDOW_HOURS} hours.
+            </p>
           </div>
           <p className="text-slate-700 text-sm leading-relaxed">{product.description}</p>
 
