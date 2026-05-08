@@ -91,43 +91,51 @@ export default async function OrderDetailPage({
         <div className="space-y-3">
           {order.items.map(item => {
             const shouldShowReviewCard = item.reviewRating !== null || isReviewEligible;
+            const itemContent = (
+              <>
+                <div className="flex items-center gap-3">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={item.product.imageUrl}
+                    alt={item.product.title}
+                    className="w-14 h-14 object-cover rounded-lg flex-shrink-0"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <Link href={`/products/${item.product.id}`} className="font-medium hover:text-blue-600 truncate block">
+                      {item.product.title}
+                    </Link>
+                    <p className="text-xs text-slate-500">
+                      Sold by {item.product.seller.name} · {dollars(item.priceCents)} each · Qty: {item.quantity}
+                    </p>
+                  </div>
+                  <p className="font-semibold flex-shrink-0">{dollars(getStoredLineSubtotalCents(item))}</p>
+                </div>
+
+                {shouldShowReviewCard && (
+                  <div className="mt-3">
+                    <OrderItemReviewForm
+                      orderItemId={item.id}
+                      productTitle={item.product.title}
+                      eligible={isReviewEligible}
+                      existingReview={{
+                        rating: item.reviewRating,
+                        comment: item.reviewComment,
+                        blockedByDispute: item.reviewBlockedByDispute,
+                      }}
+                    />
+                  </div>
+                )}
+              </>
+            );
+
+            if (!shouldShowReviewCard) {
+              return <div key={item.id}>{itemContent}</div>;
+            }
 
             return (
-              <div
-                key={item.id}
-                className={shouldShowReviewCard ? 'rounded-xl border border-slate-200 p-3' : undefined}
-              >
-              <div className="flex items-center gap-3">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={item.product.imageUrl}
-                  alt={item.product.title}
-                  className="w-14 h-14 object-cover rounded-lg flex-shrink-0"
-                />
-                <div className="flex-1 min-w-0">
-                  <Link href={`/products/${item.product.id}`} className="font-medium hover:text-blue-600 truncate block">
-                    {item.product.title}
-                  </Link>
-                  <p className="text-xs text-slate-500">
-                    Sold by {item.product.seller.name} · {dollars(item.priceCents)} each · Qty: {item.quantity}
-                  </p>
-                </div>
-                <p className="font-semibold flex-shrink-0">{dollars(getStoredLineSubtotalCents(item))}</p>
+              <div key={item.id} className="rounded-xl border border-slate-200 p-3">
+                {itemContent}
               </div>
-
-              <div className="mt-3">
-                <OrderItemReviewForm
-                  orderItemId={item.id}
-                  productTitle={item.product.title}
-                  eligible={isReviewEligible}
-                  existingReview={{
-                    rating: item.reviewRating,
-                    comment: item.reviewComment,
-                    blockedByDispute: item.reviewBlockedByDispute,
-                  }}
-                />
-              </div>
-            </div>
             );
           })}
         </div>
