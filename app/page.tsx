@@ -39,6 +39,10 @@ interface SearchParams {
   maxPrice?: string;
 }
 
+function getUniqueSellerIds(products: Array<{ sellerId: string }>) {
+  return [...new Set(products.map((product) => product.sellerId))];
+}
+
 async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?: Record<string, string | number>) => string }) {
   const where: any = { status: 'APPROVED' };
   if (sp.q) where.title = { contains: sp.q, mode: 'insensitive' };
@@ -147,7 +151,7 @@ async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?
     );
   }
 
-  const sellerIds = [...new Set(products.map((product: any) => product.sellerId))];
+  const sellerIds = getUniqueSellerIds(products);
   const sellerResponseRates = await getSellerResponseStatsForSellers(sellerIds);
 
   return (
