@@ -6,6 +6,7 @@ import { dollars } from '@/lib/money';
 import { getStoredLineSubtotalCents } from '@/lib/commission';
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import { getDeliveryStatusLabel, getShippingProvider } from '@/lib/shipping';
 
 export const metadata: Metadata = { title: 'Order Details' };
 
@@ -36,13 +37,17 @@ function statusBadge(status: string) {
 
 export default async function OrderDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ shipping?: string }>;
 }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect('/login');
 
   const { id } = await params;
+  const sp = await searchParams;
+  const shippingProvider = getShippingProvider();
 
   const order = await prisma.order.findFirst({
     where: {
@@ -81,6 +86,22 @@ export default async function OrderDetailPage({
         </div>
         <span className={`badge ${statusBadge(order.status)}`}>{STATUS_LABELS[order.status] ?? order.status}</span>
       </div>
+
+      {sp.shipping === 'refreshed' && (
+        <div className="card p-4 mb-4 bg-green-50 border-green-200 text-green-800 text-sm">
+          Tracking details refreshed from the carrier integration.
+        </div>
+      )}
+      {sp.shipping === 'refresh_unavailable' && (
+        <div className="card p-4 mb-4 bg-slate-50 border-slate-200 text-slate-700 text-sm">
+          Carrier refresh is not configured yet for this marketplace.
+        </div>
+      )}
+      {sp.shipping === 'missing_tracking' && (
+        <div className="card p-4 mb-4 bg-amber-50 border-amber-300 text-amber-900 text-sm">
+          A tracking number is required before carrier updates can be refreshed.
+        </div>
+      )}
 
       {/* Items */}
       <div className="card p-5 mb-4">
@@ -191,13 +212,57 @@ export default async function OrderDetailPage({
       )}
 
       {/* Tracking info */}
-      {order.trackingNumber && (
+      {(order.shippingLabelUrl || order.trackingNumber || order.deliveryStatus) && (
         <div className="card p-5 mb-4">
-          <h2 className="font-bold mb-2">Tracking</h2>
-          <p className="text-sm text-slate-600">
-            📦 {order.shippingCarrier && <strong>{order.shippingCarrier}: </strong>}
-            {order.trackingNumber}
-          </p>
+          <div className="flex items-start justify-between gap-4 mb-3">
+            <div>
+              <h2 className="font-bold mb-2">Shipment</h2>
+              <p className="text-sm text-slate-600">
+                Delivery status: <span className="font-semibold text-slate-900">{getDeliveryStatusLabel(order.deliveryStatus)}</span>
+              </p>
+              {order.deliveryStatusDetail && (
+                <p className="text-xs text-slate-500 mt-1">{order.deliveryStatusDetail}</p>
+              )}
+              {order.deliveryStatusUpdatedAt && (
+                <p className="text-xs text-slate-400 mt-1">
+                  Updated {new Date(order.deliveryStatusUpdatedAt).toLocaleString()}
+                </p>
+              )}
+            </div>
+            {order.shippingLabelUrl && (
+              <Link href={order.shippingLabelUrl} className="btn-outline text-sm">
+                View label
+              </Link>
+            )}
+          </div>
+          {order.trackingNumber ? (
+            <div className="space-y-2">
+              <p className="text-sm text-slate-600">
+                📦 {order.shippingCarrier && <strong>{order.shippingCarrier}: </strong>}
+                {order.trackingNumber}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {order.shippingExternalTrackingUrl && (
+                  <a
+                    href={order.shippingExternalTrackingUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn-outline text-sm"
+                  >
+                    Open carrier tracking
+                  </a>
+                )}
+                {shippingProvider.supportsCarrierTracking && (
+                  <form action={`/api/orders/${order.id}/shipment/refresh`} method="POST">
+                    <input type="hidden" name="redirectTo" value={`/orders/${order.id}`} />
+                    <button type="submit" className="btn-outline text-sm">Refresh tracking</button>
+                  </form>
+                )}
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">Tracking details have not been assigned yet.</p>
+          )}
         </div>
       )}
 

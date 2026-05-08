@@ -76,6 +76,17 @@ enum OrderStatus {
   PICKED_UP
 }
 
+enum DeliveryStatus {
+  LABEL_CREATED
+  PRE_TRANSIT
+  IN_TRANSIT
+  OUT_FOR_DELIVERY
+  DELIVERED
+  AVAILABLE_FOR_PICKUP
+  EXCEPTION
+  UNKNOWN
+}
+
 model User {
   id                       String                    @id @default(cuid())
   name                     String
@@ -198,6 +209,15 @@ model Order {
   stripePaymentIntentId String?
   trackingNumber        String?
   shippingCarrier       String?
+  shippingProvider      String?
+  shippingLabelUrl      String?
+  shippingLabelFormat   String?
+  deliveryStatus        DeliveryStatus?
+  deliveryStatusDetail  String?
+  deliveryStatusUpdatedAt DateTime?
+  shippingExternalTrackingUrl String?
+  shippingProviderShipmentId String?
+  shippingLastSyncedAt  DateTime?
   shippingName          String?
   shippingLine1         String?
   shippingLine2         String?

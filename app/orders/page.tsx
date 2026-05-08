@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { dollars } from '@/lib/money';
 import type { Metadata } from 'next';
+import { getDeliveryStatusLabel } from '@/lib/shipping';
 
 export const dynamic = 'force-dynamic';
 
@@ -78,9 +79,14 @@ export default async function OrdersPage() {
               </div>
               <div className="flex items-center justify-between border-t pt-3">
                 <span className="text-sm font-bold">Total: {dollars(order.totalCents)}</span>
-                {order.trackingNumber && (
-                  <p className="text-xs text-slate-500">📦 {order.shippingCarrier}: {order.trackingNumber}</p>
-                )}
+                <div className="text-right">
+                  {order.deliveryStatus && (
+                    <p className="text-xs text-slate-500">Status: {getDeliveryStatusLabel(order.deliveryStatus)}</p>
+                  )}
+                  {order.trackingNumber && (
+                    <p className="text-xs text-slate-500">📦 {order.shippingCarrier}: {order.trackingNumber}</p>
+                  )}
+                </div>
               </div>
             </div>
           ))}

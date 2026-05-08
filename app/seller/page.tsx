@@ -21,6 +21,8 @@ import {
   sellerPhoneVerificationLabel,
   sellerVerificationStatusTone,
 } from '@/lib/seller-verification';
+import { DeliveryStatus } from '@prisma/client';
+import { getDeliveryStatusLabel, getShippingProvider, inferDeliveryStatus } from '@/lib/shipping';
 
 export const dynamic = 'force-dynamic';
 
@@ -69,7 +71,7 @@ function stripeAccountStatus(account: {
   };
 }
 
-export default async function SellerPage({ searchParams }: { searchParams: Promise<{ created?: string; stripe?: string; reason?: string; updated?: string; deleted?: string; promoted?: string; subscribed?: string; subscribe?: string; verification?: string }> }) {
+export default async function SellerPage({ searchParams }: { searchParams: Promise<{ created?: string; stripe?: string; reason?: string; updated?: string; deleted?: string; promoted?: string; subscribed?: string; subscribe?: string; verification?: string; shipping?: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect('/login');
   if (session.user.role !== 'SELLER') redirect('/');
@@ -100,6 +102,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   const subscriptionPeriodEnd = dbUser?.subscriptionCurrentPeriodEnd ?? null;
   const subscriptionStatus = dbUser?.subscriptionStatus ?? null;
   const defaultKycProvider = getDefaultSellerKycProvider();
+  const shippingProvider = getShippingProvider();
 
   await expirePromotions();
   const [settings, products, orders, soldItems, verificationSubmission] = await Promise.all([
@@ -319,6 +322,26 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
       {sp.verification === 'manual_required' && (
         <div className="card p-4 mb-6 bg-slate-50 border-slate-200 text-slate-700 text-sm">
           Manual verification mode is enabled. Submit documents below for admin review.
+        </div>
+      )}
+      {sp.shipping === 'updated' && (
+        <div className="card p-4 mb-6 bg-green-50 border-green-200 text-green-800 text-sm">
+          Shipment details updated. Buyers can now see the label, tracking number, and delivery status.
+        </div>
+      )}
+      {sp.shipping === 'refreshed' && (
+        <div className="card p-4 mb-6 bg-green-50 border-green-200 text-green-800 text-sm">
+          Shipment tracking refreshed from the configured carrier integration.
+        </div>
+      )}
+      {sp.shipping === 'refresh_unavailable' && (
+        <div className="card p-4 mb-6 bg-slate-50 border-slate-200 text-slate-700 text-sm">
+          Carrier refresh is not configured. You can still manage the shipment manually.
+        </div>
+      )}
+      {sp.shipping === 'missing_tracking' && (
+        <div className="card p-4 mb-6 bg-amber-50 border-amber-300 text-amber-900 text-sm">
+          Add a tracking number before requesting carrier updates.
         </div>
       )}
 
@@ -797,7 +820,10 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
           <div className="card p-6 text-slate-500">No orders yet.</div>
         ) : (
           <div className="space-y-3">
-            {orders.map(o => (
+            {orders.map(o => {
+              const currentDeliveryStatus = o.deliveryStatus ?? inferDeliveryStatus({ trackingNumber: o.trackingNumber });
+
+              return (
               <div key={o.id} className="card p-4">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs text-slate-400 font-mono">{o.id.slice(-8)}</span>
@@ -808,12 +834,57 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                 ))}
                 <p className="text-sm font-bold mt-2">{dollars(o.totalCents)}</p>
                 {/* Shipping form for non-pickup PAID orders */}
-                {o.status === 'PAID' && !o.isPickup && !isRestricted && (
-                  <form action="/api/seller/ship" method="POST" className="mt-3 flex gap-2">
+                {!o.isPickup && !isRestricted && ['PAID', 'SHIPPED', 'DELIVERED'].includes(o.status) && (
+                  <form action="/api/seller/ship" method="POST" className="mt-3 space-y-2">
                     <input type="hidden" name="orderId" value={o.id} />
-                    <input name="trackingNumber" className="input flex-1" placeholder="Tracking number" />
-                    <input name="shippingCarrier" className="input w-24" placeholder="Carrier" />
-                    <button type="submit" className="btn-primary text-sm">Mark Shipped</button>
+                    <div className="flex gap-2">
+                      <input
+                        name="trackingNumber"
+                        defaultValue={o.trackingNumber ?? ''}
+                        className="input flex-1"
+                        placeholder="Tracking number"
+                      />
+                      <input
+                        name="shippingCarrier"
+                        defaultValue={o.shippingCarrier ?? ''}
+                        className="input w-32"
+                        placeholder="Carrier"
+                      />
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <select
+                        name="deliveryStatus"
+                        defaultValue={currentDeliveryStatus}
+                        className="input w-48"
+                      >
+                        <option value={DeliveryStatus.LABEL_CREATED}>Label created</option>
+                        <option value={DeliveryStatus.PRE_TRANSIT}>Pre-transit</option>
+                        <option value={DeliveryStatus.IN_TRANSIT}>In transit</option>
+                        <option value={DeliveryStatus.OUT_FOR_DELIVERY}>Out for delivery</option>
+                        <option value={DeliveryStatus.DELIVERED}>Delivered</option>
+                        <option value={DeliveryStatus.EXCEPTION}>Delivery exception</option>
+                        <option value={DeliveryStatus.UNKNOWN}>Status unavailable</option>
+                      </select>
+                      <button type="submit" className="btn-primary text-sm">
+                        {o.shippingLabelUrl ? 'Update shipment' : 'Create shipment'}
+                      </button>
+                      {o.shippingLabelUrl && (
+                        <Link href={o.shippingLabelUrl} className="btn-outline text-sm">
+                          View label
+                        </Link>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-500">
+                      {shippingProvider.supportsCarrierTracking
+                        ? `Carrier refresh is powered by ${shippingProvider.label} when a tracking number is present.`
+                        : 'Carrier refresh is not enabled. You can still create the label and manage delivery status manually.'}
+                    </p>
+                  </form>
+                )}
+                {!o.isPickup && !isRestricted && o.trackingNumber && shippingProvider.supportsCarrierTracking && (
+                  <form action={`/api/orders/${o.id}/shipment/refresh`} method="POST" className="mt-2">
+                    <input type="hidden" name="redirectTo" value="/seller" />
+                    <button type="submit" className="btn-outline text-sm">Refresh tracking</button>
                   </form>
                 )}
                 {/* Pickup verification for pickup orders */}
@@ -826,11 +897,22 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                 {o.isPickup && o.status === 'PICKED_UP' && (
                   <p className="text-xs text-green-700 mt-2 font-medium">✅ Pickup confirmed</p>
                 )}
-                {o.trackingNumber && (
-                  <p className="text-xs text-slate-500 mt-2">📦 {o.shippingCarrier}: {o.trackingNumber}</p>
+                {(o.deliveryStatus || o.trackingNumber || o.shippingLabelUrl) && (
+                  <div className="mt-2 space-y-1">
+                    {o.deliveryStatus && (
+                      <p className="text-xs text-slate-500">Status: {getDeliveryStatusLabel(o.deliveryStatus)}</p>
+                    )}
+                    {o.trackingNumber && (
+                      <p className="text-xs text-slate-500">📦 {o.shippingCarrier}: {o.trackingNumber}</p>
+                    )}
+                    {o.deliveryStatusDetail && (
+                      <p className="text-xs text-slate-400">{o.deliveryStatusDetail}</p>
+                    )}
+                  </div>
                 )}
               </div>
-            ))}
+            );
+            })}
           </div>
         )}
       </section>
