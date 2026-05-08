@@ -13,9 +13,15 @@ type PromotionMetricState = {
   lastExpirationSweepAt: number;
 };
 
-const FLUSH_DELAY_MS = Number(process.env.PROMOTION_METRIC_QUEUE_FLUSH_MS ?? 5000);
-const FLUSH_BATCH_SIZE = Number(process.env.PROMOTION_METRIC_QUEUE_BATCH_SIZE ?? 25);
-const EXPIRATION_SWEEP_MS = Number(process.env.PROMOTION_EXPIRATION_SWEEP_MS ?? 60000);
+function readPositiveIntegerEnv(name: string, fallback: number) {
+  const value = process.env[name];
+  const parsed = value ? Number.parseInt(value, 10) : fallback;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+const FLUSH_DELAY_MS = readPositiveIntegerEnv('PROMOTION_METRIC_QUEUE_FLUSH_MS', 5000);
+const FLUSH_BATCH_SIZE = readPositiveIntegerEnv('PROMOTION_METRIC_QUEUE_BATCH_SIZE', 25);
+const EXPIRATION_SWEEP_MS = readPositiveIntegerEnv('PROMOTION_EXPIRATION_SWEEP_MS', 60000);
 
 const globalForPromotionMetrics = globalThis as typeof globalThis & {
   promotionMetricState?: PromotionMetricState;
@@ -123,14 +129,15 @@ export async function schedulePromotionExpirationSweep() {
   }
 
   state.lastExpirationSweepAt = now;
-  state.expirationSweepPromise = expirePromotions()
-    .then(() => {})
-    .catch((error) => {
+  state.expirationSweepPromise = (async () => {
+    try {
+      await expirePromotions();
+    } catch (error) {
       console.error('[promotion-metrics-queue] failed to expire promotions', error);
-    })
-    .finally(() => {
-      state.expirationSweepPromise = undefined;
-    });
+    }
+  })().finally(() => {
+    state.expirationSweepPromise = undefined;
+  });
 
   return state.expirationSweepPromise;
 }

@@ -1,4 +1,4 @@
-const cdnUrl = process.env.NEXT_PUBLIC_CDN_URL?.replace(/\/$/, '');
+const cdnUrl = process.env.NEXT_PUBLIC_CDN_URL?.replace(/\/$/, '') || undefined;
 const THIRTY_DAYS_IN_SECONDS = 60 * 60 * 24 * 30;
 
 /** @type {import('next').NextConfig} */

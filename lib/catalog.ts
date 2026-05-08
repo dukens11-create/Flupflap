@@ -11,7 +11,13 @@ export interface CatalogSearchParams {
   maxPrice?: string;
 }
 
-const CATALOG_CACHE_TTL_SECONDS = Number(process.env.CATALOG_CACHE_TTL_SECONDS ?? 60);
+function readPositiveIntegerEnv(name: string, fallback: number) {
+  const value = process.env[name];
+  const parsed = value ? Number.parseInt(value, 10) : fallback;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+const CATALOG_CACHE_TTL_SECONDS = readPositiveIntegerEnv('CATALOG_CACHE_TTL_SECONDS', 60);
 
 function activePromotionWhere() {
   return { status: 'ACTIVE' as const, expiresAt: { gt: new Date() } };
