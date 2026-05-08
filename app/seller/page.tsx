@@ -12,6 +12,11 @@ import { expirePromotions } from '@/lib/promotions';
 import { isSubscriptionActive, SELLER_SUBSCRIPTION_PRICE_LABEL } from '@/lib/subscription';
 import { syncSellerSubscriptionFromStripe } from '@/lib/subscription-sync';
 import SubscriptionButton from '@/components/SubscriptionButton';
+import {
+  isSellerVerificationApproved,
+  sellerPhoneVerificationLabel,
+  sellerVerificationStatusTone,
+} from '@/lib/seller-verification';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,7 +65,7 @@ function stripeAccountStatus(account: {
   };
 }
 
-export default async function SellerPage({ searchParams }: { searchParams: Promise<{ created?: string; stripe?: string; reason?: string; updated?: string; deleted?: string; promoted?: string; subscribed?: string; subscribe?: string }> }) {
+export default async function SellerPage({ searchParams }: { searchParams: Promise<{ created?: string; stripe?: string; reason?: string; updated?: string; deleted?: string; promoted?: string; subscribed?: string; subscribe?: string; verification?: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect('/login');
   if (session.user.role !== 'SELLER') redirect('/');
@@ -92,7 +97,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   const subscriptionStatus = dbUser?.subscriptionStatus ?? null;
 
   await expirePromotions();
-  const [settings, products, orders, soldItems] = await Promise.all([
+  const [settings, products, orders, soldItems, verificationSubmission] = await Promise.all([
     getMarketplaceSettings(),
     prisma.product.findMany({
       where: { sellerId: session.user.id },
@@ -123,6 +128,22 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
       },
       orderBy: { order: { createdAt: 'desc' } },
     }),
+    prisma.sellerVerification.findUnique({
+      where: { sellerId: session.user.id },
+      select: {
+        status: true,
+        rejectionReason: true,
+        phoneNumber: true,
+        phoneVerificationStatus: true,
+        street: true,
+        city: true,
+        state: true,
+        zipCode: true,
+        country: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    }),
   ]);
 
   // Compute earnings from seller's completed order items
@@ -131,6 +152,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   const netEarningsCents = soldItems.reduce((s, i) => s + i.sellerNetCents, 0);
   const itemsSoldCount = soldItems.reduce((s, i) => s + i.quantity, 0);
   const completedOrdersCount = new Set(soldItems.map(i => i.order.id)).size;
+  const verificationApproved = isSellerVerificationApproved(verificationSubmission?.status);
 
   // Fetch Stripe onboarding state from DB (not the JWT, which is set only at
   // login and would be stale immediately after the seller returns from Stripe).
@@ -223,7 +245,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
           <h1 className="text-3xl font-black">Seller Dashboard</h1>
           <p className="text-slate-500 text-sm">Welcome back, {session.user.name}</p>
         </div>
-        {!isRestricted && subscriptionActive && <Link href="/seller/new" className="btn-primary">+ New listing</Link>}
+        {!isRestricted && subscriptionActive && verificationApproved && <Link href="/seller/new" className="btn-primary">+ New listing</Link>}
       </div>
 
       {isRestricted && (
@@ -234,6 +256,188 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
             unavailable. If you believe this is an error, please contact support.
           </p>
         </div>
+      )}
+
+      {sp.verification === 'submitted' && (
+        <div className="card p-4 mb-6 bg-green-50 border-green-200 text-green-800 text-sm">
+          ✅ Seller verification submitted. An admin will review your documents before you can list products.
+        </div>
+      )}
+
+      {sp.verification === 'required' && (
+        <div className="card p-4 mb-6 bg-amber-50 border-amber-300 text-amber-900 text-sm">
+          Submit and pass seller verification before creating product listings.
+        </div>
+      )}
+
+      {!isRestricted && (
+        <section className="card p-6 mb-6">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Seller verification
+              </p>
+              <div className="mt-2 flex items-center gap-2">
+                <span className={`badge ${sellerVerificationStatusTone(verificationSubmission?.status)}`}>
+                  {verificationSubmission?.status ?? 'NOT SUBMITTED'}
+                </span>
+                {verificationSubmission?.phoneVerificationStatus && (
+                  <span className="text-xs text-slate-500">
+                    Phone verification: {sellerPhoneVerificationLabel(verificationSubmission.phoneVerificationStatus)}
+                  </span>
+                )}
+              </div>
+              <p className="mt-3 text-sm text-slate-600 max-w-2xl">
+                Upload your government ID (front and back), a selfie / face verification photo, your physical address, and your phone number. Listings stay locked until an admin approves your seller verification.
+              </p>
+              {verificationSubmission?.status === 'REJECTED' && verificationSubmission.rejectionReason && (
+                <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+                  <span className="font-semibold">Rejected:</span> {verificationSubmission.rejectionReason}
+                </p>
+              )}
+              {verificationSubmission?.status === 'APPROVED' && (
+                <p className="mt-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
+                  Your seller verification is approved. You can now create listings once your subscription is active.
+                </p>
+              )}
+              {verificationSubmission?.status === 'PENDING' && (
+                <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                  Your verification is pending review. We&apos;ll notify you here once an admin approves or rejects it.
+                </p>
+              )}
+            </div>
+            {verificationSubmission && (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                <p className="font-medium text-slate-800">{verificationSubmission.phoneNumber}</p>
+                <p>
+                  {verificationSubmission.street}
+                  <br />
+                  {verificationSubmission.city}, {verificationSubmission.state} {verificationSubmission.zipCode}
+                  <br />
+                  {verificationSubmission.country}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {!verificationApproved && (
+            <form
+              action="/api/seller/verification"
+              method="POST"
+              encType="multipart/form-data"
+              className="mt-6 space-y-4 border-t border-slate-100 pt-6"
+            >
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="label">Phone number</label>
+                  <input
+                    name="phoneNumber"
+                    type="tel"
+                    className="input"
+                    required
+                    defaultValue={verificationSubmission?.phoneNumber ?? dbUser?.phone ?? ''}
+                    placeholder="+1 555 000 1234"
+                  />
+                </div>
+                <div>
+                  <label className="label">Country</label>
+                  <input
+                    name="country"
+                    className="input"
+                    required
+                    defaultValue={verificationSubmission?.country ?? 'US'}
+                    placeholder="United States"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="label">Street address</label>
+                <input
+                  name="street"
+                  className="input"
+                  required
+                  defaultValue={verificationSubmission?.street ?? ''}
+                  placeholder="123 Main Street"
+                />
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-3">
+                <div>
+                  <label className="label">City</label>
+                  <input
+                    name="city"
+                    className="input"
+                    required
+                    defaultValue={verificationSubmission?.city ?? ''}
+                    placeholder="Dallas"
+                  />
+                </div>
+                <div>
+                  <label className="label">State / Province</label>
+                  <input
+                    name="state"
+                    className="input"
+                    required
+                    defaultValue={verificationSubmission?.state ?? ''}
+                    placeholder="TX"
+                  />
+                </div>
+                <div>
+                  <label className="label">ZIP / Postal code</label>
+                  <input
+                    name="zipCode"
+                    className="input"
+                    required
+                    defaultValue={verificationSubmission?.zipCode ?? ''}
+                    placeholder="75001"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-3">
+                <div>
+                  <label className="label">Government ID front</label>
+                  <input
+                    name="governmentIdFront"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    className="input py-2 text-sm file:mr-3 file:rounded file:border-0 file:bg-slate-100 file:px-3 file:py-1 file:text-sm file:font-medium cursor-pointer"
+                    required={!verificationSubmission}
+                  />
+                </div>
+                <div>
+                  <label className="label">Government ID back</label>
+                  <input
+                    name="governmentIdBack"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    className="input py-2 text-sm file:mr-3 file:rounded file:border-0 file:bg-slate-100 file:px-3 file:py-1 file:text-sm file:font-medium cursor-pointer"
+                    required={!verificationSubmission}
+                  />
+                </div>
+                <div>
+                  <label className="label">Selfie / face verification</label>
+                  <input
+                    name="selfieImage"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    className="input py-2 text-sm file:mr-3 file:rounded file:border-0 file:bg-slate-100 file:px-3 file:py-1 file:text-sm file:font-medium cursor-pointer"
+                    required={!verificationSubmission}
+                  />
+                </div>
+              </div>
+
+              <p className="text-xs text-slate-500">
+                Verification documents are stored privately and are only available to you and FlupFlap admins during review.
+              </p>
+
+              <button className="btn-primary" type="submit">
+                {verificationSubmission?.status === 'REJECTED' ? 'Resubmit verification' : verificationSubmission ? 'Update verification' : 'Submit verification'}
+              </button>
+            </form>
+          )}
+        </section>
       )}
 
       {/* ── Seller Subscription ── */}
@@ -445,9 +649,11 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
         <h2 className="text-xl font-bold mb-3">My Listings</h2>
         {products.length === 0 ? (
           <div className="card p-6 text-slate-500">
-            {subscriptionActive
+            {subscriptionActive && verificationApproved
               ? <span>No listings yet. <Link href="/seller/new" className="text-blue-600 hover:underline">Create one</Link>.</span>
-              : 'No listings yet. Subscribe to start selling.'}
+              : subscriptionActive
+                ? 'No listings yet. Complete seller verification to start selling.'
+                : 'No listings yet. Subscribe to start selling.'}
           </div>
         ) : (
           <div className="space-y-3">

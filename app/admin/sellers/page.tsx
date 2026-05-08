@@ -3,6 +3,10 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import type { Metadata } from 'next';
+import {
+  sellerPhoneVerificationLabel,
+  sellerVerificationStatusTone,
+} from '@/lib/seller-verification';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,15 +33,25 @@ function statusBadge(status: string) {
   return map[status] ?? 'badge-slate';
 }
 
-export default async function AdminSellersPage() {
+export default async function AdminSellersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ verification?: string }>;
+}) {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect('/login');
   if (session.user.role !== 'ADMIN') redirect('/');
+  const sp = await searchParams;
 
   const sellers = await prisma.user.findMany({
     where: { role: 'SELLER' },
     orderBy: { createdAt: 'desc' },
     include: {
+      verificationSubmission: {
+        include: {
+          reviewedBy: { select: { name: true, email: true } },
+        },
+      },
       moderationLogsAsSeller: {
         orderBy: { createdAt: 'desc' },
         take: 5,
@@ -58,6 +72,12 @@ export default async function AdminSellersPage() {
         </div>
         <a href="/admin" className="btn-outline text-sm">← Admin Dashboard</a>
       </div>
+
+      {sp.verification === 'updated' && (
+        <div className="card p-4 mb-6 bg-green-50 border-green-200 text-green-800 text-sm">
+          ✅ Seller verification review updated.
+        </div>
+      )}
 
       {sellers.length === 0 ? (
         <div className="card p-6 text-slate-500">No seller accounts yet.</div>
@@ -85,7 +105,112 @@ export default async function AdminSellersPage() {
                       {seller.sellerStatusNotes && ` — ${seller.sellerStatusNotes}`}
                     </p>
                   )}
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                    <span className={`badge ${sellerVerificationStatusTone(seller.verificationSubmission?.status)}`}>
+                      Verification {seller.verificationSubmission?.status ?? 'NOT SUBMITTED'}
+                    </span>
+                    {seller.verificationSubmission?.phoneVerificationStatus && (
+                      <span className="text-slate-500">
+                        Phone verification: {sellerPhoneVerificationLabel(seller.verificationSubmission.phoneVerificationStatus)}
+                      </span>
+                    )}
+                  </div>
                 </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">Verification submission</p>
+                    {seller.verificationSubmission ? (
+                      <div className="mt-3 space-y-2 text-sm text-slate-600">
+                        <p>
+                          <span className="font-medium text-slate-800">Phone:</span>{' '}
+                          {seller.verificationSubmission.phoneNumber}
+                        </p>
+                        <p>
+                          <span className="font-medium text-slate-800">Address:</span>{' '}
+                          {seller.verificationSubmission.street}, {seller.verificationSubmission.city}, {seller.verificationSubmission.state} {seller.verificationSubmission.zipCode}, {seller.verificationSubmission.country}
+                        </p>
+                        {seller.verificationSubmission.rejectionReason && (
+                          <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-red-800">
+                            <span className="font-medium">Rejection reason:</span>{' '}
+                            {seller.verificationSubmission.rejectionReason}
+                          </p>
+                        )}
+                        {seller.verificationSubmission.reviewedBy && seller.verificationSubmission.reviewedAt && (
+                          <p className="text-xs text-slate-500">
+                            Last reviewed {seller.verificationSubmission.reviewedAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} by {seller.verificationSubmission.reviewedBy.name}
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="mt-2 text-sm text-slate-500">
+                        This seller has not submitted verification documents yet.
+                      </p>
+                    )}
+                  </div>
+
+                  {seller.verificationSubmission && (
+                    <div className="flex flex-col gap-2 min-w-[180px]">
+                      <a
+                        href={`/api/seller/verification/documents/front?sellerId=${seller.id}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="btn-outline text-xs text-center"
+                      >
+                        View ID front
+                      </a>
+                      <a
+                        href={`/api/seller/verification/documents/back?sellerId=${seller.id}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="btn-outline text-xs text-center"
+                      >
+                        View ID back
+                      </a>
+                      <a
+                        href={`/api/seller/verification/documents/selfie?sellerId=${seller.id}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="btn-outline text-xs text-center"
+                      >
+                        View selfie
+                      </a>
+                    </div>
+                  )}
+                </div>
+
+                {seller.verificationSubmission && (
+                  <form
+                    action={`/api/admin/sellers/${seller.id}/verification`}
+                    method="POST"
+                    className="mt-4 space-y-3 border-t border-slate-200 pt-4"
+                  >
+                    <div className="grid gap-3 md:grid-cols-[180px_1fr]">
+                      <div>
+                        <label className="label">Decision</label>
+                        <select name="status" className="input" required defaultValue="">
+                          <option value="" disabled>Select status…</option>
+                          <option value="APPROVED">Approve</option>
+                          <option value="REJECTED">Reject</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="label">Rejection reason (required for rejection)</label>
+                        <textarea
+                          name="rejectionReason"
+                          className="input h-20 resize-none"
+                          maxLength={1000}
+                          placeholder="Add clear guidance for the seller if documents are rejected…"
+                        />
+                      </div>
+                    </div>
+                    <button type="submit" className="btn-primary text-sm">
+                      Save verification review
+                    </button>
+                  </form>
+                )}
               </div>
 
               {/* Moderation form */}

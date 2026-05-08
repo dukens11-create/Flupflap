@@ -133,6 +133,7 @@ export async function DELETE(req: Request) {
 
       // 2. Remove personal addresses.
       await tx.address.deleteMany({ where: { userId } });
+      await tx.sellerVerification.deleteMany({ where: { sellerId: userId } });
 
       // 3. Remove conversations and all their messages (messages cascade on
       //    conversationId). Delete messages sent by the user first to avoid
