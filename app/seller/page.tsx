@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
+import { DEFAULT_DATE_FORMAT_OPTIONS } from '@/lib/date-format';
 import { dollars } from '@/lib/money';
 import { formatCommissionPercent, getMarketplaceSettings, getStoredLineSubtotalCents } from '@/lib/commission';
 import { classifyStripeError, getCurrentStripeMode, stripe } from '@/lib/stripe';
@@ -22,12 +23,6 @@ import {
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = { title: 'Seller Dashboard' };
-
-const DATE_FORMAT_OPTIONS: Intl.DateTimeFormatOptions = {
-  month: 'short',
-  day: 'numeric',
-  year: 'numeric',
-};
 
 function statusBadge(status: string) {
   const map: Record<string, string> = {
@@ -486,7 +481,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
           <span>
               ✅ Seller subscription active
               {subscriptionPeriodEnd
-                ? ` — renews ${subscriptionPeriodEnd.toLocaleDateString('en-US', DATE_FORMAT_OPTIONS)}`
+                ? ` — renews ${subscriptionPeriodEnd.toLocaleDateString('en-US', DEFAULT_DATE_FORMAT_OPTIONS)}`
                 : ''}
             </span>
           <SubscriptionButton hasBillingAccount={!!dbUser?.stripeCustomerId} status={subscriptionStatus} manage />

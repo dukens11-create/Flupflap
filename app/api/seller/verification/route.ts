@@ -161,10 +161,9 @@ export async function POST(req: Request) {
         : Promise.resolve(null),
     ]);
 
-    const phoneVerificationStatus: SellerPhoneVerificationStatus =
-      (user?.phoneVerified && phoneMatchesExisting) || phoneMatchesVerifiedSubmission
-        ? 'VERIFIED'
-        : 'PENDING';
+    const phoneVerificationStatus: SellerPhoneVerificationStatus = shouldKeepPhoneVerified
+      ? 'VERIFIED'
+      : 'PENDING';
 
     await prisma.$transaction([
       prisma.user.update({

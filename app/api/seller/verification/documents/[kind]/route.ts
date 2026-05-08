@@ -25,17 +25,18 @@ export async function GET(
     return NextResponse.json({ error: 'Document not found.' }, { status: 404 });
   }
 
-  const sellerId: string | null = session.user.role === 'ADMIN'
+  const sellerIdParam = session.user.role === 'ADMIN'
     ? new URL(req.url).searchParams.get('sellerId')
     : session.user.id;
 
-  if (session.user.role === 'ADMIN' && !sellerId) {
+  if (session.user.role === 'ADMIN' && !sellerIdParam) {
     return NextResponse.json({ error: 'Seller ID is required.' }, { status: 400 });
   }
+  const sellerId = sellerIdParam as string;
 
   if (session.user.role === 'ADMIN') {
     const seller = await prisma.user.findUnique({
-      where: { id: sellerId as string },
+      where: { id: sellerId },
       select: { id: true, role: true },
     });
     if (!seller || seller.role !== 'SELLER') {
@@ -44,7 +45,7 @@ export async function GET(
   }
 
   const verification = await prisma.sellerVerification.findUnique({
-    where: { sellerId: sellerId as string },
+    where: { sellerId },
     select: {
       governmentIdFrontPublicId: true,
       governmentIdFrontFormat: true,
@@ -83,7 +84,7 @@ export async function GET(
     await prisma.adminAccessLog.create({
       data: {
         adminId: session.user.id,
-        targetId: sellerId as string,
+        targetId: sellerId,
         action: 'view_seller_verification_document',
         notes: kind,
       },
