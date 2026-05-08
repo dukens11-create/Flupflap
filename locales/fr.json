@@ -15,14 +15,57 @@
     "language": "Langue"
   },
   "footer": {
+    "description": "Découvrez des annonces fiables, un paiement protégé et une façon plus claire d'acheter et de vendre au quotidien.",
+    "marketplace": "Marketplace",
+    "sell": "Vendre",
+    "support": "Support",
+    "cart": "Panier",
+    "orders": "Commandes",
+    "tagline": "Pensé pour parcourir plus vite, payer en sécurité et vendre localement en toute confiance.",
     "terms": "Conditions",
     "privacy": "Confidentialité",
     "sellerAgreement": "Accord vendeur",
     "refundPolicy": "Politique de remboursement"
   },
   "home": {
-    "title": "Un marketplace plus sûr",
-    "subtitle": "Des frais réduits, des vendeurs vérifiés et une façon plus simple d'acheter et de vendre des articles du quotidien.",
+    "title": "Un marketplace moderne pour acheter et vendre en toute confiance",
+    "subtitle": "Parcourez des annonces sélectionnées, comparez les produits plus vite et achetez auprès de vendeurs vérifiés dans une expérience FlupFlap plus nette.",
+    "heroBadge": "Design prêt pour le marketplace",
+    "shopNow": "Acheter les produits en vedette",
+    "startSelling": "Commencer à vendre sur FlupFlap",
+    "heroHighlights": {
+      "discovery": {
+        "title": "Parcourez plus vite",
+        "description": "Des comparaisons responsives permettent de voir plus d'annonces sans encombrement."
+      },
+      "trust": {
+        "title": "Faites confiance au vendeur",
+        "description": "Les signaux de vendeur vérifié et le paiement protégé rendent le marketplace plus professionnel."
+      },
+      "fulfillment": {
+        "title": "Livraison flexible",
+        "description": "Prenez en charge l'expédition et le retrait local pratique depuis une seule vitrine."
+      }
+    },
+    "trustTitle": "Pourquoi les acheteurs font confiance à FlupFlap",
+    "trustSubtitle": "La page d'accueil met désormais en avant la confiance, la rapidité et une navigation pensée pour la conversion sur tous les écrans.",
+    "featuredEyebrow": "Sélection du marketplace",
+    "featuredTitle": "Nouvelles trouvailles de vendeurs fiables",
+    "featuredSubtitle": "Une grille responsive avec filtres, un espacement plus propre et une comparaison plus rapide sur tous les appareils.",
+    "trustBadges": {
+      "verifiedSellers": {
+        "title": "Vendeurs vérifiés",
+        "description": "Les badges vendeur mettent en avant les annonces fiables et aident les acheteurs à décider plus sereinement."
+      },
+      "securePayments": {
+        "title": "Paiements sécurisés",
+        "description": "Les parcours de paiement protégés gardent chaque achat fluide et sécurisé."
+      },
+      "buyerProtection": {
+        "title": "Protection acheteur",
+        "description": "Des messages de confiance clairs renforcent des transactions plus sûres de la recherche à la livraison."
+      }
+    },
     "loadingProducts": "Chargement des produits…",
     "noProducts": "Aucun produit trouvé. Essayez d'ajuster vos filtres."
   },
@@ -54,7 +97,12 @@
     "sponsored": "Sponsorisé",
     "shipping": "Livraison {amount}",
     "pickupIn": "🏠 Retrait à {location}",
-    "viewItem": "Voir l'article"
+    "viewItem": "Voir l'article",
+    "verifiedSeller": "Vendeur vérifié",
+    "phoneVerified": "Téléphone vérifié",
+    "newSeller": "Nouveau vendeur",
+    "responseRate": "{value}% répond rapidement",
+    "sellerFallback": "Vendeur du marketplace"
   },
   "login": {
     "title": "Se connecter",

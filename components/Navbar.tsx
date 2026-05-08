@@ -102,87 +102,95 @@ export default function Navbar() {
   const unreadMessages = useUnreadMessages(!!session?.user);
   const unreadNotifications = useUnreadNotifications(!!session?.user);
   const { t } = useI18n();
+  const navLinkClass = 'rounded-full px-3 py-2 transition-colors hover:bg-amber-50 hover:text-amber-700';
+  const actionLinkClass = 'relative flex items-center gap-1 rounded-full px-3 py-2 transition-colors hover:bg-slate-100 hover:text-amber-700';
 
   return (
-    <header className="bg-white border-b border-slate-200 sticky top-0 z-30">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-[8rem] sm:h-[9.5rem] flex items-center gap-4">
-        <Link href="/" className="mr-2 sm:mr-4 flex items-center shrink-0" aria-label="FlupFlap home">
-          <Image
-            src="/flupflap_logo_brand.png"
-            alt="FlupFlap"
-            width={614}
-            height={255}
-            priority
-            className="h-28 sm:h-36 w-auto"
-          />
-        </Link>
-
-        <nav className="flex items-center gap-3 flex-1 text-sm font-medium text-slate-600">
-          <Link href="/" className="hover:text-blue-600">{t('nav.browse')}</Link>
-          {role === 'SELLER' && (
-            <>
-              <Link href="/seller" className="hover:text-blue-600">{t('nav.dashboard')}</Link>
-              <Link href="/seller/new" className="hover:text-blue-600">{t('nav.listItem')}</Link>
-            </>
-          )}
-          {role === 'ADMIN' && (
-            <Link href="/admin" className="hover:text-blue-600 flex items-center gap-1">
-              <LayoutDashboard size={14} /> {t('nav.admin')}
+    <header className="sticky top-0 z-30 border-b border-slate-200 bg-white">
+      <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-6">
+          <div className="flex items-center justify-between gap-4">
+            <Link href="/" className="flex items-center shrink-0" aria-label="FlupFlap home">
+              <Image
+                src="/flupflap_logo_brand.png"
+                alt="FlupFlap"
+                width={614}
+                height={255}
+                priority
+                className="h-14 w-auto sm:h-16"
+              />
             </Link>
-          )}
-        </nav>
+          </div>
 
-        <div className="flex items-center gap-2 text-sm font-medium">
-          <LanguageSelector />
-          <Link href="/cart" className="relative flex items-center gap-1 hover:text-blue-600">
-            <ShoppingCart size={16} /> {t('nav.cart')}
-            {cartCount > 0 && (
-              <span className="absolute -top-2 -right-3 bg-blue-600 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
-                {cartCount}
-              </span>
-            )}
-          </Link>
-          {session?.user ? (
-            <>
-              <Link href="/orders" className="flex items-center gap-1 hover:text-blue-600">
-                <Package size={16} /> {t('nav.orders')}
-              </Link>
-              <Link href="/messages" className="relative flex items-center gap-1 hover:text-blue-600">
-                <MessageCircle size={16} /> {t('nav.messages')}
-                {unreadMessages > 0 && (
-                  <span className="absolute -top-2 -right-3 bg-blue-600 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
-                    {unreadMessages}
+          <div className="flex flex-1 flex-col gap-3 lg:flex-row lg:items-center">
+            <nav className="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-600">
+              <Link href="/" className={navLinkClass}>{t('nav.browse')}</Link>
+              {role === 'SELLER' && (
+                <>
+                  <Link href="/seller" className={navLinkClass}>{t('nav.dashboard')}</Link>
+                  <Link href="/seller/new" className={navLinkClass}>{t('nav.listItem')}</Link>
+                </>
+              )}
+              {role === 'ADMIN' && (
+                <Link href="/admin" className={`${navLinkClass} flex items-center gap-1`}>
+                  <LayoutDashboard size={14} /> {t('nav.admin')}
+                </Link>
+              )}
+            </nav>
+
+            <div className="flex flex-wrap items-center gap-2 text-sm font-medium lg:ml-auto">
+              <LanguageSelector />
+              <Link href="/cart" className={actionLinkClass}>
+                <ShoppingCart size={16} /> {t('nav.cart')}
+                {cartCount > 0 && (
+                  <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-amber-500 px-1 text-xs font-bold text-white">
+                    {cartCount}
                   </span>
                 )}
               </Link>
-              <Link href="/notifications" className="relative flex items-center gap-1 hover:text-blue-600">
-                <Bell size={16} /> {t('nav.notifications')}
-                {unreadNotifications > 0 && (
-                  <span className="absolute -top-2 -right-3 bg-blue-600 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
-                    {unreadNotifications}
-                  </span>
-                )}
-              </Link>
-              <Link href="/account" className="flex items-center gap-1 hover:text-blue-600">
-                <User size={16} /> {t('nav.account')}
-              </Link>
-              <button
-                onClick={() => signOut({ callbackUrl: '/' })}
-                className="flex items-center gap-1 hover:text-red-600"
-              >
-                <LogOut size={16} /> {t('nav.logout')}
-              </button>
-            </>
-          ) : (
-            <>
-              <Link href="/login" className="flex items-center gap-1 hover:text-blue-600">
-                <LogIn size={16} /> {t('nav.login')}
-              </Link>
-              <Link href="/signup" className="btn-primary flex items-center gap-1">
-                <UserPlus size={14} /> {t('nav.signUp')}
-              </Link>
-            </>
-          )}
+              {session?.user ? (
+                <>
+                  <Link href="/orders" className={actionLinkClass}>
+                    <Package size={16} /> {t('nav.orders')}
+                  </Link>
+                  <Link href="/messages" className={actionLinkClass}>
+                    <MessageCircle size={16} /> {t('nav.messages')}
+                    {unreadMessages > 0 && (
+                      <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-emerald-500 px-1 text-xs font-bold text-white">
+                        {unreadMessages}
+                      </span>
+                    )}
+                  </Link>
+                  <Link href="/notifications" className={actionLinkClass}>
+                    <Bell size={16} /> {t('nav.notifications')}
+                    {unreadNotifications > 0 && (
+                      <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-emerald-500 px-1 text-xs font-bold text-white">
+                        {unreadNotifications}
+                      </span>
+                    )}
+                  </Link>
+                  <Link href="/account" className={actionLinkClass}>
+                    <User size={16} /> {t('nav.account')}
+                  </Link>
+                  <button
+                    onClick={() => signOut({ callbackUrl: '/' })}
+                    className="flex items-center gap-1 rounded-full px-3 py-2 transition-colors hover:bg-red-50 hover:text-red-600"
+                  >
+                    <LogOut size={16} /> {t('nav.logout')}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Link href="/login" className={actionLinkClass}>
+                    <LogIn size={16} /> {t('nav.login')}
+                  </Link>
+                  <Link href="/signup" className="btn-brand">
+                    <UserPlus size={14} /> {t('nav.signUp')}
+                  </Link>
+                </>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </header>

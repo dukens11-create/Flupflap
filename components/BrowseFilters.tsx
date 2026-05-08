@@ -41,15 +41,17 @@ export default function BrowseFilters() {
   const hasFilters = searchParams.toString().length > 0;
 
   return (
-    <div className={`flex flex-wrap gap-3 mb-6 p-4 card${isPending ? ' opacity-60' : ''}`}>
+    <div className={`mb-6 grid grid-cols-2 gap-3 rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm transition-opacity sm:p-5 lg:grid-cols-6${isPending ? ' opacity-60' : ''}`}>
+      <div className="col-span-full lg:col-span-2">
         <input
-          className="input max-w-xs"
+          className="input"
           placeholder={t('filters.searchPlaceholder')}
           value={searchValue}
           onChange={e => setSearchValue(e.target.value)}
         />
+      </div>
       <select
-        className="input w-40"
+        className="input col-span-1"
         value={searchParams.get('category') ?? ''}
         onChange={e => updateSearchParam('category', e.target.value)}
       >
@@ -57,7 +59,7 @@ export default function BrowseFilters() {
         {CATEGORIES.map(c => <option key={c} value={c}>{t(`filters.categories.${c}`)}</option>)}
       </select>
       <select
-        className="input w-36"
+        className="input col-span-1"
         value={searchParams.get('condition') ?? ''}
         onChange={e => updateSearchParam('condition', e.target.value)}
       >
@@ -65,7 +67,7 @@ export default function BrowseFilters() {
         {CONDITIONS.map(c => <option key={c} value={c}>{t(`filters.conditions.${c}`)}</option>)}
       </select>
       <input
-        className="input w-28"
+        className="input col-span-1"
         type="number"
         placeholder={t('filters.minPrice')}
         min="0"
@@ -73,7 +75,7 @@ export default function BrowseFilters() {
         onBlur={e => updateSearchParam('minPrice', e.target.value)}
       />
       <input
-        className="input w-28"
+        className="input col-span-1"
         type="number"
         placeholder={t('filters.maxPrice')}
         min="0"
@@ -81,7 +83,7 @@ export default function BrowseFilters() {
         onBlur={e => updateSearchParam('maxPrice', e.target.value)}
       />
       {hasFilters && (
-        <button className="btn-outline" onClick={clear}>{t('filters.clearFilters')}</button>
+        <button className="btn-outline col-span-full lg:col-span-1 lg:w-full" onClick={clear}>{t('filters.clearFilters')}</button>
       )}
     </div>
   );
