@@ -66,6 +66,10 @@ function formatAccountAge(days: number) {
   return years === 1 ? 'Joined 1 year ago' : `Joined ${years} years ago`;
 }
 
+function pluralize(count: number, singular: string, plural = `${singular}s`) {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
 export default async function AdminSellersPage({
   searchParams,
 }: {
@@ -233,16 +237,16 @@ export default async function AdminSellersPage({
         </div>
 
         <div className="card mt-4 p-5">
-          <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <h2 className="text-xl font-bold">Attention queue</h2>
+            <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <h2 className="text-xl font-bold">Attention queue</h2>
               <p className="text-sm text-slate-500">
                 Scores combine verification status, profile completeness, reports, listing behavior, and moderation history.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-              <span className="badge badge-red">{rejectedVerificationCount} rejected verification{rejectedVerificationCount === 1 ? '' : 's'}</span>
-              <span className="badge badge-yellow">{highRiskCount} high risk</span>
+              <span className="badge badge-red">{pluralize(rejectedVerificationCount, 'rejected verification')}</span>
+              <span className="badge badge-yellow">{pluralize(highRiskCount, 'high-risk seller')}</span>
             </div>
           </div>
 
@@ -270,11 +274,11 @@ export default async function AdminSellersPage({
                       </div>
                       <p className="mt-1 text-sm text-slate-500">{seller.email}</p>
                       <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-500">
-                        <span>{seller.risk.metrics.openReportsCount} open report{seller.risk.metrics.openReportsCount === 1 ? '' : 's'}</span>
+                        <span>{pluralize(seller.risk.metrics.openReportsCount, 'open report')}</span>
                         <span>·</span>
-                        <span>{seller.risk.metrics.recentListingsCount} recent listing{seller.risk.metrics.recentListingsCount === 1 ? '' : 's'}</span>
+                        <span>{pluralize(seller.risk.metrics.recentListingsCount, 'recent listing')}</span>
                         <span>·</span>
-                        <span>{seller.risk.metrics.flaggedListingsCount} flagged listing{seller.risk.metrics.flaggedListingsCount === 1 ? '' : 's'}</span>
+                        <span>{pluralize(seller.risk.metrics.flaggedListingsCount, 'flagged listing')}</span>
                       </div>
                       {seller.risk.factors[0] && (
                         <p className="mt-2 text-sm text-slate-600">
