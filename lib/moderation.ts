@@ -14,6 +14,7 @@ export type ModerationReason = {
   matches: string[];
   confidence: ModerationConfidence;
   score: number;
+  blocksMessage: boolean;
 };
 
 export type ModerationResult = {
@@ -34,7 +35,10 @@ type RuleConfig = {
   confidence: ModerationConfidence;
   score: number;
   minimumMatches?: number;
+  blockOnMatch?: boolean;
 };
+
+const MODERATION_SUMMARY_SEPARATOR = ' · ';
 
 const MODERATION_POLICY = {
   counterfeitDirect: [
@@ -128,6 +132,7 @@ const LISTING_RULES: RuleConfig[] = [
     keywords: MODERATION_POLICY.prohibitedItems,
     confidence: 'high',
     score: 100,
+    blockOnMatch: true,
   },
   {
     category: 'scam_wording',
@@ -172,6 +177,7 @@ const MESSAGE_RULES: RuleConfig[] = [
     keywords: MODERATION_POLICY.scamDirect,
     confidence: 'high',
     score: 90,
+    blockOnMatch: true,
   },
   {
     category: 'scam_wording',
@@ -189,6 +195,7 @@ const MESSAGE_RULES: RuleConfig[] = [
     keywords: MODERATION_POLICY.offensive,
     confidence: 'high',
     score: 80,
+    blockOnMatch: true,
   },
 ];
 
@@ -224,15 +231,12 @@ function pushReason(reasons: ModerationReason[], content: string, rule: RuleConf
     matches,
     confidence: rule.confidence,
     score: rule.score,
+    blocksMessage: rule.blockOnMatch ?? false,
   });
 }
 
 function shouldBlockMessage(reasons: ModerationReason[]) {
-  return reasons.some((reason) => (
-    reason.category === 'prohibited_item'
-    || reason.category === 'offensive_content'
-    || (reason.category === 'scam_wording' && reason.confidence === 'high')
-  ));
+  return reasons.some((reason) => reason.blocksMessage);
 }
 
 function finalizeModeration(surface: Surface, reasons: ModerationReason[]): ModerationResult {
@@ -303,7 +307,7 @@ export function formatModerationSummary(result: ModerationResult) {
 
   return `${result.confidence.toUpperCase()} risk · ${Array.from(
     new Set(result.reasons.map((reason) => `${reason.label} (${reason.confidence})`)),
-  ).join(' · ')}`;
+  ).join(MODERATION_SUMMARY_SEPARATOR)}`;
 }
 
 export function formatBlockedMessage(result: ModerationResult) {
@@ -315,9 +319,5 @@ export function formatBlockedMessage(result: ModerationResult) {
     return `Message not sent: ${details}. Please keep messages respectful and on-platform.`;
   }
 
-  if (!result.flagged) {
-    return 'Message was blocked by moderation review.';
-  }
-
-  return 'Message not sent.';
+  return 'Message was blocked by moderation review.';
 }
