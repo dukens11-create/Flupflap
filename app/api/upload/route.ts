@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { getCloudinary, isCloudinaryConfigured } from '@/lib/cloudinary';
+import { getOptimizedImageUrl } from '@/lib/images';
 
 const UPLOAD_FOLDER = process.env.CLOUDINARY_UPLOAD_FOLDER ?? 'flupflap/products';
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
@@ -53,14 +54,23 @@ export async function POST(req: Request) {
 
     const result = await new Promise<{ secure_url: string }>((resolve, reject) => {
       cloudinary.uploader
-        .upload_stream({ folder: UPLOAD_FOLDER, resource_type: 'image' }, (err, res) => {
-          if (err || !res) reject(err ?? new Error('No result from Cloudinary'));
-          else resolve(res as { secure_url: string });
-        })
+        .upload_stream(
+          {
+            folder: UPLOAD_FOLDER,
+            resource_type: 'image',
+            transformation: [{ width: 1800, height: 1800, crop: 'limit' }, { quality: 'auto:good' }],
+          },
+          (err, res) => {
+            if (err || !res) reject(err ?? new Error('No result from Cloudinary'));
+            else resolve(res as { secure_url: string });
+          },
+        )
         .end(buffer);
     });
 
-    return NextResponse.json({ url: result.secure_url });
+    return NextResponse.json({
+      url: getOptimizedImageUrl(result.secure_url, { width: 1600, height: 1600, crop: 'limit' }),
+    });
   } catch (err) {
     console.error('[api/upload]', err);
     return NextResponse.json({ error: 'Upload failed. Please try again.' }, { status: 500 });

@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db';
 import { cents } from '@/lib/money';
 import { z } from 'zod';
 import { isSellerVerificationApproved } from '@/lib/seller-verification';
+import { revalidateProductsCache } from '@/lib/cache-tags';
 
 const updateSchema = z.object({
   title: z.string().min(3).optional(),
@@ -67,6 +68,7 @@ export async function POST(
         return NextResponse.json({ error: 'Cannot delete a sold item.' }, { status: 400 });
       }
       await prisma.product.delete({ where: { id } });
+      revalidateProductsCache(id);
       return NextResponse.redirect(new URL('/seller?deleted=1', req.url));
     }
 
@@ -95,6 +97,7 @@ export async function POST(
       },
     });
 
+    revalidateProductsCache(updated.id);
     return NextResponse.redirect(new URL(`/seller?updated=${updated.id}`, req.url));
   } catch (err: any) {
     if (err?.name === 'ZodError') {
@@ -160,6 +163,7 @@ export async function PATCH(
       },
     });
 
+    revalidateProductsCache(updated.id);
     return NextResponse.json(updated);
   } catch (err: any) {
     if (err?.name === 'ZodError') {
@@ -190,6 +194,7 @@ export async function DELETE(
     }
 
     await prisma.product.delete({ where: { id } });
+    revalidateProductsCache(id);
     return NextResponse.json({ ok: true });
   } catch (err: any) {
     console.error('[seller/products/[id] DELETE]', err);

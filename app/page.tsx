@@ -1,10 +1,12 @@
 import { Suspense } from 'react';
-import { prisma, isDatabaseConfigured } from '@/lib/db';
+import { after } from 'next/server';
+import { isDatabaseConfigured } from '@/lib/db';
 import ProductCard from '@/components/ProductCard';
 import BrowseFilters from '@/components/BrowseFilters';
 import type { Metadata } from 'next';
-import { expirePromotions } from '@/lib/promotions';
 import { getServerTranslations } from '@/lib/i18n/server';
+import { getCachedCatalogProducts, type CatalogSearchParams } from '@/lib/catalog';
+import { enqueuePromotionMetrics, schedulePromotionExpirationSweep } from '@/lib/promotion-metrics-queue';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,25 +30,7 @@ function isSchemaNotInitializedError(err: unknown): boolean {
   return /relation .+ does not exist/i.test(msg) || /table .+ does not exist/i.test(msg);
 }
 
-interface SearchParams {
-  q?: string;
-  category?: string;
-  condition?: string;
-  minPrice?: string;
-  maxPrice?: string;
-}
-
-async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?: Record<string, string | number>) => string }) {
-  const where: any = { status: 'APPROVED' };
-  if (sp.q) where.title = { contains: sp.q, mode: 'insensitive' };
-  if (sp.category) where.category = sp.category;
-  if (sp.condition) where.condition = sp.condition;
-  if (sp.minPrice || sp.maxPrice) {
-    where.priceCents = {};
-    if (sp.minPrice) where.priceCents.gte = Math.round(Number(sp.minPrice) * 100);
-    if (sp.maxPrice) where.priceCents.lte = Math.round(Number(sp.maxPrice) * 100);
-  }
-
+async function ProductGrid({ sp, t }: { sp: CatalogSearchParams; t: (key: string, vars?: Record<string, string | number>) => string }) {
   // If DATABASE_URL is not configured, show a clear fallback instead of crashing.
   // Set DATABASE_URL in your environment (e.g. Render dashboard) for full functionality.
   if (!isDatabaseConfigured()) {
@@ -64,32 +48,19 @@ async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?
 
   let products;
   try {
-    await expirePromotions();
-    const now = new Date();
-    products = await prisma.product.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      take: 60,
-      include: {
-        promotions: {
-          where: { status: 'ACTIVE', expiresAt: { gt: now } },
-          orderBy: { expiresAt: 'desc' },
-          take: 1,
-        },
-      },
-    });
+    products = await getCachedCatalogProducts(sp);
     const promotionIds = products
       .map((product: any) => product.promotions[0]?.id)
       .filter(Boolean);
     if (promotionIds.length > 0) {
-      await prisma.$transaction(
-        promotionIds.map((promotionId: string) => (
-          prisma.promotion.update({
-            where: { id: promotionId },
-            data: { impressionCount: { increment: 1 } },
-          })
-        )),
-      );
+      after(async () => {
+        await schedulePromotionExpirationSweep();
+        await enqueuePromotionMetrics('impression', promotionIds);
+      });
+    } else {
+      after(async () => {
+        await schedulePromotionExpirationSweep();
+      });
     }
     // Sort a copy: featured (active promotion) products appear first
     products = [...products].sort((productA: any, productB: any) => {
@@ -139,7 +110,7 @@ async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?
   );
 }
 
-export default async function HomePage({ searchParams }: { searchParams: Promise<SearchParams> }) {
+export default async function HomePage({ searchParams }: { searchParams: Promise<CatalogSearchParams> }) {
   const sp = await searchParams;
   const { t } = await getServerTranslations();
   return (

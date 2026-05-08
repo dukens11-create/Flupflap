@@ -1,9 +1,9 @@
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
+import { after } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
-import { prisma } from '@/lib/db';
 import { dollars } from '@/lib/money';
 import AddToCartButton from '@/components/AddToCartButton';
 import BuyNowButton from '@/components/BuyNowButton';
@@ -11,31 +11,22 @@ import PickupDistance from '@/components/PickupDistance';
 import ContactSellerButton from '@/components/ContactSellerButton';
 import ReportItemButton from '@/components/ReportItemButton';
 import type { Metadata } from 'next';
-import { expirePromotions } from '@/lib/promotions';
+import { getCachedApprovedProduct } from '@/lib/catalog';
+import { getOptimizedImageUrl } from '@/lib/images';
+import { enqueuePromotionMetrics, schedulePromotionExpirationSweep } from '@/lib/promotion-metrics-queue';
 
 export const dynamic = 'force-dynamic';
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
-  const p = await prisma.product.findUnique({ where: { id } });
+  const p = await getCachedApprovedProduct(id);
   return { title: p?.title ?? 'Product not found' };
 }
 
 export default async function ProductPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  await expirePromotions();
   const [product, session] = await Promise.all([
-    prisma.product.findUnique({
-      where: { id },
-      include: {
-        seller: { select: { id: true, name: true } },
-        promotions: {
-          where: { status: 'ACTIVE', expiresAt: { gt: new Date() } },
-          orderBy: { expiresAt: 'desc' },
-          take: 1,
-        },
-      },
-    }),
+    getCachedApprovedProduct(id),
     getServerSession(authOptions),
   ]);
 
@@ -45,9 +36,13 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
   const isOwnListing = session?.user?.id === product.seller.id;
   const activePromotion = product.promotions[0] ?? null;
   if (activePromotion && !isOwnListing) {
-    await prisma.promotion.update({
-      where: { id: activePromotion.id },
-      data: { clickCount: { increment: 1 } },
+    after(async () => {
+      await schedulePromotionExpirationSweep();
+      await enqueuePromotionMetrics('click', [activePromotion.id]);
+    });
+  } else {
+    after(async () => {
+      await schedulePromotionExpirationSweep();
     });
   }
 
@@ -56,7 +51,13 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
       <Link href="/" className="text-sm text-blue-600 hover:underline mb-4 inline-block">← Back to browse</Link>
       <div className="card overflow-hidden flex flex-col md:flex-row gap-0">
         <div className="relative w-full md:w-96 h-72 md:h-auto flex-shrink-0 bg-slate-100">
-          <Image src={product.imageUrl} alt={product.title} fill className="object-cover" />
+          <Image
+            src={getOptimizedImageUrl(product.imageUrl, { width: 1200, height: 900, crop: 'fit' })}
+            alt={product.title}
+            fill
+            sizes="(max-width: 768px) 100vw, 24rem"
+            className="object-cover"
+          />
         </div>
         <div className="p-6 flex flex-col gap-4 flex-1">
           <div>

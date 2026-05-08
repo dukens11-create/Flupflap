@@ -3,6 +3,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { dollars } from '@/lib/money';
 import { useI18n } from '@/components/I18nProvider';
+import { getOptimizedImageUrl } from '@/lib/images';
 export default function ProductCard({p}:{p:any}){
   const { t } = useI18n();
   const isFeatured = !!p.activePromotion;
@@ -10,7 +11,13 @@ export default function ProductCard({p}:{p:any}){
   return (
     <div className={`card overflow-hidden ${isFeatured ? 'ring-2 ring-yellow-400' : ''}`}>
       <div className="relative h-52 bg-slate-100">
-        <Image src={p.imageUrl} alt={p.title} fill className="object-cover"/>
+        <Image
+          src={getOptimizedImageUrl(p.imageUrl, { width: 720, height: 420, crop: 'fill' })}
+          alt={p.title}
+          fill
+          sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 25vw"
+          className="object-cover"
+        />
         {isFeatured && (
           <span className="absolute top-2 left-2 badge bg-yellow-400 text-yellow-900 text-xs font-bold shadow-sm">{t('product.sponsored')}</span>
         )}
