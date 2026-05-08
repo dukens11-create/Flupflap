@@ -35,7 +35,7 @@ export async function GET(
 
   if (session.user.role === 'ADMIN') {
     const seller = await prisma.user.findUnique({
-      where: { id: sellerId },
+      where: { id: sellerId as string },
       select: { id: true, role: true },
     });
     if (!seller || seller.role !== 'SELLER') {
