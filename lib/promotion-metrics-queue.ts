@@ -158,7 +158,9 @@ function scheduleFlushTimer(state: PromotionMetricState) {
   state.isSchedulingFlushTimer = true;
   try {
     state.flushTimer = setTimeout(() => {
-      void flushPromotionMetricsQueue();
+      void flushPromotionMetricsQueue().catch((error) => {
+        console.error('[promotion-metrics-queue] scheduled flush failed', error);
+      });
     }, FLUSH_DELAY_MS);
   } finally {
     state.isSchedulingFlushTimer = false;
