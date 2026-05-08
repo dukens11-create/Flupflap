@@ -114,6 +114,10 @@ model User {
   reportsFiled             ProductReport[]           @relation("ReporterReports")
   reportsAboutSeller       ProductReport[]           @relation("SellerReports")
   reportResolutions        ProductReport[]           @relation("AdminReportResolutions")
+  sellerReportsFiled       SellerReport[]            @relation("ReporterSellerReports")
+  sellerReportsReceived    SellerReport[]            @relation("SellerReportedSellerReports")
+  sellerReportResolutions  SellerReport[]            @relation("AdminSellerReportResolutions")
+  loginActivities          LoginActivity[]
   promotions               Promotion[]
   sellerPlanId             String?
   sellerPlan               SellerPlan?               @relation(fields: [sellerPlanId], references: [id])
@@ -412,6 +416,44 @@ model ProductReport {
   @@index([productId])
   @@index([sellerId])
   @@index([status])
+}
+
+model SellerReport {
+  id          String       @id @default(cuid())
+  sellerId    String
+  seller      User         @relation("SellerReportedSellerReports", fields: [sellerId], references: [id])
+  reporterId  String
+  reporter    User         @relation("ReporterSellerReports", fields: [reporterId], references: [id])
+  reason      String
+  notes       String?
+  status      ReportStatus @default(OPEN)
+  adminId     String?
+  admin       User?        @relation("AdminSellerReportResolutions", fields: [adminId], references: [id])
+  adminAction String?
+  adminNotes  String?
+  resolvedAt  DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@unique([reporterId, sellerId, reason])
+  @@index([sellerId])
+  @@index([status])
+}
+
+model LoginActivity {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ipHash            String?
+  ipLabel           String?
+  deviceHash        String?
+  deviceLabel       String?
+  suspicious        Boolean  @default(false)
+  suspiciousReasons String[]
+  createdAt         DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([suspicious, createdAt])
 }
 
 // ── Product Promotions ────────────────────────────────────────────────────────

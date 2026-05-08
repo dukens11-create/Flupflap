@@ -43,6 +43,7 @@ function productStatusBadge(status: string) {
     APPROVED: 'badge-green',
     REJECTED: 'badge-red',
     SOLD: 'badge-slate',
+    HIDDEN: 'badge-red',
   };
   return map[status] ?? 'badge-slate';
 }

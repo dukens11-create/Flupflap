@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db';
 import { cents } from '@/lib/money';
 import { z } from 'zod';
 import { isSellerVerificationApproved } from '@/lib/seller-verification';
+import { getListingRiskAssessmentForCandidate } from '@/lib/fraud-detection';
 
 const updateSchema = z.object({
   title: z.string().min(3).optional(),
@@ -73,6 +74,18 @@ export async function POST(
     // Default: update
     const raw = Object.fromEntries(form.entries());
     const data = updateSchema.parse(raw);
+    const riskAssessment = await getListingRiskAssessmentForCandidate(
+      {
+        sellerId: session.user.id,
+        title: data.title ?? existing.title,
+        description: data.description ?? existing.description,
+        priceCents: data.price ? cents(data.price) : existing.priceCents,
+        category: data.category ?? existing.category,
+        condition: data.condition ?? existing.condition,
+        imageUrl: data.imageUrl ?? existing.imageUrl,
+      },
+      id,
+    );
 
     const updated = await prisma.product.update({
       where: { id },
@@ -95,7 +108,12 @@ export async function POST(
       },
     });
 
-    return NextResponse.redirect(new URL(`/seller?updated=${updated.id}`, req.url));
+    const fraudQuery =
+      riskAssessment.level === 'HIGH' || riskAssessment.level === 'MEDIUM'
+        ? '&fraud=review'
+        : '';
+
+    return NextResponse.redirect(new URL(`/seller?updated=${updated.id}${fraudQuery}`, req.url));
   } catch (err: any) {
     if (err?.name === 'ZodError') {
       return NextResponse.json({ error: 'Invalid input.' }, { status: 400 });
@@ -140,6 +158,18 @@ export async function PATCH(
 
     const body: unknown = await req.json();
     const data = updateSchema.parse(body);
+    const riskAssessment = await getListingRiskAssessmentForCandidate(
+      {
+        sellerId: session.user.id,
+        title: data.title ?? existing.title,
+        description: data.description ?? existing.description,
+        priceCents: data.price ? cents(data.price) : existing.priceCents,
+        category: data.category ?? existing.category,
+        condition: data.condition ?? existing.condition,
+        imageUrl: data.imageUrl ?? existing.imageUrl,
+      },
+      id,
+    );
 
     const updated = await prisma.product.update({
       where: { id },
@@ -160,7 +190,11 @@ export async function PATCH(
       },
     });
 
-    return NextResponse.json(updated);
+    return NextResponse.json({
+      ...updated,
+      fraudReviewRecommended:
+        riskAssessment.level === 'HIGH' || riskAssessment.level === 'MEDIUM',
+    });
   } catch (err: any) {
     if (err?.name === 'ZodError') {
       return NextResponse.json({ error: 'Invalid input.' }, { status: 400 });
