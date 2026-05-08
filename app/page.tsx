@@ -52,17 +52,14 @@ async function ProductGrid({ sp, t }: { sp: CatalogSearchParams; t: (key: string
     const promotionIds = products
       .map((product: any) => product.promotions[0]?.id)
       .filter(Boolean);
-    if (promotionIds.length > 0) {
-      // Run promotion bookkeeping after the response is sent so cached reads do
-      // not block page rendering on non-critical write traffic.
-      after(async () => {
-        await runPromotionMaintenance('impression', promotionIds);
-      });
-    } else {
-      after(async () => {
-        await runPromotionMaintenance();
-      });
-    }
+    // Run promotion bookkeeping after the response is sent so cached reads do
+    // not block page rendering on non-critical write traffic.
+    after(async () => {
+      await runPromotionMaintenance(
+        promotionIds.length > 0 ? 'impression' : undefined,
+        promotionIds,
+      );
+    });
     // Sort a copy: featured (active promotion) products appear first
     products = [...products].sort((productA: any, productB: any) => {
       const aFeatured = productA.promotions.length > 0 ? 1 : 0;

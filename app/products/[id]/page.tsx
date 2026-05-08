@@ -35,15 +35,12 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
   // Hide the message button if the viewer is the seller of this product
   const isOwnListing = session?.user?.id === product.seller.id;
   const activePromotion = product.promotions[0] ?? null;
-  if (activePromotion && !isOwnListing) {
-    after(async () => {
-      await runPromotionMaintenance('click', [activePromotion.id]);
-    });
-  } else {
-    after(async () => {
-      await runPromotionMaintenance();
-    });
-  }
+  after(async () => {
+    await runPromotionMaintenance(
+      activePromotion && !isOwnListing ? 'click' : undefined,
+      activePromotion && !isOwnListing ? [activePromotion.id] : [],
+    );
+  });
 
   return (
     <main className="max-w-4xl mx-auto">
