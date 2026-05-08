@@ -4,6 +4,8 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import RatingStars from '@/components/RatingStars';
 
+const DEFAULT_RATING = 3;
+
 type ExistingReview = {
   rating: number | null;
   comment: string | null;
@@ -22,7 +24,7 @@ export default function OrderItemReviewForm({
   existingReview: ExistingReview;
 }) {
   const router = useRouter();
-  const [rating, setRating] = useState(existingReview.rating !== null ? String(existingReview.rating) : '3');
+  const [rating, setRating] = useState(existingReview.rating !== null ? String(existingReview.rating) : String(DEFAULT_RATING));
   const [comment, setComment] = useState(existingReview.comment ?? '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -31,7 +33,7 @@ export default function OrderItemReviewForm({
   const hasReview = existingReview.rating !== null;
   const previewRating = useMemo(() => {
     const parsedRating = Number(rating);
-    if (Number.isNaN(parsedRating) || parsedRating < 1 || parsedRating > 5) return 3;
+    if (Number.isNaN(parsedRating) || parsedRating < 1 || parsedRating > 5) return DEFAULT_RATING;
     return parsedRating;
   }, [rating]);
 
