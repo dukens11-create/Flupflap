@@ -903,7 +903,9 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                       <p className="text-xs text-slate-500">Status: {getDeliveryStatusLabel(o.deliveryStatus)}</p>
                     )}
                     {o.trackingNumber && (
-                      <p className="text-xs text-slate-500">📦 {o.shippingCarrier}: {o.trackingNumber}</p>
+                      <p className="text-xs text-slate-500">
+                        📦 {o.shippingCarrier ? `${o.shippingCarrier}: ` : ''}{o.trackingNumber}
+                      </p>
                     )}
                     {o.deliveryStatusDetail && (
                       <p className="text-xs text-slate-400">{o.deliveryStatusDetail}</p>

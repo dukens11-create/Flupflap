@@ -44,7 +44,7 @@ export async function POST(req: Request) {
     });
     const orderId = parsed.orderId;
     const trackingNumber = parsed.trackingNumber?.trim() || null;
-    const shippingCarrier = normalizeCarrierName(parsed.shippingCarrier?.trim() || 'To be assigned');
+    const shippingCarrier = normalizeCarrierName(parsed.shippingCarrier) || null;
     const fallbackStatus = inferDeliveryStatus({
       deliveryStatus: parsed.deliveryStatus,
       trackingNumber,
@@ -72,7 +72,7 @@ export async function POST(req: Request) {
     let shippingLastSyncedAt: Date | null = null;
     const shippingProvider = getShippingProvider();
 
-    if (trackingNumber) {
+    if (trackingNumber && shippingCarrier) {
       const trackingUpdate = await refreshCarrierTracking({
         carrier: shippingCarrier,
         trackingNumber,
@@ -112,7 +112,7 @@ export async function POST(req: Request) {
         type: NotificationType.SHIPPING,
         title: nextOrderStatus === 'DELIVERED' ? 'Your order was marked delivered' : 'Your shipment was updated',
         body: trackingNumber
-          ? `Tracking is now available with ${shippingCarrier}: ${trackingNumber}.`
+          ? `Tracking is now available${shippingCarrier ? ` with ${shippingCarrier}` : ''}: ${trackingNumber}.`
           : 'The seller updated your shipment details.',
         link: `/orders/${order.id}`,
         data: { orderId: order.id, status: nextOrderStatus },

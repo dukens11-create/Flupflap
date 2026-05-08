@@ -84,7 +84,9 @@ export default async function OrdersPage() {
                     <p className="text-xs text-slate-500">Status: {getDeliveryStatusLabel(order.deliveryStatus)}</p>
                   )}
                   {order.trackingNumber && (
-                    <p className="text-xs text-slate-500">📦 {order.shippingCarrier}: {order.trackingNumber}</p>
+                    <p className="text-xs text-slate-500">
+                      📦 {order.shippingCarrier ? `${order.shippingCarrier}: ` : ''}{order.trackingNumber}
+                    </p>
                   )}
                 </div>
               </div>
