@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
-import { getCloudinary, isCloudinaryConfigured } from '@/lib/cloudinary';
+import { isCloudinaryConfigured } from '@/lib/cloudinary';
 import { ALLOWED_IMAGE_TYPES, MAX_IMAGE_UPLOAD_BYTES, uploadImageToCloudinary } from '@/lib/image-upload';
 
 const UPLOAD_FOLDER = process.env.CLOUDINARY_UPLOAD_FOLDER ?? 'flupflap/products';
@@ -46,7 +46,6 @@ export async function POST(req: Request) {
   }
 
   try {
-    getCloudinary();
     const result = await uploadImageToCloudinary(file, UPLOAD_FOLDER);
     return NextResponse.json({ url: result.secure_url });
   } catch (err) {

@@ -100,7 +100,7 @@ export function getReturnWindowState({
   }
 
   const closesAt = addDays(referenceDate, returnWindowDays);
-  const isOpen = closesAt.getTime() >= Date.now();
+  const isOpen = closesAt.getTime() > Date.now();
   return {
     title: `${returnWindowDays}-day return window`,
     detail: `${isOpen ? 'Open until' : 'Closed on'} ${closesAt.toLocaleDateString('en-US', {
