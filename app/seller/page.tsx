@@ -171,9 +171,8 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
 
   // Compute weekly / monthly product statistics
   const statsNow = new Date();
-  const dayOfWeek = statsNow.getDay(); // 0=Sun, 1=Mon … 6=Sat
   const weekStart = new Date(statsNow);
-  weekStart.setDate(statsNow.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+  weekStart.setDate(statsNow.getDate() - (statsNow.getDay() + 6) % 7);
   weekStart.setHours(0, 0, 0, 0);
   const monthStart = new Date(statsNow.getFullYear(), statsNow.getMonth(), 1);
 
@@ -692,11 +691,11 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
       <section className="mb-8">
         <h2 className="text-xl font-bold mb-3">Product Statistics</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-          <StatCard label="Listed This Week" value={String(productsAddedThisWeek)} sub="products added this week" />
-          <StatCard label="Listed This Month" value={String(productsAddedThisMonth)} sub="products added this month" />
+          <StatCard label="Listed This Week" value={String(productsAddedThisWeek)} sub="new products since Monday" />
+          <StatCard label="Listed This Month" value={String(productsAddedThisMonth)} sub="new products this month" />
           <StatCard label="Active Listings" value={String(activeListingsCount)} sub="currently approved & live" />
-          <StatCard label="Sold This Week" value={String(soldCountThisWeek)} sub="items from paid orders" />
-          <StatCard label="Sold This Month" value={String(soldCountThisMonth)} sub="items from paid orders" />
+          <StatCard label="Sold This Week" value={String(soldCountThisWeek)} sub="units from paid orders" />
+          <StatCard label="Sold This Month" value={String(soldCountThisMonth)} sub="units from paid orders" />
           <StatCard label="Total Items Sold" value={String(itemsSoldCount)} sub="all time (paid orders)" />
           <StatCard label="Revenue This Week" value={dollars(revenueThisWeekCents)} sub="net payout after fees" />
           <StatCard label="Revenue This Month" value={dollars(revenueThisMonthCents)} sub="net payout after fees" />

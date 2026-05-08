@@ -34,9 +34,8 @@ export default async function AdminPage({
   const sp = await searchParams;
 
   const now = new Date();
-  const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon … 6=Sat
   const weekStart = new Date(now);
-  weekStart.setDate(now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+  weekStart.setDate(now.getDate() - (now.getDay() + 6) % 7);
   weekStart.setHours(0, 0, 0, 0);
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
