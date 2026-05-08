@@ -8,6 +8,7 @@ import crypto from 'crypto';
 import Stripe from 'stripe';
 import { expirePromotions } from '@/lib/promotions';
 import { NotificationType, SellerKycProvider, SellerVerificationStatus } from '@prisma/client';
+import { getFreePromotionExpiry } from '@/lib/free-promotion';
 import {
   applyAutomatedKycResult,
   stripeKycChecksFromAccount,
@@ -276,12 +277,27 @@ export async function POST(req: Request) {
         }
       }
 
+      const seller = await prisma.user.findUnique({
+        where: { id: sellerId },
+        select: { freePromotionGrantedAt: true },
+      });
+      if (!seller) return new NextResponse('Seller not found', { status: 404 });
+
+      const now = new Date();
+      const shouldGrantFreePromotion = !seller.freePromotionGrantedAt;
+
       await prisma.user.update({
         where: { id: sellerId },
         data: {
           subscriptionStatus: 'ACTIVE',
           subscriptionId: subscriptionId ?? undefined,
           subscriptionCurrentPeriodEnd: periodEnd ?? undefined,
+          ...(shouldGrantFreePromotion
+            ? {
+                freePromotionGrantedAt: now,
+                freePromotionExpiresAt: getFreePromotionExpiry(now),
+              }
+            : {}),
         },
       });
 

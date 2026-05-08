@@ -146,6 +146,8 @@ model User {
   subscriptionId                String?
   subscriptionStatus            String?   // ACTIVE | INACTIVE | PAST_DUE | CANCELLED
   subscriptionCurrentPeriodEnd  DateTime?
+  freePromotionGrantedAt        DateTime?
+  freePromotionExpiresAt        DateTime?
   // Profile picture
   image                         String?
 }
@@ -179,6 +181,7 @@ model Product {
   conversations    Conversation[]
   reports          ProductReport[]
   promotions       Promotion[]
+  cartInterest     ProductCartInterest?
   offers           Offer[]
   // Pickup fields
   pickupAvailable  Boolean         @default(false)
@@ -568,6 +571,28 @@ model SellerPlan {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
   sellers           User[]
+}
+
+model ProductCartInterest {
+  id          String   @id @default(cuid())
+  productId   String   @unique
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  totalAdds   Int      @default(0)
+  lastAddedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([lastAddedAt])
+}
+
+model VisitorMetric {
+  id          String   @id @default(cuid())
+  visitorHash String
+  bucketDate  DateTime
+  createdAt   DateTime @default(now())
+
+  @@unique([visitorHash, bucketDate])
+  @@index([bucketDate])
 }
 
 model CheckoutSessionSnapshot {
