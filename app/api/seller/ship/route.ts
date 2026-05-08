@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
+import { NotificationType } from '@prisma/client';
+import { createNotifications } from '@/lib/notifications';
 import { appUrl } from '@/lib/stripe';
 
 export async function POST(req: Request) {
@@ -30,6 +32,10 @@ export async function POST(req: Request) {
         id: orderId,
         items: { some: { product: { sellerId: session.user.id } } },
       },
+      select: {
+        id: true,
+        buyerId: true,
+      },
     });
 
     if (!order) return NextResponse.json({ error: 'Order not found.' }, { status: 404 });
@@ -42,6 +48,27 @@ export async function POST(req: Request) {
         shippingCarrier: shippingCarrier || null,
       },
     });
+
+    await createNotifications([
+      {
+        userId: order.buyerId,
+        type: NotificationType.SHIPPING,
+        title: 'Your order has shipped',
+        body: trackingNumber
+          ? `Tracking is now available${shippingCarrier ? ` with ${shippingCarrier}` : ''}: ${trackingNumber}.`
+          : 'The seller marked your order as shipped.',
+        link: `/orders/${order.id}`,
+        data: { orderId: order.id },
+      },
+      {
+        userId: order.buyerId,
+        type: NotificationType.ORDER_UPDATE,
+        title: 'Order status updated',
+        body: 'Your order moved to Shipped.',
+        link: `/orders/${order.id}`,
+        data: { orderId: order.id, status: 'SHIPPED' },
+      },
+    ]);
 
     return NextResponse.redirect(new URL('/seller', req.url));
   } catch (err: any) {

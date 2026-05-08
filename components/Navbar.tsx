@@ -2,7 +2,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { signOut, useSession } from 'next-auth/react';
-import { ShoppingCart, Package, LayoutDashboard, LogIn, UserPlus, LogOut, User, MessageCircle } from 'lucide-react';
+import { ShoppingCart, Package, LayoutDashboard, LogIn, UserPlus, LogOut, User, MessageCircle, Bell } from 'lucide-react';
 import LanguageSelector from '@/components/LanguageSelector';
 import { useI18n } from '@/components/I18nProvider';
 import { useEffect, useState } from 'react';
@@ -66,11 +66,41 @@ function useUnreadMessages(loggedIn: boolean) {
   return unread;
 }
 
+function useUnreadNotifications(loggedIn: boolean) {
+  const [unread, setUnread] = useState(0);
+
+  useEffect(() => {
+    if (!loggedIn) return;
+    let cancelled = false;
+
+    async function load() {
+      try {
+        const res = await fetch('/api/notifications');
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (!cancelled) setUnread(data.unreadCount ?? 0);
+      } catch {
+        // ignore
+      }
+    }
+
+    load();
+    const interval = setInterval(load, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [loggedIn]);
+
+  return unread;
+}
+
 export default function Navbar() {
   const { data: session } = useSession();
   const role = session?.user?.role;
   const cartCount = useCartCount();
   const unreadMessages = useUnreadMessages(!!session?.user);
+  const unreadNotifications = useUnreadNotifications(!!session?.user);
   const { t } = useI18n();
 
   return (
@@ -122,6 +152,14 @@ export default function Navbar() {
                 {unreadMessages > 0 && (
                   <span className="absolute -top-2 -right-3 bg-blue-600 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
                     {unreadMessages}
+                  </span>
+                )}
+              </Link>
+              <Link href="/notifications" className="relative flex items-center gap-1 hover:text-blue-600">
+                <Bell size={16} /> {t('nav.notifications')}
+                {unreadNotifications > 0 && (
+                  <span className="absolute -top-2 -right-3 bg-blue-600 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                    {unreadNotifications}
                   </span>
                 )}
               </Link>

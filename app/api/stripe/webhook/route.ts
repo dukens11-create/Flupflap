@@ -7,11 +7,12 @@ import type { CheckoutCommissionItem } from '@/lib/commission';
 import crypto from 'crypto';
 import Stripe from 'stripe';
 import { expirePromotions } from '@/lib/promotions';
-import { SellerKycProvider, SellerVerificationStatus } from '@prisma/client';
+import { NotificationType, SellerKycProvider, SellerVerificationStatus } from '@prisma/client';
 import {
   applyAutomatedKycResult,
   stripeKycChecksFromAccount,
 } from '@/lib/kyc/providers';
+import { createNotification, createNotifications } from '@/lib/notifications';
 
 /** Generate a cryptographically secure 6-digit pickup confirmation code. */
 function generatePickupCode(): string {
@@ -81,6 +82,31 @@ export async function POST(req: Request) {
           phoneVerified: accountChecks.phoneVerified,
         },
       });
+
+      const payoutRequirementsDue = [
+        ...(account.requirements?.currently_due ?? []),
+        ...(account.requirements?.past_due ?? []),
+      ];
+
+      if (account.payouts_enabled) {
+        await createNotification({
+          userId: seller.id,
+          type: NotificationType.PAYOUT,
+          title: 'Payouts are ready',
+          body: 'Your Stripe payout account is active and ready to receive marketplace earnings.',
+          link: '/seller',
+          dedupeKey: `payouts-ready:${account.id}:${currentStripeMode}`,
+        });
+      } else if (payoutRequirementsDue.length > 0) {
+        await createNotification({
+          userId: seller.id,
+          type: NotificationType.PAYOUT,
+          title: 'Payout account needs attention',
+          body: 'Stripe needs additional information before payouts can continue.',
+          link: '/seller',
+          dedupeKey: `payouts-action-required:${account.id}:${currentStripeMode}`,
+        });
+      }
     }
 
     return new NextResponse('ok', { status: 200 });
@@ -409,6 +435,69 @@ export async function POST(req: Request) {
         },
       },
     });
+
+    const buyerNotifications = [
+      {
+        userId: buyerId,
+        type: NotificationType.ORDER_UPDATE,
+        title: 'Order confirmed',
+        body: isPickupOrder
+          ? 'Your order is paid. Your pickup details are ready in the order view.'
+          : 'Your order is paid and the seller has been notified.',
+        link: `/orders/${order.id}`,
+        data: { orderId: order.id, status: order.status },
+      },
+    ];
+
+    if (isPickupOrder && order.pickupCode) {
+      buyerNotifications.push({
+        userId: buyerId,
+        type: NotificationType.SHIPPING,
+        title: 'Pickup details ready',
+        body: `Your pickup code is ${order.pickupCode}. Show it to the seller at handoff.`,
+        link: `/orders/${order.id}`,
+        data: { orderId: order.id, pickupCode: order.pickupCode },
+      });
+    }
+
+    const sellerNotifications = Array.from(
+      new Map(
+        orderItems.map((item) => {
+          const sellerItems = orderItems.filter(
+            (candidate) => candidate.product.seller.id === item.product.seller.id,
+          );
+          const sellerItemCount = sellerItems.reduce((sum, sellerItem) => sum + sellerItem.quantity, 0);
+          const sellerNetCents = sellerItems.reduce(
+            (sum, sellerItem) => sum + sellerItem.sellerNetCents + (sellerItem.shippingCents * sellerItem.quantity),
+            0,
+          );
+
+          return [
+            item.product.seller.id,
+            [
+              {
+                userId: item.product.seller.id,
+                type: NotificationType.ORDER_UPDATE,
+                title: 'New paid order',
+                body: `${sellerItemCount} item${sellerItemCount === 1 ? '' : 's'} from your listings were purchased.`,
+                link: '/seller',
+                data: { orderId: order.id },
+              },
+              {
+                userId: item.product.seller.id,
+                type: NotificationType.PAYOUT,
+                title: 'Seller payout pending',
+                body: `${sellerNetCents > 0 ? `$${(sellerNetCents / 100).toFixed(2)}` : 'A payout'} will move through Stripe for this sale.`,
+                link: '/seller',
+                data: { orderId: order.id, sellerNetCents },
+              },
+            ],
+          ] as const;
+        }),
+      ).values(),
+    ).flat();
+
+    await createNotifications([...buyerNotifications, ...sellerNotifications]);
 
     // Single-seller checkouts that used payment_intent_data.transfer_data were
     // already split automatically by Stripe, so only platform-held payments need
