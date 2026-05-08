@@ -9,6 +9,8 @@ type RequestLike =
   | undefined
   | null;
 
+const RAPID_CHANGE_WINDOW_MS = 1000 * 60 * 60 * 24;
+
 function getHeader(request: RequestLike, name: string) {
   if (!request) return null;
   const headers = request.headers;
@@ -128,7 +130,7 @@ export async function recordLoginActivity(userId: string, request: RequestLike) 
     ipHash &&
     prior.ipHash &&
     prior.ipHash !== ipHash &&
-    prior.createdAt.getTime() >= Date.now() - 1000 * 60 * 60 * 24
+    prior.createdAt.getTime() >= Date.now() - RAPID_CHANGE_WINDOW_MS
   ) {
     reasons.push('rapid_change');
   }

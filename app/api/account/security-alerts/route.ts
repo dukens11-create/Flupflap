@@ -4,6 +4,8 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { describeSuspiciousReason } from '@/lib/login-security';
 
+const SUSPICIOUS_LOGIN_LOOKBACK_DAYS = 30;
+
 export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
@@ -28,7 +30,7 @@ export async function GET() {
       where: {
         userId: session.user.id,
         suspicious: true,
-        createdAt: { gte: new Date(Date.now() - 1000 * 60 * 60 * 24 * 30) },
+        createdAt: { gte: new Date(Date.now() - 1000 * 60 * 60 * 24 * SUSPICIOUS_LOGIN_LOOKBACK_DAYS) },
       },
       orderBy: { createdAt: 'desc' },
       take: 3,

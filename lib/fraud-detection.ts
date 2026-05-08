@@ -2,7 +2,35 @@ import { prisma } from './db';
 
 const LOOKBACK_WINDOW_DAYS = 30;
 const RAPID_POSTING_HOURS = 24;
-const RISKY_LANGUAGE_PATTERN = /\b(whatsapp|telegram|cash\s?app|cashapp|wire transfer|friends?\s+and\s+family|gift card|crypto only|urgent sale|dm me)\b/i;
+const PRICE_OUTLIER_THRESHOLD = 0.35;
+const DUPLICATE_DETECTION_RULES = {
+  sameImageTitleSimilarity: 0.45,
+  exactTitleSimilarity: 0.92,
+  exactDescriptionSimilarity: 0.75,
+  nearTitleSimilarity: 0.8,
+  nearDescriptionSimilarity: 0.82,
+  sameSellerTitleSimilarity: 0.7,
+  sameImageConfidence: 95,
+  exactMatchConfidence: 88,
+  nearMatchConfidence: 72,
+  sameSellerConfidence: 60,
+} as const;
+const HIGH_RISK_LANGUAGE_TERMS = [
+  'whatsapp',
+  'telegram',
+  'cash app',
+  'cashapp',
+  'wire transfer',
+  'friends and family',
+  'gift card',
+  'crypto only',
+  'urgent sale',
+  'dm me',
+] as const;
+const RISKY_LANGUAGE_PATTERN = new RegExp(
+  `\\b(${HIGH_RISK_LANGUAGE_TERMS.map((term) => term.replace(/\s+/g, '\\s+')).join('|')})\\b`,
+  'i',
+);
 
 export type ListingRiskReason = {
   code: string;
@@ -113,14 +141,24 @@ export function getListingRiskAssessment(
           0.15;
 
       let confidence = 0;
-      if (sameImage && samePriceBand && titleSimilarity >= 0.45) {
-        confidence = 95;
-      } else if (titleSimilarity >= 0.92 && descriptionSimilarity >= 0.75) {
-        confidence = 88;
-      } else if (titleSimilarity >= 0.8 && descriptionSimilarity >= 0.82) {
-        confidence = 72;
-      } else if (listing.sellerId === candidate.sellerId && titleSimilarity >= 0.7 && samePriceBand) {
-        confidence = 60;
+      if (sameImage && samePriceBand && titleSimilarity >= DUPLICATE_DETECTION_RULES.sameImageTitleSimilarity) {
+        confidence = DUPLICATE_DETECTION_RULES.sameImageConfidence;
+      } else if (
+        titleSimilarity >= DUPLICATE_DETECTION_RULES.exactTitleSimilarity &&
+        descriptionSimilarity >= DUPLICATE_DETECTION_RULES.exactDescriptionSimilarity
+      ) {
+        confidence = DUPLICATE_DETECTION_RULES.exactMatchConfidence;
+      } else if (
+        titleSimilarity >= DUPLICATE_DETECTION_RULES.nearTitleSimilarity &&
+        descriptionSimilarity >= DUPLICATE_DETECTION_RULES.nearDescriptionSimilarity
+      ) {
+        confidence = DUPLICATE_DETECTION_RULES.nearMatchConfidence;
+      } else if (
+        listing.sellerId === candidate.sellerId &&
+        titleSimilarity >= DUPLICATE_DETECTION_RULES.sameSellerTitleSimilarity &&
+        samePriceBand
+      ) {
+        confidence = DUPLICATE_DETECTION_RULES.sameSellerConfidence;
       }
 
       return confidence > 0
@@ -168,7 +206,7 @@ export function getListingRiskAssessment(
     .filter((value) => value > 0);
   const categoryMedian = comparisonPrices.length >= 5 ? median(comparisonPrices) : null;
 
-  if (categoryMedian && candidate.priceCents < categoryMedian * 0.35) {
+  if (categoryMedian && candidate.priceCents < categoryMedian * PRICE_OUTLIER_THRESHOLD) {
     reasons.push({
       code: 'price_outlier',
       label: 'Price far below category norm',

@@ -28,6 +28,8 @@ const SELLER_REPORT_ACTIONS = [
   { value: 'suspend_seller', label: 'Suspend seller' },
   { value: 'ban_seller', label: 'Ban seller' },
 ] as const;
+const SUSPICIOUS_LOGIN_LOOKBACK_DAYS = 30;
+const LISTING_LOOKBACK_DAYS = 45;
 
 function riskTone(level: 'LOW' | 'MEDIUM' | 'HIGH' | 'NONE') {
   return level === 'HIGH'
@@ -51,8 +53,8 @@ export default async function AdminFraudPage() {
   if (!session?.user) redirect('/login');
   if (session.user.role !== 'ADMIN') redirect('/');
 
-  const suspiciousSince = new Date(Date.now() - 1000 * 60 * 60 * 24 * 30);
-  const listingLookback = new Date(Date.now() - 1000 * 60 * 60 * 24 * 45);
+  const suspiciousSince = new Date(Date.now() - 1000 * 60 * 60 * 24 * SUSPICIOUS_LOGIN_LOOKBACK_DAYS);
+  const listingLookback = new Date(Date.now() - 1000 * 60 * 60 * 24 * LISTING_LOOKBACK_DAYS);
 
   const [recentListings, sellerReports, suspiciousLogins] = await Promise.all([
     prisma.product.findMany({
