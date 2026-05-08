@@ -242,8 +242,8 @@ export default async function AdminFraudPage() {
                 </div>
 
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
-                  {assessment.reasons.map((reason, index) => (
-                    <div key={`${listing.id}-${reason.code}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  {assessment.reasons.map((reason) => (
+                    <div key={`${listing.id}-${reason.code}-${reason.detail}`} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                       <p className="text-sm font-semibold text-slate-900">{reason.label}</p>
                       <p className="text-xs text-slate-600 mt-1">{reason.detail}</p>
                       {reason.duplicateProductIds && reason.duplicateProductIds.length > 0 && (

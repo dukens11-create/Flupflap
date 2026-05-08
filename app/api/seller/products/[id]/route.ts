@@ -5,7 +5,10 @@ import { prisma } from '@/lib/db';
 import { cents } from '@/lib/money';
 import { z } from 'zod';
 import { isSellerVerificationApproved } from '@/lib/seller-verification';
-import { getListingRiskAssessmentForCandidate } from '@/lib/fraud-detection';
+import {
+  getListingRiskAssessmentForCandidate,
+  shouldRecommendFraudReview,
+} from '@/lib/fraud-detection';
 
 const updateSchema = z.object({
   title: z.string().min(3).optional(),
@@ -108,10 +111,7 @@ export async function POST(
       },
     });
 
-    const fraudQuery =
-      riskAssessment.level === 'HIGH' || riskAssessment.level === 'MEDIUM'
-        ? '&fraud=review'
-        : '';
+    const fraudQuery = shouldRecommendFraudReview(riskAssessment) ? '&fraud=review' : '';
 
     return NextResponse.redirect(new URL(`/seller?updated=${updated.id}${fraudQuery}`, req.url));
   } catch (err: any) {
@@ -192,8 +192,7 @@ export async function PATCH(
 
     return NextResponse.json({
       ...updated,
-      fraudReviewRecommended:
-        riskAssessment.level === 'HIGH' || riskAssessment.level === 'MEDIUM',
+      fraudReviewRecommended: shouldRecommendFraudReview(riskAssessment),
     });
   } catch (err: any) {
     if (err?.name === 'ZodError') {

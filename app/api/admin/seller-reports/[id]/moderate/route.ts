@@ -11,7 +11,7 @@ const VALID_ACTIONS = [
   'suspend_seller',
   'ban_seller',
 ] as const;
-const MODERATING_ACTIONS = ['warn_seller', 'suspend_seller', 'ban_seller'] as const;
+const STATUS_CHANGING_ACTIONS = ['suspend_seller', 'ban_seller'] as const;
 
 const REPORT_REASON_TO_MODERATION_REASON: Record<string, string> = {
   scam_fraud: 'fraud',
@@ -52,24 +52,27 @@ export async function POST(
     const moderationReason = REPORT_REASON_TO_MODERATION_REASON[report.reason] ?? 'other';
     const now = new Date();
 
-    if ((MODERATING_ACTIONS as readonly string[]).includes(data.action)) {
-      const sellerAction =
-        data.action === 'ban_seller'
-          ? 'BANNED'
-          : data.action === 'suspend_seller'
-            ? 'SUSPENDED'
-            : 'WARNED';
+    if (data.action === 'warn_seller') {
+      await prisma.sellerModerationLog.create({
+        data: {
+          sellerId: report.sellerId,
+          adminId: session.user.id,
+          action: 'WARNED',
+          reasonCategory: moderationReason,
+          notes: data.adminNotes ?? null,
+        },
+      });
+    } else if ((STATUS_CHANGING_ACTIONS as readonly string[]).includes(data.action)) {
+      const sellerAction = data.action === 'ban_seller' ? 'BANNED' : 'SUSPENDED';
 
-      if (data.action === 'suspend_seller' || data.action === 'ban_seller') {
-        await prisma.user.update({
-          where: { id: report.sellerId },
-          data: {
-            sellerStatus: sellerAction as 'SUSPENDED' | 'BANNED',
-            sellerStatusReason: moderationReason,
-            sellerStatusNotes: data.adminNotes ?? null,
-          },
-        });
-      }
+      await prisma.user.update({
+        where: { id: report.sellerId },
+        data: {
+          sellerStatus: sellerAction,
+          sellerStatusReason: moderationReason,
+          sellerStatusNotes: data.adminNotes ?? null,
+        },
+      });
 
       await prisma.sellerModerationLog.create({
         data: {

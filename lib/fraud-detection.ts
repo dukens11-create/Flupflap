@@ -19,6 +19,10 @@ export type ListingRiskAssessment = {
   reasons: ListingRiskReason[];
 };
 
+export function shouldRecommendFraudReview(assessment: ListingRiskAssessment) {
+  return assessment.level === 'HIGH' || assessment.level === 'MEDIUM';
+}
+
 export type ListingRiskCandidate = {
   id?: string;
   sellerId: string;
@@ -46,7 +50,7 @@ function normalizeText(value: string) {
 
 function tokenize(value: string) {
   const normalized = normalizeText(value);
-  if (!normalized) return [] as string[];
+  if (!normalized) return [];
   return normalized.split(' ').filter(Boolean);
 }
 
@@ -66,10 +70,10 @@ function overlapScore(a: string, b: string) {
 function median(values: number[]) {
   if (values.length === 0) return null;
   const sorted = [...values].sort((a, b) => a - b);
+  if (sorted.length === 1) return sorted[0] ?? null;
   const middle = Math.floor(sorted.length / 2);
   const middleValue = sorted[middle];
   if (middleValue === undefined) return null;
-  if (middle === 0) return middleValue;
   return sorted.length % 2 === 0
     ? Math.round(((sorted[middle - 1] ?? middleValue) + middleValue) / 2)
     : middleValue;

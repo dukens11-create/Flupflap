@@ -7,7 +7,10 @@ import { z } from 'zod';
 import { isSubscriptionActive } from '@/lib/subscription';
 import { syncSellerSubscriptionFromStripe } from '@/lib/subscription-sync';
 import { isSellerVerificationApproved } from '@/lib/seller-verification';
-import { getListingRiskAssessmentForCandidate } from '@/lib/fraud-detection';
+import {
+  getListingRiskAssessmentForCandidate,
+  shouldRecommendFraudReview,
+} from '@/lib/fraud-detection';
 
 const schema = z.object({
   title: z.string().min(3),
@@ -115,10 +118,7 @@ export async function POST(req: Request) {
       },
     });
 
-    const fraudQuery =
-      riskAssessment.level === 'HIGH' || riskAssessment.level === 'MEDIUM'
-        ? '&fraud=review'
-        : '';
+    const fraudQuery = shouldRecommendFraudReview(riskAssessment) ? '&fraud=review' : '';
 
     return NextResponse.redirect(new URL(`/seller?created=${product.id}${fraudQuery}`, req.url));
   } catch (err: any) {
