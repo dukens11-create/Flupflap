@@ -87,7 +87,7 @@ export function buildCarrierTrackingUrl(carrier: string | null | undefined, trac
   return null;
 }
 
-function mapShippoCarrierTrackingStatus(status: string | null | undefined, detail: string | null | undefined): DeliveryStatus {
+export function mapShippoCarrierTrackingStatus(status: string | null | undefined, detail: string | null | undefined): DeliveryStatus {
   const normalized = (status ?? '').trim().toUpperCase();
   if (normalized === 'DELIVERED') return DeliveryStatus.DELIVERED;
   if (normalized === 'PRE_TRANSIT') return DeliveryStatus.PRE_TRANSIT;
