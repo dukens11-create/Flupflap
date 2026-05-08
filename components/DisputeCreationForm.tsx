@@ -4,11 +4,11 @@ import DisputeEvidenceUpload from '@/components/DisputeEvidenceUpload';
 export default function DisputeCreationForm({
   orderId,
   orderItemId,
-  returnWindowCopy,
+  returnWindowDescription,
 }: {
   orderId: string;
   orderItemId: string;
-  returnWindowCopy: string;
+  returnWindowDescription: string;
 }) {
   return (
     <details className="mt-3 group">
@@ -19,7 +19,7 @@ export default function DisputeCreationForm({
         <input type="hidden" name="orderItemId" value={orderItemId} />
         <div className="rounded-xl bg-white/80 p-3 text-xs text-slate-600">
           <p className="font-semibold text-slate-800">How this works</p>
-          <p className="mt-1">{returnWindowCopy}</p>
+          <p className="mt-1">{returnWindowDescription}</p>
           <p className="mt-1">The seller reviews new requests first. If needed, FlupFlap can step in and make the final refund decision.</p>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
@@ -35,6 +35,7 @@ export default function DisputeCreationForm({
           <div>
             <label className="label">Requested outcome</label>
             <select name="requestedResolution" className="input" required>
+              <option value="">Select...</option>
               {DISPUTE_RESOLUTION_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>{option.label}</option>
               ))}

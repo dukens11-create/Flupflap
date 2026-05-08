@@ -3,10 +3,11 @@ import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
+import { DISPUTE_ELIGIBLE_ORDER_STATUSES } from '@/lib/disputes';
 
 const schema = z.object({
   orderItemId: z.string().min(1),
-  reason: z.enum(['item_not_received', 'not_as_described', 'arrived_damaged', 'return_request', 'other']),
+  reason: z.enum(['item_not_received', 'not_as_described', 'arrived_damaged', 'routine_return', 'other']),
   requestedResolution: z.enum(['refund_only', 'return_for_refund']),
   description: z.string().min(20).max(2000),
   evidenceUrls: z.array(z.string().url()).max(3).default([]),
@@ -60,7 +61,7 @@ export async function POST(
       return redirectToOrder(req, id, 'not-found');
     }
 
-    if (!['PAID', 'SHIPPED', 'DELIVERED', 'READY_FOR_PICKUP', 'PICKED_UP'].includes(order.status)) {
+    if (!DISPUTE_ELIGIBLE_ORDER_STATUSES.includes(order.status as (typeof DISPUTE_ELIGIBLE_ORDER_STATUSES)[number])) {
       return redirectToOrder(req, id, 'not-eligible');
     }
 

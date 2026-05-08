@@ -14,7 +14,7 @@ export const DISPUTE_REASON_OPTIONS = [
   { value: 'item_not_received', label: 'Item not received' },
   { value: 'not_as_described', label: 'Not as described' },
   { value: 'arrived_damaged', label: 'Arrived damaged' },
-  { value: 'return_request', label: 'Return within seller window' },
+  { value: 'routine_return', label: 'Return within seller window' },
   { value: 'other', label: 'Other issue' },
 ] as const;
 
@@ -22,6 +22,8 @@ export const DISPUTE_RESOLUTION_OPTIONS = [
   { value: 'refund_only', label: 'Refund only' },
   { value: 'return_for_refund', label: 'Return for refund' },
 ] as const;
+
+export const DISPUTE_ELIGIBLE_ORDER_STATUSES = ['PAID', 'SHIPPED', 'DELIVERED', 'READY_FOR_PICKUP', 'PICKED_UP'] as const;
 
 export const MAX_RETURN_WINDOW_DAYS = 30;
 

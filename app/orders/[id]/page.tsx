@@ -197,7 +197,7 @@ export default async function OrderDetailPage({
                     <DisputeCreationForm
                       orderId={order.id}
                       orderItemId={item.id}
-                      returnWindowCopy={returnWindow.detail}
+                      returnWindowDescription={returnWindow.detail}
                     />
                   )}
                 </div>
