@@ -22,7 +22,7 @@ export default function OrderItemReviewForm({
   existingReview: ExistingReview;
 }) {
   const router = useRouter();
-  const [rating, setRating] = useState(String(existingReview.rating ?? 5));
+  const [rating, setRating] = useState(existingReview.rating !== null ? String(existingReview.rating) : '5');
   const [comment, setComment] = useState(existingReview.comment ?? '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');

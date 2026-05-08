@@ -773,25 +773,29 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
               <p className="mt-3 text-sm text-slate-500">Your completed orders have not received any public reviews yet.</p>
             ) : (
               <div className="mt-4 space-y-3">
-                {recentReviews.map((review) => (
-                  <div key={review.id} className="rounded-xl border border-slate-200 p-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <p className="font-medium text-slate-900">{review.order.buyer.name}</p>
-                        <a href={`/products/${review.product.id}`} className="text-xs text-blue-600 hover:underline">
-                          {review.product.title}
-                        </a>
+                {recentReviews.map((review) => {
+                  if (review.reviewRating === null) return null;
+
+                  return (
+                    <div key={review.id} className="rounded-xl border border-slate-200 p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <p className="font-medium text-slate-900">{review.order.buyer.name}</p>
+                          <Link href={`/products/${review.product.id}`} className="text-xs text-blue-600 hover:underline">
+                            {review.product.title}
+                          </Link>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm text-slate-600">
+                          <RatingStars rating={review.reviewRating} />
+                          <span>{review.reviewRating}/5</span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 text-sm text-slate-600">
-                        <RatingStars rating={review.reviewRating ?? 0} />
-                        <span>{review.reviewRating}/5</span>
-                      </div>
+                      <p className="mt-2 text-sm text-slate-600">
+                        {review.reviewComment?.trim() || 'Buyer left a star rating without additional comments.'}
+                      </p>
                     </div>
-                    <p className="mt-2 text-sm text-slate-600">
-                      {review.reviewComment?.trim() || 'Buyer left a star rating without additional comments.'}
-                    </p>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

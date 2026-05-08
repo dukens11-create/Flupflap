@@ -244,34 +244,38 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             </div>
           ) : (
             <div className="mt-4 space-y-4">
-              {visibleReviews.map((review) => (
-                <article key={review.id} className="rounded-xl border border-slate-200 p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <p className="font-semibold text-slate-900">{review.order.buyer.name}</p>
-                        {isReviewEligibleStatus(review.order.status) && (
-                          <span className="badge badge-green">Verified purchase</span>
-                        )}
+              {visibleReviews.map((review) => {
+                if (review.reviewRating === null) return null;
+
+                return (
+                  <article key={review.id} className="rounded-xl border border-slate-200 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-slate-900">{review.order.buyer.name}</p>
+                          {isReviewEligibleStatus(review.order.status) && (
+                            <span className="badge badge-green">Verified purchase</span>
+                          )}
+                        </div>
+                        <div className="mt-1 flex items-center gap-2 text-sm text-slate-500">
+                          <RatingStars rating={review.reviewRating} />
+                          <span>{review.reviewRating}/5</span>
+                        </div>
                       </div>
-                      <div className="mt-1 flex items-center gap-2 text-sm text-slate-500">
-                        <RatingStars rating={review.reviewRating ?? 0} />
-                        <span>{review.reviewRating}/5</span>
-                      </div>
+                      <p className="text-xs text-slate-400">
+                        {new Date(review.reviewUpdatedAt ?? review.reviewCreatedAt ?? review.order.createdAt).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })}
+                      </p>
                     </div>
-                    <p className="text-xs text-slate-400">
-                      {new Date(review.reviewUpdatedAt ?? review.reviewCreatedAt ?? review.order.createdAt).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric',
-                      })}
+                    <p className="mt-3 text-sm leading-relaxed text-slate-700">
+                      {review.reviewComment?.trim() || 'Buyer left a star rating without additional comments.'}
                     </p>
-                  </div>
-                  <p className="mt-3 text-sm leading-relaxed text-slate-700">
-                    {review.reviewComment?.trim() || 'Buyer left a star rating without additional comments.'}
-                  </p>
-                </article>
-              ))}
+                  </article>
+                );
+              })}
             </div>
           )}
         </div>
