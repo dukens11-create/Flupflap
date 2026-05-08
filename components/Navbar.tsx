@@ -34,7 +34,7 @@ function useCartCount() {
 
 /** Shape of each conversation returned by GET /api/messages (only fields used here). */
 type InboxConversation = {
-  unread: boolean;
+  unreadCount: number;
 };
 
 function useUnreadMessages(loggedIn: boolean) {
@@ -48,7 +48,7 @@ function useUnreadMessages(loggedIn: boolean) {
         const res = await fetch('/api/messages');
         if (!res.ok || cancelled) return;
         const data: InboxConversation[] = await res.json();
-        const count = data.filter((conv) => conv.unread).length;
+        const count = data.reduce((sum, conv) => sum + conv.unreadCount, 0);
         if (!cancelled) setUnread(count);
       } catch {
         // ignore

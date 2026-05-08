@@ -6,12 +6,14 @@ import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { dollars } from '@/lib/money';
+import { ImagePlus, X } from 'lucide-react';
 
 type Sender = { id: string; name: string };
 
 type Message = {
   id: string;
   body: string;
+  attachmentUrl: string | null;
   senderId: string;
   sender: Sender;
   createdAt: string;
@@ -55,7 +57,9 @@ export default function ConversationPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reply, setReply] = useState('');
+  const [attachmentUrl, setAttachmentUrl] = useState('');
   const [sending, setSending] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [sendError, setSendError] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -89,15 +93,44 @@ export default function ConversationPage() {
     await submitMessage();
   }
 
+  async function handleAttachmentChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    setSendError('');
+
+    const fd = new FormData();
+    fd.append('file', file);
+
+    try {
+      const res = await fetch('/api/messages/upload', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) {
+        setSendError(data.error || 'Photo upload failed.');
+        return;
+      }
+      setAttachmentUrl(data.url);
+    } catch {
+      setSendError('Photo upload failed. Please try again.');
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
+  }
+
   async function submitMessage() {
-    if (!reply.trim()) return;
+    if (!reply.trim() && !attachmentUrl) return;
     setSendError('');
     setSending(true);
     try {
       const res = await fetch(`/api/messages/${id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ body: reply.trim() }),
+        body: JSON.stringify({
+          body: reply.trim(),
+          attachmentUrl: attachmentUrl || null,
+        }),
       });
       if (!res.ok) {
         const d = await res.json();
@@ -106,6 +139,7 @@ export default function ConversationPage() {
         return;
       }
       setReply('');
+      setAttachmentUrl('');
       await load();
     } catch {
       setSendError('Network error. Please try again.');
@@ -191,7 +225,19 @@ export default function ConversationPage() {
                       : 'bg-slate-100 text-slate-900 rounded-bl-sm'
                   }`}
                 >
-                  {msg.body}
+                  {msg.attachmentUrl && (
+                    <a href={msg.attachmentUrl} target="_blank" rel="noreferrer" className="block mb-2">
+                      <img
+                        src={msg.attachmentUrl}
+                        alt="Shared attachment"
+                        className="max-h-56 w-auto rounded-xl border border-black/10 object-cover"
+                      />
+                    </a>
+                  )}
+                  {msg.body && <p>{msg.body}</p>}
+                  {!msg.body && msg.attachmentUrl && (
+                    <p className={`text-xs ${isMe ? 'text-blue-100' : 'text-slate-500'}`}>Photo attachment</p>
+                  )}
                 </div>
                 <p className="text-xs text-slate-400 px-1">
                   {isMe ? 'You' : msg.sender.name} · {formatTime(msg.createdAt)}
@@ -204,29 +250,61 @@ export default function ConversationPage() {
       </div>
 
       {/* Reply form */}
-      <form onSubmit={handleSend} className="card p-4 flex gap-3 items-end">
-        <textarea
-          className="input flex-1 resize-none"
-          rows={2}
-          placeholder="Type a message…"
-          value={reply}
-          maxLength={2000}
-          onChange={(e) => setReply(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              submitMessage();
-            }
-          }}
-          disabled={sending}
-        />
-        <button
-          type="submit"
-          className="btn-primary flex-shrink-0"
-          disabled={sending || !reply.trim()}
-        >
-          {sending ? 'Sending…' : 'Send'}
-        </button>
+      <form onSubmit={handleSend} className="card p-4 flex flex-col gap-3">
+        <div className="flex gap-3 items-end">
+          <textarea
+            className="input flex-1 resize-none"
+            rows={2}
+            placeholder="Type a message…"
+            value={reply}
+            maxLength={2000}
+            onChange={(e) => setReply(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                submitMessage();
+              }
+            }}
+            disabled={sending || uploading}
+          />
+          <button
+            type="submit"
+            className="btn-primary flex-shrink-0"
+            disabled={sending || uploading || (!reply.trim() && !attachmentUrl)}
+          >
+            {sending ? 'Sending…' : 'Send'}
+          </button>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="btn-outline text-sm cursor-pointer inline-flex items-center gap-2">
+            <ImagePlus size={16} />
+            {uploading ? 'Uploading photo…' : 'Attach photo'}
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              className="hidden"
+              onChange={handleAttachmentChange}
+              disabled={sending || uploading}
+            />
+          </label>
+          <span className="text-xs text-slate-500">Photos only · up to 5 MB</span>
+        </div>
+        {attachmentUrl && (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 flex items-start justify-between gap-3">
+            <img
+              src={attachmentUrl}
+              alt="New attachment preview"
+              className="h-24 w-24 rounded-lg object-cover border border-slate-200"
+            />
+            <button
+              type="button"
+              className="text-slate-500 hover:text-slate-700"
+              onClick={() => setAttachmentUrl('')}
+            >
+              <X size={16} />
+            </button>
+          </div>
+        )}
       </form>
       {sendError && <p className="text-red-600 text-xs px-1">{sendError}</p>}
     </main>

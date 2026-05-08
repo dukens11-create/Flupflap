@@ -3,12 +3,18 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { z } from 'zod';
-
-const MESSAGE_MAX_LENGTH = 2000;
+import {
+  getInboxConversations,
+  getMessageSpamError,
+  isAllowedMessageAttachmentUrl,
+  MESSAGE_MAX_LENGTH,
+  normalizeMessageBody,
+} from '@/lib/messages';
 
 const startSchema = z.object({
   productId: z.string().min(1),
-  body: z.string().min(1).max(MESSAGE_MAX_LENGTH),
+  body: z.string().max(MESSAGE_MAX_LENGTH).optional().default(''),
+  attachmentUrl: z.string().url().optional().nullable(),
 });
 
 /**
@@ -21,52 +27,8 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const userId = session.user.id;
-
-  const conversations = await prisma.conversation.findMany({
-    where: {
-      OR: [{ buyerId: userId }, { sellerId: userId }],
-    },
-    include: {
-      buyer: { select: { id: true, name: true } },
-      seller: { select: { id: true, name: true } },
-      product: { select: { id: true, title: true, imageUrl: true, status: true } },
-      // Last message for preview
-      messages: {
-        orderBy: { createdAt: 'desc' },
-        take: 1,
-        select: { id: true, body: true, createdAt: true, senderId: true, readAt: true },
-      },
-      // Separate count of all unread messages from the other party
-      _count: {
-        select: {
-          messages: true,
-        },
-      },
-    },
-    orderBy: { updatedAt: 'desc' },
-  });
-
-  // Compute per-conversation unread count using a separate aggregation query
-  // to avoid relying on the single take:1 preview message.
-  const unreadCounts = await Promise.all(
-    conversations.map((conv) =>
-      prisma.message.count({
-        where: {
-          conversationId: conv.id,
-          senderId: { not: userId },
-          readAt: null,
-        },
-      }),
-    ),
-  );
-
-  const result = conversations.map((conv, i) => {
-    const { _count: _, ...rest } = conv;
-    return { ...rest, unreadCount: unreadCounts[i], unread: unreadCounts[i] > 0 };
-  });
-
-  return NextResponse.json(result);
+  const conversations = await getInboxConversations(session.user.id);
+  return NextResponse.json(conversations);
 }
 
 /**
@@ -89,7 +51,24 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid input.' }, { status: 400 });
   }
 
-  const { productId, body } = parsed;
+  const body = normalizeMessageBody(parsed.body);
+  const attachmentUrl = parsed.attachmentUrl?.trim() || null;
+
+  if (!body && !attachmentUrl) {
+    return NextResponse.json(
+      { error: 'Add a message or attach a photo before sending.' },
+      { status: 400 },
+    );
+  }
+
+  if (attachmentUrl && !isAllowedMessageAttachmentUrl(attachmentUrl)) {
+    return NextResponse.json(
+      { error: 'Please upload your photo using the attachment picker.' },
+      { status: 400 },
+    );
+  }
+
+  const { productId } = parsed;
 
   // Load product to get seller info
   const product = await prisma.product.findUnique({
@@ -108,6 +87,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'You cannot message yourself.' }, { status: 400 });
   }
 
+  const spamError = await getMessageSpamError({ senderId: buyerId, body });
+  if (spamError) {
+    return NextResponse.json({ error: spamError }, { status: 429 });
+  }
+
   // Upsert conversation (one thread per buyer/seller/product)
   const conversation = await prisma.conversation.upsert({
     where: {
@@ -122,7 +106,8 @@ export async function POST(req: Request) {
     data: {
       conversationId: conversation.id,
       senderId: buyerId,
-      body: body.trim(),
+      body,
+      attachmentUrl,
     },
   });
 

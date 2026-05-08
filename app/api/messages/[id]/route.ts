@@ -3,11 +3,16 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { z } from 'zod';
-
-const MESSAGE_MAX_LENGTH = 2000;
+import {
+  getMessageSpamError,
+  isAllowedMessageAttachmentUrl,
+  MESSAGE_MAX_LENGTH,
+  normalizeMessageBody,
+} from '@/lib/messages';
 
 const replySchema = z.object({
-  body: z.string().min(1).max(MESSAGE_MAX_LENGTH),
+  body: z.string().max(MESSAGE_MAX_LENGTH).optional().default(''),
+  attachmentUrl: z.string().url().optional().nullable(),
 });
 
 async function getConversationForUser(id: string, userId: string) {
@@ -48,7 +53,9 @@ export async function GET(
       },
       messages: {
         orderBy: { createdAt: 'asc' },
-        include: { sender: { select: { id: true, name: true } } },
+        include: {
+          sender: { select: { id: true, name: true } },
+        },
       },
     },
   });
@@ -102,12 +109,35 @@ export async function POST(
     return NextResponse.json({ error: 'Invalid input.' }, { status: 400 });
   }
 
+  const body = normalizeMessageBody(parsed.body);
+  const attachmentUrl = parsed.attachmentUrl?.trim() || null;
+
+  if (!body && !attachmentUrl) {
+    return NextResponse.json(
+      { error: 'Add a message or attach a photo before sending.' },
+      { status: 400 },
+    );
+  }
+
+  if (attachmentUrl && !isAllowedMessageAttachmentUrl(attachmentUrl)) {
+    return NextResponse.json(
+      { error: 'Please upload your photo using the attachment picker.' },
+      { status: 400 },
+    );
+  }
+
+  const spamError = await getMessageSpamError({ senderId: userId, body });
+  if (spamError) {
+    return NextResponse.json({ error: spamError }, { status: 429 });
+  }
+
   const [message] = await prisma.$transaction([
     prisma.message.create({
       data: {
         conversationId: conversation.id,
         senderId: userId,
-        body: parsed.body.trim(),
+        body,
+        attachmentUrl,
       },
     }),
     prisma.conversation.update({

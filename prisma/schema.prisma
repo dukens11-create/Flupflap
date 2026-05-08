@@ -380,6 +380,7 @@ model Message {
   senderId       String
   sender         User         @relation("SentMessages", fields: [senderId], references: [id])
   body           String
+  attachmentUrl  String?
   readAt         DateTime?
   createdAt      DateTime     @default(now())
 

@@ -1,10 +1,10 @@
 import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
-import { prisma } from '@/lib/db';
 import Link from 'next/link';
 import Image from 'next/image';
 import type { Metadata } from 'next';
+import { getInboxConversations, getMessagePreview } from '@/lib/messages';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Messages' };
@@ -25,27 +25,24 @@ export default async function MessagesPage() {
   if (!session?.user) redirect('/login');
 
   const userId = session.user.id;
-
-  const conversations = await prisma.conversation.findMany({
-    where: {
-      OR: [{ buyerId: userId }, { sellerId: userId }],
-    },
-    include: {
-      buyer: { select: { id: true, name: true } },
-      seller: { select: { id: true, name: true } },
-      product: { select: { id: true, title: true, imageUrl: true, status: true } },
-      messages: {
-        orderBy: { createdAt: 'desc' },
-        take: 1,
-        select: { id: true, body: true, createdAt: true, senderId: true, readAt: true },
-      },
-    },
-    orderBy: { updatedAt: 'desc' },
-  });
+  const conversations = await getInboxConversations(userId);
+  const unreadCount = conversations.reduce((sum, conversation) => sum + conversation.unreadCount, 0);
+  const unreadConversations = conversations.filter((conversation) => conversation.unreadCount > 0).length;
 
   return (
     <main className="max-w-2xl mx-auto">
       <h1 className="text-3xl font-black mb-6">Messages</h1>
+
+      {unreadCount > 0 && (
+        <div className="card p-4 mb-4 bg-blue-50 border-blue-200 text-blue-900">
+          <p className="font-semibold">
+            {unreadCount} new message{unreadCount === 1 ? '' : 's'}
+          </p>
+          <p className="text-sm mt-1">
+            You have unread activity in {unreadConversations} conversation{unreadConversations === 1 ? '' : 's'}.
+          </p>
+        </div>
+      )}
 
       {conversations.length === 0 ? (
         <div className="card p-8 text-center text-slate-500">
@@ -59,10 +56,8 @@ export default async function MessagesPage() {
         <div className="space-y-3">
           {conversations.map((conv) => {
             const lastMsg = conv.messages[0];
-            const otherUser = conv.buyerId === userId ? conv.seller : conv.buyer;
             const isBuyer = conv.buyerId === userId;
-            const unread =
-              lastMsg && lastMsg.senderId !== userId && lastMsg.readAt === null;
+            const unread = conv.unreadCount > 0;
 
             return (
               <Link
@@ -94,15 +89,14 @@ export default async function MessagesPage() {
                           {timeAgo(lastMsg.createdAt)}
                         </span>
                       )}
-                      {unread && (
-                        <span className="w-2.5 h-2.5 rounded-full bg-blue-600 flex-shrink-0" />
-                      )}
+                      {unread && <span className="badge badge-blue text-[11px]">{conv.unreadCount} new</span>}
                     </div>
                   </div>
 
                   {lastMsg ? (
                     <p className={`text-sm mt-1 truncate ${unread ? 'font-semibold text-slate-900' : 'text-slate-500'}`}>
-                      {lastMsg.senderId === userId ? 'You: ' : ''}{lastMsg.body}
+                      {lastMsg.senderId === userId ? 'You: ' : ''}
+                      {getMessagePreview(lastMsg)}
                     </p>
                   ) : (
                     <p className="text-sm mt-1 text-slate-400 italic">No messages yet</p>
