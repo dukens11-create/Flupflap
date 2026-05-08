@@ -75,15 +75,15 @@ export default function Navbar() {
 
   return (
     <header className="bg-white border-b border-slate-200 sticky top-0 z-30">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center gap-4">
-        <Link href="/" className="mr-2 flex items-center" aria-label="FlupFlap home">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center gap-4">
+        <Link href="/" className="mr-4 flex items-center shrink-0" aria-label="FlupFlap home">
           <Image
             src="/flupflap_logo.png"
             alt="FlupFlap"
-            width={77}
-            height={32}
+            width={614}
+            height={255}
             priority
-            className="h-8 w-auto"
+            className="h-14 w-auto"
           />
         </Link>
 
