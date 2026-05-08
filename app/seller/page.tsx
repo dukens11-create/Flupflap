@@ -15,6 +15,7 @@ import { isSubscriptionActive, SELLER_SUBSCRIPTION_PRICE_LABEL } from '@/lib/sub
 import { syncSellerSubscriptionFromStripe } from '@/lib/subscription-sync';
 import SubscriptionButton from '@/components/SubscriptionButton';
 import RatingStars from '@/components/RatingStars';
+import { getInboxConversations, getSellerResponseStats, SELLER_RESPONSE_WINDOW_HOURS } from '@/lib/messages';
 import {
   getDefaultSellerKycProvider,
   isSellerVerificationApproved,
@@ -34,6 +35,7 @@ function statusBadge(status: string) {
     APPROVED: 'badge-green',
     REJECTED: 'badge-red',
     SOLD: 'badge-slate',
+    HIDDEN: 'badge-red',
   };
   return map[status] ?? 'badge-slate';
 }
@@ -71,7 +73,7 @@ function stripeAccountStatus(account: {
   };
 }
 
-export default async function SellerPage({ searchParams }: { searchParams: Promise<{ created?: string; stripe?: string; reason?: string; updated?: string; deleted?: string; promoted?: string; subscribed?: string; subscribe?: string; verification?: string }> }) {
+export default async function SellerPage({ searchParams }: { searchParams: Promise<{ created?: string; stripe?: string; reason?: string; updated?: string; deleted?: string; promoted?: string; subscribed?: string; subscribe?: string; verification?: string; fraud?: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect('/login');
   if (session.user.role !== 'SELLER') redirect('/');
@@ -222,6 +224,12 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   const sellerRatingAverage = sellerReviewSummary._avg.reviewRating ?? null;
   const sellerRatingCount = sellerReviewSummary._count.reviewRating;
   const verificationApproved = isSellerVerificationApproved(verificationSubmission);
+  const inboxConversations = await getInboxConversations(session.user.id);
+  const unreadInboxCount = inboxConversations.reduce(
+    (sum, conversation) => sum + conversation.unreadCount,
+    0,
+  );
+  const sellerResponseStats = await getSellerResponseStats(session.user.id);
   let emptyListingsMessage: ReactNode = 'No listings yet. Subscribe to start selling.';
   if (subscriptionActive && verificationApproved) {
     emptyListingsMessage = (
@@ -361,6 +369,11 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
       {sp.verification === 'required' && (
         <div className="card p-4 mb-6 bg-amber-50 border-amber-300 text-amber-900 text-sm">
           Submit and pass seller verification before creating product listings.
+        </div>
+      )}
+      {sp.fraud === 'review' && (
+        <div className="card p-4 mb-6 bg-amber-50 border-amber-300 text-amber-900 text-sm">
+          Your latest listing triggered extra trust-and-safety review signals (for example duplicate content, unusual pricing, or rapid posting). An admin will review it before it goes live.
         </div>
       )}
 
@@ -608,6 +621,17 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
         </div>
       )}
 
+      {unreadInboxCount > 0 && (
+        <div className="card p-4 mb-6 bg-blue-50 border-blue-200 text-blue-900 text-sm flex justify-between items-center gap-3">
+          <span>
+            You have {unreadInboxCount} unread buyer message{unreadInboxCount === 1 ? '' : 's'} waiting in your inbox.
+          </span>
+          <Link href="/messages" className="btn-outline text-xs flex-shrink-0">
+            Open inbox
+          </Link>
+        </div>
+      )}
+
       {subscribedFromCheckout && subscriptionActive && (
         <div className="card p-4 mb-6 bg-green-50 border-green-200 text-green-800 text-sm">
           🎉 Subscription activated! You can now list and sell items on FlupFlap.
@@ -735,6 +759,24 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
           <StatCard label="Total Items Sold" value={String(itemsSoldCount)} sub="all time (paid orders)" />
           <StatCard label="Revenue This Week" value={dollars(revenueThisWeekCents)} sub="net payout after fees" />
           <StatCard label="Revenue This Month" value={dollars(revenueThisMonthCents)} sub="net payout after fees" />
+          <StatCard
+            label="Response Rate"
+            value={
+              sellerResponseStats.responseRate === null
+                ? '—'
+                : `${sellerResponseStats.responseRate}%`
+            }
+            sub={
+              sellerResponseStats.responseRate === null
+                ? 'needs more inbox history'
+                : `${sellerResponseStats.respondedCount}/${sellerResponseStats.eligibleCount} buyer inquiries replied to within ${SELLER_RESPONSE_WINDOW_HOURS}h`
+            }
+          />
+          <StatCard
+            label="Awaiting Replies"
+            value={String(sellerResponseStats.awaitingReplyCount)}
+            sub="conversations where the latest message is from a buyer"
+          />
         </div>
         {products.length === 0 && soldItems.length === 0 && (
           <p className="text-xs text-slate-400 mt-3">Statistics will populate once you have listings and sales.</p>

@@ -9,10 +9,13 @@ import AddToCartButton from '@/components/AddToCartButton';
 import BuyNowButton from '@/components/BuyNowButton';
 import PickupDistance from '@/components/PickupDistance';
 import ContactSellerButton from '@/components/ContactSellerButton';
+import MakeOfferButton from '@/components/MakeOfferButton';
 import ReportItemButton from '@/components/ReportItemButton';
 import RatingStars from '@/components/RatingStars';
+import ReportSellerButton from '@/components/ReportSellerButton';
 import type { Metadata } from 'next';
 import { expirePromotions } from '@/lib/promotions';
+import { getSellerResponseStats, SELLER_RESPONSE_WINDOW_HOURS } from '@/lib/messages';
 import { formatAverageRating, isReviewEligibleStatus } from '@/lib/reviews';
 
 export const dynamic = 'force-dynamic';
@@ -107,6 +110,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
       data: { clickCount: { increment: 1 } },
     });
   }
+  const sellerResponseStats = await getSellerResponseStats(product.seller.id);
 
   const reviewCount = reviewSummary._count.reviewRating;
   const reviewAverage = reviewSummary._avg.reviewRating ?? null;
@@ -149,7 +153,17 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
                   </span>
                 </>
               )}
+              {sellerResponseStats.responseRate !== null ? (
+                <span className="badge badge-green">
+                  {sellerResponseStats.responseRate}% response rate
+                </span>
+              ) : (
+                <span className="badge badge-slate">Not enough data</span>
+              )}
             </div>
+            <p className="text-xs text-slate-500 mt-2">
+              Based on buyer messages from the last 90 days and replies sent within {SELLER_RESPONSE_WINDOW_HOURS} hours.
+            </p>
             {reviewCount > 0 && reviewAverage !== null && (
               <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-slate-600">
                 <RatingStars rating={reviewAverage} className="text-base" />
@@ -207,9 +221,17 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
           )}
           {/* Contact seller — hidden for the seller's own listing */}
           {!isOwnListing && (
-            <ContactSellerButton productId={product.id} />
+            <div className="space-y-2">
+              <MakeOfferButton productId={product.id} priceCents={product.priceCents} />
+              <ContactSellerButton productId={product.id} />
+            </div>
           )}
           {/* Report item — hidden for the seller's own listing */}
+          {!isOwnListing && (
+            <div className="pt-1">
+              <ReportSellerButton sellerId={product.seller.id} sellerName={product.seller.name} />
+            </div>
+          )}
           {!isOwnListing && (
             <div className="pt-1">
               <ReportItemButton productId={product.id} />

@@ -3,7 +3,11 @@
 import { useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { MessageCircle } from 'lucide-react';
+import { ImagePlus, MessageCircle, X } from 'lucide-react';
+import {
+  isSafeMessageAttachmentUrl,
+  MESSAGE_ATTACHMENT_HELP_TEXT,
+} from '@/lib/message-attachments';
 
 const QUICK_MESSAGE = "Is this still available?";
 
@@ -13,12 +17,40 @@ export default function ContactSellerButton({ productId }: { productId: string }
 
   const [open, setOpen] = useState(false);
   const [body, setBody] = useState(QUICK_MESSAGE);
+  const [attachmentUrl, setAttachmentUrl] = useState('');
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
+
+  async function handleAttachmentChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    setError('');
+
+    const fd = new FormData();
+    fd.append('file', file);
+
+    try {
+      const res = await fetch('/api/messages/upload', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || 'Photo upload failed.');
+        return;
+      }
+      setAttachmentUrl(data.url);
+    } catch {
+      setError('Photo upload failed. Please try again.');
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
+  }
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
-    if (!body.trim()) return;
+    if (!body.trim() && !attachmentUrl) return;
 
     if (!session?.user) {
       router.push('/login');
@@ -31,7 +63,11 @@ export default function ContactSellerButton({ productId }: { productId: string }
       const res = await fetch('/api/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ productId, body: body.trim() }),
+        body: JSON.stringify({
+          productId,
+          body: body.trim(),
+          attachmentUrl: attachmentUrl || null,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -77,19 +113,56 @@ export default function ContactSellerButton({ productId }: { productId: string }
             placeholder="Type your message…"
             autoFocus
           />
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="btn-outline text-sm cursor-pointer inline-flex items-center gap-2">
+              <ImagePlus size={16} />
+              {uploading ? 'Uploading photo…' : 'Attach photo'}
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                className="hidden"
+                onChange={handleAttachmentChange}
+                disabled={loading || uploading}
+              />
+            </label>
+            <span className="text-xs text-slate-500">{MESSAGE_ATTACHMENT_HELP_TEXT}</span>
+          </div>
+          {isSafeMessageAttachmentUrl(attachmentUrl) && (
+            <div className="rounded-xl border border-slate-200 bg-white p-3">
+              <div className="flex items-start justify-between gap-3">
+                <img
+                  src={attachmentUrl}
+                  alt="Message attachment preview"
+                  className="h-24 w-24 rounded-lg object-cover border border-slate-200"
+                />
+                <button
+                  type="button"
+                  className="text-slate-500 hover:text-slate-700"
+                  onClick={() => setAttachmentUrl('')}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+          )}
           {error && <p className="text-red-600 text-xs">{error}</p>}
           <div className="flex gap-2">
             <button
               type="submit"
               className="btn-primary flex-1"
-              disabled={loading || !body.trim()}
+              disabled={loading || uploading || (!body.trim() && !attachmentUrl)}
             >
               {loading ? 'Sending…' : 'Send Message'}
             </button>
             <button
               type="button"
               className="btn-outline"
-              onClick={() => { setOpen(false); setError(''); setBody(QUICK_MESSAGE); }}
+              onClick={() => {
+                setOpen(false);
+                setError('');
+                setBody(QUICK_MESSAGE);
+                setAttachmentUrl('');
+              }}
             >
               Cancel
             </button>

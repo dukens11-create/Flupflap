@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import { prisma } from './db';
 import { verifyOtp } from './otp';
 import { isSmsOtpEnabled, SELLER_OTP_FORCE_DISABLED } from './feature-flags';
+import { recordLoginActivity } from './login-security';
 import type { NextAuthOptions } from 'next-auth';
 
 export const authOptions: NextAuthOptions = {
@@ -18,7 +19,7 @@ export const authOptions: NextAuthOptions = {
         password: { label: 'Password', type: 'password' },
         otp:      { label: 'Code',     type: 'text' },
       },
-      async authorize(credentials) {
+      async authorize(credentials, request) {
         if (!credentials?.email || !credentials.password) return null;
         const user = await prisma.user.findUnique({ where: { email: credentials.email.toLowerCase() } });
         if (!user) return null;
@@ -47,6 +48,12 @@ export const authOptions: NextAuthOptions = {
               }).catch(() => null);
             }
           }
+        }
+
+        try {
+          await recordLoginActivity(user.id, request);
+        } catch (error) {
+          console.error('[auth] failed to record login activity', error);
         }
 
         return user as any;

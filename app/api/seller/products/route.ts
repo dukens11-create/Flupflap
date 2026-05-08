@@ -7,6 +7,10 @@ import { z } from 'zod';
 import { isSubscriptionActive } from '@/lib/subscription';
 import { syncSellerSubscriptionFromStripe } from '@/lib/subscription-sync';
 import { isSellerVerificationApproved } from '@/lib/seller-verification';
+import {
+  getListingRiskAssessmentForCandidate,
+  shouldRecommendFraudReview,
+} from '@/lib/fraud-detection';
 
 const schema = z.object({
   title: z.string().min(3),
@@ -85,6 +89,15 @@ export async function POST(req: Request) {
 
     const form = await req.formData();
     const data = schema.parse(Object.fromEntries(form.entries()));
+    const riskAssessment = await getListingRiskAssessmentForCandidate({
+      sellerId: session.user.id,
+      title: data.title,
+      description: data.description,
+      priceCents: cents(data.price),
+      category: data.category,
+      condition: data.condition,
+      imageUrl: data.imageUrl,
+    });
 
     const product = await prisma.product.create({
       data: {
@@ -105,7 +118,9 @@ export async function POST(req: Request) {
       },
     });
 
-    return NextResponse.redirect(new URL(`/seller?created=${product.id}`, req.url));
+    const fraudQuery = shouldRecommendFraudReview(riskAssessment) ? '&fraud=review' : '';
+
+    return NextResponse.redirect(new URL(`/seller?created=${product.id}${fraudQuery}`, req.url));
   } catch (err: any) {
     if (err?.name === 'ZodError') {
       return NextResponse.json({ error: 'Invalid input.' }, { status: 400 });

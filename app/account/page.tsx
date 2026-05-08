@@ -6,6 +6,15 @@ import Link from 'next/link';
 import { ACCOUNT_DELETION_REASON_LABELS, type AccountDeletionReason } from '@/lib/account-deletion';
 import { STRIPE_ERROR_REASONS } from '@/lib/stripe';
 
+type SecurityLoginEntry = {
+  id: string;
+  ipLabel: string | null;
+  deviceLabel: string | null;
+  suspicious?: boolean;
+  suspiciousReasons: string[];
+  createdAt: string;
+};
+
 export default function AccountPage() {
   const { data: session, status, update } = useSession();
   const router = useRouter();
@@ -47,6 +56,9 @@ export default function AccountPage() {
   // Stripe status — fetched fresh from the DB so it reflects the latest
   // onboarding state even if the JWT session hasn't been refreshed yet.
   const [stripeStatus, setStripeStatus] = useState<'not_started' | 'in_progress' | 'complete' | null>(null);
+  const [recentLogins, setRecentLogins] = useState<SecurityLoginEntry[]>([]);
+  const [suspiciousLogins, setSuspiciousLogins] = useState<SecurityLoginEntry[]>([]);
+  const [securityLoading, setSecurityLoading] = useState(false);
 
   // Account deletion
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -86,6 +98,23 @@ export default function AccountPage() {
         .catch(() => null);
     }
   }, [session?.user?.id, session?.user?.role]);
+
+  useEffect(() => {
+    if (!session?.user?.id) return;
+
+    setSecurityLoading(true);
+    fetch('/api/account/security-alerts')
+      .then((r) => r.json())
+      .then((data) => {
+        setRecentLogins(Array.isArray(data.recentLogins) ? data.recentLogins : []);
+        setSuspiciousLogins(Array.isArray(data.suspiciousLogins) ? data.suspiciousLogins : []);
+      })
+      .catch(() => {
+        setRecentLogins([]);
+        setSuspiciousLogins([]);
+      })
+      .finally(() => setSecurityLoading(false));
+  }, [session?.user?.id]);
 
   if (status === 'loading') {
     return (
@@ -309,6 +338,62 @@ export default function AccountPage() {
   return (
     <main className="max-w-md mx-auto">
       <h1 className="text-3xl font-black mb-6">My Account</h1>
+
+      <section className="card p-4 mb-6">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-bold">Security activity</h2>
+            <p className="text-sm text-slate-500">
+              We track recent sign-ins by device and masked network to flag suspicious changes.
+            </p>
+          </div>
+          {suspiciousLogins.length > 0 && (
+            <span className="badge badge-yellow">{suspiciousLogins.length} alert{suspiciousLogins.length !== 1 ? 's' : ''}</span>
+          )}
+        </div>
+
+        {suspiciousLogins.length > 0 && (
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            <p className="font-semibold">We noticed sign-ins from a new device or network.</p>
+            <p className="mt-1">
+              If any recent activity wasn&apos;t you, change your password now and contact support.
+            </p>
+          </div>
+        )}
+
+        <div className="mt-4 space-y-3">
+          {securityLoading ? (
+            <div className="text-sm text-slate-500">Loading recent login activity…</div>
+          ) : recentLogins.length === 0 ? (
+            <div className="text-sm text-slate-500">No recent login activity recorded yet.</div>
+          ) : (
+            recentLogins.map((login) => (
+              <div key={login.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-slate-900">{login.deviceLabel ?? 'Unknown device'}</p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      {login.ipLabel ?? 'Unknown network'} · {new Date(login.createdAt).toLocaleString()}
+                    </p>
+                  </div>
+                  {login.suspiciousReasons.length > 0 && (
+                    <span className="badge badge-yellow">Review</span>
+                  )}
+                </div>
+                {login.suspiciousReasons.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {login.suspiciousReasons.map((reason) => (
+                      <span key={`${login.id}-${reason}`} className="badge badge-slate">
+                        {reason}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      </section>
 
       {session.user.role === 'SELLER' && stripeState === 'error' && (
         <div className="card p-4 mb-6 bg-red-50 border-red-200 text-red-800 text-sm">

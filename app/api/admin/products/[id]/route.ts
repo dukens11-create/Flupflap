@@ -12,8 +12,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params;
   const form = await req.formData();
   const action = form.get('_method') as string;
+  const redirectTo = (form.get('redirectTo') as string) || '/admin';
+  const actionToStatus: Record<string, 'APPROVED' | 'REJECTED' | 'HIDDEN'> = {
+    approve: 'APPROVED',
+    reject: 'REJECTED',
+    hide: 'HIDDEN',
+  };
 
-  if (action !== 'approve' && action !== 'reject') {
+  if (action !== 'approve' && action !== 'reject' && action !== 'hide') {
     return NextResponse.json({ error: 'Invalid action.' }, { status: 400 });
   }
 
@@ -22,10 +28,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   await prisma.product.update({
     where: { id },
-    data: { status: action === 'approve' ? 'APPROVED' : 'REJECTED' },
+    data: { status: actionToStatus[action] },
   });
 
-  return NextResponse.redirect(new URL('/admin', req.url));
+  return NextResponse.redirect(new URL(redirectTo, req.url));
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -35,8 +41,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
 
   const { id } = await params;
-  const { status } = await req.json() as { status: 'APPROVED' | 'REJECTED' };
-  if (!['APPROVED', 'REJECTED'].includes(status)) {
+  const { status } = await req.json() as { status: 'APPROVED' | 'REJECTED' | 'HIDDEN' };
+  if (!['APPROVED', 'REJECTED', 'HIDDEN'].includes(status)) {
     return NextResponse.json({ error: 'Invalid status.' }, { status: 400 });
   }
 
