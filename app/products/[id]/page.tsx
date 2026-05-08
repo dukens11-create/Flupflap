@@ -82,7 +82,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
                   {sellerResponseStats.responseRate}% response rate
                 </span>
               ) : (
-                <span className="badge badge-slate">New seller inbox history</span>
+                <span className="badge badge-slate">Inbox history unavailable</span>
               )}
             </div>
             <p className="text-xs text-slate-500 mt-2">

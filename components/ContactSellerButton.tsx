@@ -122,7 +122,7 @@ export default function ContactSellerButton({ productId }: { productId: string }
                 disabled={loading || uploading}
               />
             </label>
-            <span className="text-xs text-slate-500">Photos only · up to 5 MB</span>
+            <span className="text-xs text-slate-500">JPEG, PNG, WebP, or GIF · up to 5 MB</span>
           </div>
           {isSafeMessageAttachmentUrl(attachmentUrl) && (
             <div className="rounded-xl border border-slate-200 bg-white p-3">

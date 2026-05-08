@@ -291,7 +291,7 @@ export default function ConversationPage() {
               disabled={sending || uploading}
             />
           </label>
-          <span className="text-xs text-slate-500">Photos only · up to 5 MB</span>
+          <span className="text-xs text-slate-500">JPEG, PNG, WebP, or GIF · up to 5 MB</span>
         </div>
         {isSafeMessageAttachmentUrl(attachmentUrl) && (
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 flex items-start justify-between gap-3">
