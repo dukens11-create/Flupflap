@@ -40,7 +40,7 @@ interface SearchParams {
 }
 
 function getUniqueSellerIds(products: Array<{ sellerId: string }>) {
-  return [...new Set(products.map((product) => product.sellerId))];
+  return Array.from(new Set(products.map((product) => product.sellerId)));
 }
 
 async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?: Record<string, string | number>) => string }) {

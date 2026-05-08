@@ -133,7 +133,12 @@ export async function getMessageSpamError({
 }
 
 export async function getSellerResponseStatsForSellers(sellerIds: string[]) {
-  const uniqueSellerIds = [...new Set(sellerIds.filter((sellerId) => sellerId && sellerId.trim()))];
+  const uniqueSellerIds = Array.from(
+    sellerIds.reduce((uniqueIds, sellerId) => {
+      if (sellerId?.trim()) uniqueIds.add(sellerId);
+      return uniqueIds;
+    }, new Set<string>()),
+  );
   if (!uniqueSellerIds.length) return new Map<string, SellerResponseStats>();
 
   const now = Date.now();

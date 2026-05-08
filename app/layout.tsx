@@ -27,7 +27,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <footer className="mt-16 border-t border-slate-200 bg-white text-sm text-slate-500">
               <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:px-6 md:grid-cols-2 lg:grid-cols-[1.5fr_repeat(3,minmax(0,1fr))] lg:px-8">
                 <div className="space-y-4">
-                  <Link href="/" className="flex items-center" aria-label="FlupFlap home">
+                  <Link href="/" className="flex items-center">
                     <Image
                       src="/flupflap_logo_brand.png"
                       alt="FlupFlap"
