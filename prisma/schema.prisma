@@ -251,7 +251,7 @@ model OrderItem {
   shippingCents      Int     @default(0)
   quantity           Int     @default(1)
   lineSubtotalCents  Int     @default(0)
-  commissionRateBps  Int     @default(600)
+  commissionRateBps  Int     @default(299)
   commissionFeeCents Int     @default(0)
   sellerNetCents     Int     @default(0)
   commissionSource   String  @default("DEFAULT")
@@ -555,7 +555,7 @@ model PromotionPlan {
 
 model MarketplaceSettings {
   id                         Int      @id @default(1)
-  defaultSellerCommissionBps Int      @default(600)
+  defaultSellerCommissionBps Int      @default(299)
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
 }

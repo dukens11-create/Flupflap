@@ -29,7 +29,7 @@ export default function TermsPage() {
 
       <section>
         <h2 className="text-xl font-bold mb-2">5. Fees and Commission</h2>
-        <p className="text-slate-700">Under these Terms, FlupFlap charges a 6% platform commission on each completed sale. This fee is deducted from the seller payout and stored with paid order items for audit and payout reporting.</p>
+        <p className="text-slate-700">Under these Terms, FlupFlap charges a 2.99% platform commission on each completed sale. This fee is deducted from the seller payout and stored with paid order items for audit and payout reporting.</p>
       </section>
 
       <section>

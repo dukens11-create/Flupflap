@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/db';
 
-const FIXED_COMMISSION_PERCENT = 6;
+const FIXED_COMMISSION_PERCENT = 2.99;
 const MARKETPLACE_SETTINGS_ID = 1;
 
 type SellerPlanLike = {
