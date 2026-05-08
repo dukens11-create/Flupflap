@@ -6,7 +6,7 @@ FlupFlap is a marketplace starter app like a small eBay: FlupFlap can sell items
 - Public home page and product browsing
 - Multilingual UI support (English, Español, Français) with language selector
 - Product detail pages
-- Search and filters: keyword, category, condition, min/max price
+- Search and filters: keyword, category, condition, location, min/max price, newest/popular sort, autocomplete
 - Customer/seller signup and login with NextAuth Credentials
 - Seller listing form
 - Seller dashboard

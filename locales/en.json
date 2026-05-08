@@ -27,10 +27,13 @@
   },
   "filters": {
     "searchPlaceholder": "Search products…",
+    "location": "City or state",
     "allCategories": "All categories",
     "anyCondition": "Any condition",
     "minPrice": "Min $",
     "maxPrice": "Max $",
+    "sortNewest": "Newest",
+    "sortPopular": "Popular",
     "clearFilters": "Clear filters",
     "categories": {
       "Electronics": "Electronics",
