@@ -14,6 +14,8 @@ export type SellerKycChecks = {
   phoneVerified: boolean;
 };
 
+const DEFAULT_PROVIDER_REJECTION_REASON = 'Provider verification failed.';
+
 export function resolveAutomatedKycStatus(checks: SellerKycChecks): SellerVerificationStatus {
   if (checks.governmentIdVerified && checks.selfieVerified && checks.addressVerified && checks.phoneVerified) {
     return SellerVerificationStatus.APPROVED;
@@ -41,6 +43,15 @@ export async function createPersonaInquiry(sellerId: string) {
   if (!apiKey || !templateId) {
     throw new Error('Persona KYC is not configured.');
   }
+  if (!apiKey.startsWith('persona_')) {
+    throw new Error('PERSONA_API_KEY is invalid.');
+  }
+  if (apiKey.length < 20) {
+    throw new Error('PERSONA_API_KEY is invalid.');
+  }
+  if (!templateId.startsWith('itmpl_')) {
+    throw new Error('PERSONA_TEMPLATE_ID is invalid.');
+  }
 
   const response = await fetch('https://withpersona.com/api/v1/inquiries', {
     method: 'POST',
@@ -65,7 +76,7 @@ export async function createPersonaInquiry(sellerId: string) {
   });
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Persona inquiry creation failed (${response.status}): ${text.slice(0, 200)}`);
+    throw new Error(`Persona inquiry creation failed (${response.status}): ${text.slice(0, 500)}`);
   }
   return response.json() as Promise<{
     data?: {
@@ -92,6 +103,10 @@ export async function applyAutomatedKycResult(input: {
 }) {
   const status = input.forcedStatus ?? resolveAutomatedKycStatus(input.checks);
   const now = new Date();
+  const seller = await prisma.user.findUnique({
+    where: { id: input.sellerId },
+    select: { phone: true },
+  });
 
   await prisma.sellerVerification.upsert({
     where: { sellerId: input.sellerId },
@@ -104,7 +119,7 @@ export async function applyAutomatedKycResult(input: {
       status,
       rejectionReason:
         status === 'REJECTED'
-          ? input.rejectionReason ?? 'Provider verification failed.'
+          ? input.rejectionReason ?? DEFAULT_PROVIDER_REJECTION_REASON
           : null,
       governmentIdVerified: input.checks.governmentIdVerified,
       selfieVerified: input.checks.selfieVerified,
@@ -133,13 +148,13 @@ export async function applyAutomatedKycResult(input: {
       status,
       rejectionReason:
         status === 'REJECTED'
-          ? input.rejectionReason ?? 'Provider verification failed.'
+          ? input.rejectionReason ?? DEFAULT_PROVIDER_REJECTION_REASON
           : null,
       governmentIdVerified: input.checks.governmentIdVerified,
       selfieVerified: input.checks.selfieVerified,
       addressVerified: input.checks.addressVerified,
       phoneVerified: input.checks.phoneVerified,
-      phoneNumber: '',
+      phoneNumber: seller?.phone ?? '',
       phoneVerificationStatus: input.checks.phoneVerified
         ? SellerPhoneVerificationStatus.VERIFIED
         : SellerPhoneVerificationStatus.PENDING,

@@ -291,7 +291,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
       )}
       {sp.verification === 'provider_started' && (
         <div className="card p-4 mb-6 bg-blue-50 border-blue-200 text-blue-900 text-sm">
-          ✅ Provider verification started. Complete all provider steps, then return here while we await webhook updates.
+          ✅ Provider verification has been started. Complete all provider steps, then return to this dashboard to track status updates.
         </div>
       )}
       {sp.verification === 'provider_pending' && (

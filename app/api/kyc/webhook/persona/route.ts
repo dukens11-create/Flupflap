@@ -8,8 +8,9 @@ import { applyAutomatedKycResult } from '@/lib/kyc/providers';
 import { prisma } from '@/lib/db';
 
 function timingSafeEqualHex(a: string, b: string) {
-  const aBuf = Buffer.from(a);
-  const bBuf = Buffer.from(b);
+  if (!/^[a-f0-9]+$/i.test(a) || !/^[a-f0-9]+$/i.test(b)) return false;
+  const aBuf = Buffer.from(a, 'hex');
+  const bBuf = Buffer.from(b, 'hex');
   if (aBuf.length !== bBuf.length) return false;
   return crypto.timingSafeEqual(aBuf, bBuf);
 }
@@ -96,9 +97,12 @@ export async function POST(req: Request) {
     checks.selfieVerified = true;
     checks.addressVerified = true;
     checks.phoneVerified = true;
-  } else if (eventName === 'inquiry.declined' || eventName === 'inquiry.failed') {
+  } else if (eventName === 'inquiry.declined') {
     forcedStatus = SellerVerificationStatus.REJECTED;
     rejectionReason = 'Persona verification was declined.';
+  } else if (eventName === 'inquiry.failed') {
+    forcedStatus = SellerVerificationStatus.REJECTED;
+    rejectionReason = 'Persona verification failed.';
   }
 
   await applyAutomatedKycResult({

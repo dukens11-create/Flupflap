@@ -64,6 +64,8 @@ export async function POST(req: Request) {
         },
       });
       const accountChecks = stripeKycChecksFromAccount(account);
+      // account.updated does not evaluate document/selfie checks; those are synced
+      // from identity.verification_session.* webhook events and preserved here.
       await applyAutomatedKycResult({
         sellerId: seller.id,
         provider: SellerKycProvider.STRIPE,
@@ -137,7 +139,7 @@ export async function POST(req: Request) {
       rejectionReason =
         sessionObject.last_error?.reason
         ?? sessionObject.last_error?.code
-        ?? 'Provider requested additional identity inputs.';
+        ?? 'Identity verification requires additional input.';
     } else if (event.type === 'identity.verification_session.canceled') {
       forcedStatus = SellerVerificationStatus.REJECTED;
       rejectionReason = 'Seller canceled identity verification.';

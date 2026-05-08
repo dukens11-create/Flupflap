@@ -61,6 +61,9 @@ export async function POST(req: Request) {
     if (provider === SellerKycProvider.PERSONA) {
       const inquiry = await createPersonaInquiry(session.user.id);
       providerInquiryId = inquiry.data?.id ?? null;
+      // Stripe tracks account and verification session IDs separately, while
+      // Persona uses inquiry as the single verification entity, so we store
+      // the same inquiry ID in both tracking fields for consistent querying.
       providerVerificationId = inquiry.data?.id ?? null;
       verificationUrl = inquiry.data?.attributes?.['inquiry-link'] ?? null;
     }

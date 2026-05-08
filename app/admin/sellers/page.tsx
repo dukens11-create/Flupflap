@@ -233,7 +233,7 @@ export default async function AdminSellersPage({
                         name="adminFallbackReason"
                         className="input h-16 resize-none"
                         maxLength={1000}
-                        placeholder="Optional notes about fallback approval/rejection."
+                        placeholder="Optional internal notes for admin fallback review."
                       />
                     </div>
                     <button type="submit" className="btn-primary text-sm">

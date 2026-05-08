@@ -123,6 +123,8 @@ export async function POST(
           data.status === SellerVerificationStatus.APPROVED
             ? SellerAdminFallbackStatus.APPROVED
             : SellerAdminFallbackStatus.REJECTED,
+        // If admins do not provide a separate internal fallback note for
+        // rejections, reuse rejectionReason so dashboard context stays aligned.
         adminFallbackReason:
           data.adminFallbackReason
           ?? (data.status === SellerVerificationStatus.REJECTED

@@ -40,6 +40,8 @@ export function isSellerVerificationApproved(
   if (status !== 'APPROVED') return false;
   if (typeof verification === 'string') return true;
 
+  // Admin fallback approvals should unlock listing even if provider-side
+  // eligibility timestamps are missing or delayed.
   if (verification.adminFallbackStatus === 'APPROVED') return true;
   return Boolean(verification.eligibleToListAt);
 }
