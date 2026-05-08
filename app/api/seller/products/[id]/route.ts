@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db';
 import { cents } from '@/lib/money';
 import { z } from 'zod';
 import { isSellerVerificationApproved } from '@/lib/seller-verification';
+import { parseReturnWindowDays } from '@/lib/disputes';
 
 const updateSchema = z.object({
   title: z.string().min(3).optional(),
@@ -21,15 +22,6 @@ const updateSchema = z.object({
   pickupPostalCode: z.string().max(20).optional(),
   returnWindowDays: z.string().optional(),
 });
-
-function parseReturnWindowDays(value?: string) {
-  if (!value) return null;
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 30) {
-    throw new Error('Invalid return window.');
-  }
-  return parsed;
-}
 
 async function getSellerProduct(id: string, sellerId: string) {
   return prisma.product.findFirst({ where: { id, sellerId } });

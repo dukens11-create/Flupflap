@@ -28,6 +28,14 @@ const STATUS_LABELS: Record<string, string> = {
   PICKED_UP: 'Picked Up',
 };
 
+const DISPUTE_FLASH_MESSAGES: Record<string, string> = {
+  exists: 'A request already exists for that order item.',
+  'not-eligible': 'This order is not ready for a dispute yet.',
+  invalid: 'Please complete all required dispute details before submitting.',
+  'not-found': 'We could not find the order item you selected.',
+  error: 'We could not submit your request. Please try again.',
+};
+
 function statusBadge(status: string) {
   const map: Record<string, string> = {
     PENDING: 'badge-yellow',
@@ -101,13 +109,9 @@ export default async function OrderDetailPage({
           Your request has been submitted to the seller. If needed, FlupFlap can review the dispute and make the final refund decision.
         </div>
       )}
-      {['exists', 'not-eligible', 'invalid', 'error', 'not-found'].includes(sp.dispute ?? '') && (
+      {sp.dispute && DISPUTE_FLASH_MESSAGES[sp.dispute] && (
         <div className="card p-4 mb-4 bg-red-50 border-red-200 text-red-800 text-sm">
-          {sp.dispute === 'exists' && 'A request already exists for that order item.'}
-          {sp.dispute === 'not-eligible' && 'This order is not ready for a dispute yet.'}
-          {sp.dispute === 'invalid' && 'Please complete all required dispute details before submitting.'}
-          {sp.dispute === 'not-found' && 'We could not find the order item you selected.'}
-          {sp.dispute === 'error' && 'We could not submit your request. Please try again.'}
+          {DISPUTE_FLASH_MESSAGES[sp.dispute]}
         </div>
       )}
 

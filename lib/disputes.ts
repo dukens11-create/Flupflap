@@ -23,6 +23,17 @@ export const DISPUTE_RESOLUTION_OPTIONS = [
   { value: 'return_for_refund', label: 'Return for refund' },
 ] as const;
 
+export const MAX_RETURN_WINDOW_DAYS = 30;
+
+export function parseReturnWindowDays(value?: string) {
+  if (!value) return null;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > MAX_RETURN_WINDOW_DAYS) {
+    throw new Error('Invalid return window.');
+  }
+  return parsed;
+}
+
 export function disputeStatusBadge(status: string) {
   return disputeStatusStyles[status] ?? 'badge-slate';
 }

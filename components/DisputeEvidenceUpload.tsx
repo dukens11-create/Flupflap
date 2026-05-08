@@ -10,7 +10,9 @@ export default function DisputeEvidenceUpload({ defaultValue = [] }: { defaultVa
   const [error, setError] = useState('');
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? []).slice(0, Math.max(MAX_FILES - urls.length, 0));
+    if (urls.length >= MAX_FILES) return;
+
+    const files = Array.from(e.target.files ?? []).slice(0, MAX_FILES - urls.length);
     if (files.length === 0) return;
 
     setUploading(true);

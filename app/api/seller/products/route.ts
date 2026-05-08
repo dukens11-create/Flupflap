@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { isSubscriptionActive } from '@/lib/subscription';
 import { syncSellerSubscriptionFromStripe } from '@/lib/subscription-sync';
 import { isSellerVerificationApproved } from '@/lib/seller-verification';
+import { parseReturnWindowDays } from '@/lib/disputes';
 
 const schema = z.object({
   title: z.string().min(3),
@@ -23,15 +24,6 @@ const schema = z.object({
   pickupPostalCode: z.string().max(20).optional(),
   returnWindowDays: z.string().optional(),
 });
-
-function parseReturnWindowDays(value?: string) {
-  if (!value) return null;
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 30) {
-    throw new Error('Invalid return window.');
-  }
-  return parsed;
-}
 
 export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
