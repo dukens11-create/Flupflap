@@ -820,7 +820,10 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
           <div className="card p-6 text-slate-500">No orders yet.</div>
         ) : (
           <div className="space-y-3">
-            {orders.map(o => (
+            {orders.map(o => {
+              const defaultDeliveryStatus = o.deliveryStatus ?? inferDeliveryStatus({ trackingNumber: o.trackingNumber });
+
+              return (
               <div key={o.id} className="card p-4">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs text-slate-400 font-mono">{o.id.slice(-8)}</span>
@@ -851,7 +854,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                     <div className="flex flex-wrap items-center gap-2">
                       <select
                         name="deliveryStatus"
-                        defaultValue={o.deliveryStatus ?? inferDeliveryStatus({ trackingNumber: o.trackingNumber })}
+                        defaultValue={defaultDeliveryStatus}
                         className="input w-48"
                       >
                         <option value={DeliveryStatus.LABEL_CREATED}>Label created</option>
@@ -908,7 +911,8 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                   </div>
                 )}
               </div>
-            ))}
+            );
+            })}
           </div>
         )}
       </section>

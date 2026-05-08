@@ -87,7 +87,7 @@ export function buildCarrierTrackingUrl(carrier: string | null | undefined, trac
   return null;
 }
 
-function mapShippoTrackingStatus(status: string | null | undefined, detail: string | null | undefined): DeliveryStatus {
+function mapShippoCarrierTrackingStatus(status: string | null | undefined, detail: string | null | undefined): DeliveryStatus {
   const normalized = (status ?? '').trim().toUpperCase();
   if (normalized === 'DELIVERED') return DeliveryStatus.DELIVERED;
   if (normalized === 'PRE_TRANSIT') return DeliveryStatus.PRE_TRANSIT;
@@ -150,7 +150,7 @@ export async function refreshCarrierTracking(input: {
   const detail = payload.tracking_status?.status_details ?? null;
   return {
     providerShipmentId: payload.transaction ?? null,
-    deliveryStatus: mapShippoTrackingStatus(payload.tracking_status?.status, detail),
+    deliveryStatus: mapShippoCarrierTrackingStatus(payload.tracking_status?.status, detail),
     deliveryStatusDetail: detail,
     externalTrackingUrl: buildCarrierTrackingUrl(payload.carrier ?? carrier, payload.tracking_number ?? trackingNumber),
     syncedAt: new Date(),
