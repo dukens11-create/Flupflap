@@ -279,7 +279,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
               </p>
               <div className="mt-2 flex items-center gap-2">
                 <span className={`badge ${sellerVerificationStatusTone(verificationSubmission?.status)}`}>
-                  {verificationSubmission?.status ?? 'NOT SUBMITTED'}
+                  {verificationSubmission?.status ?? 'Not submitted'}
                 </span>
                 {verificationSubmission?.phoneVerificationStatus && (
                   <span className="text-xs text-slate-500">

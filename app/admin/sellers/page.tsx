@@ -107,7 +107,7 @@ export default async function AdminSellersPage({
                   )}
                   <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
                     <span className={`badge ${sellerVerificationStatusTone(seller.verificationSubmission?.status)}`}>
-                      Verification {seller.verificationSubmission?.status ?? 'NOT SUBMITTED'}
+                      Verification {seller.verificationSubmission?.status ?? 'Not submitted'}
                     </span>
                     {seller.verificationSubmission?.phoneVerificationStatus && (
                       <span className="text-slate-500">
