@@ -59,7 +59,8 @@ export default function OrderItemReviewForm({
         );
         router.refresh();
       }
-    } catch {
+    } catch (err) {
+      console.error('[order-item-review-form]', err);
       setError('Network error. Please try again.');
     } finally {
       setLoading(false);
