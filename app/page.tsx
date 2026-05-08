@@ -130,10 +130,37 @@ async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?
     );
   }
 
+  const reviewStats = await prisma.orderItem.groupBy({
+    by: ['productId'],
+    where: {
+      productId: { in: products.map((product: any) => product.id) },
+      reviewRating: { not: null },
+      reviewBlockedByDispute: false,
+    },
+    _avg: { reviewRating: true },
+    _count: { reviewRating: true },
+  });
+  const reviewStatsByProductId = Object.fromEntries(
+    reviewStats.map((stat) => [
+      stat.productId,
+      {
+        average: stat._avg.reviewRating ?? null,
+        count: stat._count.reviewRating,
+      },
+    ]),
+  );
+
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
       {products.map((p: any) => (
-        <ProductCard key={p.id} p={{ ...p, activePromotion: p.promotions[0] ?? null }} />
+        <ProductCard
+          key={p.id}
+          p={{
+            ...p,
+            activePromotion: p.promotions[0] ?? null,
+            reviewSummary: reviewStatsByProductId[p.id] ?? { average: null, count: 0 },
+          }}
+        />
       ))}
     </div>
   );

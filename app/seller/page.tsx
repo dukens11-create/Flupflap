@@ -14,6 +14,7 @@ import { expirePromotions } from '@/lib/promotions';
 import { isSubscriptionActive, SELLER_SUBSCRIPTION_PRICE_LABEL } from '@/lib/subscription';
 import { syncSellerSubscriptionFromStripe } from '@/lib/subscription-sync';
 import SubscriptionButton from '@/components/SubscriptionButton';
+import RatingStars from '@/components/RatingStars';
 import {
   getDefaultSellerKycProvider,
   isSellerVerificationApproved,
@@ -21,6 +22,7 @@ import {
   sellerPhoneVerificationLabel,
   sellerVerificationStatusTone,
 } from '@/lib/seller-verification';
+import { formatAverageRating } from '@/lib/reviews';
 
 export const dynamic = 'force-dynamic';
 
@@ -102,7 +104,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   const defaultKycProvider = getDefaultSellerKycProvider();
 
   await expirePromotions();
-  const [settings, products, orders, soldItems, verificationSubmission] = await Promise.all([
+  const [settings, products, orders, soldItems, verificationSubmission, sellerReviewSummary, hiddenReviewCount, recentReviews] = await Promise.all([
     getMarketplaceSettings(),
     prisma.product.findMany({
       where: { sellerId: session.user.id },
@@ -160,6 +162,38 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
         adminFallbackReason: true,
       },
     }),
+    prisma.orderItem.aggregate({
+      where: {
+        product: { sellerId: session.user.id },
+        reviewRating: { not: null },
+        reviewBlockedByDispute: false,
+      },
+      _avg: { reviewRating: true },
+      _count: { reviewRating: true },
+    }),
+    prisma.orderItem.count({
+      where: {
+        product: { sellerId: session.user.id },
+        reviewRating: { not: null },
+        reviewBlockedByDispute: true,
+      },
+    }),
+    prisma.orderItem.findMany({
+      where: {
+        product: { sellerId: session.user.id },
+        reviewRating: { not: null },
+        reviewBlockedByDispute: false,
+      },
+      orderBy: [
+        { reviewUpdatedAt: 'desc' },
+        { reviewCreatedAt: 'desc' },
+      ],
+      take: 3,
+      include: {
+        product: { select: { id: true, title: true } },
+        order: { select: { buyer: { select: { name: true } } } },
+      },
+    }),
   ]);
 
   // Compute earnings from seller's completed order items
@@ -185,6 +219,8 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   const soldCountThisMonth = soldItemsThisMonth.reduce((s, i) => s + i.quantity, 0);
   const revenueThisWeekCents = soldItemsThisWeek.reduce((s, i) => s + i.sellerNetCents, 0);
   const revenueThisMonthCents = soldItemsThisMonth.reduce((s, i) => s + i.sellerNetCents, 0);
+  const sellerRatingAverage = sellerReviewSummary._avg.reviewRating ?? null;
+  const sellerRatingCount = sellerReviewSummary._count.reviewRating;
   const verificationApproved = isSellerVerificationApproved(verificationSubmission);
   let emptyListingsMessage: ReactNode = 'No listings yet. Subscribe to start selling.';
   if (subscriptionActive && verificationApproved) {
@@ -703,6 +739,67 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
         {products.length === 0 && soldItems.length === 0 && (
           <p className="text-xs text-slate-400 mt-3">Statistics will populate once you have listings and sales.</p>
         )}
+      </section>
+
+      <section className="mb-8">
+        <h2 className="text-xl font-bold mb-3">Buyer Feedback</h2>
+        <div className="grid gap-4 md:grid-cols-[minmax(0,220px)_minmax(0,1fr)]">
+          <div className="card p-5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Seller Rating</p>
+            {sellerRatingCount > 0 && sellerRatingAverage !== null ? (
+              <>
+                <p className="mt-2 text-3xl font-black text-slate-900">{formatAverageRating(sellerRatingAverage)}</p>
+                <div className="mt-2 flex items-center gap-2 text-sm text-slate-600">
+                  <RatingStars rating={sellerRatingAverage} />
+                  <span>{sellerRatingCount} review{sellerRatingCount === 1 ? '' : 's'}</span>
+                </div>
+              </>
+            ) : (
+              <p className="mt-2 text-sm text-slate-500">No public ratings yet.</p>
+            )}
+            {hiddenReviewCount > 0 && (
+              <p className="mt-3 text-xs text-amber-700">
+                {hiddenReviewCount} review{hiddenReviewCount === 1 ? '' : 's'} hidden during dispute review.
+              </p>
+            )}
+          </div>
+
+          <div className="card p-5">
+            <div className="flex items-center justify-between gap-3">
+              <p className="font-semibold text-slate-900">Latest product reviews</p>
+              <p className="text-xs text-slate-500">Verified purchases only</p>
+            </div>
+            {recentReviews.length === 0 ? (
+              <p className="mt-3 text-sm text-slate-500">Your completed orders have not received any public reviews yet.</p>
+            ) : (
+              <div className="mt-4 space-y-3">
+                {recentReviews.map((review) => {
+                  if (review.reviewRating === null) return null;
+
+                  return (
+                    <div key={review.id} className="rounded-xl border border-slate-200 p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <p className="font-medium text-slate-900">{review.order.buyer.name}</p>
+                          <Link href={`/products/${review.product.id}`} className="text-xs text-blue-600 hover:underline">
+                            {review.product.title}
+                          </Link>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm text-slate-600">
+                          <RatingStars rating={review.reviewRating} />
+                          <span>{review.reviewRating}/5</span>
+                        </div>
+                      </div>
+                      <p className="mt-2 text-sm text-slate-600">
+                        {review.reviewComment?.trim() || 'Buyer left a star rating without additional comments.'}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
       </section>
 
       {/* ── Sold Items ── */}

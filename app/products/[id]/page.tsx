@@ -10,8 +10,10 @@ import BuyNowButton from '@/components/BuyNowButton';
 import PickupDistance from '@/components/PickupDistance';
 import ContactSellerButton from '@/components/ContactSellerButton';
 import ReportItemButton from '@/components/ReportItemButton';
+import RatingStars from '@/components/RatingStars';
 import type { Metadata } from 'next';
 import { expirePromotions } from '@/lib/promotions';
+import { formatAverageRating, isReviewEligibleStatus } from '@/lib/reviews';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,6 +21,13 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const { id } = await params;
   const p = await prisma.product.findUnique({ where: { id } });
   return { title: p?.title ?? 'Product not found' };
+}
+
+function getReviewDisplayDate(review: {
+  reviewUpdatedAt: Date | null;
+  reviewCreatedAt: Date | null;
+}) {
+  return review.reviewUpdatedAt ?? review.reviewCreatedAt;
 }
 
 export default async function ProductPage({ params }: { params: Promise<{ id: string }> }) {
@@ -41,6 +50,54 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
 
   if (!product || product.status !== 'APPROVED') notFound();
 
+  const [reviewSummary, hiddenReviewCount, sellerReviewSummary, visibleReviews] = await Promise.all([
+    prisma.orderItem.aggregate({
+      where: {
+        productId: id,
+        reviewRating: { not: null },
+        reviewBlockedByDispute: false,
+      },
+      _avg: { reviewRating: true },
+      _count: { reviewRating: true },
+    }),
+    prisma.orderItem.count({
+      where: {
+        productId: id,
+        reviewRating: { not: null },
+        reviewBlockedByDispute: true,
+      },
+    }),
+    prisma.orderItem.aggregate({
+      where: {
+        product: { sellerId: product.sellerId },
+        reviewRating: { not: null },
+        reviewBlockedByDispute: false,
+      },
+      _avg: { reviewRating: true },
+      _count: { reviewRating: true },
+    }),
+    prisma.orderItem.findMany({
+      where: {
+        productId: id,
+        reviewRating: { not: null },
+        reviewBlockedByDispute: false,
+      },
+      orderBy: [
+        { reviewUpdatedAt: 'desc' },
+        { reviewCreatedAt: 'desc' },
+      ],
+      take: 10,
+      include: {
+        order: {
+          select: {
+            status: true,
+            buyer: { select: { name: true } },
+          },
+        },
+      },
+    }),
+  ]);
+
   // Hide the message button if the viewer is the seller of this product
   const isOwnListing = session?.user?.id === product.seller.id;
   const activePromotion = product.promotions[0] ?? null;
@@ -50,6 +107,11 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
       data: { clickCount: { increment: 1 } },
     });
   }
+
+  const reviewCount = reviewSummary._count.reviewRating;
+  const reviewAverage = reviewSummary._avg.reviewRating ?? null;
+  const sellerReviewCount = sellerReviewSummary._count.reviewRating;
+  const sellerReviewAverage = sellerReviewSummary._avg.reviewRating ?? null;
 
   return (
     <main className="max-w-4xl mx-auto">
@@ -73,7 +135,30 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             ) : (
               <p className="text-sm text-slate-500">+ {dollars(product.shippingCents)} shipping</p>
             )}
-            <p className="text-xs text-slate-400 mt-1">Sold by {product.seller.name}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+              <span>Sold by {product.seller.name}</span>
+              {sellerReviewCount > 0 && sellerReviewAverage !== null && (
+                <>
+                  <span>•</span>
+                  <span className="inline-flex items-center gap-1">
+                    <RatingStars rating={sellerReviewAverage} />
+                    <span className="font-semibold text-slate-700">
+                      {formatAverageRating(sellerReviewAverage)}
+                    </span>
+                    <span>seller rating ({sellerReviewCount})</span>
+                  </span>
+                </>
+              )}
+            </div>
+            {reviewCount > 0 && reviewAverage !== null && (
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-slate-600">
+                <RatingStars rating={reviewAverage} className="text-base" />
+                <span className="font-semibold text-slate-900">{formatAverageRating(reviewAverage)}</span>
+                <span>
+                  {reviewCount} review{reviewCount === 1 ? '' : 's'}
+                </span>
+              </div>
+            )}
           </div>
           <p className="text-slate-700 text-sm leading-relaxed">{product.description}</p>
 
@@ -132,6 +217,102 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
           )}
         </div>
       </div>
+
+      <section className="mt-6 grid gap-6 md:grid-cols-[minmax(0,2fr)_minmax(260px,1fr)]">
+        <div className="card p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-bold">Product reviews</h2>
+              <p className="text-sm text-slate-500">
+                Reviews from completed marketplace purchases only.
+              </p>
+            </div>
+            {reviewCount > 0 && reviewAverage !== null && (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-right">
+                <p className="text-2xl font-black text-slate-900">{formatAverageRating(reviewAverage)}</p>
+                <div className="mt-1 flex items-center justify-end gap-2 text-sm text-slate-500">
+                  <RatingStars rating={reviewAverage} />
+                  <span>{reviewCount} total</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {hiddenReviewCount > 0 && (
+            <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              {hiddenReviewCount} review{hiddenReviewCount === 1 ? '' : 's'} temporarily hidden while a dispute is being reviewed.
+            </p>
+          )}
+
+          {visibleReviews.length === 0 ? (
+            <div className="mt-4 rounded-xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+              No reviews yet for this item.
+            </div>
+          ) : (
+            <div className="mt-4 space-y-4">
+              {visibleReviews.map((review) => {
+                if (review.reviewRating === null) return null;
+                const reviewDisplayDate = getReviewDisplayDate(review);
+
+                return (
+                  <article key={review.id} className="rounded-xl border border-slate-200 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-slate-900">{review.order.buyer.name}</p>
+                          {isReviewEligibleStatus(review.order.status) && (
+                            <span className="badge badge-green">Verified purchase</span>
+                          )}
+                        </div>
+                        <div className="mt-1 flex items-center gap-2 text-sm text-slate-500">
+                          <RatingStars rating={review.reviewRating} />
+                          <span>{review.reviewRating}/5</span>
+                        </div>
+                      </div>
+                      <p className="text-xs text-slate-400">
+                        {reviewDisplayDate
+                          ? reviewDisplayDate.toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                          })
+                          : 'Review date unavailable'}
+                      </p>
+                    </div>
+                    <p className="mt-3 text-sm leading-relaxed text-slate-700">
+                      {review.reviewComment?.trim() || 'Buyer left a star rating without additional comments.'}
+                    </p>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <aside className="card p-6">
+          <h2 className="text-lg font-bold">Seller rating</h2>
+          {sellerReviewCount > 0 && sellerReviewAverage !== null ? (
+            <>
+              <div className="mt-3 flex items-center gap-3">
+                <p className="text-3xl font-black text-slate-900">{formatAverageRating(sellerReviewAverage)}</p>
+                <div>
+                  <RatingStars rating={sellerReviewAverage} className="text-base" />
+                  <p className="text-sm text-slate-500">
+                    {sellerReviewCount} verified purchase rating{sellerReviewCount === 1 ? '' : 's'}
+                  </p>
+                </div>
+              </div>
+              <p className="mt-3 text-sm text-slate-600">
+                Based on buyer feedback across this seller&apos;s completed orders.
+              </p>
+            </>
+          ) : (
+            <p className="mt-3 text-sm text-slate-500">
+              This seller does not have any public ratings yet.
+            </p>
+          )}
+        </aside>
+      </section>
     </main>
   );
 }

@@ -91,6 +91,17 @@ export async function POST(
           notes: notes ?? null,
         },
       });
+
+      await prisma.orderItem.updateMany({
+        where: {
+          productId,
+          order: { buyerId: session.user.id },
+          reviewRating: { not: null },
+        },
+        data: {
+          reviewBlockedByDispute: true,
+        },
+      });
     } catch (err: any) {
       if (err?.code === 'P2002') {
         return NextResponse.json({ error: 'You have already reported this listing for this reason.' }, { status: 409 });
