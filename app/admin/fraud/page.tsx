@@ -29,7 +29,7 @@ const SELLER_REPORT_ACTIONS = [
   { value: 'ban_seller', label: 'Ban seller' },
 ] as const;
 
-function riskTone(level: 'LOW' | 'MEDIUM' | 'HIGH') {
+function riskTone(level: 'LOW' | 'MEDIUM' | 'HIGH' | 'NONE') {
   return level === 'HIGH'
     ? 'badge-red'
     : level === 'MEDIUM'
