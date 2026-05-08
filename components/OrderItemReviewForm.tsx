@@ -113,7 +113,7 @@ export default function OrderItemReviewForm({
             </select>
             <div className="flex items-center gap-2 text-sm text-slate-600">
               <RatingStars rating={previewRating} />
-              <span>{previewRating || 0}/5</span>
+              <span>{previewRating}/5</span>
             </div>
           </div>
         </div>

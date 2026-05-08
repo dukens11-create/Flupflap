@@ -90,7 +90,7 @@ export default async function OrderDetailPage({
         <h2 className="font-bold mb-3">Items ordered</h2>
         <div className="space-y-3">
           {order.items.map(item => (
-            <div key={item.id} className="rounded-xl border border-slate-100 p-3">
+            <div key={item.id} className="rounded-xl border border-slate-200 p-3">
               <div className="flex items-center gap-3">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
