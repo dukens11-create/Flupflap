@@ -75,7 +75,7 @@ In the **Environment** tab, add:
 | `STRIPE_SECRET_KEY` | From your Stripe dashboard → Developers → API keys |
 | `STRIPE_PUBLISHABLE_KEY` | From your Stripe dashboard → Developers → API keys |
 | `STRIPE_WEBHOOK_SECRET` | From Stripe → Webhooks → your endpoint → Signing secret |
-| `PLATFORM_FEE_PERCENT` | Legacy bootstrap env var; the app normalizes seller commission to `6` |
+| `PLATFORM_FEE_PERCENT` | Legacy bootstrap env var; the app normalizes seller commission to `2.99` |
 | `CLOUDINARY_CLOUD_NAME` | From your Cloudinary dashboard — Settings → API Keys |
 | `CLOUDINARY_API_KEY` | From your Cloudinary dashboard — Settings → API Keys |
 | `CLOUDINARY_API_SECRET` | From your Cloudinary dashboard — Settings → API Keys |
