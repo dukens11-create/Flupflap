@@ -7,10 +7,9 @@ export const MESSAGE_ATTACHMENT_ALLOWED_TYPES = [
 export const MESSAGE_ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024; // 5 MB
 export const MESSAGE_UPLOAD_FOLDER =
   process.env.CLOUDINARY_MESSAGE_UPLOAD_FOLDER ?? 'flupflap/message-attachments';
+export const MESSAGE_ATTACHMENT_HELP_TEXT = 'JPEG, PNG, WebP, or GIF · up to 5 MB';
 
-function getAttachmentAssetPathSegments(pathname: string) {
-  const pathSegments = pathname.split('/').filter(Boolean);
-
+function getAttachmentAssetPathSegments(pathSegments: string[]) {
   if (
     pathSegments.length < 4 ||
     pathSegments[1] !== 'image' ||
@@ -33,7 +32,8 @@ export function isSafeMessageAttachmentUrl(
   try {
     const url = new URL(attachmentUrl);
     const folderSegments = MESSAGE_UPLOAD_FOLDER.split('/').filter(Boolean);
-    const assetPathSegments = getAttachmentAssetPathSegments(url.pathname);
+    const pathSegments = url.pathname.split('/').filter(Boolean);
+    const assetPathSegments = getAttachmentAssetPathSegments(pathSegments);
 
     if (
       url.protocol !== 'https:' ||
@@ -44,7 +44,6 @@ export function isSafeMessageAttachmentUrl(
     }
 
     if (cloudName) {
-      const pathSegments = url.pathname.split('/').filter(Boolean);
       if (pathSegments[0] !== cloudName) {
         return false;
       }

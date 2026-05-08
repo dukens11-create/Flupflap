@@ -7,7 +7,10 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { dollars } from '@/lib/money';
 import { ImagePlus, X } from 'lucide-react';
-import { isSafeMessageAttachmentUrl } from '@/lib/message-attachments';
+import {
+  isSafeMessageAttachmentUrl,
+  MESSAGE_ATTACHMENT_HELP_TEXT,
+} from '@/lib/message-attachments';
 
 type Sender = { id: string; name: string };
 
@@ -291,7 +294,7 @@ export default function ConversationPage() {
               disabled={sending || uploading}
             />
           </label>
-          <span className="text-xs text-slate-500">JPEG, PNG, WebP, or GIF · up to 5 MB</span>
+          <span className="text-xs text-slate-500">{MESSAGE_ATTACHMENT_HELP_TEXT}</span>
         </div>
         {isSafeMessageAttachmentUrl(attachmentUrl) && (
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 flex items-start justify-between gap-3">
