@@ -80,9 +80,8 @@ export default function Navbar() {
           <Image
             src="/flupflap_logo.png"
             alt="FlupFlap"
-            width={614}
-            height={255}
-            priority
+            width={128}
+            height={53}
             className="h-8 w-auto"
           />
         </Link>

@@ -27,8 +27,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <Image
                   src="/flupflap_logo.png"
                   alt="FlupFlap"
-                  width={614}
-                  height={255}
+                  width={160}
+                  height={66}
                   className="h-10 w-auto"
                 />
               </Link>
