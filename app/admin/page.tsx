@@ -6,6 +6,7 @@ import { dollars } from '@/lib/money';
 import { formatCommissionPercent, getMarketplaceSettings } from '@/lib/commission';
 import { OrderStatus } from '@prisma/client';
 import type { Metadata } from 'next';
+import { getVisitorMetrics } from '@/lib/traffic';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,7 +43,7 @@ export default async function AdminPage({
 
   const suspiciousLoginSince = new Date(Date.now() - 1000 * 60 * 60 * 24 * 30);
 
-  const [settings, pending, all, recentOrders, restrictedSellersCount, buyerCount, sellerCount, openReportsCount, openSellerReportsCount, suspiciousLoginCount, activePromotionsCount, productsThisWeek, productsThisMonth, activeListingsCount, soldItemsAgg, revenueThisWeekAgg, revenueThisMonthAgg] = await Promise.all([
+  const [settings, pending, all, recentOrders, restrictedSellersCount, buyerCount, sellerCount, openReportsCount, openSellerReportsCount, suspiciousLoginCount, activePromotionsCount, productsThisWeek, productsThisMonth, activeListingsCount, soldItemsAgg, revenueThisWeekAgg, revenueThisMonthAgg, visitorMetrics] = await Promise.all([
     getMarketplaceSettings(),
     prisma.product.findMany({
       where: { status: 'PENDING' },
@@ -91,6 +92,7 @@ export default async function AdminPage({
       _sum: { totalCents: true },
       where: { status: { in: PAID_ORDER_STATUSES }, createdAt: { gte: monthStart } },
     }),
+    getVisitorMetrics(now),
   ]);
 
   const revenueThisWeekCents = revenueThisWeekAgg._sum.totalCents ?? 0;
@@ -180,6 +182,24 @@ export default async function AdminPage({
           <div className="card p-4 text-center">
             <p className="text-2xl font-black text-emerald-600">{dollars(revenueThisMonthCents)}</p>
             <p className="text-sm text-slate-500">Gross revenue this month</p>
+          </div>
+        </div>
+      </section>
+
+      <section className="mb-8">
+        <h2 className="text-xl font-bold mb-3">Traffic Analytics</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="card p-4 text-center">
+            <p className="text-2xl font-black text-blue-600">{visitorMetrics.dailyVisitors}</p>
+            <p className="text-sm text-slate-500">Visitors today</p>
+          </div>
+          <div className="card p-4 text-center">
+            <p className="text-2xl font-black text-indigo-600">{visitorMetrics.weeklyVisitors}</p>
+            <p className="text-sm text-slate-500">Visitors this week</p>
+          </div>
+          <div className="card p-4 text-center">
+            <p className="text-2xl font-black text-violet-600">{visitorMetrics.monthlyVisitors}</p>
+            <p className="text-sm text-slate-500">Visitors this month</p>
           </div>
         </div>
       </section>

@@ -15,6 +15,7 @@ import { isSubscriptionActive, SELLER_SUBSCRIPTION_PRICE_LABEL } from '@/lib/sub
 import { syncSellerSubscriptionFromStripe } from '@/lib/subscription-sync';
 import SubscriptionButton from '@/components/SubscriptionButton';
 import { getInboxConversations, getSellerResponseStats, SELLER_RESPONSE_WINDOW_HOURS } from '@/lib/messages';
+import { getFreePromotionWindowLabel, isFreePromotionEligible } from '@/lib/free-promotion';
 import {
   getDefaultSellerKycProvider,
   isSellerVerificationApproved,
@@ -101,6 +102,8 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   const subscriptionActive = dbUser ? isSubscriptionActive(dbUser) : false;
   const subscriptionPeriodEnd = dbUser?.subscriptionCurrentPeriodEnd ?? null;
   const subscriptionStatus = dbUser?.subscriptionStatus ?? null;
+  const freePromotionEligible = dbUser ? isFreePromotionEligible(dbUser) : false;
+  const freePromotionExpiresAt = dbUser?.freePromotionExpiresAt ?? null;
   const defaultKycProvider = getDefaultSellerKycProvider();
 
   await expirePromotions();
@@ -114,6 +117,12 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
           where: { status: 'ACTIVE', expiresAt: { gt: new Date() } },
           orderBy: { expiresAt: 'desc' },
           take: 1,
+        },
+        cartInterest: {
+          select: {
+            totalAdds: true,
+            lastAddedAt: true,
+          },
         },
       },
     }),
@@ -181,6 +190,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   const productsAddedThisWeek = products.filter(p => p.createdAt >= weekStart).length;
   const productsAddedThisMonth = products.filter(p => p.createdAt >= monthStart).length;
   const activeListingsCount = products.filter(p => p.status === 'APPROVED').length;
+  const totalCartAdds = products.reduce((sum, product) => sum + (product.cartInterest?.totalAdds ?? 0), 0);
   const soldItemsThisWeek = soldItems.filter(i => i.order.createdAt >= weekStart);
   const soldItemsThisMonth = soldItems.filter(i => i.order.createdAt >= monthStart);
   const soldCountThisWeek = soldItemsThisWeek.reduce((s, i) => s + i.quantity, 0);
@@ -601,6 +611,11 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
           🎉 Subscription activated! You can now list and sell items on FlupFlap.
         </div>
       )}
+      {subscribedFromCheckout && freePromotionEligible && freePromotionExpiresAt && (
+        <div className="card p-4 mb-6 bg-blue-50 border-blue-200 text-blue-900 text-sm">
+          🎁 New seller benefit unlocked: free promotions for {getFreePromotionWindowLabel()} (until {freePromotionExpiresAt.toLocaleDateString('en-US', DEFAULT_DATE_FORMAT_OPTIONS)}).
+        </div>
+      )}
       {subscribedFromCheckout && !subscriptionActive && (
         <div className="card p-4 mb-6 bg-blue-50 border-blue-200 text-blue-900 text-sm">
           ✅ Payment received. Your subscription activation is still syncing. Please refresh in a few seconds.
@@ -610,6 +625,12 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
       {sp.updated && (
         <div className="card p-4 mb-6 bg-green-50 border-green-200 text-green-800 text-sm">
           ✅ Listing updated and re-submitted for review.
+        </div>
+      )}
+
+      {sp.promoted === 'free' && (
+        <div className="card p-4 mb-6 bg-green-50 border-green-200 text-green-800 text-sm">
+          ⭐ Free promotion activated successfully.
         </div>
       )}
 
@@ -718,6 +739,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
           <StatCard label="Listed This Week" value={String(productsAddedThisWeek)} sub="new products since Monday" />
           <StatCard label="Listed This Month" value={String(productsAddedThisMonth)} sub="new products this month" />
           <StatCard label="Active Listings" value={String(activeListingsCount)} sub="currently approved & live" />
+          <StatCard label="Cart Adds" value={String(totalCartAdds)} sub="buyers adding your items to cart" />
           <StatCard label="Sold This Week" value={String(soldCountThisWeek)} sub="units from paid orders" />
           <StatCard label="Sold This Month" value={String(soldCountThisMonth)} sub="units from paid orders" />
           <StatCard label="Total Items Sold" value={String(itemsSoldCount)} sub="all time (paid orders)" />
@@ -805,6 +827,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
           <div className="space-y-3">
             {products.map(p => {
               const activePromo = p.promotions[0] ?? null;
+              const cartAdds = p.cartInterest?.totalAdds ?? 0;
               return (
                 <div key={p.id} className="card p-4 flex items-center justify-between gap-4">
                   <div className="flex-1 min-w-0">
@@ -815,6 +838,12 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                       )}
                     </div>
                     <p className="text-sm text-slate-500">{p.condition} · {p.category} · {dollars(p.priceCents)}</p>
+                    <p className="text-xs text-slate-500">
+                      Cart interest: <span className="font-semibold text-slate-700">{cartAdds}</span>{cartAdds === 1 ? ' add' : ' adds'}
+                      {p.cartInterest?.lastAddedAt
+                        ? ` · last activity ${p.cartInterest.lastAddedAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+                        : ''}
+                    </p>
                   </div>
                   <span className={statusBadge(p.status)}>{p.status}</span>
                   <div className="flex gap-2 flex-shrink-0">

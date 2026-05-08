@@ -8,6 +8,7 @@ import crypto from 'crypto';
 import Stripe from 'stripe';
 import { expirePromotions } from '@/lib/promotions';
 import { NotificationType, SellerKycProvider, SellerVerificationStatus } from '@prisma/client';
+import { getFreePromotionExpiry } from '@/lib/free-promotion';
 import {
   applyAutomatedKycResult,
   stripeKycChecksFromAccount,
@@ -276,14 +277,32 @@ export async function POST(req: Request) {
         }
       }
 
-      await prisma.user.update({
-        where: { id: sellerId },
-        data: {
-          subscriptionStatus: 'ACTIVE',
-          subscriptionId: subscriptionId ?? undefined,
-          subscriptionCurrentPeriodEnd: periodEnd ?? undefined,
-        },
-      });
+      const now = new Date();
+      const expiry = getFreePromotionExpiry(now);
+      const updatedRows = await prisma.$executeRaw`
+        WITH target AS (
+          SELECT "id"
+          FROM "User"
+          WHERE "id" = ${sellerId}
+          FOR UPDATE
+        )
+        UPDATE "User" u
+        SET
+          "subscriptionStatus" = 'ACTIVE',
+          "subscriptionId" = CASE
+            WHEN ${subscriptionId}::text IS NULL THEN u."subscriptionId"
+            ELSE ${subscriptionId}
+          END,
+          "subscriptionCurrentPeriodEnd" = CASE
+            WHEN ${periodEnd}::timestamptz IS NULL THEN u."subscriptionCurrentPeriodEnd"
+            ELSE ${periodEnd}
+          END,
+          "freePromotionGrantedAt" = COALESCE(u."freePromotionGrantedAt", ${now}),
+          "freePromotionExpiresAt" = COALESCE(u."freePromotionExpiresAt", ${expiry})
+        FROM target
+        WHERE u."id" = target."id"
+      `;
+      if (updatedRows === 0) return new NextResponse('Seller not found', { status: 404 });
 
       return new NextResponse('ok', { status: 200 });
     }

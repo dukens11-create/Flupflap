@@ -7,6 +7,7 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import PromoteForm from './PromoteForm';
 import { expirePromotions, getPromotionPlans } from '@/lib/promotions';
+import { getFreePromotionWindowLabel, isFreePromotionEligible } from '@/lib/free-promotion';
 
 export const metadata: Metadata = { title: 'Promote Listing' };
 
@@ -20,12 +21,20 @@ export default async function SellerPromotePage({
   if (session.user.role !== 'SELLER') redirect('/');
 
   // Block restricted sellers
-  const dbUser = await prisma.user.findUnique({ where: { id: session.user.id } });
+  const dbUser = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: {
+      sellerStatus: true,
+      freePromotionGrantedAt: true,
+      freePromotionExpiresAt: true,
+    },
+  });
   if (dbUser?.sellerStatus === 'SUSPENDED' || dbUser?.sellerStatus === 'BANNED') {
     redirect('/seller');
   }
 
   const { id } = await params;
+  const freePromotionEligible = dbUser ? isFreePromotionEligible(dbUser) : false;
   const product = await prisma.product.findUnique({ where: { id } });
 
   if (!product || product.sellerId !== session.user.id) {
@@ -97,7 +106,12 @@ export default async function SellerPromotePage({
       ) : (
         <>
           <h2 className="text-lg font-bold mb-3">Choose a promotion package</h2>
-          <PromoteForm productId={id} plans={plans} />
+          {freePromotionEligible && dbUser?.freePromotionExpiresAt && (
+            <div className="card p-4 mb-4 bg-blue-50 border-blue-200 text-blue-900 text-sm">
+              🎁 New seller benefit active: promotion checkout is free for {getFreePromotionWindowLabel()} (until {dbUser.freePromotionExpiresAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}).
+            </div>
+          )}
+          <PromoteForm productId={id} plans={plans} freePromotionEligible={freePromotionEligible} />
         </>
       )}
     </main>

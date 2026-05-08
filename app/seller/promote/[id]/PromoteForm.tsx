@@ -11,11 +11,22 @@ type PromotionPlan = {
   description: string | null;
 };
 
-export default function PromoteForm({ productId, plans }: { productId: string; plans: PromotionPlan[] }) {
+export default function PromoteForm({
+  productId,
+  plans,
+  freePromotionEligible,
+}: {
+  productId: string;
+  plans: PromotionPlan[];
+  freePromotionEligible?: boolean;
+}) {
   const [selected, setSelected] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const router = useRouter();
+  const buttonLabel = loading
+    ? (freePromotionEligible ? 'Activating promotion…' : 'Redirecting to payment…')
+    : (freePromotionEligible ? 'Activate Free Promotion →' : 'Pay & Promote →');
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -63,7 +74,7 @@ export default function PromoteForm({ productId, plans }: { productId: string; p
               <p className="font-semibold text-slate-800">{plan.label}</p>
               <p className="text-sm text-slate-500">{plan.description}</p>
             </div>
-            <p className="font-black text-blue-700 text-lg">{dollars(plan.priceCents)}</p>
+            <p className="font-black text-blue-700 text-lg">{freePromotionEligible ? '$0.00' : dollars(plan.priceCents)}</p>
           </label>
         ))}
       </div>
@@ -77,12 +88,18 @@ export default function PromoteForm({ productId, plans }: { productId: string; p
         disabled={!selected || loading}
         className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {loading ? 'Redirecting to payment…' : 'Pay & Promote →'}
+        {buttonLabel}
       </button>
 
-      <p className="text-xs text-slate-400 text-center">
-        Secure payment via Stripe. Promotion activates only after payment is verified.
-      </p>
+      {freePromotionEligible ? (
+        <p className="text-xs text-slate-400 text-center">
+          Eligible promotions activate instantly while your new-seller free promotion window is active.
+        </p>
+      ) : (
+        <p className="text-xs text-slate-400 text-center">
+          Secure payment via Stripe. Promotion activates only after payment is verified.
+        </p>
+      )}
     </form>
   );
 }

@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { stripe, appUrl } from '@/lib/stripe';
 import { expirePromotions, getPromotionLabel, getPromotionPlan } from '@/lib/promotions';
+import { isFreePromotionEligible } from '@/lib/free-promotion';
 
 export async function POST(req: Request) {
   try {
@@ -13,7 +14,15 @@ export async function POST(req: Request) {
     }
 
     // Block restricted sellers
-    const dbUser = await prisma.user.findUnique({ where: { id: session.user.id } });
+    const dbUser = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: {
+        id: true,
+        sellerStatus: true,
+        freePromotionGrantedAt: true,
+        freePromotionExpiresAt: true,
+      },
+    });
     if (dbUser?.sellerStatus === 'SUSPENDED' || dbUser?.sellerStatus === 'BANNED') {
       return NextResponse.json({ error: 'Your seller account is currently restricted.' }, { status: 403 });
     }
@@ -24,7 +33,8 @@ export async function POST(req: Request) {
     if (!plan || !plan.isActive) {
       return NextResponse.json({ error: 'Invalid promotion duration.' }, { status: 400 });
     }
-    const priceCents = plan.priceCents;
+    const hasFreePromotion = dbUser ? isFreePromotionEligible(dbUser) : false;
+    const priceCents = hasFreePromotion ? 0 : plan.priceCents;
 
     // Verify the product exists, is owned by this seller, and is APPROVED
     const product = await prisma.product.findUnique({ where: { id: productId } });
@@ -59,6 +69,16 @@ export async function POST(req: Request) {
         priceCents,
       },
     });
+
+    if (priceCents === 0) {
+      const now = new Date();
+      const expiresAt = new Date(now.getTime() + durationDays * 24 * 60 * 60 * 1000);
+      await prisma.promotion.update({
+        where: { id: promotion.id },
+        data: { status: 'ACTIVE', startsAt: now, expiresAt },
+      });
+      return NextResponse.json({ url: `${appUrl}/seller?promoted=free` });
+    }
 
     // Create a Stripe Checkout session for the promotion fee
     const stripeSession = await stripe.checkout.sessions.create({
