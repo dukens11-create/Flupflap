@@ -278,22 +278,27 @@ export async function POST(req: Request) {
       }
 
       const now = new Date();
-      await prisma.user.update({
-        where: { id: sellerId },
-        data: {
-          subscriptionStatus: 'ACTIVE',
-          subscriptionId: subscriptionId ?? undefined,
-          subscriptionCurrentPeriodEnd: periodEnd ?? undefined,
-        },
-      });
-
-      await prisma.user.updateMany({
-        where: { id: sellerId, freePromotionGrantedAt: null },
-        data: {
-          freePromotionGrantedAt: now,
-          freePromotionExpiresAt: getFreePromotionExpiry(now),
-        },
-      });
+      const expiry = getFreePromotionExpiry(now);
+      const updatedRows = await prisma.$executeRaw`
+        UPDATE "User"
+        SET
+          "subscriptionStatus" = 'ACTIVE',
+          "subscriptionId" = CASE
+            WHEN ${subscriptionId}::text IS NULL THEN "subscriptionId"
+            ELSE ${subscriptionId}
+          END,
+          "subscriptionCurrentPeriodEnd" = CASE
+            WHEN ${periodEnd}::timestamptz IS NULL THEN "subscriptionCurrentPeriodEnd"
+            ELSE ${periodEnd}
+          END,
+          "freePromotionGrantedAt" = COALESCE("freePromotionGrantedAt", ${now}),
+          "freePromotionExpiresAt" = CASE
+            WHEN "freePromotionGrantedAt" IS NULL THEN ${expiry}
+            ELSE "freePromotionExpiresAt"
+          END
+        WHERE "id" = ${sellerId}
+      `;
+      if (updatedRows === 0) return new NextResponse('Seller not found', { status: 404 });
 
       return new NextResponse('ok', { status: 200 });
     }
