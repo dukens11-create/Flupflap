@@ -249,9 +249,9 @@ export function buildSellerRiskAssessment(
     ),
   );
   const band = sellerRiskBand(score);
-  const verificationNeedsReview =
-    input.verification?.status === 'PENDING'
-    || input.verification?.status === 'REJECTED';
+  const verificationNeedsReview = ['PENDING', 'REJECTED'].includes(
+    input.verification?.status ?? '',
+  );
   const requiresReview =
     score >= SELLER_REVIEW_THRESHOLD
     || input.sellerStatus !== 'ACTIVE'

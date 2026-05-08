@@ -316,7 +316,7 @@ export default async function AdminSellersPage({
                   </div>
                   <p className="text-sm text-slate-500">{seller.email}</p>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    {seller.products.length} listing{seller.products.length !== 1 ? 's' : ''} ·{' '}
+                    {pluralize(seller.products.length, 'listing')} ·{' '}
                     {formatAccountAge(seller.risk.metrics.accountAgeDays)} ·{' '}
                     Joined {seller.createdAt.toLocaleDateString('en-US', DEFAULT_DATE_FORMAT_OPTIONS)}
                   </p>
