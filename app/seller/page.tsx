@@ -827,6 +827,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
           <div className="space-y-3">
             {products.map(p => {
               const activePromo = p.promotions[0] ?? null;
+              const cartAdds = p.cartInterest?.totalAdds ?? 0;
               return (
                 <div key={p.id} className="card p-4 flex items-center justify-between gap-4">
                   <div className="flex-1 min-w-0">
@@ -838,7 +839,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                     </div>
                     <p className="text-sm text-slate-500">{p.condition} · {p.category} · {dollars(p.priceCents)}</p>
                     <p className="text-xs text-slate-500">
-                      Cart interest: <span className="font-semibold text-slate-700">{p.cartInterest?.totalAdds ?? 0}</span> add{(p.cartInterest?.totalAdds ?? 0) === 1 ? '' : 's'}
+                      Cart interest: <span className="font-semibold text-slate-700">{cartAdds}</span> add{cartAdds === 1 ? '' : 's'}
                       {p.cartInterest?.lastAddedAt
                         ? ` · last activity ${p.cartInterest.lastAddedAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
                         : ''}

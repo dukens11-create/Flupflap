@@ -24,6 +24,9 @@ export default function PromoteForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const router = useRouter();
+  const buttonLabel = loading
+    ? (freePromotionEligible ? 'Activating promotion…' : 'Redirecting to payment…')
+    : (freePromotionEligible ? 'Activate Free Promotion →' : 'Pay & Promote →');
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -85,7 +88,7 @@ export default function PromoteForm({
         disabled={!selected || loading}
         className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {loading ? (freePromotionEligible ? 'Activating promotion…' : 'Redirecting to payment…') : (freePromotionEligible ? 'Activate Free Promotion →' : 'Pay & Promote →')}
+        {buttonLabel}
       </button>
 
       {freePromotionEligible ? (

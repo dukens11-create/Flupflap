@@ -18,7 +18,10 @@ function getMonthStart(input: Date): Date {
 }
 
 function hashVisitor(ip: string, userAgent: string): string {
-  const salt = process.env.TRAFFIC_HASH_SALT ?? process.env.NEXTAUTH_SECRET ?? 'flupflap-traffic';
+  const salt = process.env.TRAFFIC_HASH_SALT ?? process.env.NEXTAUTH_SECRET;
+  if (!salt) {
+    throw new Error('Missing TRAFFIC_HASH_SALT (or NEXTAUTH_SECRET) for visitor hashing.');
+  }
   return crypto.createHash('sha256').update(`${ip}|${userAgent}|${salt}`).digest('hex');
 }
 
