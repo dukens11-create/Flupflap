@@ -168,6 +168,24 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   const netEarningsCents = soldItems.reduce((s, i) => s + i.sellerNetCents, 0);
   const itemsSoldCount = soldItems.reduce((s, i) => s + i.quantity, 0);
   const completedOrdersCount = new Set(soldItems.map(i => i.order.id)).size;
+
+  // Compute weekly / monthly product statistics
+  const statsNow = new Date();
+  const dayOfWeek = statsNow.getDay(); // 0=Sun, 1=Mon … 6=Sat
+  const weekStart = new Date(statsNow);
+  weekStart.setDate(statsNow.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+  weekStart.setHours(0, 0, 0, 0);
+  const monthStart = new Date(statsNow.getFullYear(), statsNow.getMonth(), 1);
+
+  const productsAddedThisWeek = products.filter(p => p.createdAt >= weekStart).length;
+  const productsAddedThisMonth = products.filter(p => p.createdAt >= monthStart).length;
+  const activeListingsCount = products.filter(p => p.status === 'APPROVED').length;
+  const soldItemsThisWeek = soldItems.filter(i => i.order.createdAt >= weekStart);
+  const soldItemsThisMonth = soldItems.filter(i => i.order.createdAt >= monthStart);
+  const soldCountThisWeek = soldItemsThisWeek.reduce((s, i) => s + i.quantity, 0);
+  const soldCountThisMonth = soldItemsThisMonth.reduce((s, i) => s + i.quantity, 0);
+  const revenueThisWeekCents = soldItemsThisWeek.reduce((s, i) => s + i.sellerNetCents, 0);
+  const revenueThisMonthCents = soldItemsThisMonth.reduce((s, i) => s + i.sellerNetCents, 0);
   const verificationApproved = isSellerVerificationApproved(verificationSubmission);
   let emptyListingsMessage: ReactNode = 'No listings yet. Subscribe to start selling.';
   if (subscriptionActive && verificationApproved) {
@@ -667,6 +685,24 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
             Stripe status: charges {stripeChargesEnabled ? 'enabled' : 'disabled'} · payouts {stripePayoutsEnabled ? 'enabled' : 'disabled'}
             {stripeDisabledReason ? ` · ${stripeDisabledReason.replaceAll('_', ' ')}` : ''}
           </p>
+        )}
+      </section>
+
+      {/* ── Product Statistics ── */}
+      <section className="mb-8">
+        <h2 className="text-xl font-bold mb-3">Product Statistics</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+          <StatCard label="Listed This Week" value={String(productsAddedThisWeek)} sub="products added this week" />
+          <StatCard label="Listed This Month" value={String(productsAddedThisMonth)} sub="products added this month" />
+          <StatCard label="Active Listings" value={String(activeListingsCount)} sub="currently approved & live" />
+          <StatCard label="Sold This Week" value={String(soldCountThisWeek)} sub="items from paid orders" />
+          <StatCard label="Sold This Month" value={String(soldCountThisMonth)} sub="items from paid orders" />
+          <StatCard label="Total Items Sold" value={String(itemsSoldCount)} sub="all time (paid orders)" />
+          <StatCard label="Revenue This Week" value={dollars(revenueThisWeekCents)} sub="net payout after fees" />
+          <StatCard label="Revenue This Month" value={dollars(revenueThisMonthCents)} sub="net payout after fees" />
+        </div>
+        {products.length === 0 && soldItems.length === 0 && (
+          <p className="text-xs text-slate-400 mt-3">Statistics will populate once you have listings and sales.</p>
         )}
       </section>
 

@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { dollars } from '@/lib/money';
 import { formatCommissionPercent, getMarketplaceSettings } from '@/lib/commission';
+import { OrderStatus } from '@prisma/client';
 import type { Metadata } from 'next';
 
 export const dynamic = 'force-dynamic';
@@ -20,6 +21,8 @@ function statusBadge(status: string) {
   return map[status] ?? 'badge-slate';
 }
 
+const PAID_ORDER_STATUSES: OrderStatus[] = ['PAID', 'SHIPPED', 'DELIVERED', 'PICKED_UP'];
+
 export default async function AdminPage({
   searchParams,
 }: {
@@ -31,7 +34,13 @@ export default async function AdminPage({
   const sp = await searchParams;
 
   const now = new Date();
-  const [settings, pending, all, recentOrders, restrictedSellersCount, buyerCount, sellerCount, openReportsCount, activePromotionsCount] = await Promise.all([
+  const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon … 6=Sat
+  const weekStart = new Date(now);
+  weekStart.setDate(now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+  weekStart.setHours(0, 0, 0, 0);
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  const [settings, pending, all, recentOrders, restrictedSellersCount, buyerCount, sellerCount, openReportsCount, activePromotionsCount, productsThisWeek, productsThisMonth, activeListingsCount, soldProductsCount, revenueThisWeekAgg, revenueThisMonthAgg] = await Promise.all([
     getMarketplaceSettings(),
     prisma.product.findMany({
       where: { status: 'PENDING' },
@@ -59,7 +68,22 @@ export default async function AdminPage({
     prisma.promotion.count({
       where: { status: 'ACTIVE', expiresAt: { gt: now } },
     }),
+    prisma.product.count({ where: { createdAt: { gte: weekStart } } }),
+    prisma.product.count({ where: { createdAt: { gte: monthStart } } }),
+    prisma.product.count({ where: { status: 'APPROVED' } }),
+    prisma.product.count({ where: { status: 'SOLD' } }),
+    prisma.order.aggregate({
+      _sum: { totalCents: true },
+      where: { status: { in: PAID_ORDER_STATUSES }, createdAt: { gte: weekStart } },
+    }),
+    prisma.order.aggregate({
+      _sum: { totalCents: true },
+      where: { status: { in: PAID_ORDER_STATUSES }, createdAt: { gte: monthStart } },
+    }),
   ]);
+
+  const revenueThisWeekCents = revenueThisWeekAgg._sum.totalCents ?? 0;
+  const revenueThisMonthCents = revenueThisMonthAgg._sum.totalCents ?? 0;
 
   return (
     <main className="max-w-5xl mx-auto">
@@ -110,6 +134,37 @@ export default async function AdminPage({
           <p className="text-sm text-slate-500">Restricted sellers</p>
         </a>
       </div>
+
+      {/* ── Product Statistics ── */}
+      <section className="mb-8">
+        <h2 className="text-xl font-bold mb-3">Product Statistics</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+          <div className="card p-4 text-center">
+            <p className="text-2xl font-black text-indigo-600">{productsThisWeek}</p>
+            <p className="text-sm text-slate-500">Listed this week</p>
+          </div>
+          <div className="card p-4 text-center">
+            <p className="text-2xl font-black text-indigo-600">{productsThisMonth}</p>
+            <p className="text-sm text-slate-500">Listed this month</p>
+          </div>
+          <div className="card p-4 text-center">
+            <p className="text-2xl font-black text-green-600">{activeListingsCount}</p>
+            <p className="text-sm text-slate-500">Active listings</p>
+          </div>
+          <div className="card p-4 text-center">
+            <p className="text-2xl font-black text-slate-600">{soldProductsCount}</p>
+            <p className="text-sm text-slate-500">Items sold (all time)</p>
+          </div>
+          <div className="card p-4 text-center">
+            <p className="text-2xl font-black text-emerald-600">{dollars(revenueThisWeekCents)}</p>
+            <p className="text-sm text-slate-500">Revenue this week</p>
+          </div>
+          <div className="card p-4 text-center">
+            <p className="text-2xl font-black text-emerald-600">{dollars(revenueThisMonthCents)}</p>
+            <p className="text-sm text-slate-500">Revenue this month</p>
+          </div>
+        </div>
+      </section>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <div className="card p-5 flex items-center gap-4">
