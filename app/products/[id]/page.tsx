@@ -11,6 +11,7 @@ import PickupDistance from '@/components/PickupDistance';
 import ContactSellerButton from '@/components/ContactSellerButton';
 import MakeOfferButton from '@/components/MakeOfferButton';
 import ReportItemButton from '@/components/ReportItemButton';
+import ReportSellerButton from '@/components/ReportSellerButton';
 import type { Metadata } from 'next';
 import { expirePromotions } from '@/lib/promotions';
 
@@ -129,6 +130,11 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             </div>
           )}
           {/* Report item — hidden for the seller's own listing */}
+          {!isOwnListing && (
+            <div className="pt-1">
+              <ReportSellerButton sellerId={product.seller.id} sellerName={product.seller.name} />
+            </div>
+          )}
           {!isOwnListing && (
             <div className="pt-1">
               <ReportItemButton productId={product.id} />

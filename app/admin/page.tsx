@@ -17,6 +17,7 @@ function statusBadge(status: string) {
     APPROVED: 'badge-green',
     REJECTED: 'badge-red',
     SOLD: 'badge-slate',
+    HIDDEN: 'badge-red',
   };
   return map[status] ?? 'badge-slate';
 }
@@ -39,7 +40,9 @@ export default async function AdminPage({
   weekStart.setHours(0, 0, 0, 0);
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  const [settings, pending, all, recentOrders, restrictedSellersCount, buyerCount, sellerCount, openReportsCount, activePromotionsCount, productsThisWeek, productsThisMonth, activeListingsCount, soldItemsAgg, revenueThisWeekAgg, revenueThisMonthAgg] = await Promise.all([
+  const suspiciousLoginSince = new Date(Date.now() - 1000 * 60 * 60 * 24 * 30);
+
+  const [settings, pending, all, recentOrders, restrictedSellersCount, buyerCount, sellerCount, openReportsCount, openSellerReportsCount, suspiciousLoginCount, activePromotionsCount, productsThisWeek, productsThisMonth, activeListingsCount, soldItemsAgg, revenueThisWeekAgg, revenueThisMonthAgg] = await Promise.all([
     getMarketplaceSettings(),
     prisma.product.findMany({
       where: { status: 'PENDING' },
@@ -63,6 +66,12 @@ export default async function AdminPage({
     prisma.user.count({ where: { role: 'SELLER' } }),
     prisma.productReport.count({
       where: { status: 'OPEN' },
+    }),
+    prisma.sellerReport.count({
+      where: { status: 'OPEN' },
+    }),
+    prisma.loginActivity.count({
+      where: { suspicious: true, createdAt: { gte: suspiciousLoginSince } },
     }),
     prisma.promotion.count({
       where: { status: 'ACTIVE', expiresAt: { gt: now } },
@@ -100,6 +109,12 @@ export default async function AdminPage({
           <a href="/admin/sellers" className="btn-outline text-sm">Seller Management →</a>
           <a href="/admin/reports" className={`text-sm ${openReportsCount > 0 ? 'btn bg-red-600 hover:bg-red-700 text-white' : 'btn-outline'}`}>
             Reports {openReportsCount > 0 ? `(${openReportsCount})` : '→'}
+          </a>
+          <a
+            href="/admin/fraud"
+            className={`text-sm ${openSellerReportsCount > 0 || suspiciousLoginCount > 0 ? 'btn bg-amber-600 hover:bg-amber-700 text-white' : 'btn-outline'}`}
+          >
+            Fraud {openSellerReportsCount + suspiciousLoginCount > 0 ? `(${openSellerReportsCount + suspiciousLoginCount})` : '→'}
           </a>
           <a href="/admin/promotions" className="btn-outline text-sm">
             Promotions {activePromotionsCount > 0 ? `(${activePromotionsCount})` : '→'}
@@ -199,6 +214,20 @@ export default async function AdminPage({
             <p className="font-bold text-slate-800">Product Reports</p>
             <p className={`text-sm ${openReportsCount > 0 ? 'text-red-600 font-medium' : 'text-slate-500'}`}>
               {openReportsCount > 0 ? `${openReportsCount} open report${openReportsCount !== 1 ? 's' : ''} need review` : 'No open reports'}
+            </p>
+          </div>
+        </a>
+        <a
+          href="/admin/fraud"
+          className={`card p-5 flex items-center gap-4 hover:bg-slate-50 transition-colors ${openSellerReportsCount > 0 || suspiciousLoginCount > 0 ? 'border-amber-200 bg-amber-50' : ''}`}
+        >
+          <div className="text-3xl">🛡️</div>
+          <div>
+            <p className="font-bold text-slate-800">Fraud Protection</p>
+            <p className={`text-sm ${openSellerReportsCount > 0 || suspiciousLoginCount > 0 ? 'text-amber-700 font-medium' : 'text-slate-500'}`}>
+              {openSellerReportsCount > 0 || suspiciousLoginCount > 0
+                ? `${openSellerReportsCount} seller report${openSellerReportsCount !== 1 ? 's' : ''} · ${suspiciousLoginCount} login alert${suspiciousLoginCount !== 1 ? 's' : ''}`
+                : 'No seller reports or login alerts'}
             </p>
           </div>
         </a>

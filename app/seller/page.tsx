@@ -32,6 +32,7 @@ function statusBadge(status: string) {
     APPROVED: 'badge-green',
     REJECTED: 'badge-red',
     SOLD: 'badge-slate',
+    HIDDEN: 'badge-red',
   };
   return map[status] ?? 'badge-slate';
 }
@@ -69,7 +70,7 @@ function stripeAccountStatus(account: {
   };
 }
 
-export default async function SellerPage({ searchParams }: { searchParams: Promise<{ created?: string; stripe?: string; reason?: string; updated?: string; deleted?: string; promoted?: string; subscribed?: string; subscribe?: string; verification?: string }> }) {
+export default async function SellerPage({ searchParams }: { searchParams: Promise<{ created?: string; stripe?: string; reason?: string; updated?: string; deleted?: string; promoted?: string; subscribed?: string; subscribe?: string; verification?: string; fraud?: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect('/login');
   if (session.user.role !== 'SELLER') redirect('/');
@@ -325,6 +326,11 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
       {sp.verification === 'required' && (
         <div className="card p-4 mb-6 bg-amber-50 border-amber-300 text-amber-900 text-sm">
           Submit and pass seller verification before creating product listings.
+        </div>
+      )}
+      {sp.fraud === 'review' && (
+        <div className="card p-4 mb-6 bg-amber-50 border-amber-300 text-amber-900 text-sm">
+          Your latest listing triggered extra trust-and-safety review signals (for example duplicate content, unusual pricing, or rapid posting). An admin will review it before it goes live.
         </div>
       )}
 

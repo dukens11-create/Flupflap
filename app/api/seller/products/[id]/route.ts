@@ -5,6 +5,10 @@ import { prisma } from '@/lib/db';
 import { cents } from '@/lib/money';
 import { z } from 'zod';
 import { isSellerVerificationApproved } from '@/lib/seller-verification';
+import {
+  getListingRiskAssessmentForCandidate,
+  shouldRecommendFraudReview,
+} from '@/lib/fraud-detection';
 
 const updateSchema = z.object({
   title: z.string().min(3).optional(),
@@ -21,8 +25,26 @@ const updateSchema = z.object({
   pickupPostalCode: z.string().max(20).optional(),
 });
 
+type ProductUpdateInput = z.infer<typeof updateSchema>;
+
 async function getSellerProduct(id: string, sellerId: string) {
   return prisma.product.findFirst({ where: { id, sellerId } });
+}
+
+function buildListingRiskCandidate(
+  sellerId: string,
+  existing: NonNullable<Awaited<ReturnType<typeof getSellerProduct>>>,
+  data: ProductUpdateInput,
+) {
+  return {
+    sellerId,
+    title: data.title ?? existing.title,
+    description: data.description ?? existing.description,
+    priceCents: data.price ? cents(data.price) : existing.priceCents,
+    category: data.category ?? existing.category,
+    condition: data.condition ?? existing.condition,
+    imageUrl: data.imageUrl ?? existing.imageUrl,
+  };
 }
 
 /** POST handles both edits (_method=update) and deletes (_method=delete) via HTML forms */
@@ -73,6 +95,10 @@ export async function POST(
     // Default: update
     const raw = Object.fromEntries(form.entries());
     const data = updateSchema.parse(raw);
+    const riskAssessment = await getListingRiskAssessmentForCandidate(
+      buildListingRiskCandidate(session.user.id, existing, data),
+      id,
+    );
 
     const updated = await prisma.product.update({
       where: { id },
@@ -95,7 +121,9 @@ export async function POST(
       },
     });
 
-    return NextResponse.redirect(new URL(`/seller?updated=${updated.id}`, req.url));
+    const fraudQuery = shouldRecommendFraudReview(riskAssessment) ? '&fraud=review' : '';
+
+    return NextResponse.redirect(new URL(`/seller?updated=${updated.id}${fraudQuery}`, req.url));
   } catch (err: any) {
     if (err?.name === 'ZodError') {
       return NextResponse.json({ error: 'Invalid input.' }, { status: 400 });
@@ -140,6 +168,10 @@ export async function PATCH(
 
     const body: unknown = await req.json();
     const data = updateSchema.parse(body);
+    const riskAssessment = await getListingRiskAssessmentForCandidate(
+      buildListingRiskCandidate(session.user.id, existing, data),
+      id,
+    );
 
     const updated = await prisma.product.update({
       where: { id },
@@ -160,7 +192,10 @@ export async function PATCH(
       },
     });
 
-    return NextResponse.json(updated);
+    return NextResponse.json({
+      ...updated,
+      fraudReviewRecommended: shouldRecommendFraudReview(riskAssessment),
+    });
   } catch (err: any) {
     if (err?.name === 'ZodError') {
       return NextResponse.json({ error: 'Invalid input.' }, { status: 400 });
