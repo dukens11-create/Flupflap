@@ -67,8 +67,8 @@ function OfferCard({
               </p>
               <p className="text-xs text-slate-400 mt-1">
                 {mode === 'received'
-                  ? `From ${offer.buyer?.name ?? 'buyer'}`
-                  : `To ${offer.seller?.name ?? 'seller'}`} · {new Date(offer.createdAt).toLocaleString()}
+                  ? `From ${offer.buyer?.name ?? 'Buyer'}`
+                  : `To ${offer.seller?.name ?? 'Seller'}`} · {new Date(offer.createdAt).toLocaleString()}
               </p>
             </div>
             <span className={`badge ${statusBadge(offer.status)}`}>{offer.status}</span>

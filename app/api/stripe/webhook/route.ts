@@ -473,28 +473,32 @@ export async function POST(req: Request) {
           );
           const payoutAmountLabel = sellerNetCents > 0
             ? `$${(sellerNetCents / 100).toFixed(2)}`
-            : 'A payout';
+            : null;
+          const sellerEventNotifications: CreateNotificationInput[] = [
+            {
+              userId: item.product.seller.id,
+              type: NotificationType.ORDER_UPDATE,
+              title: 'New paid order',
+              body: `${sellerItemCount} item${sellerItemCount === 1 ? '' : 's'} from your listings were purchased.`,
+              link: '/seller',
+              data: { orderId: order.id },
+            },
+          ];
+
+          if (payoutAmountLabel) {
+            sellerEventNotifications.push({
+              userId: item.product.seller.id,
+              type: NotificationType.PAYOUT,
+              title: 'Seller payout pending',
+              body: `${payoutAmountLabel} will move through Stripe for this sale.`,
+              link: '/seller',
+              data: { orderId: order.id, sellerNetCents },
+            });
+          }
 
           return [
             item.product.seller.id,
-            [
-              {
-                userId: item.product.seller.id,
-                type: NotificationType.ORDER_UPDATE,
-                title: 'New paid order',
-                body: `${sellerItemCount} item${sellerItemCount === 1 ? '' : 's'} from your listings were purchased.`,
-                link: '/seller',
-                data: { orderId: order.id },
-              },
-              {
-                userId: item.product.seller.id,
-                type: NotificationType.PAYOUT,
-                title: 'Seller payout pending',
-                body: `${payoutAmountLabel} will move through Stripe for this sale.`,
-                link: '/seller',
-                data: { orderId: order.id, sellerNetCents },
-              },
-            ],
+            sellerEventNotifications,
           ] as const;
         }),
       ).values(),

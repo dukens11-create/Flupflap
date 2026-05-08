@@ -117,7 +117,7 @@ export default function MakeOfferButton({
             <button
               type="submit"
               className="btn-primary flex-1"
-              disabled={loading || !amount.trim()}
+              disabled={loading || !amount}
             >
               {loading ? 'Sending…' : 'Send offer'}
             </button>
