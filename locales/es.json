@@ -15,14 +15,57 @@
     "language": "Idioma"
   },
   "footer": {
+    "description": "Descubre anuncios confiables, pagos protegidos y una forma más clara de comprar y vender todos los días.",
+    "marketplace": "Marketplace",
+    "sell": "Vender",
+    "support": "Soporte",
+    "cart": "Carrito",
+    "orders": "Pedidos",
+    "tagline": "Diseñado para explorar más rápido, pagar con seguridad y vender localmente con confianza.",
     "terms": "Términos",
     "privacy": "Privacidad",
     "sellerAgreement": "Acuerdo de vendedor",
     "refundPolicy": "Política de reembolso"
   },
   "home": {
-    "title": "Un marketplace más seguro",
-    "subtitle": "Comisiones bajas, vendedores verificados y una forma más simple de comprar y vender artículos de todos los días.",
+    "title": "Un marketplace moderno para comprar y vender con confianza",
+    "subtitle": "Compra anuncios seleccionados, compara productos más rápido y paga con vendedores verificados en una experiencia FlupFlap más limpia.",
+    "heroBadge": "Diseño listo para marketplace",
+    "shopNow": "Comprar productos destacados",
+    "startSelling": "Comenzar a vender en FlupFlap",
+    "heroHighlights": {
+      "discovery": {
+        "title": "Explora más rápido",
+        "description": "Las comparaciones responsivas ayudan a revisar más anuncios sin desorden."
+      },
+      "trust": {
+        "title": "Confía en el vendedor",
+        "description": "Las señales de vendedor verificado y el checkout protegido hacen que el marketplace se vea más profesional."
+      },
+      "fulfillment": {
+        "title": "Entrega flexible",
+        "description": "Admite envíos y recogida local conveniente desde una sola tienda."
+      }
+    },
+    "trustTitle": "Por qué los compradores confían en FlupFlap",
+    "trustSubtitle": "La portada ahora prioriza la confianza, la velocidad y una navegación orientada a la conversión en cualquier pantalla.",
+    "featuredEyebrow": "Selecciones del marketplace",
+    "featuredTitle": "Novedades de vendedores confiables",
+    "featuredSubtitle": "Una cuadrícula responsiva con filtros, mejor espaciado y comparación más rápida entre dispositivos.",
+    "trustBadges": {
+      "verifiedSellers": {
+        "title": "Verified Sellers",
+        "description": "Las insignias de vendedor destacan anuncios confiables y ayudan a comprar con mayor seguridad."
+      },
+      "securePayments": {
+        "title": "Secure Payments",
+        "description": "Los flujos de pago protegidos mantienen cada compra simple y segura."
+      },
+      "buyerProtection": {
+        "title": "Buyer Protection",
+        "description": "Los mensajes de confianza refuerzan transacciones más seguras desde la búsqueda hasta la entrega."
+      }
+    },
     "loadingProducts": "Cargando productos…",
     "noProducts": "No se encontraron productos. Intenta ajustar los filtros."
   },
@@ -54,7 +97,12 @@
     "sponsored": "Patrocinado",
     "shipping": "Envío {amount}",
     "pickupIn": "🏠 Recogida en {location}",
-    "viewItem": "Ver artículo"
+    "viewItem": "Ver artículo",
+    "verifiedSeller": "Vendedor verificado",
+    "phoneVerified": "Teléfono verificado",
+    "newSeller": "Vendedor nuevo",
+    "responseRate": "{value}% responde",
+    "sellerFallback": "Vendedor del marketplace"
   },
   "login": {
     "title": "Iniciar sesión",

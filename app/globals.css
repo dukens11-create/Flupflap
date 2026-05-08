@@ -7,6 +7,12 @@
   .btn {
     @apply inline-flex items-center justify-center px-4 py-2 rounded-xl font-semibold text-sm transition-colors cursor-pointer;
   }
+  .btn-brand {
+    @apply inline-flex items-center justify-center px-4 py-2 rounded-xl font-semibold text-sm transition-colors cursor-pointer bg-amber-500 hover:bg-amber-600 text-white shadow-sm;
+  }
+  .btn-brand-outline {
+    @apply inline-flex items-center justify-center px-4 py-2 rounded-xl font-semibold text-sm transition-colors cursor-pointer border border-emerald-200 text-emerald-700 hover:bg-emerald-50;
+  }
   .btn-primary {
     @apply inline-flex items-center justify-center px-4 py-2 rounded-xl font-semibold text-sm transition-colors cursor-pointer bg-blue-600 hover:bg-blue-700 text-white;
   }

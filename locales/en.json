@@ -15,14 +15,57 @@
     "language": "Language"
   },
   "footer": {
+    "description": "Discover trusted listings, protected checkout, and a cleaner way to buy and sell every day.",
+    "marketplace": "Marketplace",
+    "sell": "Sell",
+    "support": "Support",
+    "cart": "Cart",
+    "orders": "Orders",
+    "tagline": "Built for faster browsing, safer checkouts, and confident local selling.",
     "terms": "Terms",
     "privacy": "Privacy",
     "sellerAgreement": "Seller Agreement",
     "refundPolicy": "Refund Policy"
   },
   "home": {
-    "title": "A safer marketplace",
-    "subtitle": "Low fees, verified sellers, and a simpler way to buy and sell everyday items.",
+    "title": "A modern marketplace built for confident buying and selling",
+    "subtitle": "Shop curated listings, compare products faster, and check out with verified sellers on a cleaner FlupFlap experience.",
+    "heroBadge": "Marketplace-ready design",
+    "shopNow": "Shop featured products",
+    "startSelling": "Start selling on FlupFlap",
+    "heroHighlights": {
+      "discovery": {
+        "title": "Browse faster",
+        "description": "Responsive product comparisons help buyers scan more listings without the clutter."
+      },
+      "trust": {
+        "title": "Trust the seller",
+        "description": "Verified seller signals and protected checkout keep the marketplace professional."
+      },
+      "fulfillment": {
+        "title": "Flexible fulfillment",
+        "description": "Support both shipped orders and convenient local pickup from one storefront."
+      }
+    },
+    "trustTitle": "Why buyers trust FlupFlap",
+    "trustSubtitle": "The homepage now puts trust, speed, and conversion-focused browsing first on every screen.",
+    "featuredEyebrow": "Marketplace picks",
+    "featuredTitle": "Fresh finds from trusted sellers",
+    "featuredSubtitle": "A responsive product grid with filters, cleaner spacing, and faster product comparison across devices.",
+    "trustBadges": {
+      "verifiedSellers": {
+        "title": "Verified Sellers",
+        "description": "Seller badges highlight trusted listings and help shoppers buy with more confidence."
+      },
+      "securePayments": {
+        "title": "Secure Payments",
+        "description": "Protected checkout flows keep every purchase streamlined and secure."
+      },
+      "buyerProtection": {
+        "title": "Buyer Protection",
+        "description": "Clear trust messaging reinforces safer transactions from browse to delivery."
+      }
+    },
     "loadingProducts": "Loading products…",
     "noProducts": "No products found. Try adjusting your filters."
   },
@@ -54,7 +97,12 @@
     "sponsored": "Sponsored",
     "shipping": "Shipping {amount}",
     "pickupIn": "🏠 Pickup in {location}",
-    "viewItem": "View item"
+    "viewItem": "View item",
+    "verifiedSeller": "Verified seller",
+    "phoneVerified": "Phone verified",
+    "newSeller": "New seller",
+    "responseRate": "{value}% responsive",
+    "sellerFallback": "Marketplace seller"
   },
   "login": {
     "title": "Sign in",
