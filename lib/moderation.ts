@@ -280,24 +280,24 @@ export function evaluateListingModeration(input: {
       .filter((value) => value != null)
       .join(' '),
   );
-  const reasons: ModerationReason[] = [];
+  const moderationReasons: ModerationReason[] = [];
 
   for (const rule of LISTING_RULES) {
-    pushReason(reasons, content, rule);
+    pushReason(moderationReasons, content, rule);
   }
 
-  return finalizeModeration('listing', reasons);
+  return finalizeModeration('listing', moderationReasons);
 }
 
 export function evaluateMessageModeration(body: string) {
   const content = normalizeContent(body);
-  const reasons: ModerationReason[] = [];
+  const moderationReasons: ModerationReason[] = [];
 
   for (const rule of MESSAGE_RULES) {
-    pushReason(reasons, content, rule);
+    pushReason(moderationReasons, content, rule);
   }
 
-  return finalizeModeration('message', reasons);
+  return finalizeModeration('message', moderationReasons);
 }
 
 export function formatModerationSummary(result: ModerationResult) {
