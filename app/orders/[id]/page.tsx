@@ -89,11 +89,14 @@ export default async function OrderDetailPage({
       <div className="card p-5 mb-4">
         <h2 className="font-bold mb-3">Items ordered</h2>
         <div className="space-y-3">
-          {order.items.map(item => (
-            <div
-              key={item.id}
-              className={item.reviewRating !== null || isReviewEligible ? 'rounded-xl border border-slate-200 p-3' : undefined}
-            >
+          {order.items.map(item => {
+            const shouldShowReviewCard = item.reviewRating !== null || isReviewEligible;
+
+            return (
+              <div
+                key={item.id}
+                className={shouldShowReviewCard ? 'rounded-xl border border-slate-200 p-3' : undefined}
+              >
               <div className="flex items-center gap-3">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
@@ -125,7 +128,8 @@ export default async function OrderDetailPage({
                 />
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
