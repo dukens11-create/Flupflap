@@ -4,7 +4,7 @@ export type ModerationCategory =
   | 'scam_wording'
   | 'offensive_content';
 
-export type ModerationConfidence = 'low' | 'medium' | 'high';
+export type ModerationConfidence = 'none' | 'low' | 'medium' | 'high';
 export type ModerationDecision = 'allow' | 'review' | 'block';
 
 export type ModerationReason = {
@@ -238,7 +238,9 @@ function shouldBlockMessage(reasons: ModerationReason[]) {
 function finalizeModeration(surface: Surface, reasons: ModerationReason[]): ModerationResult {
   const score = reasons.reduce((sum, reason) => sum + reason.score, 0);
   const confidence: ModerationConfidence =
-    reasons.some((reason) => reason.confidence === 'high')
+    reasons.length === 0
+      ? 'none'
+      : reasons.some((reason) => reason.confidence === 'high')
       ? 'high'
       : reasons.some((reason) => reason.confidence === 'medium')
         ? 'medium'
@@ -305,13 +307,17 @@ export function formatModerationSummary(result: ModerationResult) {
 }
 
 export function formatBlockedMessage(result: ModerationResult) {
+  if (result.flagged) {
+    const details = result.reasons
+      .map((reason) => `${reason.label.toLowerCase()} (${reason.matches.join(', ')})`)
+      .join('; ');
+
+    return `Message not sent: ${details}. Please keep messages respectful and on-platform.`;
+  }
+
   if (!result.flagged) {
     return 'Message was blocked by moderation review.';
   }
 
-  const details = result.reasons
-    .map((reason) => `${reason.label.toLowerCase()} (${reason.matches.join(', ')})`)
-    .join('; ');
-
-  return `Message not sent: ${details}. Please keep messages respectful and on-platform.`;
+  return 'Message not sent.';
 }

@@ -24,7 +24,7 @@ function statusBadge(status: string) {
 
 function moderationPanelClassName(moderation: {
   flagged: boolean;
-  confidence: 'low' | 'medium' | 'high';
+  confidence: 'none' | 'low' | 'medium' | 'high';
 }) {
   if (!moderation.flagged) {
     return 'border-slate-200 bg-slate-50 text-slate-700';
