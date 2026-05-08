@@ -1,7 +1,7 @@
-const FREE_PROMOTION_WINDOW_DAYS = 60;
-
 export function getFreePromotionExpiry(fromDate = new Date()): Date {
-  return new Date(fromDate.getTime() + FREE_PROMOTION_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  const expiry = new Date(fromDate);
+  expiry.setMonth(expiry.getMonth() + 2);
+  return expiry;
 }
 
 export function isFreePromotionEligible(user: {
