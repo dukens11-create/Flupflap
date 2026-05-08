@@ -55,8 +55,8 @@ function useUnreadMessages(loggedIn: boolean) {
       }
     }
     load();
-    // Poll every 30 seconds so the badge stays up to date
-    const interval = setInterval(load, 30_000);
+    // Poll every 60 seconds so the badge stays up to date without excessive API churn
+    const interval = setInterval(load, 60_000);
     return () => {
       cancelled = true;
       clearInterval(interval);
@@ -85,7 +85,7 @@ function useUnreadNotifications(loggedIn: boolean) {
     }
 
     load();
-    const interval = setInterval(load, 30_000);
+    const interval = setInterval(load, 60_000);
     return () => {
       cancelled = true;
       clearInterval(interval);

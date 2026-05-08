@@ -125,9 +125,9 @@ export default function NotificationsPage() {
 
       {items.length === 0 ? (
         <div className="card p-8 text-center text-slate-500">
-          <p className="text-lg font-medium mb-2">You&apos;re all caught up</p>
+          <p className="text-lg font-medium mb-2">You're all caught up</p>
           <p className="text-sm mb-4">
-            We&apos;ll show marketplace updates here when an order changes, a seller replies, or an offer needs your attention.
+            We'll show marketplace updates here when an order changes, a seller replies, or an offer needs your attention.
           </p>
           <div className="flex justify-center gap-3">
             <Link href="/" className="btn-primary">Browse listings</Link>
