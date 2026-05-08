@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { dollars } from '@/lib/money';
 import { formatCommissionPercent, getMarketplaceSettings } from '@/lib/commission';
+import { evaluateListingModeration, formatModerationSummary } from '@/lib/moderation';
 import { OrderStatus } from '@prisma/client';
 import type { Metadata } from 'next';
 
@@ -87,6 +88,10 @@ export default async function AdminPage({
   const revenueThisWeekCents = revenueThisWeekAgg._sum.totalCents ?? 0;
   const revenueThisMonthCents = revenueThisMonthAgg._sum.totalCents ?? 0;
   const soldItemsCount = soldItemsAgg._sum.quantity ?? 0;
+  const pendingWithModeration = pending.map((product) => ({
+    ...product,
+    moderation: evaluateListingModeration(product),
+  }));
 
   return (
     <main className="max-w-5xl mx-auto">
@@ -235,20 +240,52 @@ export default async function AdminPage({
 
       {pending.length > 0 && (
         <section className="mb-8">
+          <div className="card p-4 mb-3 bg-blue-50 border-blue-200 text-sm text-blue-900">
+            New moderation assistant signals counterfeit/fake products, prohibited items, scam wording, and offensive language on pending listings.
+            Listings stay reviewable by admins instead of being auto-removed.
+          </div>
           <h2 className="text-xl font-bold mb-3">⏳ Pending Approval</h2>
           <div className="space-y-3">
-            {pending.map((p: (typeof pending)[number]) => (
+            {pendingWithModeration.map((p) => (
               <div key={p.id} className="card p-4">
                 <div className="flex gap-4 items-start">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={p.imageUrl} alt={p.title} className="w-20 h-20 object-cover rounded-xl flex-shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <p className="font-bold">{p.title}</p>
-                    <p className="text-sm text-slate-500">{p.condition} · {p.category} · {dollars(p.priceCents)}</p>
-                    <p className="text-xs text-slate-400">Seller: {p.seller.name} ({p.seller.email})</p>
-                    <p className="text-sm text-slate-600 mt-1 line-clamp-2">{p.description}</p>
-                  </div>
-                  <div className="flex flex-col gap-2">
+                     <p className="font-bold">{p.title}</p>
+                     <p className="text-sm text-slate-500">{p.condition} · {p.category} · {dollars(p.priceCents)}</p>
+                     <p className="text-xs text-slate-400">Seller: {p.seller.name} ({p.seller.email})</p>
+                     <p className="text-sm text-slate-600 mt-1 line-clamp-2">{p.description}</p>
+                     <div className={`mt-3 rounded-xl border p-3 text-sm ${
+                       p.moderation.flagged
+                         ? p.moderation.confidence === 'high'
+                           ? 'border-red-200 bg-red-50 text-red-900'
+                           : 'border-yellow-200 bg-yellow-50 text-yellow-900'
+                         : 'border-slate-200 bg-slate-50 text-slate-700'
+                     }`}>
+                       <p className="font-semibold">
+                         Moderation assistant · {formatModerationSummary(p.moderation)}
+                       </p>
+                       {p.moderation.flagged ? (
+                         <ul className="mt-2 space-y-1 text-xs">
+                           {p.moderation.reasons.map((reason, index) => (
+                             <li key={`${reason.category}-${index}`}>
+                               <span className="font-semibold">{reason.label}:</span>{' '}
+                               {reason.explanation}
+                               <span className="block opacity-80">
+                                 Matched: {reason.matches.join(', ')}
+                               </span>
+                             </li>
+                           ))}
+                         </ul>
+                       ) : (
+                         <p className="mt-1 text-xs opacity-80">
+                           No fake-product, prohibited-item, scam-wording, or offensive-language rules matched this listing.
+                         </p>
+                       )}
+                     </div>
+                   </div>
+                   <div className="flex flex-col gap-2">
                     <form action={`/api/admin/products/${p.id}`} method="POST">
                       <input type="hidden" name="_method" value="approve" />
                       <button type="submit" className="btn bg-green-600 hover:bg-green-700 text-white text-sm w-full">✓ Approve</button>

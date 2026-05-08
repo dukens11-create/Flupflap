@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
+import { evaluateMessageModeration, formatBlockedMessage } from '@/lib/moderation';
 import { z } from 'zod';
 
 const MESSAGE_MAX_LENGTH = 2000;
@@ -90,6 +91,18 @@ export async function POST(req: Request) {
   }
 
   const { productId, body } = parsed;
+  const trimmedBody = body.trim();
+  const moderation = evaluateMessageModeration(trimmedBody);
+
+  if (moderation.decision === 'block') {
+    return NextResponse.json(
+      {
+        error: formatBlockedMessage(moderation),
+        moderation,
+      },
+      { status: 422 },
+    );
+  }
 
   // Load product to get seller info
   const product = await prisma.product.findUnique({
@@ -119,12 +132,12 @@ export async function POST(req: Request) {
 
   // Create the message
   const message = await prisma.message.create({
-    data: {
-      conversationId: conversation.id,
-      senderId: buyerId,
-      body: body.trim(),
-    },
-  });
+      data: {
+        conversationId: conversation.id,
+        senderId: buyerId,
+        body: trimmedBody,
+      },
+    });
 
   return NextResponse.json({ conversationId: conversation.id, messageId: message.id }, { status: 201 });
 }

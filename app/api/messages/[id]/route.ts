@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
+import { evaluateMessageModeration, formatBlockedMessage } from '@/lib/moderation';
 import { z } from 'zod';
 
 const MESSAGE_MAX_LENGTH = 2000;
@@ -102,12 +103,24 @@ export async function POST(
     return NextResponse.json({ error: 'Invalid input.' }, { status: 400 });
   }
 
+  const trimmedBody = parsed.body.trim();
+  const moderation = evaluateMessageModeration(trimmedBody);
+  if (moderation.decision === 'block') {
+    return NextResponse.json(
+      {
+        error: formatBlockedMessage(moderation),
+        moderation,
+      },
+      { status: 422 },
+    );
+  }
+
   const [message] = await prisma.$transaction([
     prisma.message.create({
       data: {
         conversationId: conversation.id,
         senderId: userId,
-        body: parsed.body.trim(),
+        body: trimmedBody,
       },
     }),
     prisma.conversation.update({
