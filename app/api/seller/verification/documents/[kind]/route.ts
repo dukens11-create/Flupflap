@@ -25,12 +25,11 @@ export async function GET(
     return NextResponse.json({ error: 'Document not found.' }, { status: 404 });
   }
 
-  const sellerId =
-    session.user.role === 'ADMIN'
-      ? new URL(req.url).searchParams.get('sellerId')
-      : session.user.id;
+  const sellerId = session.user.role === 'ADMIN'
+    ? new URL(req.url).searchParams.get('sellerId')
+    : session.user.id;
 
-  if (!sellerId) {
+  if (session.user.role === 'ADMIN' && !sellerId) {
     return NextResponse.json({ error: 'Seller ID is required.' }, { status: 400 });
   }
 
@@ -79,8 +78,6 @@ export async function GET(
         notes: kind,
       },
     });
-  } else if (sellerId !== session.user.id) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   return NextResponse.redirect(

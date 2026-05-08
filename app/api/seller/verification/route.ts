@@ -111,6 +111,7 @@ export async function POST(req: Request) {
     const frontFile = getOptionalFile(form, 'governmentIdFront');
     const backFile = getOptionalFile(form, 'governmentIdBack');
     const selfieFile = getOptionalFile(form, 'selfieImage');
+    const phoneMatchesExisting = user?.phone === normalizedPhone;
 
     if (!frontFile && !existingVerification?.governmentIdFrontPublicId) {
       return NextResponse.json(
@@ -163,8 +164,8 @@ export async function POST(req: Request) {
         where: { id: session.user.id },
         data: {
           phone: normalizedPhone,
-          phoneVerified: user?.phone === normalizedPhone ? user.phoneVerified : false,
-          phoneVerifiedAt: user?.phone === normalizedPhone ? user.phoneVerifiedAt : null,
+          phoneVerified: phoneMatchesExisting ? user.phoneVerified : false,
+          phoneVerifiedAt: phoneMatchesExisting ? user.phoneVerifiedAt : null,
         },
       }),
       prisma.sellerVerification.upsert({
