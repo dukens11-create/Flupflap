@@ -129,7 +129,9 @@ export default async function SellerNewPage() {
         </fieldset>
 
         <button className="btn-primary w-full" type="submit">Submit for review</button>
-        <p className="text-xs text-slate-500 text-center">Your listing will be reviewed by an admin before it goes live.</p>
+        <p className="text-xs text-slate-500 text-center">
+          Your listing will be reviewed by an admin before it goes live. Our moderation assistant flags potential fake-product, prohibited-item, scam, and offensive-language concerns for manual review.
+        </p>
       </form>
     </main>
   );

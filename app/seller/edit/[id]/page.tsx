@@ -49,6 +49,7 @@ export default async function SellerEditPage({
       <h1 className="text-3xl font-black mb-2">Edit listing</h1>
       <p className="text-sm text-slate-500 mb-6">
         Changes will require re-approval by an admin before going live.
+        Fake-product, prohibited-item, scam, and offensive-language signals stay in review for manual checks.
       </p>
       <form action={`/api/seller/products/${id}`} method="POST" className="card p-6 space-y-4">
         <div>
@@ -181,7 +182,7 @@ export default async function SellerEditPage({
           <button className="btn-primary flex-1" type="submit">Save changes</button>
         </div>
         <p className="text-xs text-slate-500 text-center">
-          Your listing will return to &quot;Pending&quot; status and be re-reviewed by an admin.
+          Your listing will return to &quot;Pending&quot; status and be re-reviewed by an admin with moderation signals shown alongside it.
         </p>
       </form>
 

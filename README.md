@@ -11,6 +11,7 @@ FlupFlap is a marketplace starter app like a small eBay: FlupFlap can sell items
 - Seller listing form
 - Seller dashboard
 - Admin dashboard to approve/reject products
+- Transparent heuristic moderation signals for pending listings and buyer-seller messages
 - LocalStorage multi-item cart
 - Buy-now checkout
 - Stripe Checkout payment routes
@@ -162,6 +163,14 @@ This build supports image URLs by default. For production, connect Cloudinary, U
 
 ## Taxes
 A placeholder `taxCents` field exists. For launch, connect Stripe Tax or TaxJar/Avalara because tax rules depend on state, city, nexus, product type, and seller location.
+
+## Moderation assistant
+
+FlupFlap includes a first-release moderation layer that uses transparent heuristic rules instead of opaque auto-removals:
+
+- Pending listings show admin-facing fake-product, prohibited-item, scam-wording, and offensive-language signals with matched rule text.
+- Buyer/seller messages block obviously risky prohibited, scam, or offensive wording and return a plain-language reason to the sender.
+- Listings remain reviewable by admins rather than being silently deleted.
 
 ## Important production checklist
 - Add email verification and password reset emails
