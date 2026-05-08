@@ -50,7 +50,7 @@ export function createNotification(input: CreateNotificationInput) {
   });
 }
 
-export function createNotifications(inputs: CreateNotificationInput[]) {
+export async function createNotifications(inputs: CreateNotificationInput[]) {
   const validInputs = inputs.filter((input) => input.userId);
   if (validInputs.length === 0) return [];
 
