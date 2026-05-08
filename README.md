@@ -17,7 +17,7 @@ FlupFlap is a marketplace starter app like a small eBay: FlupFlap can sell items
 - Stripe Connect Express onboarding route for seller payouts
 - Configurable seller commission with Stripe Connect fee splitting
 - Stripe webhook route to mark orders paid and products sold
-- Shipping price fields, order tracking fields, and mark-shipped form
+- Shipping price fields, printable shipping labels, tracking fields, delivery status visibility, and mark-shipped form
 - Order dashboard
 - Prisma PostgreSQL schema with users, products, orders, order items, addresses, auth sessions
 - Starter legal pages: Terms, Privacy, Seller Agreement, Refund Policy
@@ -135,6 +135,25 @@ Webhook endpoints:
 
 - Stripe: `/api/stripe/webhook`
 - Persona: `/api/kyc/webhook/persona`
+
+## Shipping integration
+
+FlupFlap now includes a first-release shipping workflow for marketplace orders:
+
+- Sellers can create a shipment from the seller dashboard
+- Each shipped order gets a printable internal shipping label at `/orders/:id/label`
+- Tracking number, carrier, and delivery status are visible to buyers and sellers
+- Optional carrier refresh is supported through **Shippo** when configured
+
+Set:
+
+- `SHIPPING_PROVIDER` (`manual` or `shippo`; default `manual`)
+- `SHIPPO_API_KEY` when using Shippo tracking refresh
+
+Notes:
+
+- The first release intentionally avoids postage purchasing because the current catalog does not store package weights/dimensions yet.
+- The printable internal label is intended as the app-level shipment record. If you buy postage externally, attach the carrier-issued label to the parcel.
 
 ## Seller subscription
 
