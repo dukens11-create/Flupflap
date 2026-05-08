@@ -69,7 +69,7 @@ export default async function OrderDetailPage({
   });
 
   if (!order) notFound();
-  const reviewEligible = isReviewEligibleStatus(order.status);
+  const isReviewEligible = isReviewEligibleStatus(order.status);
 
   return (
     <main className="max-w-2xl mx-auto">
@@ -113,7 +113,7 @@ export default async function OrderDetailPage({
                 <OrderItemReviewForm
                   orderItemId={item.id}
                   productTitle={item.product.title}
-                  eligible={reviewEligible}
+                  eligible={isReviewEligible}
                   existingReview={{
                     rating: item.reviewRating,
                     comment: item.reviewComment,

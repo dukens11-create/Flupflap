@@ -29,7 +29,11 @@ export default function OrderItemReviewForm({
   const [success, setSuccess] = useState('');
 
   const hasReview = existingReview.rating !== null;
-  const previewRating = useMemo(() => Number(rating) || 0, [rating]);
+  const previewRating = useMemo(() => {
+    const parsedRating = Number(rating);
+    if (Number.isNaN(parsedRating) || parsedRating < 1 || parsedRating > 5) return 5;
+    return parsedRating;
+  }, [rating]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();

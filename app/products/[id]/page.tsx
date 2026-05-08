@@ -23,6 +23,14 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   return { title: p?.title ?? 'Product not found' };
 }
 
+function getReviewDisplayDate(review: {
+  reviewUpdatedAt: Date | null;
+  reviewCreatedAt: Date | null;
+  order: { createdAt: Date };
+}) {
+  return review.reviewUpdatedAt ?? review.reviewCreatedAt ?? review.order.createdAt;
+}
+
 export default async function ProductPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   await expirePromotions();
@@ -263,7 +271,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
                         </div>
                       </div>
                       <p className="text-xs text-slate-400">
-                        {new Date(review.reviewUpdatedAt ?? review.reviewCreatedAt ?? review.order.createdAt).toLocaleDateString('en-US', {
+                        {getReviewDisplayDate(review).toLocaleDateString('en-US', {
                           month: 'short',
                           day: 'numeric',
                           year: 'numeric',
