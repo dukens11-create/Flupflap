@@ -43,11 +43,12 @@ export function buildInternalShippingLabelUrl(orderId: string): string {
   return `/orders/${orderId}/label`;
 }
 
-export function normalizeCarrierName(input: string): string {
+export function normalizeCarrierName(input: string | null | undefined): string {
+  if (!input) return '';
   return input.trim().replace(/\s+/g, ' ');
 }
 
-export function normalizeCarrierCode(input: string): string {
+export function normalizeCarrierCode(input: string | null | undefined): string {
   return normalizeCarrierName(input).toLowerCase().replace(/[^a-z0-9]+/g, '_');
 }
 

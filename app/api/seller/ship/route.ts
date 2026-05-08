@@ -42,7 +42,7 @@ export async function POST(req: Request) {
     });
     const orderId = parsed.orderId;
     const trackingNumber = parsed.trackingNumber?.trim() || null;
-    const shippingCarrier = normalizeCarrierName(parsed.shippingCarrier || 'To be assigned');
+    const shippingCarrier = normalizeCarrierName(parsed.shippingCarrier?.trim() || 'To be assigned');
     const fallbackStatus = inferDeliveryStatus({
       deliveryStatus: parsed.deliveryStatus,
       trackingNumber,
