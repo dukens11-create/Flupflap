@@ -3,9 +3,9 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { z } from 'zod';
+import { isAllowedMessageAttachmentUrl } from '@/lib/message-attachments';
 import {
   getMessageSpamError,
-  isAllowedMessageAttachmentUrl,
   MESSAGE_MAX_LENGTH,
   normalizeMessageBody,
 } from '@/lib/messages';

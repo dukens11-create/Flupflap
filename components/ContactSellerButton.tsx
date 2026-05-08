@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { ImagePlus, MessageCircle, X } from 'lucide-react';
+import { isSafeMessageAttachmentUrl } from '@/lib/message-attachments';
 
 const QUICK_MESSAGE = "Is this still available?";
 
@@ -123,7 +124,7 @@ export default function ContactSellerButton({ productId }: { productId: string }
             </label>
             <span className="text-xs text-slate-500">Photos only · up to 5 MB</span>
           </div>
-          {attachmentUrl && (
+          {isSafeMessageAttachmentUrl(attachmentUrl) && (
             <div className="rounded-xl border border-slate-200 bg-white p-3">
               <div className="flex items-start justify-between gap-3">
                 <img

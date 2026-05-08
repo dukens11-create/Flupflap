@@ -6,7 +6,7 @@ import {
   MESSAGE_ATTACHMENT_ALLOWED_TYPES,
   MESSAGE_ATTACHMENT_MAX_BYTES,
   MESSAGE_UPLOAD_FOLDER,
-} from '@/lib/messages';
+} from '@/lib/message-attachments';
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);

@@ -7,6 +7,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { dollars } from '@/lib/money';
 import { ImagePlus, X } from 'lucide-react';
+import { isSafeMessageAttachmentUrl } from '@/lib/message-attachments';
 
 type Sender = { id: string; name: string };
 
@@ -213,6 +214,9 @@ export default function ConversationPage() {
         ) : (
           conv.messages.map((msg) => {
             const isMe = msg.senderId === userId;
+            const safeAttachmentUrl = isSafeMessageAttachmentUrl(msg.attachmentUrl)
+              ? msg.attachmentUrl
+              : null;
             return (
               <div
                 key={msg.id}
@@ -225,17 +229,17 @@ export default function ConversationPage() {
                       : 'bg-slate-100 text-slate-900 rounded-bl-sm'
                   }`}
                 >
-                  {msg.attachmentUrl && (
-                    <a href={msg.attachmentUrl} target="_blank" rel="noreferrer" className="block mb-2">
+                  {safeAttachmentUrl && (
+                    <a href={safeAttachmentUrl} target="_blank" rel="noreferrer" className="block mb-2">
                       <img
-                        src={msg.attachmentUrl}
+                        src={safeAttachmentUrl}
                         alt="Shared attachment"
                         className="max-h-56 w-auto rounded-xl border border-black/10 object-cover"
                       />
                     </a>
                   )}
                   {msg.body && <p>{msg.body}</p>}
-                  {!msg.body && msg.attachmentUrl && (
+                  {!msg.body && safeAttachmentUrl && (
                     <p className={`text-xs ${isMe ? 'text-blue-100' : 'text-slate-500'}`}>Photo attachment</p>
                   )}
                 </div>
@@ -289,7 +293,7 @@ export default function ConversationPage() {
           </label>
           <span className="text-xs text-slate-500">Photos only · up to 5 MB</span>
         </div>
-        {attachmentUrl && (
+        {isSafeMessageAttachmentUrl(attachmentUrl) && (
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 flex items-start justify-between gap-3">
             <img
               src={attachmentUrl}

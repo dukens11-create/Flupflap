@@ -1,15 +1,12 @@
 import { prisma } from '@/lib/db';
+import {
+  isAllowedMessageAttachmentUrl,
+  MESSAGE_ATTACHMENT_ALLOWED_TYPES,
+  MESSAGE_ATTACHMENT_MAX_BYTES,
+  MESSAGE_UPLOAD_FOLDER,
+} from '@/lib/message-attachments';
 
 export const MESSAGE_MAX_LENGTH = 2000;
-export const MESSAGE_ATTACHMENT_ALLOWED_TYPES = [
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'image/gif',
-];
-export const MESSAGE_ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024; // 5 MB
-export const MESSAGE_UPLOAD_FOLDER =
-  process.env.CLOUDINARY_MESSAGE_UPLOAD_FOLDER ?? 'flupflap/message-attachments';
 export const MESSAGE_RATE_LIMIT_WINDOW_MINUTES = 10;
 export const MESSAGE_RATE_LIMIT_MAX = 6;
 export const MESSAGE_DUPLICATE_WINDOW_MINUTES = 2;
@@ -28,25 +25,6 @@ export function getMessagePreview(message?: { body: string; attachmentUrl?: stri
   if (body) return body;
   if (message.attachmentUrl) return '📷 Photo attachment';
   return '';
-}
-
-export function isAllowedMessageAttachmentUrl(attachmentUrl: string) {
-  try {
-    const url = new URL(attachmentUrl);
-    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-
-    if (url.protocol !== 'https:' || !cloudName) {
-      return false;
-    }
-
-    return (
-      url.hostname === 'res.cloudinary.com' &&
-      url.pathname.includes(`/${cloudName}/`) &&
-      url.pathname.includes(`/${MESSAGE_UPLOAD_FOLDER}/`)
-    );
-  } catch {
-    return false;
-  }
 }
 
 export async function getInboxConversations(userId: string) {
@@ -143,7 +121,8 @@ export async function getMessageSpamError({
     return 'Please avoid sending the same message repeatedly.';
   }
 
-  const linkCount = normalizedBody.match(/https?:\/\/\S+/gi)?.length ?? 0;
+  const linkCount =
+    normalizedBody.match(/\b(?:https?:\/\/|www\.)[^\s<]+/gi)?.length ?? 0;
   if (linkCount > 2) {
     return 'Please remove extra links and keep the message focused on the listing.';
   }
