@@ -69,6 +69,7 @@ function median(values: number[]) {
   const middle = Math.floor(sorted.length / 2);
   const middleValue = sorted[middle];
   if (middleValue === undefined) return null;
+  if (middle === 0) return middleValue;
   return sorted.length % 2 === 0
     ? Math.round(((sorted[middle - 1] ?? middleValue) + middleValue) / 2)
     : middleValue;
@@ -103,7 +104,9 @@ export function getListingRiskAssessment(
       const samePriceBand =
         candidate.priceCents > 0 &&
         listing.priceCents > 0 &&
-        Math.abs(listing.priceCents - candidate.priceCents) / candidate.priceCents <= 0.15;
+        Math.abs(listing.priceCents - candidate.priceCents) /
+          Math.max(candidate.priceCents, listing.priceCents) <=
+          0.15;
 
       let confidence = 0;
       if (sameImage && samePriceBand && titleSimilarity >= 0.45) {

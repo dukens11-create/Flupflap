@@ -11,6 +11,7 @@ const VALID_ACTIONS = [
   'suspend_seller',
   'ban_seller',
 ] as const;
+const MODERATING_ACTIONS = ['warn_seller', 'suspend_seller', 'ban_seller'] as const;
 
 const REPORT_REASON_TO_MODERATION_REASON: Record<string, string> = {
   scam_fraud: 'fraud',
@@ -51,7 +52,7 @@ export async function POST(
     const moderationReason = REPORT_REASON_TO_MODERATION_REASON[report.reason] ?? 'other';
     const now = new Date();
 
-    if (data.action === 'warn_seller' || data.action === 'suspend_seller' || data.action === 'ban_seller') {
+    if ((MODERATING_ACTIONS as readonly string[]).includes(data.action)) {
       const sellerAction =
         data.action === 'ban_seller'
           ? 'BANNED'

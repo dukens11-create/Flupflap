@@ -21,7 +21,7 @@ export default function ReportSellerButton({
   sellerId: string;
   sellerName: string;
 }) {
-  const displaySellerName = sellerName.replace(/\s+/g, ' ').trim() || 'this seller';
+  const displaySellerName = sellerName.replace(/\s+/g, ' ').trim() || 'this account';
   const { data: session, status } = useSession();
   const router = useRouter();
 

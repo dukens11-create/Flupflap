@@ -253,7 +253,7 @@ export default async function AdminFraudPage() {
                             <span key={id}>
                               {index > 0 && ', '}
                               <Link href={`/products/${id}`} target="_blank" className="text-blue-600 hover:underline">
-                                {listingTitleById.get(id) ?? id.slice(-6)}
+                                {listingTitleById.get(id) ?? (id.length > 6 ? id.slice(-6) : id)}
                               </Link>
                             </span>
                           ))}

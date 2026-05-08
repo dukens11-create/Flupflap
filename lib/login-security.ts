@@ -1,4 +1,4 @@
-import { createHash } from 'crypto';
+import { createHmac } from 'crypto';
 import { prisma } from './db';
 
 type RequestLike =
@@ -76,7 +76,7 @@ function fingerprint(value: string | null) {
   const secret = process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET;
   if (!secret) return null;
 
-  return createHash('sha256').update(`${secret}:${value}`).digest('hex');
+  return createHmac('sha256', secret).update(value).digest('hex');
 }
 
 export function describeSuspiciousReason(reason: string) {
