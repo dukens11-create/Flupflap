@@ -8,7 +8,7 @@ import { getServerTranslations } from '@/lib/i18n/server';
 
 export const metadata: Metadata = {
   title: { default: 'FlupFlap Marketplace', template: '%s | FlupFlap' },
-  description: 'Buy and sell new & used items on FlupFlap Marketplace.',
+  description: 'A safer marketplace with low fees, verified sellers, and a simpler way to buy and sell everyday items.',
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
