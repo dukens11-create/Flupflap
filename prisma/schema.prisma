@@ -65,6 +65,20 @@ enum PromotionStatus {
   CANCELLED
 }
 
+enum NotificationType {
+  ORDER_UPDATE
+  OFFER
+  MESSAGE
+  PAYOUT
+  SHIPPING
+}
+
+enum OfferStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
 enum OrderStatus {
   PENDING
   PAID
@@ -126,9 +140,12 @@ model User {
   reportsAboutSeller       ProductReport[]           @relation("SellerReports")
   reportResolutions        ProductReport[]           @relation("AdminReportResolutions")
   promotions               Promotion[]
+  notifications            Notification[]
   sellerPlanId             String?
   sellerPlan               SellerPlan?               @relation(fields: [sellerPlanId], references: [id])
   checkoutSessionSnapshots CheckoutSessionSnapshot[]
+  buyerOffers              Offer[]                   @relation("BuyerOffers")
+  sellerOffers             Offer[]                   @relation("SellerOffers")
   // Seller subscription billing
   // Keep these nullable identifiers non-unique so production `prisma db push`
   // stays deploy-safe for existing databases with legacy duplicate values.
@@ -169,6 +186,7 @@ model Product {
   conversations    Conversation[]
   reports          ProductReport[]
   promotions       Promotion[]
+  offers           Offer[]
   // Pickup fields
   pickupAvailable  Boolean         @default(false)
   pickupCity       String?
@@ -404,6 +422,44 @@ model Message {
   createdAt      DateTime     @default(now())
 
   @@index([conversationId])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  body      String
+  link      String?
+  data      Json?
+  dedupeKey String?          @unique
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  @@index([userId, createdAt])
+  @@index([userId, readAt])
+}
+
+model Offer {
+  id          String      @id @default(cuid())
+  productId   String
+  product     Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  buyerId     String
+  buyer       User        @relation("BuyerOffers", fields: [buyerId], references: [id], onDelete: Cascade)
+  sellerId    String
+  seller      User        @relation("SellerOffers", fields: [sellerId], references: [id], onDelete: Cascade)
+  amountCents Int
+  message     String?
+  status      OfferStatus @default(PENDING)
+  respondedAt DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([productId])
+  @@index([buyerId, createdAt])
+  @@index([sellerId, createdAt])
+  @@index([status])
 }
 
 // ── Product Reporting ─────────────────────────────────────────────────────────

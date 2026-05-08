@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { z, ZodError } from 'zod';
+import { NotificationType } from '@prisma/client';
+import { createNotifications } from '@/lib/notifications';
 import {
   buildCarrierTrackingUrl,
   buildInternalShippingLabelUrl,
@@ -54,6 +56,11 @@ export async function POST(req: Request) {
         id: orderId,
         items: { some: { product: { sellerId: session.user.id } } },
       },
+      select: {
+        id: true,
+        buyerId: true,
+        shippingProviderShipmentId: true,
+      },
     });
 
     if (!order) return NextResponse.json({ error: 'Order not found.' }, { status: 404 });
@@ -79,10 +86,12 @@ export async function POST(req: Request) {
       }
     }
 
+    const nextOrderStatus = mapDeliveryStatusToOrderStatus(deliveryStatus);
+
     await prisma.order.update({
       where: { id: orderId },
       data: {
-        status: mapDeliveryStatusToOrderStatus(deliveryStatus),
+        status: nextOrderStatus,
         trackingNumber,
         shippingCarrier,
         shippingProvider: shippingProvider.label,
@@ -96,6 +105,27 @@ export async function POST(req: Request) {
         shippingLastSyncedAt,
       },
     });
+
+    await createNotifications([
+      {
+        userId: order.buyerId,
+        type: NotificationType.SHIPPING,
+        title: nextOrderStatus === 'DELIVERED' ? 'Your order was marked delivered' : 'Your shipment was updated',
+        body: trackingNumber
+          ? `Tracking is now available with ${shippingCarrier}: ${trackingNumber}.`
+          : 'The seller updated your shipment details.',
+        link: `/orders/${order.id}`,
+        data: { orderId: order.id, status: nextOrderStatus },
+      },
+      {
+        userId: order.buyerId,
+        type: NotificationType.ORDER_UPDATE,
+        title: 'Order status updated',
+        body: `Your order moved to ${nextOrderStatus}.`,
+        link: `/orders/${order.id}`,
+        data: { orderId: order.id, status: nextOrderStatus },
+      },
+    ]);
 
     return NextResponse.redirect(new URL('/seller?shipping=updated', req.url));
   } catch (err: any) {

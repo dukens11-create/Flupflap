@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
+import { NotificationType } from '@prisma/client';
+import { createNotification } from '@/lib/notifications';
 import { z } from 'zod';
 
 const MESSAGE_MAX_LENGTH = 2000;
@@ -115,6 +117,16 @@ export async function POST(
       data: { updatedAt: new Date() },
     }),
   ]);
+
+  const recipientId = conversation.buyerId === userId ? conversation.sellerId : conversation.buyerId;
+  await createNotification({
+    userId: recipientId,
+    type: NotificationType.MESSAGE,
+    title: 'New message in your conversation',
+    body: parsed.body.trim().length > 120 ? `${parsed.body.trim().slice(0, 117)}...` : parsed.body.trim(),
+    link: `/messages/${conversation.id}`,
+    data: { conversationId: conversation.id },
+  });
 
   return NextResponse.json({ messageId: message.id }, { status: 201 });
 }
