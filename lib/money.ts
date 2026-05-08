@@ -1,4 +1,4 @@
-const FIXED_COMMISSION_PERCENT = 2.99;
+const FIXED_COMMISSION_PERCENT = 7;
 
 export function dollars(cents:number){ return `$${(cents/100).toFixed(2)}`; }
 export function cents(amount:string|number){ return Math.round(Number(amount) * 100); }

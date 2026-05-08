@@ -1,6 +1,6 @@
 # FlupFlap Marketplace — Full Starter Build
 
-FlupFlap is a marketplace starter app like a small eBay: FlupFlap can sell items, public sellers can list new/used items, buyers can shop, and FlupFlap keeps a fixed 2.99% marketplace commission on each paid seller item.
+FlupFlap is a marketplace starter app like a small eBay: FlupFlap can sell items, public sellers can list new/used items, buyers can shop, and FlupFlap keeps a fixed 7% marketplace commission on each paid seller item.
 
 ## Included now
 - Public home page and product browsing
@@ -94,7 +94,7 @@ Set these in **Environment → Environment Variables** in the Render dashboard:
 | `STRIPE_SECRET_KEY` | Stripe secret key |
 | `STRIPE_PUBLISHABLE_KEY` | Stripe publishable key |
 | `STRIPE_WEBHOOK_SECRET` | Secret from your Stripe webhook endpoint |
-| `PLATFORM_FEE_PERCENT` | Legacy bootstrap env var (the app normalizes commission snapshots to `2.99`) |
+| `PLATFORM_FEE_PERCENT` | Legacy bootstrap env var (the app normalizes commission snapshots to `7`) |
 
 ### Why the build succeeds but deployment fails
 
@@ -153,7 +153,7 @@ FlupFlap uses a seller-only Stripe subscription for listing eligibility:
 The initial default platform commission is bootstrapped from:
 
 ```env
-PLATFORM_FEE_PERCENT="2.99"
+PLATFORM_FEE_PERCENT="7"
 ```
 
 Each checkout stores commission snapshots on order items so seller earnings, Stripe Connect fee splits, and reporting stay consistent even if listing prices change later.
