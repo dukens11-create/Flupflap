@@ -22,7 +22,7 @@ export default function OrderItemReviewForm({
   existingReview: ExistingReview;
 }) {
   const router = useRouter();
-  const [rating, setRating] = useState(existingReview.rating !== null ? String(existingReview.rating) : '5');
+  const [rating, setRating] = useState(existingReview.rating !== null ? String(existingReview.rating) : '3');
   const [comment, setComment] = useState(existingReview.comment ?? '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -31,7 +31,7 @@ export default function OrderItemReviewForm({
   const hasReview = existingReview.rating !== null;
   const previewRating = useMemo(() => {
     const parsedRating = Number(rating);
-    if (Number.isNaN(parsedRating) || parsedRating < 1 || parsedRating > 5) return 5;
+    if (Number.isNaN(parsedRating) || parsedRating < 1 || parsedRating > 5) return 3;
     return parsedRating;
   }, [rating]);
 

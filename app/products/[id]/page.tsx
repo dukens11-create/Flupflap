@@ -26,9 +26,8 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 function getReviewDisplayDate(review: {
   reviewUpdatedAt: Date | null;
   reviewCreatedAt: Date | null;
-  order: { createdAt: Date };
 }) {
-  return review.reviewUpdatedAt ?? review.reviewCreatedAt ?? review.order.createdAt;
+  return review.reviewUpdatedAt ?? review.reviewCreatedAt;
 }
 
 export default async function ProductPage({ params }: { params: Promise<{ id: string }> }) {
@@ -91,7 +90,6 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
       include: {
         order: {
           select: {
-            createdAt: true,
             status: true,
             buyer: { select: { name: true } },
           },
@@ -254,6 +252,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             <div className="mt-4 space-y-4">
               {visibleReviews.map((review) => {
                 if (review.reviewRating === null) return null;
+                const reviewDisplayDate = getReviewDisplayDate(review);
 
                 return (
                   <article key={review.id} className="rounded-xl border border-slate-200 p-4">
@@ -271,11 +270,13 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
                         </div>
                       </div>
                       <p className="text-xs text-slate-400">
-                        {getReviewDisplayDate(review).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric',
-                        })}
+                        {reviewDisplayDate
+                          ? reviewDisplayDate.toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                          })
+                          : 'Review date unavailable'}
                       </p>
                     </div>
                     <p className="mt-3 text-sm leading-relaxed text-slate-700">
