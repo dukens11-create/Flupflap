@@ -82,7 +82,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
                   {sellerResponseStats.responseRate}% response rate
                 </span>
               ) : (
-                <span className="badge badge-slate">Insufficient message history</span>
+                <span className="badge badge-slate">Not enough data</span>
               )}
             </div>
             <p className="text-xs text-slate-500 mt-2">

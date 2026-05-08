@@ -13,6 +13,10 @@ export const MESSAGE_DUPLICATE_WINDOW_MINUTES = 2;
 export const SELLER_RESPONSE_LOOKBACK_DAYS = 90;
 export const SELLER_RESPONSE_WINDOW_HOURS = 24;
 
+function minutesAgo(minutes: number) {
+  return new Date(Date.now() - minutes * 60 * 1000);
+}
+
 export function normalizeMessageBody(body?: string | null) {
   return (body ?? '').trim().replace(/\s+/g, ' ');
 }
@@ -79,9 +83,7 @@ export async function getMessageSpamError({
   body: string;
 }) {
   const normalizedBody = normalizeMessageBody(body);
-  const rateLimitWindowStart = new Date(
-    Date.now() - MESSAGE_RATE_LIMIT_WINDOW_MINUTES * 60 * 1000,
-  );
+  const rateLimitWindowStart = minutesAgo(MESSAGE_RATE_LIMIT_WINDOW_MINUTES);
 
   const recentMessageCount = await prisma.message.count({
     where: {
@@ -98,9 +100,7 @@ export async function getMessageSpamError({
     return null;
   }
 
-  const duplicateWindowStart = new Date(
-    Date.now() - MESSAGE_DUPLICATE_WINDOW_MINUTES * 60 * 1000,
-  );
+  const duplicateWindowStart = minutesAgo(MESSAGE_DUPLICATE_WINDOW_MINUTES);
 
   const recentMessages = await prisma.message.findMany({
     where: {
@@ -173,7 +173,7 @@ export async function getSellerResponseStats(sellerId: string) {
       firstBuyerMessage.createdAt.getTime() +
       SELLER_RESPONSE_WINDOW_HOURS * 60 * 60 * 1000;
 
-    if (now >= responseDeadline) {
+    if (sellerReply || now >= responseDeadline) {
       eligibleCount += 1;
 
       if (sellerReply && sellerReply.createdAt.getTime() <= responseDeadline) {
