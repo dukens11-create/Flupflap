@@ -3,6 +3,10 @@ import { prisma } from '@/lib/db';
 
 const CATEGORIES = ['Electronics', 'Clothing', 'Furniture', 'Books', 'Toys', 'Sports', 'Collectibles', 'Other'];
 const MAX_PRODUCTS_FOR_SUGGESTIONS = 12;
+const TITLE_SUGGESTION_WEIGHT = 40;
+const CATEGORY_SUGGESTION_WEIGHT = 20;
+const CITY_SUGGESTION_WEIGHT = 10;
+const STATE_SUGGESTION_WEIGHT = 8;
 
 function addSuggestion(
   scores: Map<string, number>,
@@ -63,10 +67,10 @@ export async function GET(request: NextRequest) {
 
   products.forEach((product, index) => {
     const weight = Math.max(1, MAX_PRODUCTS_FOR_SUGGESTIONS - index);
-    addSuggestion(scores, product.title, normalizedQuery, 40 + weight);
-    addSuggestion(scores, product.category, normalizedQuery, 20 + weight);
-    addSuggestion(scores, product.pickupCity, normalizedQuery, 10 + weight);
-    addSuggestion(scores, product.pickupState, normalizedQuery, 8 + weight);
+    addSuggestion(scores, product.title, normalizedQuery, TITLE_SUGGESTION_WEIGHT + weight);
+    addSuggestion(scores, product.category, normalizedQuery, CATEGORY_SUGGESTION_WEIGHT + weight);
+    addSuggestion(scores, product.pickupCity, normalizedQuery, CITY_SUGGESTION_WEIGHT + weight);
+    addSuggestion(scores, product.pickupState, normalizedQuery, STATE_SUGGESTION_WEIGHT + weight);
   });
 
   const suggestions = [...scores.entries()]

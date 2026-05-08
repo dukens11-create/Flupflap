@@ -99,8 +99,8 @@ export default function BrowseFilters() {
     startTransition(() => router.push('/'));
   };
 
-  const handlePriceInputKeyDown = (key: string) => {
-    if (key === 'Enter') applyPriceFilters();
+  const handlePriceInputKeyDown = (keyName: string) => {
+    if (keyName === 'Enter') applyPriceFilters();
   };
 
   const hasFilters = searchParams.toString().length > 0;
