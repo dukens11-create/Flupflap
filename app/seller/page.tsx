@@ -821,7 +821,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
         ) : (
           <div className="space-y-3">
             {orders.map(o => {
-              const defaultDeliveryStatus = o.deliveryStatus ?? inferDeliveryStatus({ trackingNumber: o.trackingNumber });
+              const currentDeliveryStatus = o.deliveryStatus ?? inferDeliveryStatus({ trackingNumber: o.trackingNumber });
 
               return (
               <div key={o.id} className="card p-4">
@@ -854,7 +854,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                     <div className="flex flex-wrap items-center gap-2">
                       <select
                         name="deliveryStatus"
-                        defaultValue={defaultDeliveryStatus}
+                        defaultValue={currentDeliveryStatus}
                         className="input w-48"
                       >
                         <option value={DeliveryStatus.LABEL_CREATED}>Label created</option>

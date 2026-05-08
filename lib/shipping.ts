@@ -59,7 +59,7 @@ export function inferDeliveryStatus(input: {
   if (requested && Object.values(DeliveryStatus).includes(requested as DeliveryStatus)) {
     return requested as DeliveryStatus;
   }
-  return input.trackingNumber?.trim() ? DeliveryStatus.IN_TRANSIT : DeliveryStatus.LABEL_CREATED;
+  return input.trackingNumber?.trim() ? DeliveryStatus.PRE_TRANSIT : DeliveryStatus.LABEL_CREATED;
 }
 
 export function mapDeliveryStatusToOrderStatus(status: DeliveryStatus): 'PAID' | 'SHIPPED' | 'DELIVERED' {
@@ -134,7 +134,7 @@ export async function refreshCarrierTracking(input: {
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Shippo tracking lookup failed (${response.status}): ${text.slice(0, 500)}`);
+    throw new Error(`Shippo tracking lookup failed (status ${response.status}): ${text.slice(0, 200)}`);
   }
 
   const payload = await response.json() as {
