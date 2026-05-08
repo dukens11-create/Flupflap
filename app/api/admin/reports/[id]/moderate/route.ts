@@ -134,6 +134,27 @@ export async function POST(
       },
     });
 
+    const remainingOpenReports = await prisma.productReport.count({
+      where: {
+        productId: report.productId,
+        reporterId: report.reporterId,
+        status: 'OPEN',
+      },
+    });
+
+    if (remainingOpenReports === 0) {
+      await prisma.orderItem.updateMany({
+        where: {
+          productId: report.productId,
+          order: { buyerId: report.reporterId },
+          reviewRating: { not: null },
+        },
+        data: {
+          reviewBlockedByDispute: false,
+        },
+      });
+    }
+
     return NextResponse.redirect(new URL('/admin/reports', req.url));
   } catch (err: any) {
     if (err?.name === 'ZodError') {

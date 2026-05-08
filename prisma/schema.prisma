@@ -234,6 +234,11 @@ model OrderItem {
   sellerNetCents     Int     @default(0)
   commissionSource   String  @default("DEFAULT")
   commissionPlanCode String?
+  reviewRating       Int?
+  reviewComment      String?
+  reviewCreatedAt    DateTime?
+  reviewUpdatedAt    DateTime?
+  reviewBlockedByDispute Boolean @default(false)
 }
 
 model Account {

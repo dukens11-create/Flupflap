@@ -4,6 +4,8 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { dollars } from '@/lib/money';
 import { getStoredLineSubtotalCents } from '@/lib/commission';
+import { isReviewEligibleStatus } from '@/lib/reviews';
+import OrderItemReviewForm from '@/components/OrderItemReviewForm';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 
@@ -67,6 +69,7 @@ export default async function OrderDetailPage({
   });
 
   if (!order) notFound();
+  const reviewEligible = isReviewEligibleStatus(order.status);
 
   return (
     <main className="max-w-2xl mx-auto">
@@ -85,27 +88,42 @@ export default async function OrderDetailPage({
       {/* Items */}
       <div className="card p-5 mb-4">
         <h2 className="font-bold mb-3">Items ordered</h2>
-        <div className="space-y-3">
-          {order.items.map(item => (
-            <div key={item.id} className="flex items-center gap-3">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={item.product.imageUrl}
-                alt={item.product.title}
-                className="w-14 h-14 object-cover rounded-lg flex-shrink-0"
-              />
-              <div className="flex-1 min-w-0">
-                <Link href={`/products/${item.product.id}`} className="font-medium hover:text-blue-600 truncate block">
-                  {item.product.title}
-                </Link>
-                <p className="text-xs text-slate-500">
-                  Sold by {item.product.seller.name} · {dollars(item.priceCents)} each · Qty: {item.quantity}
-                </p>
+          <div className="space-y-3">
+            {order.items.map(item => (
+              <div key={item.id} className="rounded-xl border border-slate-100 p-3">
+                <div className="flex items-center gap-3">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={item.product.imageUrl}
+                    alt={item.product.title}
+                    className="w-14 h-14 object-cover rounded-lg flex-shrink-0"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <Link href={`/products/${item.product.id}`} className="font-medium hover:text-blue-600 truncate block">
+                      {item.product.title}
+                    </Link>
+                    <p className="text-xs text-slate-500">
+                      Sold by {item.product.seller.name} · {dollars(item.priceCents)} each · Qty: {item.quantity}
+                    </p>
+                  </div>
+                  <p className="font-semibold flex-shrink-0">{dollars(getStoredLineSubtotalCents(item))}</p>
+                </div>
+
+                <div className="mt-3">
+                  <OrderItemReviewForm
+                    orderItemId={item.id}
+                    productTitle={item.product.title}
+                    eligible={reviewEligible}
+                    existingReview={{
+                      rating: item.reviewRating,
+                      comment: item.reviewComment,
+                      blockedByDispute: item.reviewBlockedByDispute,
+                    }}
+                  />
+                </div>
               </div>
-              <p className="font-semibold flex-shrink-0">{dollars(getStoredLineSubtotalCents(item))}</p>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
       </div>
 
       {/* Price breakdown */}
