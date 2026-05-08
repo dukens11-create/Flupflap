@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { isSubscriptionActive } from '@/lib/subscription';
 import { syncSellerSubscriptionFromStripe } from '@/lib/subscription-sync';
 import { isSellerVerificationApproved } from '@/lib/seller-verification';
+import { parseReturnWindowDays } from '@/lib/disputes';
 
 const schema = z.object({
   title: z.string().min(3),
@@ -21,6 +22,7 @@ const schema = z.object({
   pickupCity: z.string().max(100).optional(),
   pickupState: z.string().max(2).optional(),
   pickupPostalCode: z.string().max(20).optional(),
+  returnWindowDays: z.string().optional(),
 });
 
 export async function GET(req: Request) {
@@ -102,6 +104,7 @@ export async function POST(req: Request) {
         pickupCity: data.pickupCity || null,
         pickupState: data.pickupState || null,
         pickupPostalCode: data.pickupPostalCode || null,
+        returnWindowDays: parseReturnWindowDays(data.returnWindowDays),
       },
     });
 
@@ -109,6 +112,9 @@ export async function POST(req: Request) {
   } catch (err: any) {
     if (err?.name === 'ZodError') {
       return NextResponse.json({ error: 'Invalid input.' }, { status: 400 });
+    }
+    if (err instanceof Error && err.message.includes('Return window must be between')) {
+      return NextResponse.json({ error: err.message }, { status: 400 });
     }
     console.error('[seller/products POST]', err);
     return NextResponse.json({ error: 'Failed to create listing.' }, { status: 500 });

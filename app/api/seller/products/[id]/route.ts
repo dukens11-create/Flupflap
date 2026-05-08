@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db';
 import { cents } from '@/lib/money';
 import { z } from 'zod';
 import { isSellerVerificationApproved } from '@/lib/seller-verification';
+import { parseReturnWindowDays } from '@/lib/disputes';
 
 const updateSchema = z.object({
   title: z.string().min(3).optional(),
@@ -19,6 +20,7 @@ const updateSchema = z.object({
   pickupCity: z.string().max(100).optional(),
   pickupState: z.string().max(2).optional(),
   pickupPostalCode: z.string().max(20).optional(),
+  returnWindowDays: z.string().optional(),
 });
 
 async function getSellerProduct(id: string, sellerId: string) {
@@ -90,6 +92,7 @@ export async function POST(
         pickupCity: data.pickupCity || null,
         pickupState: data.pickupState || null,
         pickupPostalCode: data.pickupPostalCode || null,
+        returnWindowDays: parseReturnWindowDays(data.returnWindowDays),
         // Reset to PENDING on edit so admin can re-review
         status: 'PENDING',
       },
@@ -99,6 +102,9 @@ export async function POST(
   } catch (err: any) {
     if (err?.name === 'ZodError') {
       return NextResponse.json({ error: 'Invalid input.' }, { status: 400 });
+    }
+    if (err instanceof Error && err.message.includes('Return window must be between')) {
+      return NextResponse.json({ error: err.message }, { status: 400 });
     }
     console.error('[seller/products/[id] POST]', err);
     return NextResponse.json({ error: 'Failed to update listing.' }, { status: 500 });
@@ -156,6 +162,7 @@ export async function PATCH(
         ...(data.pickupCity !== undefined && { pickupCity: data.pickupCity || null }),
         ...(data.pickupState !== undefined && { pickupState: data.pickupState || null }),
         ...(data.pickupPostalCode !== undefined && { pickupPostalCode: data.pickupPostalCode || null }),
+        ...(data.returnWindowDays !== undefined && { returnWindowDays: parseReturnWindowDays(data.returnWindowDays) }),
         status: 'PENDING',
       },
     });
@@ -164,6 +171,9 @@ export async function PATCH(
   } catch (err: any) {
     if (err?.name === 'ZodError') {
       return NextResponse.json({ error: 'Invalid input.' }, { status: 400 });
+    }
+    if (err instanceof Error && err.message.includes('Return window must be between')) {
+      return NextResponse.json({ error: err.message }, { status: 400 });
     }
     console.error('[seller/products/[id] PATCH]', err);
     return NextResponse.json({ error: 'Failed to update listing.' }, { status: 500 });

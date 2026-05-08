@@ -76,6 +76,17 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             <p className="text-xs text-slate-400 mt-1">Sold by {product.seller.name}</p>
           </div>
           <p className="text-slate-700 text-sm leading-relaxed">{product.description}</p>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+            <p className="font-semibold text-slate-900">Returns & refunds</p>
+            <p className="mt-1">
+              {product.returnWindowDays
+                ? `Seller accepts return requests within ${product.returnWindowDays} day${product.returnWindowDays === 1 ? '' : 's'} of delivery or pickup confirmation.`
+                : 'Seller does not offer routine returns.'}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              Buyers can still use the dispute center for items that never arrive or arrive damaged / not as described.
+            </p>
+          </div>
 
           {/* Pickup distance widget */}
           {product.pickupAvailable && product.pickupCity && product.pickupState && product.pickupPostalCode && (

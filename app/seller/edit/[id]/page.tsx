@@ -127,6 +127,22 @@ export default async function SellerEditPage({
             defaultValue={product.inventory}
           />
         </div>
+        <div>
+          <label className="label">Return window</label>
+          <select
+            name="returnWindowDays"
+            className="input"
+            defaultValue={product.returnWindowDays?.toString() ?? ''}
+          >
+            <option value="">No routine returns</option>
+            <option value="7">7 days</option>
+            <option value="14">14 days</option>
+            <option value="30">30 days</option>
+          </select>
+          <p className="text-xs text-slate-500 mt-1">
+            Buyers can still dispute delivery or item-condition issues even when routine returns are disabled.
+          </p>
+        </div>
 
         {/* Pickup section */}
         <fieldset className="border border-slate-200 rounded-xl p-4 space-y-3">
