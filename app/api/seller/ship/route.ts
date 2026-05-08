@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
-import { z } from 'zod';
+import { z, ZodError } from 'zod';
 import {
   buildCarrierTrackingUrl,
   buildInternalShippingLabelUrl,
@@ -99,8 +99,8 @@ export async function POST(req: Request) {
 
     return NextResponse.redirect(new URL('/seller?shipping=updated', req.url));
   } catch (err: any) {
-    if (err?.name === 'ZodError') {
-      return NextResponse.json({ error: err.errors[0]?.message || 'Invalid shipping data.' }, { status: 400 });
+    if (err instanceof ZodError) {
+      return NextResponse.json({ error: err.issues[0]?.message || 'Invalid shipping data.' }, { status: 400 });
     }
     console.error('[seller/ship]', err);
     return NextResponse.json({ error: 'Failed to update order.' }, { status: 500 });

@@ -56,7 +56,7 @@ export function inferDeliveryStatus(input: {
   trackingNumber?: string | null;
 }): DeliveryStatus {
   const requested = (input.deliveryStatus ?? '').trim().toUpperCase();
-  if (requested && requested in DeliveryStatus) {
+  if (requested && Object.values(DeliveryStatus).includes(requested as DeliveryStatus)) {
     return requested as DeliveryStatus;
   }
   return input.trackingNumber?.trim() ? DeliveryStatus.IN_TRANSIT : DeliveryStatus.LABEL_CREATED;

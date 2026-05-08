@@ -22,7 +22,7 @@ import {
   sellerVerificationStatusTone,
 } from '@/lib/seller-verification';
 import { DeliveryStatus } from '@prisma/client';
-import { getDeliveryStatusLabel, getShippingProvider } from '@/lib/shipping';
+import { getDeliveryStatusLabel, getShippingProvider, inferDeliveryStatus } from '@/lib/shipping';
 
 export const dynamic = 'force-dynamic';
 
@@ -851,7 +851,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                     <div className="flex flex-wrap items-center gap-2">
                       <select
                         name="deliveryStatus"
-                        defaultValue={o.deliveryStatus ?? (o.trackingNumber ? DeliveryStatus.IN_TRANSIT : DeliveryStatus.LABEL_CREATED)}
+                        defaultValue={o.deliveryStatus ?? inferDeliveryStatus({ trackingNumber: o.trackingNumber })}
                         className="input w-48"
                       >
                         <option value={DeliveryStatus.LABEL_CREATED}>Label created</option>
