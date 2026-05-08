@@ -39,7 +39,7 @@ export default function RefundPage() {
 
       <section>
         <h2 className="text-xl font-bold mb-2">7. Item significantly not as described</h2>
-        <p className="text-slate-700">If the item you receive is materially different from the listing description, you may request a return or refund within the seller&apos;s posted return window. Photo evidence is strongly recommended and may be required for a final decision.</p>
+        <p className="text-slate-700">If the item you receive is materially different from the listing description, you may request a return or refund within the seller&apos;s posted return window when one exists. Even without a routine return window, buyers can still open a dispute for wrong-item, damage, counterfeit, or other serious item-condition problems. Photo evidence is strongly recommended and may be required for a final decision.</p>
       </section>
 
       <section>

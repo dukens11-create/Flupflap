@@ -104,7 +104,11 @@ export default async function AdminPage({
           <a href="/admin/reports" className={`text-sm ${openReportsCount > 0 ? 'btn bg-red-600 hover:bg-red-700 text-white' : 'btn-outline'}`}>
             Reports {openReportsCount > 0 ? `(${openReportsCount})` : '→'}
           </a>
-          <a href="/admin/disputes" className={`text-sm ${openDisputesCount > 0 ? 'btn bg-orange-600 hover:bg-orange-700 text-white' : 'btn-outline'}`}>
+          <a
+            href="/admin/disputes"
+            aria-label={openDisputesCount > 0 ? `Urgent: ${openDisputesCount} disputes need review` : 'Open order disputes'}
+            className={`text-sm ${openDisputesCount > 0 ? 'btn bg-orange-600 hover:bg-orange-700 text-white' : 'btn-outline'}`}
+          >
             Disputes {openDisputesCount > 0 ? `(${openDisputesCount})` : '→'}
           </a>
           <a href="/admin/promotions" className="btn-outline text-sm">

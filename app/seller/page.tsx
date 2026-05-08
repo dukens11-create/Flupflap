@@ -295,7 +295,11 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
           <p className="text-slate-500 text-sm">Welcome back, {session.user.name}</p>
         </div>
         <div className="flex gap-2">
-          <Link href="/disputes" className={`text-sm ${openDisputesCount > 0 ? 'btn bg-red-600 hover:bg-red-700 text-white' : 'btn-outline'}`}>
+          <Link
+            href="/disputes"
+            aria-label={openDisputesCount > 0 ? `Urgent: you have ${openDisputesCount} open dispute${openDisputesCount === 1 ? '' : 's'}` : 'Open dispute center'}
+            className={`text-sm ${openDisputesCount > 0 ? 'btn bg-red-600 hover:bg-red-700 text-white' : 'btn-outline'}`}
+          >
             Disputes {openDisputesCount > 0 ? `(${openDisputesCount})` : '→'}
           </Link>
           {!isRestricted && subscriptionActive && verificationApproved && <Link href="/seller/new" className="btn-primary">+ New listing</Link>}
