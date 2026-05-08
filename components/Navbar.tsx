@@ -82,6 +82,7 @@ export default function Navbar() {
             alt="FlupFlap"
             width={128}
             height={53}
+            priority
             className="h-8 w-auto"
           />
         </Link>
