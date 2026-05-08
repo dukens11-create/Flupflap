@@ -19,7 +19,17 @@ const updateSchema = z.object({
   pickupCity: z.string().max(100).optional(),
   pickupState: z.string().max(2).optional(),
   pickupPostalCode: z.string().max(20).optional(),
+  returnWindowDays: z.string().optional(),
 });
+
+function parseReturnWindowDays(value?: string) {
+  if (!value) return null;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 30) {
+    throw new Error('Invalid return window.');
+  }
+  return parsed;
+}
 
 async function getSellerProduct(id: string, sellerId: string) {
   return prisma.product.findFirst({ where: { id, sellerId } });
@@ -90,6 +100,7 @@ export async function POST(
         pickupCity: data.pickupCity || null,
         pickupState: data.pickupState || null,
         pickupPostalCode: data.pickupPostalCode || null,
+        returnWindowDays: parseReturnWindowDays(data.returnWindowDays),
         // Reset to PENDING on edit so admin can re-review
         status: 'PENDING',
       },
@@ -156,6 +167,7 @@ export async function PATCH(
         ...(data.pickupCity !== undefined && { pickupCity: data.pickupCity || null }),
         ...(data.pickupState !== undefined && { pickupState: data.pickupState || null }),
         ...(data.pickupPostalCode !== undefined && { pickupPostalCode: data.pickupPostalCode || null }),
+        ...(data.returnWindowDays !== undefined && { returnWindowDays: parseReturnWindowDays(data.returnWindowDays) }),
         status: 'PENDING',
       },
     });
@@ -164,6 +176,9 @@ export async function PATCH(
   } catch (err: any) {
     if (err?.name === 'ZodError') {
       return NextResponse.json({ error: 'Invalid input.' }, { status: 400 });
+    }
+    if (err instanceof Error && err.message === 'Invalid return window.') {
+      return NextResponse.json({ error: 'Return window must be between 1 and 30 days.' }, { status: 400 });
     }
     console.error('[seller/products/[id] PATCH]', err);
     return NextResponse.json({ error: 'Failed to update listing.' }, { status: 500 });

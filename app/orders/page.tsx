@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { dollars } from '@/lib/money';
+import { disputeStatusBadge, disputeStatusLabel } from '@/lib/disputes';
 import type { Metadata } from 'next';
 
 export const dynamic = 'force-dynamic';
@@ -40,6 +41,7 @@ export default async function OrdersPage() {
       items: {
         include: {
           product: { select: { title: true, imageUrl: true, id: true } },
+          dispute: { select: { status: true } },
         },
       },
     },
@@ -49,6 +51,9 @@ export default async function OrdersPage() {
   return (
     <main className="max-w-3xl mx-auto">
       <h1 className="text-3xl font-black mb-6">My Orders</h1>
+      <div className="mb-4 flex justify-end">
+        <a href="/disputes" className="btn-outline text-sm">Dispute Center</a>
+      </div>
       {orders.length === 0 ? (
         <div className="card p-8 text-center text-slate-500">
           No orders yet. <a href="/" className="text-blue-600 hover:underline">Start shopping</a>.
@@ -72,6 +77,11 @@ export default async function OrdersPage() {
                     <div>
                       <a href={`/products/${item.product.id}`} className="text-sm font-medium hover:text-blue-600">{item.product.title}</a>
                       <p className="text-xs text-slate-500">Qty: {item.quantity} · {dollars(item.priceCents)}</p>
+                      {item.dispute && (
+                        <span className={`mt-1 inline-flex ${disputeStatusBadge(item.dispute.status)}`}>
+                          {disputeStatusLabel(item.dispute.status)}
+                        </span>
+                      )}
                     </div>
                   </div>
                 ))}

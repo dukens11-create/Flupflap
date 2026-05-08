@@ -102,7 +102,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   const defaultKycProvider = getDefaultSellerKycProvider();
 
   await expirePromotions();
-  const [settings, products, orders, soldItems, verificationSubmission] = await Promise.all([
+  const [settings, products, orders, soldItems, verificationSubmission, openDisputesCount] = await Promise.all([
     getMarketplaceSettings(),
     prisma.product.findMany({
       where: { sellerId: session.user.id },
@@ -117,7 +117,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
     }),
     prisma.order.findMany({
       where: { items: { some: { product: { sellerId: session.user.id } } } },
-      include: { items: { include: { product: { select: { title: true } } } } },
+      include: { items: { include: { product: { select: { title: true } }, dispute: { select: { status: true } } } } },
       orderBy: { createdAt: 'desc' },
       take: 20,
     }),
@@ -158,6 +158,12 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
         eligibleToListAt: true,
         adminFallbackStatus: true,
         adminFallbackReason: true,
+      },
+    }),
+    prisma.orderItemDispute.count({
+      where: {
+        sellerId: session.user.id,
+        status: { in: ['OPEN', 'UNDER_REVIEW'] },
       },
     }),
   ]);
@@ -288,7 +294,12 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
           <h1 className="text-3xl font-black">Seller Dashboard</h1>
           <p className="text-slate-500 text-sm">Welcome back, {session.user.name}</p>
         </div>
-        {!isRestricted && subscriptionActive && verificationApproved && <Link href="/seller/new" className="btn-primary">+ New listing</Link>}
+        <div className="flex gap-2">
+          <Link href="/disputes" className={`text-sm ${openDisputesCount > 0 ? 'btn bg-red-600 hover:bg-red-700 text-white' : 'btn-outline'}`}>
+            Disputes {openDisputesCount > 0 ? `(${openDisputesCount})` : '→'}
+          </Link>
+          {!isRestricted && subscriptionActive && verificationApproved && <Link href="/seller/new" className="btn-primary">+ New listing</Link>}
+        </div>
       </div>
 
       {isRestricted && (
@@ -804,7 +815,14 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                   <span className={`badge ${o.status === 'PAID' || o.status === 'SHIPPED' || o.status === 'DELIVERED' ? 'badge-green' : 'badge-yellow'}`}>{o.status}</span>
                 </div>
                 {o.items.map(i => (
-                  <p key={i.id} className="text-sm text-slate-700">{i.product.title} × {i.quantity}</p>
+                  <div key={i.id} className="text-sm text-slate-700 flex items-center gap-2 flex-wrap">
+                    <span>{i.product.title} × {i.quantity}</span>
+                    {i.dispute && (
+                      <span className={`badge ${i.dispute.status === 'RESOLVED' ? 'badge-green' : 'badge-yellow'}`}>
+                        {i.dispute.status === 'UNDER_REVIEW' ? 'Dispute under review' : i.dispute.status === 'RESOLVED' ? 'Dispute resolved' : 'Open dispute'}
+                      </span>
+                    )}
+                  </div>
                 ))}
                 <p className="text-sm font-bold mt-2">{dollars(o.totalCents)}</p>
                 {/* Shipping form for non-pickup PAID orders */}

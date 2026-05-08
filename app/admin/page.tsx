@@ -39,7 +39,7 @@ export default async function AdminPage({
   weekStart.setHours(0, 0, 0, 0);
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  const [settings, pending, all, recentOrders, restrictedSellersCount, buyerCount, sellerCount, openReportsCount, activePromotionsCount, productsThisWeek, productsThisMonth, activeListingsCount, soldItemsAgg, revenueThisWeekAgg, revenueThisMonthAgg] = await Promise.all([
+  const [settings, pending, all, recentOrders, restrictedSellersCount, buyerCount, sellerCount, openReportsCount, openDisputesCount, activePromotionsCount, productsThisWeek, productsThisMonth, activeListingsCount, soldItemsAgg, revenueThisWeekAgg, revenueThisMonthAgg] = await Promise.all([
     getMarketplaceSettings(),
     prisma.product.findMany({
       where: { status: 'PENDING' },
@@ -63,6 +63,9 @@ export default async function AdminPage({
     prisma.user.count({ where: { role: 'SELLER' } }),
     prisma.productReport.count({
       where: { status: 'OPEN' },
+    }),
+    prisma.orderItemDispute.count({
+      where: { status: { in: ['OPEN', 'UNDER_REVIEW'] } },
     }),
     prisma.promotion.count({
       where: { status: 'ACTIVE', expiresAt: { gt: now } },
@@ -100,6 +103,9 @@ export default async function AdminPage({
           <a href="/admin/sellers" className="btn-outline text-sm">Seller Management →</a>
           <a href="/admin/reports" className={`text-sm ${openReportsCount > 0 ? 'btn bg-red-600 hover:bg-red-700 text-white' : 'btn-outline'}`}>
             Reports {openReportsCount > 0 ? `(${openReportsCount})` : '→'}
+          </a>
+          <a href="/admin/disputes" className={`text-sm ${openDisputesCount > 0 ? 'btn bg-orange-600 hover:bg-orange-700 text-white' : 'btn-outline'}`}>
+            Disputes {openDisputesCount > 0 ? `(${openDisputesCount})` : '→'}
           </a>
           <a href="/admin/promotions" className="btn-outline text-sm">
             Promotions {activePromotionsCount > 0 ? `(${activePromotionsCount})` : '→'}
@@ -199,6 +205,15 @@ export default async function AdminPage({
             <p className="font-bold text-slate-800">Product Reports</p>
             <p className={`text-sm ${openReportsCount > 0 ? 'text-red-600 font-medium' : 'text-slate-500'}`}>
               {openReportsCount > 0 ? `${openReportsCount} open report${openReportsCount !== 1 ? 's' : ''} need review` : 'No open reports'}
+            </p>
+          </div>
+        </a>
+        <a href="/admin/disputes" className={`card p-5 flex items-center gap-4 hover:bg-slate-50 transition-colors ${openDisputesCount > 0 ? 'border-orange-200 bg-orange-50' : ''}`}>
+          <div className="text-3xl">💬</div>
+          <div>
+            <p className="font-bold text-slate-800">Order Disputes</p>
+            <p className={`text-sm ${openDisputesCount > 0 ? 'text-orange-700 font-medium' : 'text-slate-500'}`}>
+              {openDisputesCount > 0 ? `${openDisputesCount} dispute${openDisputesCount !== 1 ? 's' : ''} need review` : 'No open disputes'}
             </p>
           </div>
         </a>

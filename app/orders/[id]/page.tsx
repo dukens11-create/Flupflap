@@ -6,6 +6,14 @@ import { dollars } from '@/lib/money';
 import { getStoredLineSubtotalCents } from '@/lib/commission';
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import {
+  disputeStatusBadge,
+  disputeStatusLabel,
+  getReturnWindowState,
+  refundStatusBadge,
+  refundStatusLabel,
+} from '@/lib/disputes';
+import DisputeCreationForm from '@/components/DisputeCreationForm';
 
 export const metadata: Metadata = { title: 'Order Details' };
 
@@ -36,13 +44,16 @@ function statusBadge(status: string) {
 
 export default async function OrderDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ dispute?: string }>;
 }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect('/login');
 
   const { id } = await params;
+  const sp = await searchParams;
 
   const order = await prisma.order.findFirst({
     where: {
@@ -58,9 +69,11 @@ export default async function OrderDetailPage({
               id: true,
               title: true,
               imageUrl: true,
+              returnWindowDays: true,
               seller: { select: { name: true } },
             },
           },
+          dispute: true,
         },
       },
     },
@@ -72,6 +85,7 @@ export default async function OrderDetailPage({
     <main className="max-w-2xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
         <Link href="/orders" className="text-sm text-slate-500 hover:text-blue-600">← My Orders</Link>
+        <Link href="/disputes" className="text-sm text-blue-600 hover:underline">Dispute Center</Link>
       </div>
 
       <div className="flex items-start justify-between mb-4">
@@ -82,33 +96,109 @@ export default async function OrderDetailPage({
         <span className={`badge ${statusBadge(order.status)}`}>{STATUS_LABELS[order.status] ?? order.status}</span>
       </div>
 
-      {/* Items */}
+      {sp.dispute === 'created' && (
+        <div className="card p-4 mb-4 bg-green-50 border-green-200 text-green-800 text-sm">
+          Your request has been submitted to the seller. If needed, FlupFlap can review the dispute and make the final refund decision.
+        </div>
+      )}
+      {['exists', 'not-eligible', 'invalid', 'error', 'not-found'].includes(sp.dispute ?? '') && (
+        <div className="card p-4 mb-4 bg-red-50 border-red-200 text-red-800 text-sm">
+          {sp.dispute === 'exists' && 'A request already exists for that order item.'}
+          {sp.dispute === 'not-eligible' && 'This order is not ready for a dispute yet.'}
+          {sp.dispute === 'invalid' && 'Please complete all required dispute details before submitting.'}
+          {sp.dispute === 'not-found' && 'We could not find the order item you selected.'}
+          {sp.dispute === 'error' && 'We could not submit your request. Please try again.'}
+        </div>
+      )}
+
       <div className="card p-5 mb-4">
         <h2 className="font-bold mb-3">Items ordered</h2>
-        <div className="space-y-3">
-          {order.items.map(item => (
-            <div key={item.id} className="flex items-center gap-3">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={item.product.imageUrl}
-                alt={item.product.title}
-                className="w-14 h-14 object-cover rounded-lg flex-shrink-0"
-              />
-              <div className="flex-1 min-w-0">
-                <Link href={`/products/${item.product.id}`} className="font-medium hover:text-blue-600 truncate block">
-                  {item.product.title}
-                </Link>
-                <p className="text-xs text-slate-500">
-                  Sold by {item.product.seller.name} · {dollars(item.priceCents)} each · Qty: {item.quantity}
-                </p>
+        <div className="space-y-4">
+          {order.items.map((item) => {
+            const returnWindow = getReturnWindowState({
+              returnWindowDays: item.product.returnWindowDays,
+              orderStatus: order.status,
+              updatedAt: order.updatedAt,
+              pickupConfirmedAt: order.pickupConfirmedAt,
+            });
+
+            return (
+              <div key={item.id} className="rounded-2xl border border-slate-200 p-4">
+                <div className="flex items-center gap-3">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={item.product.imageUrl}
+                    alt={item.product.title}
+                    className="w-14 h-14 object-cover rounded-lg flex-shrink-0"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <Link href={`/products/${item.product.id}`} className="font-medium hover:text-blue-600 truncate block">
+                      {item.product.title}
+                    </Link>
+                    <p className="text-xs text-slate-500">
+                      Sold by {item.product.seller.name} · {dollars(item.priceCents)} each · Qty: {item.quantity}
+                    </p>
+                  </div>
+                  <p className="font-semibold flex-shrink-0">{dollars(getStoredLineSubtotalCents(item))}</p>
+                </div>
+
+                <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-semibold text-slate-900">{returnWindow.title}</span>
+                    {item.dispute && (
+                      <>
+                        <span className={disputeStatusBadge(item.dispute.status)}>
+                          {disputeStatusLabel(item.dispute.status)}
+                        </span>
+                        <span className={refundStatusBadge(item.dispute.refundStatus)}>
+                          {refundStatusLabel(item.dispute.refundStatus)}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                  <p className="mt-1 text-slate-600">{returnWindow.detail}</p>
+
+                  {item.dispute ? (
+                    <div className="mt-3 space-y-3 rounded-2xl bg-white p-4">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Buyer request</p>
+                        <p className="mt-1 text-slate-700">{item.dispute.description}</p>
+                      </div>
+                      {item.dispute.sellerResponse && (
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Seller response</p>
+                          <p className="mt-1 text-slate-700">{item.dispute.sellerResponse}</p>
+                        </div>
+                      )}
+                      {item.dispute.adminNotes && (
+                        <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">FlupFlap review</p>
+                          <p className="mt-1 text-blue-900">{item.dispute.adminNotes}</p>
+                        </div>
+                      )}
+                      {item.dispute.evidenceUrls.length > 0 && (
+                        <div className="grid grid-cols-3 gap-3">
+                          {item.dispute.evidenceUrls.map((url) => (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img key={url} src={url} alt="Dispute evidence" className="h-20 w-full rounded-xl object-cover" />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <DisputeCreationForm
+                      orderId={order.id}
+                      orderItemId={item.id}
+                      returnWindowCopy={returnWindow.detail}
+                    />
+                  )}
+                </div>
               </div>
-              <p className="font-semibold flex-shrink-0">{dollars(getStoredLineSubtotalCents(item))}</p>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
-      {/* Price breakdown */}
       <div className="card p-5 mb-4 space-y-2 text-sm">
         <h2 className="font-bold mb-1">Payment summary</h2>
         <div className="flex justify-between">
@@ -133,7 +223,6 @@ export default async function OrderDetailPage({
         </div>
       </div>
 
-      {/* Pickup info */}
       {order.isPickup && (
         <div className="card p-5 mb-4 bg-green-50 border-green-200">
           <h2 className="font-bold mb-2 text-green-800">🏠 Local Pickup Order</h2>
@@ -170,7 +259,6 @@ export default async function OrderDetailPage({
         </div>
       )}
 
-      {/* Shipping info */}
       {!order.isPickup && (order.shippingName || order.shippingLine1) && (
         <div className="card p-5 mb-4">
           <h2 className="font-bold mb-2">Shipping address</h2>
@@ -190,7 +278,6 @@ export default async function OrderDetailPage({
         </div>
       )}
 
-      {/* Tracking info */}
       {order.trackingNumber && (
         <div className="card p-5 mb-4">
           <h2 className="font-bold mb-2">Tracking</h2>

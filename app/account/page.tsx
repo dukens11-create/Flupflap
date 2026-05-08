@@ -603,6 +603,7 @@ export default function AccountPage() {
           <Link href="/admin" className="btn-dark block text-center">Admin Dashboard</Link>
         )}
         <Link href="/orders" className="btn-outline block text-center">My Orders</Link>
+        <Link href="/disputes" className="btn-outline block text-center">Dispute Center</Link>
         <button
           onClick={() => signOut({ callbackUrl: '/' })}
           className="w-full text-center text-sm text-slate-500 hover:text-red-600 py-2"

@@ -21,7 +21,17 @@ const schema = z.object({
   pickupCity: z.string().max(100).optional(),
   pickupState: z.string().max(2).optional(),
   pickupPostalCode: z.string().max(20).optional(),
+  returnWindowDays: z.string().optional(),
 });
+
+function parseReturnWindowDays(value?: string) {
+  if (!value) return null;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 30) {
+    throw new Error('Invalid return window.');
+  }
+  return parsed;
+}
 
 export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
@@ -102,6 +112,7 @@ export async function POST(req: Request) {
         pickupCity: data.pickupCity || null,
         pickupState: data.pickupState || null,
         pickupPostalCode: data.pickupPostalCode || null,
+        returnWindowDays: parseReturnWindowDays(data.returnWindowDays),
       },
     });
 
@@ -109,6 +120,9 @@ export async function POST(req: Request) {
   } catch (err: any) {
     if (err?.name === 'ZodError') {
       return NextResponse.json({ error: 'Invalid input.' }, { status: 400 });
+    }
+    if (err instanceof Error && err.message === 'Invalid return window.') {
+      return NextResponse.json({ error: 'Return window must be between 1 and 30 days.' }, { status: 400 });
     }
     console.error('[seller/products POST]', err);
     return NextResponse.json({ error: 'Failed to create listing.' }, { status: 500 });
