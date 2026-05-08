@@ -78,7 +78,7 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-24 flex items-center gap-4">
         <Link href="/" className="mr-4 flex items-center shrink-0" aria-label="FlupFlap home">
           <Image
-            src="/flupflap_logo.png"
+            src="/flupflap_logo_brand.png"
             alt="FlupFlap"
             width={614}
             height={255}

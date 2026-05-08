@@ -25,7 +25,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-wrap items-center gap-4">
               <Link href="/" className="flex items-center" aria-label="FlupFlap home">
                 <Image
-                  src="/flupflap_logo.png"
+                  src="/flupflap_logo_brand.png"
                   alt="FlupFlap"
                   width={614}
                   height={255}
