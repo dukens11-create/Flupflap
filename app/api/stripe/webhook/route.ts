@@ -460,49 +460,55 @@ export async function POST(req: Request) {
       });
     }
 
-    const sellerNotifications: CreateNotificationInput[] = Array.from(
-      new Map(
-        orderItems.map((item) => {
-          const sellerItems = orderItems.filter(
-            (candidate) => candidate.product.seller.id === item.product.seller.id,
-          );
-          const sellerItemCount = sellerItems.reduce((sum, sellerItem) => sum + sellerItem.quantity, 0);
-          const sellerNetCents = sellerItems.reduce(
-            (sum, sellerItem) => sum + sellerItem.sellerNetCents + (sellerItem.shippingCents * sellerItem.quantity),
-            0,
-          );
-          const payoutAmountLabel = sellerNetCents > 0
-            ? `$${(sellerNetCents / 100).toFixed(2)}`
-            : null;
-          const sellerEventNotifications: CreateNotificationInput[] = [
-            {
-              userId: item.product.seller.id,
-              type: NotificationType.ORDER_UPDATE,
-              title: 'New paid order',
-              body: `${sellerItemCount} item${sellerItemCount === 1 ? '' : 's'} from your listings were purchased.`,
-              link: '/seller',
-              data: { orderId: order.id },
-            },
-          ];
+    const sellerOrderGroups = orderItems.reduce<Map<string, { sellerId: string; itemCount: number; payoutCents: number }>>(
+      (groups, item) => {
+        const sellerId = item.product.seller.id;
+        const existing = groups.get(sellerId);
+        const payoutCents = item.sellerNetCents + (item.shippingCents * item.quantity);
 
-          if (payoutAmountLabel) {
-            sellerEventNotifications.push({
-              userId: item.product.seller.id,
-              type: NotificationType.PAYOUT,
-              title: 'Seller payout pending',
-              body: `${payoutAmountLabel} will move through Stripe for this sale.`,
-              link: '/seller',
-              data: { orderId: order.id, sellerNetCents },
-            });
-          }
+        if (existing) {
+          existing.itemCount += item.quantity;
+          existing.payoutCents += payoutCents;
+        } else {
+          groups.set(sellerId, {
+            sellerId,
+            itemCount: item.quantity,
+            payoutCents,
+          });
+        }
 
-          return [
-            item.product.seller.id,
-            sellerEventNotifications,
-          ] as const;
-        }),
-      ).values(),
-    ).flat();
+        return groups;
+      },
+      new Map(),
+    );
+
+    const sellerNotifications: CreateNotificationInput[] = Array.from(sellerOrderGroups.values()).flatMap(
+      ({ sellerId, itemCount, payoutCents }) => {
+        const notifications: CreateNotificationInput[] = [
+          {
+            userId: sellerId,
+            type: NotificationType.ORDER_UPDATE,
+            title: 'New paid order',
+            body: `${itemCount} item${itemCount === 1 ? '' : 's'} from your listings were purchased.`,
+            link: '/seller',
+            data: { orderId: order.id },
+          },
+        ];
+
+        if (payoutCents > 0) {
+          notifications.push({
+            userId: sellerId,
+            type: NotificationType.PAYOUT,
+            title: 'Seller payout pending',
+            body: `$${(payoutCents / 100).toFixed(2)} will move through Stripe for this sale.`,
+            link: '/seller',
+            data: { orderId: order.id, sellerNetCents: payoutCents },
+          });
+        }
+
+        return notifications;
+      },
+    );
 
     await createNotifications([...buyerNotifications, ...sellerNotifications]);
 
