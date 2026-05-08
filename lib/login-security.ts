@@ -73,11 +73,8 @@ function getDeviceLabel(userAgent: string | null) {
 
 function fingerprint(value: string | null) {
   if (!value) return null;
-  const secret =
-    process.env.NEXTAUTH_SECRET ??
-    process.env.AUTH_SECRET ??
-    process.env.DATABASE_URL ??
-    'flupflap-security';
+  const secret = process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET;
+  if (!secret) return null;
 
   return createHash('sha256').update(`${secret}:${value}`).digest('hex');
 }

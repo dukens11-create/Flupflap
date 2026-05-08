@@ -13,6 +13,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const form = await req.formData();
   const action = form.get('_method') as string;
   const redirectTo = (form.get('redirectTo') as string) || '/admin';
+  const actionToStatus: Record<string, 'APPROVED' | 'REJECTED' | 'HIDDEN'> = {
+    approve: 'APPROVED',
+    reject: 'REJECTED',
+    hide: 'HIDDEN',
+  };
 
   if (action !== 'approve' && action !== 'reject' && action !== 'hide') {
     return NextResponse.json({ error: 'Invalid action.' }, { status: 400 });
@@ -23,14 +28,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   await prisma.product.update({
     where: { id },
-    data: {
-      status:
-        action === 'approve'
-          ? 'APPROVED'
-          : action === 'reject'
-            ? 'REJECTED'
-            : 'HIDDEN',
-    },
+    data: { status: actionToStatus[action] },
   });
 
   return NextResponse.redirect(new URL(redirectTo, req.url));

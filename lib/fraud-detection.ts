@@ -67,9 +67,11 @@ function median(values: number[]) {
   if (values.length === 0) return null;
   const sorted = [...values].sort((a, b) => a - b);
   const middle = Math.floor(sorted.length / 2);
+  const middleValue = sorted[middle];
+  if (middleValue === undefined) return null;
   return sorted.length % 2 === 0
-    ? Math.round((sorted[middle - 1] + sorted[middle]) / 2)
-    : sorted[middle];
+    ? Math.round(((sorted[middle - 1] ?? middleValue) + middleValue) / 2)
+    : middleValue;
 }
 
 function dedupeReasons(reasons: ListingRiskReason[]) {
@@ -100,6 +102,7 @@ export function getListingRiskAssessment(
       const sameImage = listing.imageUrl === candidate.imageUrl;
       const samePriceBand =
         candidate.priceCents > 0 &&
+        listing.priceCents > 0 &&
         Math.abs(listing.priceCents - candidate.priceCents) / candidate.priceCents <= 0.15;
 
       let confidence = 0;

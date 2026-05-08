@@ -21,6 +21,7 @@ export default function ReportSellerButton({
   sellerId: string;
   sellerName: string;
 }) {
+  const displaySellerName = sellerName.replace(/\s+/g, ' ').trim() || 'this seller';
   const { data: session, status } = useSession();
   const router = useRouter();
 
@@ -66,7 +67,7 @@ export default function ReportSellerButton({
   if (success) {
     return (
       <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-        Thanks for the report. We&apos;ll review {sellerName}&apos;s account for suspicious activity.
+        Thanks for the report. We&apos;ll review {displaySellerName}&apos;s account for suspicious activity.
       </div>
     );
   }
@@ -95,7 +96,7 @@ export default function ReportSellerButton({
         >
           <p className="text-sm font-medium text-slate-700 flex items-center gap-1.5">
             <ShieldAlert size={14} className="text-amber-600" />
-            Report {sellerName}
+            Report {displaySellerName}
           </p>
           <div>
             <label className="label">Reason <span className="text-red-500">*</span></label>
