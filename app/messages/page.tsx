@@ -56,7 +56,6 @@ export default async function MessagesPage() {
         <div className="space-y-3">
           {conversations.map((conv) => {
             const lastMsg = conv.messages[0];
-            const isBuyer = conv.buyerId === userId;
             const unread = conv.unreadCount > 0;
 
             return (
@@ -80,7 +79,7 @@ export default async function MessagesPage() {
                     <div>
                       <p className="font-semibold text-sm truncate">{conv.product.title}</p>
                       <p className="text-xs text-slate-500">
-                        {isBuyer ? `Seller: ${conv.seller.name}` : `Buyer: ${conv.buyer.name}`}
+                        {conv.buyerId === userId ? `Seller: ${conv.seller.name}` : `Buyer: ${conv.buyer.name}`}
                       </p>
                     </div>
                     <div className="flex flex-col items-end gap-1 flex-shrink-0">
