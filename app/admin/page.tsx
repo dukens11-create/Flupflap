@@ -40,7 +40,7 @@ export default async function AdminPage({
   weekStart.setHours(0, 0, 0, 0);
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  const [settings, pending, all, recentOrders, restrictedSellersCount, buyerCount, sellerCount, openReportsCount, activePromotionsCount, productsThisWeek, productsThisMonth, activeListingsCount, soldProductsCount, revenueThisWeekAgg, revenueThisMonthAgg] = await Promise.all([
+  const [settings, pending, all, recentOrders, restrictedSellersCount, buyerCount, sellerCount, openReportsCount, activePromotionsCount, productsThisWeek, productsThisMonth, activeListingsCount, soldItemsAgg, revenueThisWeekAgg, revenueThisMonthAgg] = await Promise.all([
     getMarketplaceSettings(),
     prisma.product.findMany({
       where: { status: 'PENDING' },
@@ -71,7 +71,10 @@ export default async function AdminPage({
     prisma.product.count({ where: { createdAt: { gte: weekStart } } }),
     prisma.product.count({ where: { createdAt: { gte: monthStart } } }),
     prisma.product.count({ where: { status: 'APPROVED' } }),
-    prisma.product.count({ where: { status: 'SOLD' } }),
+    prisma.orderItem.aggregate({
+      _sum: { quantity: true },
+      where: { order: { status: { in: PAID_ORDER_STATUSES } } },
+    }),
     prisma.order.aggregate({
       _sum: { totalCents: true },
       where: { status: { in: PAID_ORDER_STATUSES }, createdAt: { gte: weekStart } },
@@ -84,6 +87,7 @@ export default async function AdminPage({
 
   const revenueThisWeekCents = revenueThisWeekAgg._sum.totalCents ?? 0;
   const revenueThisMonthCents = revenueThisMonthAgg._sum.totalCents ?? 0;
+  const soldItemsCount = soldItemsAgg._sum.quantity ?? 0;
 
   return (
     <main className="max-w-5xl mx-auto">
@@ -152,16 +156,16 @@ export default async function AdminPage({
             <p className="text-sm text-slate-500">Active listings</p>
           </div>
           <div className="card p-4 text-center">
-            <p className="text-2xl font-black text-slate-600">{soldProductsCount}</p>
+            <p className="text-2xl font-black text-slate-600">{soldItemsCount}</p>
             <p className="text-sm text-slate-500">Items sold (all time)</p>
           </div>
           <div className="card p-4 text-center">
             <p className="text-2xl font-black text-emerald-600">{dollars(revenueThisWeekCents)}</p>
-            <p className="text-sm text-slate-500">Revenue this week</p>
+            <p className="text-sm text-slate-500">Gross revenue this week</p>
           </div>
           <div className="card p-4 text-center">
             <p className="text-2xl font-black text-emerald-600">{dollars(revenueThisMonthCents)}</p>
-            <p className="text-sm text-slate-500">Revenue this month</p>
+            <p className="text-sm text-slate-500">Gross revenue this month</p>
           </div>
         </div>
       </section>
