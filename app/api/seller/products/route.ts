@@ -113,8 +113,8 @@ export async function POST(req: Request) {
     if (err?.name === 'ZodError') {
       return NextResponse.json({ error: 'Invalid input.' }, { status: 400 });
     }
-    if (err instanceof Error && err.message === 'Invalid return window.') {
-      return NextResponse.json({ error: 'Return window must be between 1 and 30 days.' }, { status: 400 });
+    if (err instanceof Error && err.message.includes('Return window must be between')) {
+      return NextResponse.json({ error: err.message }, { status: 400 });
     }
     console.error('[seller/products POST]', err);
     return NextResponse.json({ error: 'Failed to create listing.' }, { status: 500 });

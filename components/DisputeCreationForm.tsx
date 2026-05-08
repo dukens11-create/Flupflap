@@ -26,7 +26,7 @@ export default function DisputeCreationForm({
           <div>
             <label className="label">Issue</label>
             <select name="reason" className="input" required>
-              <option value="">Select…</option>
+              <option value="">Select...</option>
               {DISPUTE_REASON_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>{option.label}</option>
               ))}

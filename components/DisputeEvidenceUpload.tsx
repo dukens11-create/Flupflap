@@ -3,6 +3,7 @@
 import { useState } from 'react';
 
 const MAX_FILES = 3;
+const INPUT_ID = 'dispute-evidence-upload';
 
 export default function DisputeEvidenceUpload({ defaultValue = [] }: { defaultValue?: string[] }) {
   const [urls, setUrls] = useState(defaultValue);
@@ -45,8 +46,9 @@ export default function DisputeEvidenceUpload({ defaultValue = [] }: { defaultVa
   return (
     <div className="space-y-3">
       <div>
-        <label className="label">Evidence images (optional)</label>
+        <label htmlFor={INPUT_ID} className="label">Evidence images (optional)</label>
         <input
+          id={INPUT_ID}
           type="file"
           accept="image/jpeg,image/png,image/webp,image/gif"
           multiple

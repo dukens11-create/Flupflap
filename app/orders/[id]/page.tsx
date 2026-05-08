@@ -89,6 +89,12 @@ export default async function OrderDetailPage({
 
   if (!order) notFound();
 
+  const orderReturnContext = {
+    orderStatus: order.status,
+    updatedAt: order.updatedAt,
+    pickupConfirmedAt: order.pickupConfirmedAt,
+  };
+
   return (
     <main className="max-w-2xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
@@ -120,10 +126,8 @@ export default async function OrderDetailPage({
         <div className="space-y-4">
           {order.items.map((item) => {
             const returnWindow = getReturnWindowState({
+              ...orderReturnContext,
               returnWindowDays: item.product.returnWindowDays,
-              orderStatus: order.status,
-              updatedAt: order.updatedAt,
-              pickupConfirmedAt: order.pickupConfirmedAt,
             });
 
             return (

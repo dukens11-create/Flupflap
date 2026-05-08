@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth-options';
 import { isCloudinaryConfigured } from '@/lib/cloudinary';
 import { ALLOWED_IMAGE_TYPES, MAX_IMAGE_UPLOAD_BYTES, uploadImageToCloudinary } from '@/lib/image-upload';
 
+// Optional override for teams that want dispute evidence in a separate Cloudinary folder.
 const UPLOAD_FOLDER = process.env.CLOUDINARY_DISPUTE_UPLOAD_FOLDER ?? 'flupflap/disputes';
 
 export async function POST(req: Request) {

@@ -103,6 +103,9 @@ export async function POST(
     if (err?.name === 'ZodError') {
       return NextResponse.json({ error: 'Invalid input.' }, { status: 400 });
     }
+    if (err instanceof Error && err.message.includes('Return window must be between')) {
+      return NextResponse.json({ error: err.message }, { status: 400 });
+    }
     console.error('[seller/products/[id] POST]', err);
     return NextResponse.json({ error: 'Failed to update listing.' }, { status: 500 });
   }
@@ -169,8 +172,8 @@ export async function PATCH(
     if (err?.name === 'ZodError') {
       return NextResponse.json({ error: 'Invalid input.' }, { status: 400 });
     }
-    if (err instanceof Error && err.message === 'Invalid return window.') {
-      return NextResponse.json({ error: 'Return window must be between 1 and 30 days.' }, { status: 400 });
+    if (err instanceof Error && err.message.includes('Return window must be between')) {
+      return NextResponse.json({ error: err.message }, { status: 400 });
     }
     console.error('[seller/products/[id] PATCH]', err);
     return NextResponse.json({ error: 'Failed to update listing.' }, { status: 500 });

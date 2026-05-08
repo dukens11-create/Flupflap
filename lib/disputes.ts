@@ -29,7 +29,7 @@ export function parseReturnWindowDays(value?: string) {
   if (!value) return null;
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed < 1 || parsed > MAX_RETURN_WINDOW_DAYS) {
-    throw new Error('Invalid return window.');
+    throw new Error(`Return window must be between 1 and ${MAX_RETURN_WINDOW_DAYS} days.`);
   }
   return parsed;
 }
@@ -69,9 +69,8 @@ export function refundStatusLabel(status: string) {
 }
 
 function addDays(date: Date, days: number) {
-  const next = new Date(date);
-  next.setDate(next.getDate() + days);
-  return next;
+  // Use an explicit timestamp calculation so the input Date is never mutated.
+  return new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
 }
 
 export function getReturnWindowState({
