@@ -10,6 +10,9 @@ export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = { title: 'Browse Products' };
 
+const PROMOTION_CLICK_WEIGHT = 5;
+const PROMOTION_SALE_WEIGHT = 25;
+
 /**
  * Returns true when a Prisma/Postgres error indicates the schema has not been
  * applied yet (tables or columns are missing). This lets the homepage show a
@@ -47,7 +50,7 @@ function parsePriceBound(value?: string): number | undefined {
 
 function getPromotionScore(promotions: Array<{ impressionCount: number; clickCount: number; saleCount: number }>) {
   return promotions.reduce(
-    (score, promotion) => score + promotion.impressionCount + (promotion.clickCount * 5) + (promotion.saleCount * 25),
+    (score, promotion) => score + promotion.impressionCount + (promotion.clickCount * PROMOTION_CLICK_WEIGHT) + (promotion.saleCount * PROMOTION_SALE_WEIGHT),
     0,
   );
 }

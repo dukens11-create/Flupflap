@@ -99,7 +99,7 @@ export default function BrowseFilters() {
     startTransition(() => router.push('/'));
   };
 
-  const handleCommitKeyDown = (key: string) => {
+  const handlePriceInputKeyDown = (key: string) => {
     if (key === 'Enter') applyPriceFilters();
   };
 
@@ -153,7 +153,7 @@ export default function BrowseFilters() {
           value={minPriceValue}
           onChange={e => setMinPriceValue(e.target.value)}
           onBlur={applyPriceFilters}
-          onKeyDown={e => handleCommitKeyDown(e.key)}
+          onKeyDown={e => handlePriceInputKeyDown(e.key)}
         />
         <input
           className="input"
@@ -163,7 +163,7 @@ export default function BrowseFilters() {
           value={maxPriceValue}
           onChange={e => setMaxPriceValue(e.target.value)}
           onBlur={applyPriceFilters}
-          onKeyDown={e => handleCommitKeyDown(e.key)}
+          onKeyDown={e => handlePriceInputKeyDown(e.key)}
         />
         {hasFilters && (
           <button className="btn-outline" onClick={clear}>{t('filters.clearFilters')}</button>
@@ -171,8 +171,8 @@ export default function BrowseFilters() {
       </div>
       {suggestions.length > 0 && (
         <datalist id="browse-search-suggestions">
-          {suggestions.map((suggestion) => (
-            <option key={suggestion} value={suggestion} />
+          {suggestions.map((suggestion, index) => (
+            <option key={`${suggestion}-${index}`} value={suggestion} />
           ))}
         </datalist>
       )}
