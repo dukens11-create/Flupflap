@@ -727,7 +727,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
             sub={
               sellerResponseStats.responseRate === null
                 ? 'needs more inbox history'
-                : `${sellerResponseStats.respondedCount}/${sellerResponseStats.eligibleCount} buyer threads replied to within ${SELLER_RESPONSE_WINDOW_HOURS}h`
+                : `${sellerResponseStats.respondedCount}/${sellerResponseStats.eligibleCount} buyer conversations replied to within ${SELLER_RESPONSE_WINDOW_HOURS}h`
             }
           />
           <StatCard

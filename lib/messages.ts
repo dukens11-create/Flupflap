@@ -10,7 +10,6 @@ export const MESSAGE_MAX_LENGTH = 2000;
 export const MESSAGE_RATE_LIMIT_WINDOW_MINUTES = 10;
 export const MESSAGE_RATE_LIMIT_MAX = 6;
 export const MESSAGE_DUPLICATE_WINDOW_MINUTES = 2;
-export const MESSAGE_MAX_LINKS = 2;
 export const SELLER_RESPONSE_LOOKBACK_DAYS = 90;
 export const SELLER_RESPONSE_WINDOW_HOURS = 24;
 
@@ -120,12 +119,6 @@ export async function getMessageSpamError({
 
   if (duplicateFound) {
     return 'Please avoid sending the same message repeatedly.';
-  }
-
-  const linkCount =
-    normalizedBody.match(/\b(?:https?:\/\/|www\.)[^\s<]+/gi)?.length ?? 0;
-  if (linkCount > MESSAGE_MAX_LINKS) {
-    return 'Please remove extra links and keep the message focused on the listing.';
   }
 
   return null;
