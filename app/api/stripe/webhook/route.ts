@@ -12,6 +12,7 @@ import {
   applyAutomatedKycResult,
   stripeKycChecksFromAccount,
 } from '@/lib/kyc/providers';
+import { revalidateProductsCache } from '@/lib/cache-tags';
 
 /** Generate a cryptographically secure 6-digit pickup confirmation code. */
 function generatePickupCode(): string {
@@ -278,6 +279,7 @@ export async function POST(req: Request) {
         data: { status: 'ACTIVE', startsAt: now, expiresAt },
       });
 
+      revalidateProductsCache(promo.productId);
       return new NextResponse('ok', { status: 200 });
     }
     const metadataBuyerId: string = cs.metadata?.buyerId;
@@ -463,18 +465,30 @@ export async function POST(req: Request) {
       }
     }
 
+    const activePromotions = await prisma.promotion.findMany({
+      where: {
+        productId: { in: orderItems.map((item) => item.product.id) },
+        status: 'ACTIVE',
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { expiresAt: 'desc' },
+      select: { id: true, productId: true },
+    });
+    const activePromotionByProductId = new Map<string, string>();
+    for (const promotion of activePromotions) {
+      // `activePromotions` is ordered by latest expiry first so the first row for a
+      // product is the currently most relevant active promotion we want to update.
+      if (!activePromotionByProductId.has(promotion.productId)) {
+        activePromotionByProductId.set(promotion.productId, promotion.id);
+      }
+    }
+
     // Decrement inventory and mark as SOLD if qty reaches 0
     for (const item of orderItems) {
-      const activePromotion = await prisma.promotion.findFirst({
-        where: {
-          productId: item.product.id,
-          status: 'ACTIVE',
-          expiresAt: { gt: new Date() },
-        },
-      });
-      if (activePromotion) {
+      const activePromotionId = activePromotionByProductId.get(item.product.id);
+      if (activePromotionId) {
         await prisma.promotion.update({
-          where: { id: activePromotion.id },
+          where: { id: activePromotionId },
           data: {
             saleCount: { increment: item.quantity },
             saleAmountCents: { increment: item.lineSubtotalCents },
@@ -489,6 +503,7 @@ export async function POST(req: Request) {
           status: newInventory <= 0 ? 'SOLD' : undefined,
         },
       });
+      revalidateProductsCache(item.product.id);
     }
 
     if (snapshot) {

@@ -94,6 +94,11 @@ Set these in **Environment → Environment Variables** in the Render dashboard:
 | `STRIPE_PUBLISHABLE_KEY` | Stripe publishable key |
 | `STRIPE_WEBHOOK_SECRET` | Secret from your Stripe webhook endpoint |
 | `PLATFORM_FEE_PERCENT` | Legacy bootstrap env var (the app normalizes commission snapshots to `6`) |
+| `NEXT_PUBLIC_CDN_URL` | Optional CDN / asset host for Next.js static assets |
+| `CATALOG_CACHE_TTL_SECONDS` | Optional server-side cache TTL for browse and product catalog reads (default `60`) |
+| `PROMOTION_METRIC_QUEUE_FLUSH_MS` | Optional flush interval for batched promotion impression/click updates (default `5000`) |
+| `PROMOTION_METRIC_QUEUE_BATCH_SIZE` | Optional max buffered promotion metric batch size before immediate flush (default `25`) |
+| `PROMOTION_EXPIRATION_SWEEP_MS` | Optional minimum interval between promotion expiration sweeps (default `60000`) |
 
 ### Why the build succeeds but deployment fails
 
@@ -159,6 +164,14 @@ Each checkout stores commission snapshots on order items so seller earnings, Str
 
 ## Image uploads
 This build supports image URLs by default. For production, connect Cloudinary, UploadThing, S3, or Vercel Blob and store the returned URL in `imageUrl`.
+
+## Performance and scalability defaults
+
+- Next.js is CDN-ready through the optional `NEXT_PUBLIC_CDN_URL` asset prefix plus long-lived cache headers for `/_next/static` and CDN-friendly caching on `/_next/image`.
+- Product browse/detail reads now use short-lived server-side caching with explicit cache invalidation whenever listings or promotion visibility changes.
+- Promotion impressions and clicks are buffered through a lightweight in-process queue so browse/detail requests avoid synchronous write amplification during traffic spikes.
+- Cloudinary uploads now constrain oversized originals and return auto-quality delivery URLs for smaller image payloads.
+- Prisma includes additional indexes for common product, order, order-item, and promotion access patterns. Apply them in production with `npx prisma db push`.
 
 ## Taxes
 A placeholder `taxCents` field exists. For launch, connect Stripe Tax or TaxJar/Avalara because tax rules depend on state, city, nexus, product type, and seller location.

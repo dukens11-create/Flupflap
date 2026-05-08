@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
+import { revalidateProductsCache } from '@/lib/cache-tags';
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
@@ -25,6 +26,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     data: { status: action === 'approve' ? 'APPROVED' : 'REJECTED' },
   });
 
+  revalidateProductsCache(id);
   return NextResponse.redirect(new URL('/admin', req.url));
 }
 
@@ -45,5 +47,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     data: { status },
   });
 
+  revalidateProductsCache(product.id);
   return NextResponse.json(product);
 }

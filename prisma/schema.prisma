@@ -166,6 +166,8 @@ model Product {
 
   @@index([status, category, condition])
   @@index([title])
+  @@index([status, createdAt])
+  @@index([sellerId, createdAt])
 }
 
 model Address {
@@ -217,6 +219,9 @@ model Order {
   createdAt             DateTime    @default(now())
   updatedAt             DateTime    @updatedAt
   items                 OrderItem[]
+
+  @@index([buyerId, createdAt])
+  @@index([status, createdAt])
 }
 
 model OrderItem {
@@ -234,6 +239,9 @@ model OrderItem {
   sellerNetCents     Int     @default(0)
   commissionSource   String  @default("DEFAULT")
   commissionPlanCode String?
+
+  @@index([orderId])
+  @@index([productId])
 }
 
 model Account {
@@ -438,6 +446,8 @@ model Promotion {
   @@index([productId])
   @@index([sellerId])
   @@index([status])
+  @@index([status, expiresAt])
+  @@index([productId, status, expiresAt])
 }
 
 model PromotionPlan {

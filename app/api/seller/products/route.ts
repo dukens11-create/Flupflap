@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { isSubscriptionActive } from '@/lib/subscription';
 import { syncSellerSubscriptionFromStripe } from '@/lib/subscription-sync';
 import { isSellerVerificationApproved } from '@/lib/seller-verification';
+import { revalidateProductsCache } from '@/lib/cache-tags';
 
 const schema = z.object({
   title: z.string().min(3),
@@ -105,6 +106,7 @@ export async function POST(req: Request) {
       },
     });
 
+    revalidateProductsCache(product.id);
     return NextResponse.redirect(new URL(`/seller?created=${product.id}`, req.url));
   } catch (err: any) {
     if (err?.name === 'ZodError') {

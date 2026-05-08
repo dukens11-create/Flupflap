@@ -1,0 +1,98 @@
+import { unstable_cache } from 'next/cache';
+import type { Prisma } from '@prisma/client';
+import { prisma } from '@/lib/db';
+import { PRODUCTS_CACHE_TAG, productCacheTag } from '@/lib/cache-tags';
+
+export interface CatalogSearchParams {
+  q?: string;
+  category?: string;
+  condition?: string;
+  minPrice?: string;
+  maxPrice?: string;
+}
+
+function readPositiveIntegerEnv(name: string, fallback: number) {
+  const value = process.env[name];
+  const parsed = value ? Number.parseInt(value, 10) : fallback;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+const CATALOG_CACHE_TTL_SECONDS = readPositiveIntegerEnv('CATALOG_CACHE_TTL_SECONDS', 60);
+
+function activePromotionWhere() {
+  return { status: 'ACTIVE' as const, expiresAt: { gt: new Date() } };
+}
+
+function catalogSearchCacheKey(sp: CatalogSearchParams) {
+  return JSON.stringify({
+    q: sp.q ?? '',
+    category: sp.category ?? '',
+    condition: sp.condition ?? '',
+    minPrice: sp.minPrice ?? '',
+    maxPrice: sp.maxPrice ?? '',
+  });
+}
+
+function buildApprovedProductWhere(sp: CatalogSearchParams): Prisma.ProductWhereInput {
+  const where: Prisma.ProductWhereInput = { status: 'APPROVED' };
+
+  if (sp.q) where.title = { contains: sp.q, mode: 'insensitive' };
+  if (sp.category) where.category = sp.category;
+  if (sp.condition) where.condition = sp.condition;
+  if (sp.minPrice || sp.maxPrice) {
+    where.priceCents = {};
+    if (sp.minPrice) where.priceCents.gte = Math.round(Number(sp.minPrice) * 100);
+    if (sp.maxPrice) where.priceCents.lte = Math.round(Number(sp.maxPrice) * 100);
+  }
+
+  return where;
+}
+
+export async function getCachedCatalogProducts(sp: CatalogSearchParams) {
+  const where = buildApprovedProductWhere(sp);
+  const cacheKey = catalogSearchCacheKey(sp);
+
+  const loadProducts = unstable_cache(
+    async (inputWhere: Prisma.ProductWhereInput) =>
+      prisma.product.findMany({
+        where: inputWhere,
+        orderBy: { createdAt: 'desc' },
+        take: 60,
+        include: {
+          promotions: {
+            where: activePromotionWhere(),
+            orderBy: { expiresAt: 'desc' },
+            take: 1,
+          },
+        },
+      }),
+    ['catalog-products', cacheKey],
+    { revalidate: CATALOG_CACHE_TTL_SECONDS, tags: [PRODUCTS_CACHE_TAG] },
+  );
+
+  return loadProducts(where);
+}
+
+export async function getCachedApprovedProduct(productId: string) {
+  const loadProduct = unstable_cache(
+    async (id: string) =>
+      prisma.product.findUnique({
+        where: { id },
+        include: {
+          seller: { select: { id: true, name: true } },
+          promotions: {
+            where: activePromotionWhere(),
+            orderBy: { expiresAt: 'desc' },
+            take: 1,
+          },
+        },
+      }),
+    [productCacheTag(productId)],
+    {
+      revalidate: CATALOG_CACHE_TTL_SECONDS,
+      tags: [PRODUCTS_CACHE_TAG, productCacheTag(productId)],
+    },
+  );
+
+  return loadProduct(productId);
+}

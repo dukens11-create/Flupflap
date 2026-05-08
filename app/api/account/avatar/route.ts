@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { getCloudinary, isCloudinaryConfigured } from '@/lib/cloudinary';
+import { getOptimizedImageUrl } from '@/lib/images';
 
 const AVATAR_FOLDER = 'flupflap/avatars';
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
@@ -61,7 +62,10 @@ export async function POST(req: Request) {
             folder: AVATAR_FOLDER,
             resource_type: 'image',
             // Crop to a square, centered on the face if detected.
-            transformation: [{ width: AVATAR_WIDTH, height: AVATAR_HEIGHT, crop: 'fill', gravity: 'auto' }],
+            transformation: [
+              { width: AVATAR_WIDTH, height: AVATAR_HEIGHT, crop: 'fill', gravity: 'auto' },
+              { quality: 'auto:good' },
+            ],
           },
           (err, res) => {
             if (err || !res) reject(err ?? new Error('No result from Cloudinary'));
@@ -71,12 +75,18 @@ export async function POST(req: Request) {
         .end(buffer);
     });
 
-    await prisma.user.update({
-      where: { id: session.user.id },
-      data: { image: result.secure_url },
+    const avatarUrl = getOptimizedImageUrl(result.secure_url, {
+      width: AVATAR_WIDTH,
+      height: AVATAR_HEIGHT,
+      crop: 'fill',
     });
 
-    return NextResponse.json({ url: result.secure_url });
+    await prisma.user.update({
+      where: { id: session.user.id },
+      data: { image: avatarUrl },
+    });
+
+    return NextResponse.json({ url: avatarUrl });
   } catch (err) {
     console.error('[api/account/avatar]', err);
     return NextResponse.json({ error: 'Upload failed. Please try again.' }, { status: 500 });
