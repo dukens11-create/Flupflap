@@ -25,7 +25,7 @@ export async function GET(
     return NextResponse.json({ error: 'Document not found.' }, { status: 404 });
   }
 
-  const sellerId = session.user.role === 'ADMIN'
+  const sellerId: string | null = session.user.role === 'ADMIN'
     ? new URL(req.url).searchParams.get('sellerId')
     : session.user.id;
 
@@ -44,7 +44,7 @@ export async function GET(
   }
 
   const verification = await prisma.sellerVerification.findUnique({
-    where: { sellerId },
+    where: { sellerId: sellerId as string },
     select: {
       governmentIdFrontPublicId: true,
       governmentIdFrontFormat: true,
@@ -83,7 +83,7 @@ export async function GET(
     await prisma.adminAccessLog.create({
       data: {
         adminId: session.user.id,
-        targetId: sellerId,
+        targetId: sellerId as string,
         action: 'view_seller_verification_document',
         notes: kind,
       },

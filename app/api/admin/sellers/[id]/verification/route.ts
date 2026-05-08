@@ -99,7 +99,7 @@ export async function POST(
         status: data.status,
         rejectionReason:
           data.status === SellerVerificationStatus.REJECTED
-            ? data.rejectionReason ?? null
+            ? data.rejectionReason
             : null,
         reviewedAt: new Date(),
         reviewedById: session.user.id,

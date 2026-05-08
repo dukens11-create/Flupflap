@@ -169,8 +169,16 @@ export async function POST(req: Request) {
         where: { id: session.user.id },
         data: {
           phone: normalizedPhone,
-          phoneVerified: phoneMatchesExisting ? user.phoneVerified : false,
-          phoneVerifiedAt: phoneMatchesExisting ? user.phoneVerifiedAt : null,
+          phoneVerified:
+            phoneMatchesExisting
+              ? user?.phoneVerified ?? false
+              : phoneMatchesVerifiedSubmission,
+          phoneVerifiedAt:
+            phoneMatchesExisting
+              ? user?.phoneVerifiedAt ?? null
+              : phoneMatchesVerifiedSubmission
+                ? user?.phoneVerifiedAt ?? new Date()
+                : null,
         },
       }),
       prisma.sellerVerification.upsert({
