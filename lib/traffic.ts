@@ -9,6 +9,7 @@ function getDayBucket(input: Date): Date {
 
 function getWeekStart(input: Date): Date {
   const weekStart = getDayBucket(input);
+  // Calculate days back to Monday (ISO 8601 week start).
   weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7));
   return weekStart;
 }
@@ -18,9 +19,9 @@ function getMonthStart(input: Date): Date {
 }
 
 function hashVisitor(ip: string, userAgent: string): string {
-  const salt = process.env.TRAFFIC_HASH_SALT ?? process.env.NEXTAUTH_SECRET;
+  const salt = process.env.TRAFFIC_HASH_SALT;
   if (!salt) {
-    throw new Error('Missing TRAFFIC_HASH_SALT (or NEXTAUTH_SECRET) for visitor hashing.');
+    throw new Error('Missing TRAFFIC_HASH_SALT for visitor hashing.');
   }
   return crypto.createHash('sha256').update(`${ip}|${userAgent}|${salt}`).digest('hex');
 }

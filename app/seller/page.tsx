@@ -112,20 +112,20 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
     prisma.product.findMany({
       where: { sellerId: session.user.id },
       orderBy: { createdAt: 'desc' },
-        include: {
-          promotions: {
-            where: { status: 'ACTIVE', expiresAt: { gt: new Date() } },
-            orderBy: { expiresAt: 'desc' },
-            take: 1,
-          },
-          cartInterest: {
-            select: {
-              totalAdds: true,
-              lastAddedAt: true,
-            },
+      include: {
+        promotions: {
+          where: { status: 'ACTIVE', expiresAt: { gt: new Date() } },
+          orderBy: { expiresAt: 'desc' },
+          take: 1,
+        },
+        cartInterest: {
+          select: {
+            totalAdds: true,
+            lastAddedAt: true,
           },
         },
-      }),
+      },
+    }),
     prisma.order.findMany({
       where: { items: { some: { product: { sellerId: session.user.id } } } },
       include: { items: { include: { product: { select: { title: true } } } } },
@@ -839,7 +839,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                     </div>
                     <p className="text-sm text-slate-500">{p.condition} · {p.category} · {dollars(p.priceCents)}</p>
                     <p className="text-xs text-slate-500">
-                      Cart interest: <span className="font-semibold text-slate-700">{cartAdds}</span> add{cartAdds === 1 ? '' : 's'}
+                      Cart interest: <span className="font-semibold text-slate-700">{cartAdds}</span>{cartAdds === 1 ? ' add' : ' adds'}
                       {p.cartInterest?.lastAddedAt
                         ? ` · last activity ${p.cartInterest.lastAddedAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
                         : ''}
