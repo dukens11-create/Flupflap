@@ -271,7 +271,7 @@ export function evaluateListingModeration(input: {
 }) {
   const content = normalizeContent(
     [input.title, input.description, input.category, input.condition]
-      .filter(Boolean)
+      .filter((value) => value != null)
       .join(' '),
   );
   const reasons: ModerationReason[] = [];
@@ -300,7 +300,7 @@ export function formatModerationSummary(result: ModerationResult) {
   }
 
   return `${result.confidence.toUpperCase()} risk · ${Array.from(
-    new Set(result.reasons.map((reason) => reason.label)),
+    new Set(result.reasons.map((reason) => `${reason.label} (${reason.confidence})`)),
   ).join(' · ')}`;
 }
 

@@ -22,6 +22,21 @@ function statusBadge(status: string) {
   return map[status] ?? 'badge-slate';
 }
 
+function moderationPanelClassName(moderation: {
+  flagged: boolean;
+  confidence: 'low' | 'medium' | 'high';
+}) {
+  if (!moderation.flagged) {
+    return 'border-slate-200 bg-slate-50 text-slate-700';
+  }
+
+  if (moderation.confidence === 'high') {
+    return 'border-red-200 bg-red-50 text-red-900';
+  }
+
+  return 'border-yellow-200 bg-yellow-50 text-yellow-900';
+}
+
 const PAID_ORDER_STATUSES: OrderStatus[] = ['PAID', 'SHIPPED', 'DELIVERED', 'PICKED_UP'];
 
 export default async function AdminPage({
@@ -256,20 +271,14 @@ export default async function AdminPage({
                      <p className="text-sm text-slate-500">{p.condition} · {p.category} · {dollars(p.priceCents)}</p>
                      <p className="text-xs text-slate-400">Seller: {p.seller.name} ({p.seller.email})</p>
                      <p className="text-sm text-slate-600 mt-1 line-clamp-2">{p.description}</p>
-                     <div className={`mt-3 rounded-xl border p-3 text-sm ${
-                       p.moderation.flagged
-                         ? p.moderation.confidence === 'high'
-                           ? 'border-red-200 bg-red-50 text-red-900'
-                           : 'border-yellow-200 bg-yellow-50 text-yellow-900'
-                         : 'border-slate-200 bg-slate-50 text-slate-700'
-                     }`}>
+                     <div className={`mt-3 rounded-xl border p-3 text-sm ${moderationPanelClassName(p.moderation)}`}>
                        <p className="font-semibold">
                          Moderation assistant · {formatModerationSummary(p.moderation)}
                        </p>
                        {p.moderation.flagged ? (
                          <ul className="mt-2 space-y-1 text-xs">
                             {p.moderation.reasons.map((reason, index) => (
-                              <li key={`${reason.category}-${reason.confidence}-${index}`}>
+                              <li key={`${reason.category}-${reason.confidence}-${reason.matches.join('|')}`}>
                                 <span className="font-semibold">{reason.label}:</span>{' '}
                                 {reason.explanation}
                                 <span className="block opacity-80">
