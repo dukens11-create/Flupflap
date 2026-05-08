@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
   });
 
   const scores = new Map<string, number>();
-  CATEGORIES.forEach((category) => addSuggestion(scores, category, normalizedQuery, 25));
+  CATEGORIES.forEach((category) => addSuggestion(scores, category, normalizedQuery, CATEGORY_SUGGESTION_WEIGHT + 5));
 
   products.forEach((product, index) => {
     const weight = Math.max(1, MAX_PRODUCTS_FOR_SUGGESTIONS - index);
