@@ -249,12 +249,14 @@ export function buildSellerRiskAssessment(
     ),
   );
   const band = sellerRiskBand(score);
+  const verificationNeedsReview =
+    input.verification?.status === 'PENDING'
+    || input.verification?.status === 'REJECTED';
   const requiresReview =
     score >= SELLER_REVIEW_THRESHOLD
     || input.sellerStatus !== 'ACTIVE'
     || openReportsCount > 0
-    || input.verification?.status === 'PENDING'
-    || input.verification?.status === 'REJECTED';
+    || verificationNeedsReview;
 
   return {
     score,

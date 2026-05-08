@@ -237,7 +237,7 @@ export default async function AdminSellersPage({
             <div>
               <h2 className="text-xl font-bold">Attention queue</h2>
               <p className="text-sm text-slate-500">
-                Scores combine verification state, profile completeness, reports, listing behavior, and moderation history.
+                Scores combine verification status, profile completeness, reports, listing behavior, and moderation history.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
