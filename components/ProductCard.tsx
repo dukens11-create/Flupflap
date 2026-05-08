@@ -15,6 +15,10 @@ function isApprovedSeller(verification?: {
   return Boolean(verification.eligibleToListAt);
 }
 
+function percentageToStars(rate: number) {
+  return Math.round(rate / 20);
+}
+
 export default function ProductCard({p}:{p:any}){
   const { t } = useI18n();
   const isFeatured = !!p.activePromotion;
@@ -27,7 +31,7 @@ export default function ProductCard({p}:{p:any}){
       ? t('product.phoneVerified')
       : t('product.newSeller');
   const responseRate = typeof p.sellerResponseRate === 'number' ? p.sellerResponseRate : null;
-  const filledStars = responseRate === null ? 0 : Math.round(responseRate / 20);
+  const filledStars = responseRate === null ? 0 : percentageToStars(responseRate);
 
   return (
     <div className={`group flex h-full flex-col overflow-hidden rounded-[28px] border bg-white shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-xl ${isFeatured ? 'border-amber-200 ring-2 ring-amber-300' : 'border-slate-200'}`}>

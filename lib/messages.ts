@@ -13,7 +13,7 @@ export const MESSAGE_DUPLICATE_WINDOW_MINUTES = 2;
 export const SELLER_RESPONSE_LOOKBACK_DAYS = 90;
 export const SELLER_RESPONSE_WINDOW_HOURS = 24;
 
-type SellerResponseStats = {
+export type SellerResponseStats = {
   respondedCount: number;
   eligibleCount: number;
   awaitingReplyCount: number;
