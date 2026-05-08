@@ -65,12 +65,8 @@ export async function GET(request: NextRequest) {
     const weight = Math.max(1, MAX_PRODUCTS_FOR_SUGGESTIONS - index);
     addSuggestion(scores, product.title, normalizedQuery, 40 + weight);
     addSuggestion(scores, product.category, normalizedQuery, 20 + weight);
-    addSuggestion(
-      scores,
-      [product.pickupCity, product.pickupState].filter(Boolean).join(', '),
-      normalizedQuery,
-      10 + weight,
-    );
+    addSuggestion(scores, product.pickupCity, normalizedQuery, 10 + weight);
+    addSuggestion(scores, product.pickupState, normalizedQuery, 8 + weight);
   });
 
   const suggestions = [...scores.entries()]

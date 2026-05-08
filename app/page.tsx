@@ -156,7 +156,7 @@ async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?
     });
     const promotionIds = products
       .map((product: any) => getActivePromotion(product.promotions, now)?.id)
-      .filter((promotionId): promotionId is string => Boolean(promotionId));
+      .filter((promotionId): promotionId is string => promotionId !== undefined && promotionId !== null);
     if (promotionIds.length > 0) {
       await prisma.$transaction(
         promotionIds.map((promotionId: string) => (

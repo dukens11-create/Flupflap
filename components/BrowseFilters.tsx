@@ -171,8 +171,8 @@ export default function BrowseFilters() {
       </div>
       {suggestions.length > 0 && (
         <datalist id="browse-search-suggestions">
-          {suggestions.map((suggestion, index) => (
-            <option key={`${suggestion}-${index}`} value={suggestion} />
+          {suggestions.map((suggestion) => (
+            <option key={suggestion} value={suggestion} />
           ))}
         </datalist>
       )}
