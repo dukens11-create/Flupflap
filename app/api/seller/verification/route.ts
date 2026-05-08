@@ -1,4 +1,6 @@
 import {
+  SellerAdminFallbackStatus,
+  SellerKycProvider,
   SellerPhoneVerificationStatus,
   SellerVerificationStatus,
 } from '@prisma/client';
@@ -50,8 +52,17 @@ export async function GET() {
   const verification = await prisma.sellerVerification.findUnique({
     where: { sellerId: session.user.id },
     select: {
+      provider: true,
+      providerStatus: true,
+      providerAccountId: true,
+      providerInquiryId: true,
+      providerVerificationId: true,
       status: true,
       rejectionReason: true,
+      governmentIdVerified: true,
+      selfieVerified: true,
+      addressVerified: true,
+      phoneVerified: true,
       phoneNumber: true,
       phoneVerificationStatus: true,
       street: true,
@@ -61,6 +72,11 @@ export async function GET() {
       country: true,
       createdAt: true,
       updatedAt: true,
+      kycStartedAt: true,
+      providerReviewedAt: true,
+      eligibleToListAt: true,
+      adminFallbackStatus: true,
+      adminFallbackReason: true,
       reviewedAt: true,
     },
   });
@@ -164,6 +180,7 @@ export async function POST(req: Request) {
     const phoneVerificationStatus: SellerPhoneVerificationStatus = shouldKeepPhoneVerified
       ? 'VERIFIED'
       : 'PENDING';
+    const now = new Date();
 
     await prisma.$transaction([
       prisma.user.update({
@@ -177,8 +194,15 @@ export async function POST(req: Request) {
       prisma.sellerVerification.upsert({
         where: { sellerId: session.user.id },
         update: {
+          provider: SellerKycProvider.MANUAL,
+          providerStatus: 'manual_review',
+          providerReviewedAt: null,
           status: SellerVerificationStatus.PENDING,
           rejectionReason: null,
+          governmentIdVerified: true,
+          selfieVerified: true,
+          addressVerified: true,
+          phoneVerified: shouldKeepPhoneVerified,
           phoneNumber: normalizedPhone,
           phoneVerificationStatus,
           street: data.street,
@@ -200,13 +224,25 @@ export async function POST(req: Request) {
             selfieUpload?.publicId ?? existingVerification?.selfieImagePublicId ?? '',
           selfieImageFormat:
             selfieUpload?.format ?? existingVerification?.selfieImageFormat ?? null,
+          kycStartedAt: existingVerification?.kycStartedAt ?? now,
+          eligibleToListAt: null,
+          adminFallbackStatus: SellerAdminFallbackStatus.PENDING_REVIEW,
+          adminFallbackReason: null,
+          webhookLastEventId: null,
+          webhookLastReceivedAt: null,
           reviewedAt: null,
           reviewedById: null,
         },
         create: {
           sellerId: session.user.id,
+          provider: SellerKycProvider.MANUAL,
+          providerStatus: 'manual_review',
           status: SellerVerificationStatus.PENDING,
           rejectionReason: null,
+          governmentIdVerified: true,
+          selfieVerified: true,
+          addressVerified: true,
+          phoneVerified: shouldKeepPhoneVerified,
           phoneNumber: normalizedPhone,
           phoneVerificationStatus,
           street: data.street,
@@ -220,6 +256,11 @@ export async function POST(req: Request) {
           governmentIdBackFormat: backUpload?.format ?? null,
           selfieImagePublicId: selfieUpload?.publicId ?? '',
           selfieImageFormat: selfieUpload?.format ?? null,
+          kycStartedAt: now,
+          providerReviewedAt: null,
+          eligibleToListAt: null,
+          adminFallbackStatus: SellerAdminFallbackStatus.PENDING_REVIEW,
+          adminFallbackReason: null,
         },
       }),
     ]);

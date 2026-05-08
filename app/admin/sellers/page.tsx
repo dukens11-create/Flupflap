@@ -5,6 +5,7 @@ import { DEFAULT_DATE_FORMAT_OPTIONS } from '@/lib/date-format';
 import { prisma } from '@/lib/db';
 import type { Metadata } from 'next';
 import {
+  sellerKycProviderLabel,
   sellerPhoneVerificationLabel,
   sellerVerificationStatusTone,
 } from '@/lib/seller-verification';
@@ -110,6 +111,11 @@ export default async function AdminSellersPage({
                     <span className={`badge ${sellerVerificationStatusTone(seller.verificationSubmission?.status)}`}>
                       Verification {seller.verificationSubmission?.status ?? 'Not submitted'}
                     </span>
+                    {seller.verificationSubmission?.provider && (
+                      <span className="text-slate-500">
+                        Provider: {sellerKycProviderLabel(seller.verificationSubmission.provider)}
+                      </span>
+                    )}
                     {seller.verificationSubmission?.phoneVerificationStatus && (
                       <span className="text-slate-500">
                         Phone verification: {sellerPhoneVerificationLabel(seller.verificationSubmission.phoneVerificationStatus)}
@@ -137,6 +143,20 @@ export default async function AdminSellersPage({
                           <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-red-800">
                             <span className="font-medium">Rejection reason:</span>{' '}
                             {seller.verificationSubmission.rejectionReason}
+                          </p>
+                        )}
+                        <div className="grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-4">
+                          <p className={`rounded border px-2 py-1 ${seller.verificationSubmission.governmentIdVerified ? 'border-green-200 bg-green-50 text-green-700' : 'border-slate-200 bg-white'}`}>ID: {seller.verificationSubmission.governmentIdVerified ? 'Verified' : 'Pending'}</p>
+                          <p className={`rounded border px-2 py-1 ${seller.verificationSubmission.selfieVerified ? 'border-green-200 bg-green-50 text-green-700' : 'border-slate-200 bg-white'}`}>Selfie: {seller.verificationSubmission.selfieVerified ? 'Verified' : 'Pending'}</p>
+                          <p className={`rounded border px-2 py-1 ${seller.verificationSubmission.addressVerified ? 'border-green-200 bg-green-50 text-green-700' : 'border-slate-200 bg-white'}`}>Address: {seller.verificationSubmission.addressVerified ? 'Verified' : 'Pending'}</p>
+                          <p className={`rounded border px-2 py-1 ${seller.verificationSubmission.phoneVerified ? 'border-green-200 bg-green-50 text-green-700' : 'border-slate-200 bg-white'}`}>Phone: {seller.verificationSubmission.phoneVerified ? 'Verified' : 'Pending'}</p>
+                        </div>
+                        {seller.verificationSubmission.adminFallbackStatus !== 'NOT_REQUIRED' && (
+                          <p className="text-xs text-slate-500">
+                            Admin fallback: {seller.verificationSubmission.adminFallbackStatus}
+                            {seller.verificationSubmission.adminFallbackReason
+                              ? ` — ${seller.verificationSubmission.adminFallbackReason}`
+                              : ''}
                           </p>
                         )}
                         {seller.verificationSubmission.reviewedBy && seller.verificationSubmission.reviewedAt && (
@@ -206,6 +226,15 @@ export default async function AdminSellersPage({
                           placeholder="Add clear guidance for the seller if documents are rejected…"
                         />
                       </div>
+                    </div>
+                    <div>
+                      <label className="label">Admin fallback notes (internal)</label>
+                      <textarea
+                        name="adminFallbackReason"
+                        className="input h-16 resize-none"
+                        maxLength={1000}
+                        placeholder="Optional internal notes for admin fallback review."
+                      />
                     </div>
                     <button type="submit" className="btn-primary text-sm">
                       Save verification review

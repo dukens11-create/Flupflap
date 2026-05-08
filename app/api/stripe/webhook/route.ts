@@ -7,6 +7,11 @@ import type { CheckoutCommissionItem } from '@/lib/commission';
 import crypto from 'crypto';
 import Stripe from 'stripe';
 import { expirePromotions } from '@/lib/promotions';
+import { SellerKycProvider, SellerVerificationStatus } from '@prisma/client';
+import {
+  applyAutomatedKycResult,
+  stripeKycChecksFromAccount,
+} from '@/lib/kyc/providers';
 
 /** Generate a cryptographically secure 6-digit pickup confirmation code. */
 function generatePickupCode(): string {
@@ -43,6 +48,116 @@ export async function POST(req: Request) {
         },
       });
     }
+
+    const seller = await prisma.user.findFirst({
+      where: { stripeAccountId: account.id, role: 'SELLER' },
+      select: { id: true, phone: true },
+    });
+    if (seller) {
+      const existingVerification = await prisma.sellerVerification.findUnique({
+        where: { sellerId: seller.id },
+        select: {
+          governmentIdVerified: true,
+          selfieVerified: true,
+          providerVerificationId: true,
+          providerInquiryId: true,
+        },
+      });
+      const accountChecks = stripeKycChecksFromAccount(account);
+      // account.updated does not evaluate document/selfie checks; those are synced
+      // from identity.verification_session.* webhook events and preserved here.
+      await applyAutomatedKycResult({
+        sellerId: seller.id,
+        provider: SellerKycProvider.STRIPE,
+        providerStatus: accountChecks.payoutsEnabled ? 'verified' : 'pending',
+        providerAccountId: account.id,
+        providerInquiryId: existingVerification?.providerInquiryId ?? null,
+        providerVerificationId: existingVerification?.providerVerificationId ?? null,
+        webhookEventId: event.id,
+        checks: {
+          governmentIdVerified: existingVerification?.governmentIdVerified ?? false,
+          selfieVerified: existingVerification?.selfieVerified ?? false,
+          addressVerified: accountChecks.addressVerified,
+          phoneVerified: accountChecks.phoneVerified,
+        },
+      });
+    }
+
+    return new NextResponse('ok', { status: 200 });
+  }
+
+  if (
+    event.type === 'identity.verification_session.verified'
+    || event.type === 'identity.verification_session.requires_input'
+    || event.type === 'identity.verification_session.canceled'
+    || event.type === 'identity.verification_session.processing'
+  ) {
+    const sessionObject = event.data.object as Stripe.Identity.VerificationSession;
+    const metadataSellerId = sessionObject.metadata?.sellerId;
+
+    let sellerId: string | null = metadataSellerId ?? null;
+    if (!sellerId) {
+      const bySessionId = await prisma.sellerVerification.findFirst({
+        where: { providerVerificationId: sessionObject.id },
+        select: { sellerId: true },
+      });
+      sellerId = bySessionId?.sellerId ?? null;
+    }
+    if (!sellerId) {
+      return new NextResponse('ok', { status: 200 });
+    }
+
+    const [existingVerification, seller] = await Promise.all([
+      prisma.sellerVerification.findUnique({
+        where: { sellerId },
+        select: {
+          providerAccountId: true,
+          providerInquiryId: true,
+          addressVerified: true,
+          phoneVerified: true,
+          rejectionReason: true,
+        },
+      }),
+      prisma.user.findUnique({
+        where: { id: sellerId },
+        select: { stripeAccountId: true },
+      }),
+    ]);
+
+    const isVerified = event.type === 'identity.verification_session.verified';
+    const checks = {
+      governmentIdVerified: isVerified,
+      selfieVerified: isVerified,
+      addressVerified: existingVerification?.addressVerified ?? false,
+      phoneVerified: existingVerification?.phoneVerified ?? false,
+    };
+
+    let forcedStatus: SellerVerificationStatus | undefined;
+    let rejectionReason: string | null = null;
+    if (event.type === 'identity.verification_session.requires_input') {
+      forcedStatus = SellerVerificationStatus.REJECTED;
+      rejectionReason =
+        sessionObject.last_error?.reason
+        ?? sessionObject.last_error?.code
+        ?? 'Identity verification requires additional input.';
+    } else if (event.type === 'identity.verification_session.canceled') {
+      forcedStatus = SellerVerificationStatus.REJECTED;
+      rejectionReason = 'Seller canceled identity verification.';
+    }
+
+    await applyAutomatedKycResult({
+      sellerId,
+      provider: SellerKycProvider.STRIPE,
+      providerStatus: sessionObject.status,
+      providerAccountId: existingVerification?.providerAccountId ?? seller?.stripeAccountId ?? null,
+      providerInquiryId: existingVerification?.providerInquiryId ?? null,
+      providerVerificationId: sessionObject.id,
+      webhookEventId: event.id,
+      checks,
+      forcedStatus,
+      rejectionReason,
+    });
+
     return new NextResponse('ok', { status: 200 });
   }
 

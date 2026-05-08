@@ -109,10 +109,32 @@ After deploying or while using Stripe CLI locally, point Stripe webhooks to:
 Listen for:
 - `checkout.session.completed`
 - `account.updated`
+- `identity.verification_session.processing`
+- `identity.verification_session.verified`
+- `identity.verification_session.requires_input`
+- `identity.verification_session.canceled`
 - `customer.subscription.updated`
 - `customer.subscription.deleted`
 - `invoice.payment_succeeded`
 - `invoice.payment_failed`
+
+## Seller KYC providers
+
+FlupFlap now supports provider-based seller KYC with admin fallback review:
+
+- Default provider: **Stripe Connect + Stripe Identity**
+- Alternate provider: **Persona**
+- Manual fallback: sellers can submit secure document uploads for admin review if automated/provider checks are incomplete or rejected.
+
+Set:
+
+- `KYC_PROVIDER` (`stripe`, `persona`, or `manual`; default `stripe`)
+- `PERSONA_API_KEY`, `PERSONA_TEMPLATE_ID`, and `PERSONA_WEBHOOK_SECRET` when using Persona
+
+Webhook endpoints:
+
+- Stripe: `/api/stripe/webhook`
+- Persona: `/api/kyc/webhook/persona`
 
 ## Seller subscription
 

@@ -31,6 +31,19 @@ enum SellerPhoneVerificationStatus {
   VERIFIED
 }
 
+enum SellerKycProvider {
+  STRIPE
+  PERSONA
+  MANUAL
+}
+
+enum SellerAdminFallbackStatus {
+  NOT_REQUIRED
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+}
+
 enum ProductStatus {
   PENDING
   APPROVED
@@ -275,8 +288,17 @@ model SellerVerification {
   id                           String                         @id @default(cuid())
   sellerId                     String                         @unique
   seller                       User                           @relation("SellerVerificationSubmission", fields: [sellerId], references: [id], onDelete: Cascade)
+  provider                     SellerKycProvider              @default(STRIPE)
+  providerAccountId            String?
+  providerInquiryId            String?
+  providerVerificationId       String?
+  providerStatus               String?
   status                       SellerVerificationStatus       @default(PENDING)
   rejectionReason              String?
+  governmentIdVerified         Boolean                        @default(false)
+  selfieVerified               Boolean                        @default(false)
+  addressVerified              Boolean                        @default(false)
+  phoneVerified                Boolean                        @default(false)
   phoneNumber                  String
   phoneVerificationStatus      SellerPhoneVerificationStatus  @default(NOT_STARTED)
   street                       String
@@ -290,6 +312,13 @@ model SellerVerification {
   governmentIdBackFormat       String?
   selfieImagePublicId          String
   selfieImageFormat            String?
+  kycStartedAt                 DateTime?
+  providerReviewedAt           DateTime?
+  eligibleToListAt             DateTime?
+  adminFallbackStatus          SellerAdminFallbackStatus      @default(NOT_REQUIRED)
+  adminFallbackReason          String?
+  webhookLastEventId           String?
+  webhookLastReceivedAt        DateTime?
   reviewedAt                   DateTime?
   reviewedById                 String?
   reviewedBy                   User?                          @relation("SellerVerificationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)

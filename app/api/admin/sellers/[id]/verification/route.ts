@@ -1,4 +1,7 @@
-import { SellerVerificationStatus } from '@prisma/client';
+import {
+  SellerAdminFallbackStatus,
+  SellerVerificationStatus,
+} from '@prisma/client';
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { z } from 'zod';
@@ -7,9 +10,10 @@ import { prisma } from '@/lib/db';
 
 const schema = z
   .object({
-    status: z.enum([SellerVerificationStatus.APPROVED, SellerVerificationStatus.REJECTED]),
-    rejectionReason: z.string().trim().max(1000).optional(),
-  })
+      status: z.enum([SellerVerificationStatus.APPROVED, SellerVerificationStatus.REJECTED]),
+      rejectionReason: z.string().trim().max(1000).optional(),
+      adminFallbackReason: z.string().trim().max(1000).optional(),
+    })
   .superRefine((data, ctx) => {
     if (data.status === SellerVerificationStatus.REJECTED && !data.rejectionReason) {
       ctx.addIssue({
@@ -32,21 +36,35 @@ export async function GET(
   const { id } = await params;
   const verification = await prisma.sellerVerification.findUnique({
     where: { sellerId: id },
-    select: {
-      status: true,
-      rejectionReason: true,
-      phoneNumber: true,
-      phoneVerificationStatus: true,
-      street: true,
+      select: {
+        provider: true,
+        providerStatus: true,
+        providerAccountId: true,
+        providerInquiryId: true,
+        providerVerificationId: true,
+        status: true,
+        rejectionReason: true,
+        governmentIdVerified: true,
+        selfieVerified: true,
+        addressVerified: true,
+        phoneVerified: true,
+        phoneNumber: true,
+        phoneVerificationStatus: true,
+        street: true,
       city: true,
       state: true,
       zipCode: true,
       country: true,
-      createdAt: true,
-      updatedAt: true,
-      reviewedAt: true,
-      reviewedBy: { select: { name: true, email: true } },
-    },
+        createdAt: true,
+        updatedAt: true,
+        kycStartedAt: true,
+        providerReviewedAt: true,
+        eligibleToListAt: true,
+        adminFallbackStatus: true,
+        adminFallbackReason: true,
+        reviewedAt: true,
+        reviewedBy: { select: { name: true, email: true } },
+      },
   });
 
   if (!verification) {
@@ -100,6 +118,21 @@ export async function POST(
         rejectionReason:
           data.status === SellerVerificationStatus.REJECTED
             ? data.rejectionReason
+            : null,
+        adminFallbackStatus:
+          data.status === SellerVerificationStatus.APPROVED
+            ? SellerAdminFallbackStatus.APPROVED
+            : SellerAdminFallbackStatus.REJECTED,
+        // If admins do not provide a separate internal fallback note for
+        // rejections, reuse rejectionReason so dashboard context stays aligned.
+        adminFallbackReason:
+          data.adminFallbackReason
+          ?? (data.status === SellerVerificationStatus.REJECTED
+            ? data.rejectionReason
+            : null),
+        eligibleToListAt:
+          data.status === SellerVerificationStatus.APPROVED
+            ? new Date()
             : null,
         reviewedAt: new Date(),
         reviewedById: session.user.id,
