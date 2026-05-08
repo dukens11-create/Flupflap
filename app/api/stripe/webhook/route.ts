@@ -12,7 +12,7 @@ import {
   applyAutomatedKycResult,
   stripeKycChecksFromAccount,
 } from '@/lib/kyc/providers';
-import { createNotification, createNotifications } from '@/lib/notifications';
+import { createNotification, createNotifications, type CreateNotificationInput } from '@/lib/notifications';
 
 /** Generate a cryptographically secure 6-digit pickup confirmation code. */
 function generatePickupCode(): string {
@@ -436,7 +436,7 @@ export async function POST(req: Request) {
       },
     });
 
-    const buyerNotifications = [
+    const buyerNotifications: CreateNotificationInput[] = [
       {
         userId: buyerId,
         type: NotificationType.ORDER_UPDATE,
@@ -460,7 +460,7 @@ export async function POST(req: Request) {
       });
     }
 
-    const sellerNotifications = Array.from(
+    const sellerNotifications: CreateNotificationInput[] = Array.from(
       new Map(
         orderItems.map((item) => {
           const sellerItems = orderItems.filter(

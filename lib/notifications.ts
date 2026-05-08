@@ -1,7 +1,7 @@
 import { NotificationType, Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 
-type CreateNotificationInput = {
+export type CreateNotificationInput = {
   userId: string;
   type: NotificationType;
   title: string;
@@ -11,8 +11,9 @@ type CreateNotificationInput = {
   dedupeKey?: string | null;
 };
 
-export async function createNotification(input: CreateNotificationInput) {
+export function createNotification(input: CreateNotificationInput) {
   const { userId, type, title, body, link, data, dedupeKey } = input;
+  const normalizedData = data ?? Prisma.JsonNull;
 
   if (dedupeKey) {
     return prisma.notification.upsert({
@@ -22,7 +23,7 @@ export async function createNotification(input: CreateNotificationInput) {
         title,
         body,
         link: link ?? null,
-        data: data ?? null,
+        data: normalizedData,
         readAt: null,
       },
       create: {
@@ -31,7 +32,7 @@ export async function createNotification(input: CreateNotificationInput) {
         title,
         body,
         link: link ?? null,
-        data: data ?? null,
+        data: normalizedData,
         dedupeKey,
       },
     });
@@ -44,12 +45,12 @@ export async function createNotification(input: CreateNotificationInput) {
       title,
       body,
       link: link ?? null,
-      data: data ?? null,
+      data: normalizedData,
     },
   });
 }
 
-export async function createNotifications(inputs: CreateNotificationInput[]) {
+export function createNotifications(inputs: CreateNotificationInput[]) {
   const validInputs = inputs.filter((input) => input.userId);
   if (validInputs.length === 0) return [];
 

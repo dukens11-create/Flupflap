@@ -231,7 +231,7 @@ export default function OffersPage() {
         </div>
         {sent.length === 0 ? (
           <div className="card p-6 text-sm text-slate-500">
-            You haven&apos;t sent any offers yet. Browse listings to make one.
+            You haven't sent any offers yet. Browse listings to make one.
           </div>
         ) : (
           <div className="space-y-3">
