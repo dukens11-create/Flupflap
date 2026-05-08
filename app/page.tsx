@@ -53,6 +53,8 @@ async function ProductGrid({ sp, t }: { sp: CatalogSearchParams; t: (key: string
       .map((product: any) => product.promotions[0]?.id)
       .filter(Boolean);
     if (promotionIds.length > 0) {
+      // Run promotion bookkeeping after the response is sent so cached reads do
+      // not block page rendering on non-critical write traffic.
       after(async () => {
         await runPromotionMaintenance('impression', promotionIds);
       });

@@ -13,6 +13,10 @@ export interface CatalogSearchParams {
 
 const CATALOG_CACHE_TTL_SECONDS = Number(process.env.CATALOG_CACHE_TTL_SECONDS ?? 60);
 
+function activePromotionWhere() {
+  return { status: 'ACTIVE' as const, expiresAt: { gt: new Date() } };
+}
+
 function catalogSearchCacheKey(sp: CatalogSearchParams) {
   return JSON.stringify({
     q: sp.q ?? '',
@@ -50,7 +54,7 @@ export async function getCachedCatalogProducts(sp: CatalogSearchParams) {
         take: 60,
         include: {
           promotions: {
-            where: { status: 'ACTIVE', expiresAt: { gt: new Date() } },
+            where: activePromotionWhere(),
             orderBy: { expiresAt: 'desc' },
             take: 1,
           },
@@ -71,7 +75,7 @@ export async function getCachedApprovedProduct(productId: string) {
         include: {
           seller: { select: { id: true, name: true } },
           promotions: {
-            where: { status: 'ACTIVE', expiresAt: { gt: new Date() } },
+            where: activePromotionWhere(),
             orderBy: { expiresAt: 'desc' },
             take: 1,
           },

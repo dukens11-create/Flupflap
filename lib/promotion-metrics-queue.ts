@@ -9,6 +9,7 @@ type PromotionMetricState = {
   flushTimer?: ReturnType<typeof setTimeout>;
   flushPromise?: Promise<void>;
   expirationSweepPromise?: Promise<void>;
+  isSchedulingFlushTimer: boolean;
   lastExpirationSweepAt: number;
 };
 
@@ -25,6 +26,7 @@ function getState(): PromotionMetricState {
     globalForPromotionMetrics.promotionMetricState = {
       clickCounts: new Map(),
       impressionCounts: new Map(),
+      isSchedulingFlushTimer: false,
       lastExpirationSweepAt: 0,
     };
   }
@@ -52,18 +54,7 @@ export async function enqueuePromotionMetrics(type: PromotionMetricType, promoti
     return;
   }
 
-  if (!state.flushTimer) {
-    const pendingTimer = setTimeout(() => {
-      void flushPromotionMetricsQueue();
-    }, FLUSH_DELAY_MS);
-
-    if (state.flushTimer) {
-      clearTimeout(pendingTimer);
-      return;
-    }
-
-    state.flushTimer = pendingTimer;
-  }
+  scheduleFlushTimer(state);
 }
 
 export async function flushPromotionMetricsQueue() {
@@ -149,5 +140,22 @@ export async function runPromotionMaintenance(type?: PromotionMetricType, promot
 
   if (type && promotionIds.length) {
     await enqueuePromotionMetrics(type, promotionIds);
+  }
+}
+
+function scheduleFlushTimer(state: PromotionMetricState) {
+  if (state.flushTimer || state.isSchedulingFlushTimer) {
+    return;
+  }
+
+  state.isSchedulingFlushTimer = true;
+  try {
+    if (!state.flushTimer) {
+      state.flushTimer = setTimeout(() => {
+        void flushPromotionMetricsQueue();
+      }, FLUSH_DELAY_MS);
+    }
+  } finally {
+    state.isSchedulingFlushTimer = false;
   }
 }
