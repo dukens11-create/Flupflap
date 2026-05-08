@@ -16,7 +16,7 @@ import {
 const schema = z.object({
   orderId: z.string().min(1, 'Order ID required.'),
   trackingNumber: z.string().trim().max(100).optional().or(z.literal('')),
-  shippingCarrier: z.string().trim().min(1, 'Carrier is required.').max(80),
+  shippingCarrier: z.string().trim().max(80).optional().or(z.literal('')),
   deliveryStatus: z.string().trim().optional().or(z.literal('')),
 });
 
@@ -42,7 +42,7 @@ export async function POST(req: Request) {
     });
     const orderId = parsed.orderId;
     const trackingNumber = parsed.trackingNumber?.trim() || null;
-    const shippingCarrier = normalizeCarrierName(parsed.shippingCarrier);
+    const shippingCarrier = normalizeCarrierName(parsed.shippingCarrier || 'To be assigned');
     const fallbackStatus = inferDeliveryStatus({
       deliveryStatus: parsed.deliveryStatus,
       trackingNumber,

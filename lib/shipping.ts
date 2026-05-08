@@ -73,7 +73,7 @@ export function buildCarrierTrackingUrl(carrier: string | null | undefined, trac
   if (!tracking) return null;
   const code = normalizeCarrierCode(carrier ?? '');
   if (code.includes('ups')) {
-    return `https://www.ups.com/track?tracknum=${encodeURIComponent(tracking)}`;
+    return `https://www.ups.com/track?trackingNumber=${encodeURIComponent(tracking)}`;
   }
   if (code.includes('fedex')) {
     return `https://www.fedex.com/fedextrack/?tracknumbers=${encodeURIComponent(tracking)}`;

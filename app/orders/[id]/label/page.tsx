@@ -78,7 +78,6 @@ export default async function ShippingLabelPage({
               {sellerNames.map((name) => (
                 <p key={name} className="font-semibold">{name}</p>
               ))}
-              <p className="text-sm text-slate-500 mt-2">Seller shipment prepared in FlupFlap.</p>
             </div>
           </div>
           <div>

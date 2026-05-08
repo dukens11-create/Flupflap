@@ -877,7 +877,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                     <p className="text-xs text-slate-500">
                       {shippingProvider.supportsCarrierTracking
                         ? `Carrier refresh is powered by ${shippingProvider.label} when a tracking number is present.`
-                        : 'Carrier refresh is optional for launch. You can still create the label and manage delivery status manually.'}
+                        : 'Carrier refresh is not enabled. You can still create the label and manage delivery status manually.'}
                     </p>
                   </form>
                 )}
