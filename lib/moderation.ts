@@ -227,6 +227,14 @@ function pushReason(reasons: ModerationReason[], content: string, rule: RuleConf
   });
 }
 
+function shouldBlockMessage(reasons: ModerationReason[]) {
+  return reasons.some((reason) => (
+    reason.category === 'prohibited_item'
+    || reason.category === 'offensive_content'
+    || (reason.category === 'scam_wording' && reason.confidence === 'high')
+  ));
+}
+
 function finalizeModeration(surface: Surface, reasons: ModerationReason[]): ModerationResult {
   const score = reasons.reduce((sum, reason) => sum + reason.score, 0);
   const confidence: ModerationConfidence =
@@ -242,14 +250,7 @@ function finalizeModeration(surface: Surface, reasons: ModerationReason[]): Mode
     decision = 'review';
   }
 
-  if (
-    surface === 'message'
-    && reasons.some((reason) => (
-      reason.category === 'prohibited_item'
-      || reason.category === 'offensive_content'
-      || (reason.category === 'scam_wording' && reason.confidence === 'high')
-    ))
-  ) {
+  if (surface === 'message' && shouldBlockMessage(reasons)) {
     decision = 'block';
   }
 
@@ -298,10 +299,9 @@ export function formatModerationSummary(result: ModerationResult) {
     return 'No moderation signals';
   }
 
-  return `${result.confidence.toUpperCase()} risk · ${result.reasons
-    .map((reason) => reason.label)
-    .filter((label, index, all) => all.indexOf(label) === index)
-    .join(' · ')}`;
+  return `${result.confidence.toUpperCase()} risk · ${Array.from(
+    new Set(result.reasons.map((reason) => reason.label)),
+  ).join(' · ')}`;
 }
 
 export function formatBlockedMessage(result: ModerationResult) {

@@ -268,11 +268,11 @@ export default async function AdminPage({
                        </p>
                        {p.moderation.flagged ? (
                          <ul className="mt-2 space-y-1 text-xs">
-                           {p.moderation.reasons.map((reason, index) => (
-                             <li key={`${reason.category}-${index}`}>
-                               <span className="font-semibold">{reason.label}:</span>{' '}
-                               {reason.explanation}
-                               <span className="block opacity-80">
+                            {p.moderation.reasons.map((reason, index) => (
+                              <li key={`${reason.category}-${reason.confidence}-${index}`}>
+                                <span className="font-semibold">{reason.label}:</span>{' '}
+                                {reason.explanation}
+                                <span className="block opacity-80">
                                  Matched: {reason.matches.join(', ')}
                                </span>
                              </li>
