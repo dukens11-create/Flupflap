@@ -33,6 +33,16 @@ export async function GET(
     return NextResponse.json({ error: 'Seller ID is required.' }, { status: 400 });
   }
 
+  if (session.user.role === 'ADMIN') {
+    const seller = await prisma.user.findUnique({
+      where: { id: sellerId },
+      select: { id: true, role: true },
+    });
+    if (!seller || seller.role !== 'SELLER') {
+      return NextResponse.json({ error: 'Seller not found.' }, { status: 404 });
+    }
+  }
+
   const verification = await prisma.sellerVerification.findUnique({
     where: { sellerId },
     select: {

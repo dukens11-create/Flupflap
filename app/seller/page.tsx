@@ -7,6 +7,7 @@ import { formatCommissionPercent, getMarketplaceSettings, getStoredLineSubtotalC
 import { classifyStripeError, getCurrentStripeMode, stripe } from '@/lib/stripe';
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import type { ReactNode } from 'react';
 import PickupVerifyForm from '@/components/PickupVerifyForm';
 import { expirePromotions } from '@/lib/promotions';
 import { isSubscriptionActive, SELLER_SUBSCRIPTION_PRICE_LABEL } from '@/lib/subscription';
@@ -153,6 +154,16 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   const itemsSoldCount = soldItems.reduce((s, i) => s + i.quantity, 0);
   const completedOrdersCount = new Set(soldItems.map(i => i.order.id)).size;
   const verificationApproved = isSellerVerificationApproved(verificationSubmission?.status);
+  let emptyListingsMessage: ReactNode = 'No listings yet. Subscribe to start selling.';
+  if (subscriptionActive && verificationApproved) {
+    emptyListingsMessage = (
+      <span>
+        No listings yet. <Link href="/seller/new" className="text-blue-600 hover:underline">Create one</Link>.
+      </span>
+    );
+  } else if (subscriptionActive) {
+    emptyListingsMessage = 'No listings yet. Complete seller verification to start selling.';
+  }
 
   // Fetch Stripe onboarding state from DB (not the JWT, which is set only at
   // login and would be stale immediately after the seller returns from Stripe).
@@ -649,11 +660,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
         <h2 className="text-xl font-bold mb-3">My Listings</h2>
         {products.length === 0 ? (
           <div className="card p-6 text-slate-500">
-            {subscriptionActive && verificationApproved
-              ? <span>No listings yet. <Link href="/seller/new" className="text-blue-600 hover:underline">Create one</Link>.</span>
-              : subscriptionActive
-                ? 'No listings yet. Complete seller verification to start selling.'
-                : 'No listings yet. Subscribe to start selling.'}
+            {emptyListingsMessage}
           </div>
         ) : (
           <div className="space-y-3">

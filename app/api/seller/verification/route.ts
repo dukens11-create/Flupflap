@@ -112,6 +112,9 @@ export async function POST(req: Request) {
     const backFile = getOptionalFile(form, 'governmentIdBack');
     const selfieFile = getOptionalFile(form, 'selfieImage');
     const phoneMatchesExisting = user?.phone === normalizedPhone;
+    const phoneMatchesVerifiedSubmission =
+      existingVerification?.phoneNumber === normalizedPhone
+      && existingVerification.phoneVerificationStatus === 'VERIFIED';
 
     if (!frontFile && !existingVerification?.governmentIdFrontPublicId) {
       return NextResponse.json(
@@ -157,7 +160,9 @@ export async function POST(req: Request) {
     ]);
 
     const phoneVerificationStatus: SellerPhoneVerificationStatus =
-      user?.phoneVerified && user.phone === normalizedPhone ? 'VERIFIED' : 'PENDING';
+      (user?.phoneVerified && phoneMatchesExisting) || phoneMatchesVerifiedSubmission
+        ? 'VERIFIED'
+        : 'PENDING';
 
     await prisma.$transaction([
       prisma.user.update({
