@@ -27,9 +27,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <Image
                   src="/flupflap_logo.png"
                   alt="FlupFlap"
-                  width={96}
-                  height={40}
-                  className="h-10 w-auto"
+                  width={614}
+                  height={255}
+                  className="h-14 w-auto"
                 />
               </Link>
               <a href="/legal/terms" className="hover:underline">{t('footer.terms')}</a>
