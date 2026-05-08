@@ -1,4 +1,6 @@
 import type {
+  SellerAdminFallbackStatus,
+  SellerKycProvider,
   SellerPhoneVerificationStatus,
   SellerVerificationStatus,
 } from '@prisma/client';
@@ -9,10 +11,37 @@ export const SELLER_VERIFICATION_UPLOAD_FOLDER =
 
 export type SellerVerificationDocumentKind = 'front' | 'back' | 'selfie';
 
+export function getDefaultSellerKycProvider(): SellerKycProvider {
+  const configured = (process.env.KYC_PROVIDER ?? 'stripe').trim().toLowerCase();
+  if (configured === 'persona') return 'PERSONA';
+  if (configured === 'manual') return 'MANUAL';
+  return 'STRIPE';
+}
+
+export function sellerKycProviderLabel(provider?: SellerKycProvider | null) {
+  if (provider === 'PERSONA') return 'Persona';
+  if (provider === 'MANUAL') return 'Manual review';
+  return 'Stripe Identity + Connect';
+}
+
 export function isSellerVerificationApproved(
-  status?: SellerVerificationStatus | null,
+  verification?:
+    | SellerVerificationStatus
+    | {
+      status?: SellerVerificationStatus | null;
+      eligibleToListAt?: Date | null;
+      adminFallbackStatus?: SellerAdminFallbackStatus | null;
+    }
+    | null,
 ) {
-  return status === 'APPROVED';
+  if (!verification) return false;
+
+  const status = typeof verification === 'string' ? verification : verification.status;
+  if (status !== 'APPROVED') return false;
+  if (typeof verification === 'string') return true;
+
+  if (verification.adminFallbackStatus === 'APPROVED') return true;
+  return Boolean(verification.eligibleToListAt);
 }
 
 export function sellerVerificationStatusTone(

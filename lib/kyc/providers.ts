@@ -1,0 +1,191 @@
+import {
+  SellerAdminFallbackStatus,
+  SellerKycProvider,
+  SellerPhoneVerificationStatus,
+  SellerVerificationStatus,
+} from '@prisma/client';
+import { prisma } from '@/lib/db';
+import { appUrl, getCurrentStripeMode, stripe } from '@/lib/stripe';
+
+export type SellerKycChecks = {
+  governmentIdVerified: boolean;
+  selfieVerified: boolean;
+  addressVerified: boolean;
+  phoneVerified: boolean;
+};
+
+export function resolveAutomatedKycStatus(checks: SellerKycChecks): SellerVerificationStatus {
+  if (checks.governmentIdVerified && checks.selfieVerified && checks.addressVerified && checks.phoneVerified) {
+    return SellerVerificationStatus.APPROVED;
+  }
+  return SellerVerificationStatus.PENDING;
+}
+
+export async function createStripeIdentitySession(sellerId: string) {
+  return stripe.identity.verificationSessions.create({
+    type: 'document',
+    metadata: { sellerId },
+    options: {
+      document: {
+        require_live_capture: true,
+        require_matching_selfie: true,
+      },
+    },
+    return_url: `${appUrl}/seller?verification=provider_pending`,
+  });
+}
+
+export async function createPersonaInquiry(sellerId: string) {
+  const apiKey = (process.env.PERSONA_API_KEY ?? '').trim();
+  const templateId = (process.env.PERSONA_TEMPLATE_ID ?? '').trim();
+  if (!apiKey || !templateId) {
+    throw new Error('Persona KYC is not configured.');
+  }
+
+  const response = await fetch('https://withpersona.com/api/v1/inquiries', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({
+      data: {
+        type: 'inquiry',
+        attributes: {
+          'template-id': templateId,
+          'redirect-uri': `${appUrl}/seller?verification=provider_pending`,
+        },
+      },
+      meta: {
+        'reference-id': sellerId,
+      },
+    }),
+    cache: 'no-store',
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Persona inquiry creation failed (${response.status}): ${text.slice(0, 200)}`);
+  }
+  return response.json() as Promise<{
+    data?: {
+      id?: string;
+      attributes?: {
+        status?: string;
+        'inquiry-link'?: string;
+      };
+    };
+  }>;
+}
+
+export async function applyAutomatedKycResult(input: {
+  sellerId: string;
+  provider: SellerKycProvider;
+  providerStatus: string;
+  checks: SellerKycChecks;
+  providerAccountId?: string | null;
+  providerInquiryId?: string | null;
+  providerVerificationId?: string | null;
+  webhookEventId?: string | null;
+  forcedStatus?: SellerVerificationStatus;
+  rejectionReason?: string | null;
+}) {
+  const status = input.forcedStatus ?? resolveAutomatedKycStatus(input.checks);
+  const now = new Date();
+
+  await prisma.sellerVerification.upsert({
+    where: { sellerId: input.sellerId },
+    update: {
+      provider: input.provider,
+      providerStatus: input.providerStatus,
+      providerAccountId: input.providerAccountId ?? undefined,
+      providerInquiryId: input.providerInquiryId ?? undefined,
+      providerVerificationId: input.providerVerificationId ?? undefined,
+      status,
+      rejectionReason:
+        status === 'REJECTED'
+          ? input.rejectionReason ?? 'Provider verification failed.'
+          : null,
+      governmentIdVerified: input.checks.governmentIdVerified,
+      selfieVerified: input.checks.selfieVerified,
+      addressVerified: input.checks.addressVerified,
+      phoneVerified: input.checks.phoneVerified,
+      phoneVerificationStatus: input.checks.phoneVerified
+        ? SellerPhoneVerificationStatus.VERIFIED
+        : SellerPhoneVerificationStatus.PENDING,
+      providerReviewedAt: now,
+      eligibleToListAt: status === 'APPROVED' ? now : null,
+      adminFallbackStatus:
+        status === 'APPROVED'
+          ? SellerAdminFallbackStatus.NOT_REQUIRED
+          : SellerAdminFallbackStatus.PENDING_REVIEW,
+      adminFallbackReason: null,
+      webhookLastEventId: input.webhookEventId ?? undefined,
+      webhookLastReceivedAt: now,
+    },
+    create: {
+      sellerId: input.sellerId,
+      provider: input.provider,
+      providerStatus: input.providerStatus,
+      providerAccountId: input.providerAccountId ?? null,
+      providerInquiryId: input.providerInquiryId ?? null,
+      providerVerificationId: input.providerVerificationId ?? null,
+      status,
+      rejectionReason:
+        status === 'REJECTED'
+          ? input.rejectionReason ?? 'Provider verification failed.'
+          : null,
+      governmentIdVerified: input.checks.governmentIdVerified,
+      selfieVerified: input.checks.selfieVerified,
+      addressVerified: input.checks.addressVerified,
+      phoneVerified: input.checks.phoneVerified,
+      phoneNumber: '',
+      phoneVerificationStatus: input.checks.phoneVerified
+        ? SellerPhoneVerificationStatus.VERIFIED
+        : SellerPhoneVerificationStatus.PENDING,
+      street: '',
+      city: '',
+      state: '',
+      zipCode: '',
+      country: '',
+      governmentIdFrontPublicId: '',
+      governmentIdBackPublicId: '',
+      selfieImagePublicId: '',
+      kycStartedAt: now,
+      providerReviewedAt: now,
+      eligibleToListAt: status === 'APPROVED' ? now : null,
+      adminFallbackStatus:
+        status === 'APPROVED'
+          ? SellerAdminFallbackStatus.NOT_REQUIRED
+          : SellerAdminFallbackStatus.PENDING_REVIEW,
+      webhookLastEventId: input.webhookEventId ?? null,
+      webhookLastReceivedAt: now,
+    },
+  });
+}
+
+export function stripeKycChecksFromAccount(account: {
+  payouts_enabled?: boolean | null;
+  requirements?: {
+    currently_due?: string[] | null;
+    past_due?: string[] | null;
+  } | null;
+}) {
+  const due = new Set([
+    ...(account.requirements?.currently_due ?? []),
+    ...(account.requirements?.past_due ?? []),
+  ]);
+  const addressVerified = ![...due].some(
+    (field) => field.includes('address') || field.includes('city') || field.includes('postal_code'),
+  );
+  const phoneVerified = ![...due].some((field) => field.includes('phone'));
+  return {
+    addressVerified,
+    phoneVerified,
+    payoutsEnabled: Boolean(account.payouts_enabled),
+  };
+}
+
+export function getStripeMode() {
+  return getCurrentStripeMode();
+}

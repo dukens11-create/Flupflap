@@ -15,7 +15,9 @@ import { isSubscriptionActive, SELLER_SUBSCRIPTION_PRICE_LABEL } from '@/lib/sub
 import { syncSellerSubscriptionFromStripe } from '@/lib/subscription-sync';
 import SubscriptionButton from '@/components/SubscriptionButton';
 import {
+  getDefaultSellerKycProvider,
   isSellerVerificationApproved,
+  sellerKycProviderLabel,
   sellerPhoneVerificationLabel,
   sellerVerificationStatusTone,
 } from '@/lib/seller-verification';
@@ -97,6 +99,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   const subscriptionActive = dbUser ? isSubscriptionActive(dbUser) : false;
   const subscriptionPeriodEnd = dbUser?.subscriptionCurrentPeriodEnd ?? null;
   const subscriptionStatus = dbUser?.subscriptionStatus ?? null;
+  const defaultKycProvider = getDefaultSellerKycProvider();
 
   await expirePromotions();
   const [settings, products, orders, soldItems, verificationSubmission] = await Promise.all([
@@ -133,8 +136,16 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
     prisma.sellerVerification.findUnique({
       where: { sellerId: session.user.id },
       select: {
+        provider: true,
+        providerStatus: true,
+        providerInquiryId: true,
+        providerVerificationId: true,
         status: true,
         rejectionReason: true,
+        governmentIdVerified: true,
+        selfieVerified: true,
+        addressVerified: true,
+        phoneVerified: true,
         phoneNumber: true,
         phoneVerificationStatus: true,
         street: true,
@@ -144,6 +155,9 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
         country: true,
         createdAt: true,
         updatedAt: true,
+        eligibleToListAt: true,
+        adminFallbackStatus: true,
+        adminFallbackReason: true,
       },
     }),
   ]);
@@ -154,7 +168,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   const netEarningsCents = soldItems.reduce((s, i) => s + i.sellerNetCents, 0);
   const itemsSoldCount = soldItems.reduce((s, i) => s + i.quantity, 0);
   const completedOrdersCount = new Set(soldItems.map(i => i.order.id)).size;
-  const verificationApproved = isSellerVerificationApproved(verificationSubmission?.status);
+  const verificationApproved = isSellerVerificationApproved(verificationSubmission);
   let emptyListingsMessage: ReactNode = 'No listings yet. Subscribe to start selling.';
   if (subscriptionActive && verificationApproved) {
     emptyListingsMessage = (
@@ -275,6 +289,21 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
           ✅ Seller verification submitted. An admin will review your documents before you can list products.
         </div>
       )}
+      {sp.verification === 'provider_started' && (
+        <div className="card p-4 mb-6 bg-blue-50 border-blue-200 text-blue-900 text-sm">
+          ✅ Provider verification started. Complete all provider steps, then return here while we await webhook updates.
+        </div>
+      )}
+      {sp.verification === 'provider_pending' && (
+        <div className="card p-4 mb-6 bg-amber-50 border-amber-300 text-amber-900 text-sm">
+          Verification is in progress with your selected provider. Listings remain locked until all checks are approved.
+        </div>
+      )}
+      {sp.verification === 'manual_required' && (
+        <div className="card p-4 mb-6 bg-slate-50 border-slate-200 text-slate-700 text-sm">
+          Manual verification mode is enabled. Submit documents below for admin review.
+        </div>
+      )}
 
       {sp.verification === 'required' && (
         <div className="card p-4 mb-6 bg-amber-50 border-amber-300 text-amber-900 text-sm">
@@ -292,6 +321,9 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
               <div className="mt-2 flex items-center gap-2">
                 <span className={`badge ${sellerVerificationStatusTone(verificationSubmission?.status)}`}>
                   {verificationSubmission?.status ?? 'Not submitted'}
+                </span>
+                <span className="text-xs text-slate-500">
+                  Provider: {sellerKycProviderLabel(verificationSubmission?.provider ?? defaultKycProvider)}
                 </span>
                 {verificationSubmission?.phoneVerificationStatus && (
                   <span className="text-xs text-slate-500">
@@ -317,6 +349,12 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                   Your verification is pending review. We&apos;ll notify you here once a FlupFlap admin approves or rejects it.
                 </p>
               )}
+              <div className="mt-4 grid gap-2 text-xs text-slate-600 sm:grid-cols-2 lg:grid-cols-4">
+                <p className={`rounded-lg border px-2 py-1 ${verificationSubmission?.governmentIdVerified ? 'border-green-200 bg-green-50 text-green-700' : 'border-slate-200 bg-white'}`}>Government ID: {verificationSubmission?.governmentIdVerified ? 'Verified' : 'Pending'}</p>
+                <p className={`rounded-lg border px-2 py-1 ${verificationSubmission?.selfieVerified ? 'border-green-200 bg-green-50 text-green-700' : 'border-slate-200 bg-white'}`}>Selfie / face: {verificationSubmission?.selfieVerified ? 'Verified' : 'Pending'}</p>
+                <p className={`rounded-lg border px-2 py-1 ${verificationSubmission?.addressVerified ? 'border-green-200 bg-green-50 text-green-700' : 'border-slate-200 bg-white'}`}>Address: {verificationSubmission?.addressVerified ? 'Verified' : 'Pending'}</p>
+                <p className={`rounded-lg border px-2 py-1 ${verificationSubmission?.phoneVerified ? 'border-green-200 bg-green-50 text-green-700' : 'border-slate-200 bg-white'}`}>Phone: {verificationSubmission?.phoneVerified ? 'Verified' : 'Pending'}</p>
+              </div>
             </div>
             {verificationSubmission && (
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
@@ -331,6 +369,29 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
               </div>
             )}
           </div>
+
+          {!verificationApproved && (
+            <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-sm font-semibold text-slate-900">Start provider verification</p>
+              <p className="mt-1 text-xs text-slate-600">
+                Use Stripe Identity + Connect (default) or Persona. If provider checks are incomplete, admins can finalize with manual fallback review.
+              </p>
+              <form action="/api/seller/verification/initiate" method="POST" className="mt-3 flex flex-wrap items-center gap-3">
+                <select name="provider" className="input text-sm max-w-[220px]" defaultValue={verificationSubmission?.provider ?? defaultKycProvider}>
+                  <option value="STRIPE">Stripe Identity + Connect</option>
+                  <option value="PERSONA">Persona</option>
+                </select>
+                <button className="btn-outline text-sm" type="submit">
+                  Start provider KYC
+                </button>
+                {defaultKycProvider === 'STRIPE' && (
+                  <a href="/api/stripe/connect" className="text-xs text-blue-700 hover:underline">
+                    Open Stripe Connect onboarding
+                  </a>
+                )}
+              </form>
+            </div>
+          )}
 
           {!verificationApproved && (
             <form
