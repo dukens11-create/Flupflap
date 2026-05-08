@@ -278,7 +278,7 @@ export default async function AdminPage({
                        {p.moderation.flagged ? (
                          <ul className="mt-2 space-y-1 text-xs">
                             {p.moderation.reasons.map((reason, index) => (
-                              <li key={`${reason.category}-${reason.confidence}-${reason.matches.join('|')}`}>
+                              <li key={`${reason.category}-${reason.confidence}-${reason.score}-${reason.explanation}-${reason.matches.join('|')}`}>
                                 <span className="font-semibold">{reason.label}:</span>{' '}
                                 {reason.explanation}
                                 <span className="block opacity-80">
