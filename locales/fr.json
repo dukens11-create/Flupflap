@@ -27,10 +27,13 @@
   },
   "filters": {
     "searchPlaceholder": "Rechercher des produits…",
+    "location": "Ville ou état",
     "allCategories": "Toutes les catégories",
     "anyCondition": "Tout état",
     "minPrice": "Min $",
     "maxPrice": "Max $",
+    "sortNewest": "Plus récents",
+    "sortPopular": "Populaires",
     "clearFilters": "Effacer les filtres",
     "categories": {
       "Electronics": "Électronique",

@@ -10,6 +10,9 @@ export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = { title: 'Browse Products' };
 
+const PROMOTION_CLICK_WEIGHT = 5;
+const PROMOTION_SALE_WEIGHT = 25;
+
 /**
  * Returns true when a Prisma/Postgres error indicates the schema has not been
  * applied yet (tables or columns are missing). This lets the homepage show a
@@ -30,22 +33,80 @@ function isSchemaNotInitializedError(err: unknown): boolean {
 
 interface SearchParams {
   q?: string;
+  location?: string;
   category?: string;
   condition?: string;
   minPrice?: string;
   maxPrice?: string;
+  sort?: string;
+}
+
+function parsePriceBound(value?: string): number | undefined {
+  if (!value) return undefined;
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount < 0) return undefined;
+  return Math.round(amount * 100);
+}
+
+function getPromotionScore(promotions: Array<{ impressionCount: number; clickCount: number; saleCount: number }>) {
+  return promotions.reduce(
+    (score, promotion) => score + promotion.impressionCount + (promotion.clickCount * PROMOTION_CLICK_WEIGHT) + (promotion.saleCount * PROMOTION_SALE_WEIGHT),
+    0,
+  );
+}
+
+function getActivePromotion<T extends { id: string; status: string; expiresAt: Date | null }>(promotions: T[], now: Date) {
+  return promotions.find((promotion) => promotion.status === 'ACTIVE' && promotion.expiresAt && promotion.expiresAt > now) ?? null;
 }
 
 async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?: Record<string, string | number>) => string }) {
-  const where: any = { status: 'APPROVED' };
-  if (sp.q) where.title = { contains: sp.q, mode: 'insensitive' };
-  if (sp.category) where.category = sp.category;
-  if (sp.condition) where.condition = sp.condition;
-  if (sp.minPrice || sp.maxPrice) {
-    where.priceCents = {};
-    if (sp.minPrice) where.priceCents.gte = Math.round(Number(sp.minPrice) * 100);
-    if (sp.maxPrice) where.priceCents.lte = Math.round(Number(sp.maxPrice) * 100);
+  const filters: Record<string, unknown>[] = [];
+  const query = sp.q?.trim();
+  const location = sp.location?.trim();
+  const sort = sp.sort === 'popular' ? 'popular' : 'newest';
+
+  if (query) {
+    filters.push({
+      OR: [
+        { title: { contains: query, mode: 'insensitive' } },
+        { description: { contains: query, mode: 'insensitive' } },
+        { category: { contains: query, mode: 'insensitive' } },
+        { condition: { contains: query, mode: 'insensitive' } },
+        { pickupCity: { contains: query, mode: 'insensitive' } },
+        { pickupState: { contains: query, mode: 'insensitive' } },
+      ],
+    });
   }
+  if (sp.category) filters.push({ category: sp.category });
+  if (sp.condition) filters.push({ condition: sp.condition });
+  if (location) {
+    filters.push({
+      pickupAvailable: true,
+      OR: [
+        { pickupCity: { contains: location, mode: 'insensitive' } },
+        { pickupState: { contains: location, mode: 'insensitive' } },
+      ],
+    });
+  }
+
+  let minPriceCents = parsePriceBound(sp.minPrice);
+  let maxPriceCents = parsePriceBound(sp.maxPrice);
+  if (minPriceCents !== undefined && maxPriceCents !== undefined && minPriceCents > maxPriceCents) {
+    [minPriceCents, maxPriceCents] = [maxPriceCents, minPriceCents];
+  }
+  if (minPriceCents !== undefined || maxPriceCents !== undefined) {
+    filters.push({
+      priceCents: {
+        ...(minPriceCents !== undefined ? { gte: minPriceCents } : {}),
+        ...(maxPriceCents !== undefined ? { lte: maxPriceCents } : {}),
+      },
+    });
+  }
+
+  const where: Record<string, unknown> = {
+    status: 'APPROVED',
+    ...(filters.length > 0 ? { AND: filters } : {}),
+  };
 
   // If DATABASE_URL is not configured, show a clear fallback instead of crashing.
   // Set DATABASE_URL in your environment (e.g. Render dashboard) for full functionality.
@@ -68,19 +129,34 @@ async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?
     const now = new Date();
     products = await prisma.product.findMany({
       where,
-      orderBy: { createdAt: 'desc' },
+      orderBy: sort === 'popular'
+        ? [
+            { orderItems: { _count: 'desc' } },
+            { createdAt: 'desc' },
+          ]
+        : { createdAt: 'desc' },
       take: 60,
       include: {
         promotions: {
-          where: { status: 'ACTIVE', expiresAt: { gt: now } },
-          orderBy: { expiresAt: 'desc' },
-          take: 1,
+          select: {
+            id: true,
+            status: true,
+            expiresAt: true,
+            impressionCount: true,
+            clickCount: true,
+            saleCount: true,
+          },
+        },
+        _count: {
+          select: {
+            orderItems: true,
+          },
         },
       },
     });
     const promotionIds = products
-      .map((product: any) => product.promotions[0]?.id)
-      .filter(Boolean);
+      .map((product: any) => getActivePromotion(product.promotions, now)?.id)
+      .filter((promotionId): promotionId is string => promotionId !== undefined && promotionId !== null);
     if (promotionIds.length > 0) {
       await prisma.$transaction(
         promotionIds.map((promotionId: string) => (
@@ -91,11 +167,19 @@ async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?
         )),
       );
     }
-    // Sort a copy: featured (active promotion) products appear first
     products = [...products].sort((productA: any, productB: any) => {
-      const aFeatured = productA.promotions.length > 0 ? 1 : 0;
-      const bFeatured = productB.promotions.length > 0 ? 1 : 0;
+      if (sort === 'popular') {
+        const purchaseDelta = productB._count.orderItems - productA._count.orderItems;
+        if (purchaseDelta !== 0) return purchaseDelta;
+
+        const promotionDelta = getPromotionScore(productB.promotions) - getPromotionScore(productA.promotions);
+        if (promotionDelta !== 0) return promotionDelta;
+      }
+
+      const aFeatured = getActivePromotion(productA.promotions, now) ? 1 : 0;
+      const bFeatured = getActivePromotion(productB.promotions, now) ? 1 : 0;
       if (aFeatured !== bFeatured) return bFeatured - aFeatured;
+
       return productB.createdAt.getTime() - productA.createdAt.getTime();
     });
   } catch (err: unknown) {
@@ -133,7 +217,13 @@ async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
       {products.map((p: any) => (
-        <ProductCard key={p.id} p={{ ...p, activePromotion: p.promotions[0] ?? null }} />
+        <ProductCard
+          key={p.id}
+          p={{
+            ...p,
+            activePromotion: getActivePromotion(p.promotions, new Date()),
+          }}
+        />
       ))}
     </div>
   );
