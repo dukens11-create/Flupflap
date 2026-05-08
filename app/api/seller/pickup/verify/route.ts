@@ -15,6 +15,8 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
+import { NotificationType } from '@prisma/client';
+import { createNotifications } from '@/lib/notifications';
 import { z } from 'zod';
 import crypto from 'crypto';
 
@@ -62,6 +64,13 @@ export async function POST(req: Request) {
         isPickup: true,
         items: { some: { product: { sellerId: session.user.id } } },
       },
+      select: {
+        id: true,
+        buyerId: true,
+        status: true,
+        pickupCode: true,
+        pickupCodeAttempts: true,
+      },
     });
 
     if (!order) {
@@ -106,6 +115,25 @@ export async function POST(req: Request) {
         pickupConfirmedById: session.user.id,
       },
     });
+
+    await createNotifications([
+      {
+        userId: order.buyerId,
+        type: NotificationType.SHIPPING,
+        title: 'Pickup confirmed',
+        body: 'The seller confirmed your pickup handoff.',
+        link: `/orders/${order.id}`,
+        data: { orderId: order.id },
+      },
+      {
+        userId: order.buyerId,
+        type: NotificationType.ORDER_UPDATE,
+        title: 'Order status updated',
+        body: 'Your order moved to Picked Up.',
+        link: `/orders/${order.id}`,
+        data: { orderId: order.id, status: 'PICKED_UP' },
+      },
+    ]);
 
     return NextResponse.json({ ok: true, message: 'Pickup confirmed. Order marked as picked up.' });
   } catch (err: any) {

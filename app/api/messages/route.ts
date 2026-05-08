@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
+import { NotificationType } from '@prisma/client';
+import { createNotification } from '@/lib/notifications';
 import { z } from 'zod';
 
 const MESSAGE_MAX_LENGTH = 2000;
@@ -124,6 +126,15 @@ export async function POST(req: Request) {
       senderId: buyerId,
       body: body.trim(),
     },
+  });
+
+  await createNotification({
+    userId: sellerId,
+    type: NotificationType.MESSAGE,
+    title: 'New message from a buyer',
+    body: body.trim().length > 120 ? `${body.trim().slice(0, 117)}...` : body.trim(),
+    link: `/messages/${conversation.id}`,
+    data: { conversationId: conversation.id, productId },
   });
 
   return NextResponse.json({ conversationId: conversation.id, messageId: message.id }, { status: 201 });
