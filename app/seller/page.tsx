@@ -23,6 +23,12 @@ export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = { title: 'Seller Dashboard' };
 
+const DATE_FORMAT_OPTIONS: Intl.DateTimeFormatOptions = {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+};
+
 function statusBadge(status: string) {
   const map: Record<string, string> = {
     PENDING: 'badge-yellow',
@@ -303,7 +309,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
               </p>
               {verificationSubmission?.status === 'REJECTED' && verificationSubmission.rejectionReason && (
                 <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-                  <span className="font-semibold">Rejected:</span> {verificationSubmission.rejectionReason}
+                  <span className="font-semibold">Rejected by a FlupFlap admin:</span> {verificationSubmission.rejectionReason}
                 </p>
               )}
               {verificationSubmission?.status === 'APPROVED' && (
@@ -313,7 +319,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
               )}
               {verificationSubmission?.status === 'PENDING' && (
                 <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                  Your verification is pending review. We&apos;ll notify you here once an admin approves or rejects it.
+                  Your verification is pending review. We&apos;ll notify you here once a FlupFlap admin approves or rejects it.
                 </p>
               )}
             </div>
@@ -478,11 +484,11 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
       {!isRestricted && subscriptionActive && (
         <div className="card p-4 mb-6 bg-green-50 border-green-200 text-green-800 text-sm flex justify-between items-center gap-3">
           <span>
-            ✅ Seller subscription active
-            {subscriptionPeriodEnd
-              ? ` — renews ${subscriptionPeriodEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
-              : ''}
-          </span>
+              ✅ Seller subscription active
+              {subscriptionPeriodEnd
+                ? ` — renews ${subscriptionPeriodEnd.toLocaleDateString('en-US', DATE_FORMAT_OPTIONS)}`
+                : ''}
+            </span>
           <SubscriptionButton hasBillingAccount={!!dbUser?.stripeCustomerId} status={subscriptionStatus} manage />
         </div>
       )}

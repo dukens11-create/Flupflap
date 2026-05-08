@@ -12,6 +12,12 @@ export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = { title: 'Seller Management — Admin' };
 
+const DATE_FORMAT_OPTIONS: Intl.DateTimeFormatOptions = {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+};
+
 const REASON_LABELS: Record<string, string> = {
   misconduct_to_customer: 'Misconduct to customer',
   fake_product: 'Fake product',
@@ -96,8 +102,8 @@ export default async function AdminSellersPage({
                   </div>
                   <p className="text-sm text-slate-500">{seller.email}</p>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    {seller._count.products} listing{seller._count.products !== 1 ? 's' : ''} ·
-                    Joined {seller.createdAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                     {seller._count.products} listing{seller._count.products !== 1 ? 's' : ''} ·
+                    Joined {seller.createdAt.toLocaleDateString('en-US', DATE_FORMAT_OPTIONS)}
                   </p>
                   {seller.sellerStatusReason && seller.sellerStatus !== 'ACTIVE' && (
                     <p className="text-xs text-slate-600 mt-1">
@@ -140,7 +146,7 @@ export default async function AdminSellersPage({
                         )}
                         {seller.verificationSubmission.reviewedBy && seller.verificationSubmission.reviewedAt && (
                           <p className="text-xs text-slate-500">
-                            Last reviewed {seller.verificationSubmission.reviewedAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} by {seller.verificationSubmission.reviewedBy.name}
+                            Last reviewed {seller.verificationSubmission.reviewedAt.toLocaleDateString('en-US', DATE_FORMAT_OPTIONS)} by {seller.verificationSubmission.reviewedBy.name}
                           </p>
                         )}
                       </div>

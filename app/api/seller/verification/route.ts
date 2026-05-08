@@ -115,6 +115,8 @@ export async function POST(req: Request) {
     const phoneMatchesVerifiedSubmission =
       existingVerification?.phoneNumber === normalizedPhone
       && existingVerification.phoneVerificationStatus === 'VERIFIED';
+    const shouldKeepPhoneVerified = (phoneMatchesExisting && Boolean(user?.phoneVerified))
+      || phoneMatchesVerifiedSubmission;
 
     if (!frontFile && !existingVerification?.governmentIdFrontPublicId) {
       return NextResponse.json(
@@ -169,16 +171,8 @@ export async function POST(req: Request) {
         where: { id: session.user.id },
         data: {
           phone: normalizedPhone,
-          phoneVerified:
-            phoneMatchesExisting
-              ? user?.phoneVerified ?? false
-              : phoneMatchesVerifiedSubmission,
-          phoneVerifiedAt:
-            phoneMatchesExisting
-              ? user?.phoneVerifiedAt ?? null
-              : phoneMatchesVerifiedSubmission
-                ? user?.phoneVerifiedAt ?? new Date()
-                : null,
+          phoneVerified: shouldKeepPhoneVerified,
+          phoneVerifiedAt: shouldKeepPhoneVerified ? user?.phoneVerifiedAt ?? null : null,
         },
       }),
       prisma.sellerVerification.upsert({
