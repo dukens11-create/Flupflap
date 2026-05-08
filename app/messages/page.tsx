@@ -26,20 +26,26 @@ export default async function MessagesPage() {
 
   const userId = session.user.id;
   const conversations = await getInboxConversations(userId);
-  const unreadCount = conversations.reduce((sum, conversation) => sum + conversation.unreadCount, 0);
-  const unreadConversations = conversations.filter((conversation) => conversation.unreadCount > 0).length;
+  const unreadSummary = conversations.reduce(
+    (summary, conversation) => ({
+      unreadCount: summary.unreadCount + conversation.unreadCount,
+      unreadConversations:
+        summary.unreadConversations + (conversation.unreadCount > 0 ? 1 : 0),
+    }),
+    { unreadCount: 0, unreadConversations: 0 },
+  );
 
   return (
     <main className="max-w-2xl mx-auto">
       <h1 className="text-3xl font-black mb-6">Messages</h1>
 
-      {unreadCount > 0 && (
+      {unreadSummary.unreadCount > 0 && (
         <div className="card p-4 mb-4 bg-blue-50 border-blue-200 text-blue-900">
           <p className="font-semibold">
-            {unreadCount} new message{unreadCount === 1 ? '' : 's'}
+            {unreadSummary.unreadCount} new message{unreadSummary.unreadCount === 1 ? '' : 's'}
           </p>
           <p className="text-sm mt-1">
-            You have unread activity in {unreadConversations} conversation{unreadConversations === 1 ? '' : 's'}.
+            You have unread activity in {unreadSummary.unreadConversations} conversation{unreadSummary.unreadConversations === 1 ? '' : 's'}.
           </p>
         </div>
       )}

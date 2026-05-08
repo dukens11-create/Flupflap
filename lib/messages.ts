@@ -56,22 +56,23 @@ export async function getInboxConversations(userId: string) {
     orderBy: { updatedAt: 'desc' },
   });
 
-  const unreadCounts = await Promise.all(
-    conversations.map((conversation) =>
-      prisma.message.count({
-        where: {
-          conversationId: conversation.id,
-          senderId: { not: userId },
-          readAt: null,
-        },
-      }),
-    ),
+  const unreadGroups = await prisma.message.groupBy({
+    by: ['conversationId'],
+    where: {
+      conversationId: { in: conversations.map((conversation) => conversation.id) },
+      senderId: { not: userId },
+      readAt: null,
+    },
+    _count: { _all: true },
+  });
+  const unreadCountByConversationId = new Map(
+    unreadGroups.map((group) => [group.conversationId, group._count._all]),
   );
 
-  return conversations.map((conversation, index) => ({
+  return conversations.map((conversation) => ({
     ...conversation,
-    unreadCount: unreadCounts[index],
-    unread: unreadCounts[index] > 0,
+    unreadCount: unreadCountByConversationId.get(conversation.id) ?? 0,
+    unread: (unreadCountByConversationId.get(conversation.id) ?? 0) > 0,
   }));
 }
 
