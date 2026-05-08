@@ -1,4 +1,5 @@
 "use client";
+import Image from 'next/image';
 import Link from 'next/link';
 import { signOut, useSession } from 'next-auth/react';
 import { ShoppingCart, Package, LayoutDashboard, LogIn, UserPlus, LogOut, User, MessageCircle } from 'lucide-react';
@@ -75,7 +76,16 @@ export default function Navbar() {
   return (
     <header className="bg-white border-b border-slate-200 sticky top-0 z-30">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center gap-4">
-        <Link href="/" className="font-black text-xl text-blue-600 mr-2">FlupFlap</Link>
+        <Link href="/" className="mr-2 flex items-center" aria-label="FlupFlap home">
+          <Image
+            src="/flupflap_logo.png"
+            alt="FlupFlap"
+            width={77}
+            height={32}
+            priority
+            className="h-8 w-auto"
+          />
+        </Link>
 
         <nav className="flex items-center gap-3 flex-1 text-sm font-medium text-slate-600">
           <Link href="/" className="hover:text-blue-600">{t('nav.browse')}</Link>

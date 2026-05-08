@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import Image from 'next/image';
+import Link from 'next/link';
 import Providers from '@/components/Providers';
 import Navbar from '@/components/Navbar';
 import { getServerTranslations } from '@/lib/i18n/server';
@@ -20,8 +22,16 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             {children}
           </div>
           <footer className="mt-16 border-t border-slate-200 bg-white text-sm text-slate-500">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-wrap gap-4">
-              <span className="font-bold text-slate-700">FlupFlap</span>
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-wrap items-center gap-4">
+              <Link href="/" className="flex items-center" aria-label="FlupFlap home">
+                <Image
+                  src="/flupflap_logo.png"
+                  alt="FlupFlap"
+                  width={96}
+                  height={40}
+                  className="h-10 w-auto"
+                />
+              </Link>
               <a href="/legal/terms" className="hover:underline">{t('footer.terms')}</a>
               <a href="/legal/privacy" className="hover:underline">{t('footer.privacy')}</a>
               <a href="/legal/seller-agreement" className="hover:underline">{t('footer.sellerAgreement')}</a>
