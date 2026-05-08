@@ -56,7 +56,7 @@ export async function POST(req: Request) {
       cloudinary.uploader
         .upload_stream(
           {
-            folder: MESSAGE_UPLOAD_FOLDER,
+            folder: `${MESSAGE_UPLOAD_FOLDER}/${session.user.id}`,
             resource_type: 'image',
           },
           (err, res) => {
