@@ -24,8 +24,8 @@ export async function POST(req: Request) {
       );
     }
 
-    const normalizedPhone = data.role === 'SELLER'
-      ? normalizePhone(data.phone ?? '')
+    const normalizedPhone = data.role === 'SELLER' && data.phone
+      ? normalizePhone(data.phone)
       : null;
 
     if (data.role === 'SELLER' && !normalizedPhone) {
