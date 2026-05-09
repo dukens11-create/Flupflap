@@ -42,12 +42,12 @@ export const authOptions: NextAuthOptions = {
         // Sellers must supply a valid one-time code (when SMS OTP is enabled).
         if (user.role === 'SELLER') {
           if (SELLER_OTP_FORCE_DISABLED || !isSmsOtpEnabled()) {
-            console.warn('[auth] Seller OTP forcibly bypassed: pending Twilio A2P 10DLC approval', {
+            // Seller OTP is not active in the current sign-in flow.
+            // Either SELLER_OTP_FORCE_DISABLED=true or ENABLE_SMS_OTP=false.
+            // Sellers sign in with email + password only.
+            console.info('[auth] Seller OTP bypassed: not active in current sign-in flow', {
               userId: user.id,
-              role: user.role,
-              reason: SELLER_OTP_FORCE_DISABLED
-                ? 'SELLER_OTP_FORCE_DISABLED=true (pending Twilio A2P 10DLC approval)'
-                : 'feature flag ENABLE_SMS_OTP=false',
+              reason: SELLER_OTP_FORCE_DISABLED ? 'SELLER_OTP_FORCE_DISABLED=true' : 'ENABLE_SMS_OTP=false',
             });
           } else {
             if (!credentials.otp) return null;
