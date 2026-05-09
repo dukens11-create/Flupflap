@@ -16,23 +16,24 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const data = schema.parse(body);
+    const sellerPhone = data.phone?.trim();
 
-    if (data.role === 'SELLER' && !data.phone?.trim()) {
-      return NextResponse.json(
-        { error: 'A mobile phone number is required for seller accounts.' },
-        { status: 400 },
-      );
-    }
+    let normalizedPhone: string | null = null;
+    if (data.role === 'SELLER') {
+      if (!sellerPhone) {
+        return NextResponse.json(
+          { error: 'A mobile phone number is required for seller accounts.' },
+          { status: 400 },
+        );
+      }
 
-    const normalizedPhone = data.role === 'SELLER' && data.phone
-      ? normalizePhone(data.phone)
-      : null;
-
-    if (data.role === 'SELLER' && !normalizedPhone) {
-      return NextResponse.json(
-        { error: 'Enter a valid phone number. US/Canada numbers can be entered with or without +1.' },
-        { status: 400 },
-      );
+      normalizedPhone = normalizePhone(sellerPhone);
+      if (!normalizedPhone) {
+        return NextResponse.json(
+          { error: 'Enter a valid phone number. US/Canada numbers can be entered with or without +1.' },
+          { status: 400 },
+        );
+      }
     }
 
     const existing = await prisma.user.findUnique({ where: { email: data.email.toLowerCase() } });
