@@ -106,30 +106,34 @@ export async function GET(req: Request) {
         };
 
         const stripeKey = (process.env.STRIPE_SECRET_KEY ?? '').trim();
-        const params = new URLSearchParams({
-          'payee[type]': 'account',
-          'payee[account]': stripeAccountId,
-          type: '1099-K',
-        });
-        const res = await fetch(
-          `https://api.stripe.com/v1/tax/forms?${params.toString()}`,
-          {
-            headers: {
-              Authorization: `Bearer ${stripeKey}`,
-              'Stripe-Version': '2024-06-20',
-            },
-          },
-        );
-
-        if (res.ok) {
-          const taxForms = (await res.json()) as StripeTaxFormsListResponse;
-          const form = taxForms?.data?.find(f => f.tax_year === taxYear);
-          if (form) {
-            form1099EnumStatus = toForm1099StatusFromStripe(form.status);
-            form1099DownloadUrl = form.pdf ?? null;
-          }
+        if (!stripeKey) {
+          console.warn('[api/seller/tax-center] STRIPE_SECRET_KEY is not configured; skipping 1099-K lookup.');
         } else {
-          console.warn('[api/seller/tax-center] Stripe Tax Forms API returned', res.status);
+          const params = new URLSearchParams({
+            'payee[type]': 'account',
+            'payee[account]': stripeAccountId,
+            type: '1099-K',
+          });
+          const res = await fetch(
+            `https://api.stripe.com/v1/tax/forms?${params.toString()}`,
+            {
+              headers: {
+                Authorization: `Bearer ${stripeKey}`,
+                'Stripe-Version': '2024-06-20',
+              },
+            },
+          );
+
+          if (res.ok) {
+            const taxForms = (await res.json()) as StripeTaxFormsListResponse;
+            const form = taxForms?.data?.find(f => f.tax_year === taxYear);
+            if (form) {
+              form1099EnumStatus = toForm1099StatusFromStripe(form.status);
+              form1099DownloadUrl = form.pdf ?? null;
+            }
+          } else {
+            console.warn('[api/seller/tax-center] Stripe Tax Forms API returned', res.status);
+          }
         }
       } catch (stripeErr) {
         // Stripe Tax Forms API may not be available in all environments or
