@@ -132,7 +132,9 @@
     "invalidCode": "Invalid or expired code. Please try again.",
     "failedSavePhone": "Failed to save phone number.",
     "missingLoginInfo": "Login information not found. Please try again.",
-    "failedResendCode": "Failed to resend code."
+    "failedResendCode": "Failed to resend code.",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password"
   },
   "signup": {
     "title": "Create account",

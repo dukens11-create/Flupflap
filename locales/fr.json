@@ -132,7 +132,9 @@
     "invalidCode": "Code invalide ou expiré. Veuillez réessayer.",
     "failedSavePhone": "Impossible d'enregistrer le numéro de téléphone.",
     "missingLoginInfo": "Informations de connexion introuvables. Veuillez réessayer.",
-    "failedResendCode": "Impossible de renvoyer le code."
+    "failedResendCode": "Impossible de renvoyer le code.",
+    "showPassword": "Afficher le mot de passe",
+    "hidePassword": "Masquer le mot de passe"
   },
   "signup": {
     "title": "Créer un compte",
