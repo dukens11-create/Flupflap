@@ -41,6 +41,7 @@ export default function AccountPage() {
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarError, setAvatarError] = useState('');
   const [avatarSuccess, setAvatarSuccess] = useState('');
+  const [avatarImage, setAvatarImage] = useState<string | null>(null);
 
   // Phone management
   const [phoneStep, setPhoneStep] = useState<'idle' | 'enter_phone' | 'enter_code'>('idle');
@@ -116,6 +117,10 @@ export default function AccountPage() {
       .finally(() => setSecurityLoading(false));
   }, [session?.user?.id]);
 
+  useEffect(() => {
+    setAvatarImage(session?.user?.image ?? null);
+  }, [session?.user?.image]);
+
   if (status === 'loading') {
     return (
       <main className="max-w-md mx-auto">
@@ -146,12 +151,15 @@ export default function AccountPage() {
       if (!res.ok) {
         setAvatarError(data.error ?? 'Upload failed.');
       } else {
+        const uploadedUrl = typeof data.url === 'string' ? data.url : null;
+        if (uploadedUrl) setAvatarImage(uploadedUrl);
         try {
-          await update(); // Refresh session so header/avatar reflects the change
+          const refreshed = await update({}); // Refresh session so header/avatar reflects the change
+          setAvatarImage(refreshed?.user?.image ?? uploadedUrl);
+          setAvatarSuccess('Profile photo updated!');
         } catch {
-          // update() failure is non-critical; the DB is already updated.
+          setAvatarError('Profile photo saved, but refresh failed. Please reload to see it everywhere.');
         }
-        setAvatarSuccess('Profile photo updated!');
       }
     } catch {
       setAvatarError('Network error. Please try again.');
@@ -172,12 +180,14 @@ export default function AccountPage() {
       if (!res.ok) {
         setAvatarError(data.error ?? 'Failed to remove photo.');
       } else {
+        setAvatarImage(null);
         try {
-          await update();
+          const refreshed = await update({});
+          setAvatarImage(refreshed?.user?.image ?? null);
+          setAvatarSuccess('Profile photo removed.');
         } catch {
-          // update() failure is non-critical; the DB is already updated.
+          setAvatarError('Profile photo removed, but refresh failed. Please reload to see it everywhere.');
         }
-        setAvatarSuccess('Profile photo removed.');
       }
     } catch {
       setAvatarError('Network error. Please try again.');
@@ -411,9 +421,9 @@ export default function AccountPage() {
         <div>
           <p className="label">Profile photo</p>
           <div className="flex items-center gap-4 mt-1">
-            {session.user.image ? (
+            {avatarImage ? (
               <img
-                src={session.user.image}
+                src={avatarImage}
                 alt="Profile"
                 className="h-16 w-16 rounded-full object-cover border border-slate-200 shrink-0"
               />
@@ -439,9 +449,9 @@ export default function AccountPage() {
                   htmlFor="avatar-upload"
                   className={`text-xs font-medium px-3 py-1.5 rounded-lg border border-slate-300 cursor-pointer hover:bg-slate-50 transition-colors ${avatarUploading ? 'opacity-50 pointer-events-none' : ''}`}
                 >
-                  {avatarUploading ? 'Uploading…' : session.user.image ? 'Change photo' : 'Upload photo'}
+                  {avatarUploading ? 'Uploading…' : avatarImage ? 'Change photo' : 'Upload photo'}
                 </label>
-                {session.user.image && !avatarUploading && (
+                {avatarImage && !avatarUploading && (
                   <button
                     type="button"
                     onClick={removeAvatar}
