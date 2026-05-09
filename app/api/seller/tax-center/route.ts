@@ -3,7 +3,6 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { computeTaxYearSummary, getSellerTaxYears } from '@/lib/tax-center';
-import { stripe } from '@/lib/stripe';
 
 export const dynamic = 'force-dynamic';
 
@@ -79,27 +78,50 @@ export async function GET(req: Request) {
     const stripeAccountId = user?.stripeAccountId;
     if (stripeAccountId && user?.stripeOnboardingComplete) {
       try {
-        // Stripe Tax Forms API: list 1099-K forms for this connected account
-        // The forms endpoint is available on Stripe Connect accounts.
-        const taxForms = await (stripe as any).tax.forms.list({
-          payee: { type: 'account', account: stripeAccountId },
+        // The Stripe Tax Forms API (/v1/tax/forms) is not yet included in the
+        // stripe-node type definitions at the pinned API version (2024-06-20).
+        // We call it directly via fetch to maintain full type safety without
+        // resorting to unsafe `any` casts on the Stripe client object.
+        type StripeTaxForm = {
+          tax_year: number;
+          status: 'draft' | 'pending' | 'issued' | 'filed' | string;
+          pdf: string | null;
+        };
+        type StripeTaxFormsListResponse = {
+          object: 'list';
+          data: StripeTaxForm[];
+        };
+
+        const stripeKey = (process.env.STRIPE_SECRET_KEY ?? '').trim();
+        const params = new URLSearchParams({
+          'payee[type]': 'account',
+          'payee[account]': stripeAccountId,
           type: '1099-K',
         });
-
-        const form = taxForms?.data?.find(
-          (f: any) => f.tax_year === taxYear,
+        const res = await fetch(
+          `https://api.stripe.com/v1/tax/forms?${params.toString()}`,
+          {
+            headers: {
+              Authorization: `Bearer ${stripeKey}`,
+              'Stripe-Version': '2024-06-20',
+            },
+          },
         );
 
-        if (form) {
-          if (form.status === 'filed') {
-            form1099Status = 'FILED';
-          } else if (form.status === 'issued') {
-            form1099Status = 'AVAILABLE';
-          } else if (form.status === 'pending') {
-            form1099Status = 'PENDING';
+        if (res.ok) {
+          const taxForms = (await res.json()) as StripeTaxFormsListResponse;
+          const form = taxForms?.data?.find(f => f.tax_year === taxYear);
+
+          if (form) {
+            if (form.status === 'filed') {
+              form1099Status = 'FILED';
+            } else if (form.status === 'issued') {
+              form1099Status = 'AVAILABLE';
+            } else if (form.status === 'pending') {
+              form1099Status = 'PENDING';
+            }
+            form1099DownloadUrl = form.pdf ?? null;
           }
-          // Download URL (if available in the form object)
-          form1099DownloadUrl = form.pdf ?? null;
         }
       } catch {
         // Stripe Tax Forms API may not be available in all environments;
