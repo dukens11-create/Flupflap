@@ -32,7 +32,7 @@ export async function GET() {
     const base64Payload = dataUrlMatch[2];
     try {
       const buffer = Buffer.from(base64Payload, 'base64');
-      return new NextResponse(new Uint8Array(buffer), {
+      return new NextResponse(buffer, {
         status: 200,
         headers: {
           'Content-Type': mimeType,
@@ -44,15 +44,7 @@ export async function GET() {
     }
   }
 
-  if (!/^https?:\/\//i.test(user.image)) {
-    return NextResponse.json({ error: 'Invalid avatar image.' }, { status: 500 });
-  }
-
-  return NextResponse.redirect(user.image, {
-    headers: {
-      'Cache-Control': 'private, max-age=300',
-    },
-  });
+  return NextResponse.json({ error: 'Not found' }, { status: 404 });
 }
 
 export async function POST(req: Request) {

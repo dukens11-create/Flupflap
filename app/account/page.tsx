@@ -152,13 +152,15 @@ export default function AccountPage() {
         setAvatarError(data.error ?? 'Upload failed.');
       } else {
         const uploadedUrl = typeof data.url === 'string' ? data.url : null;
-        if (uploadedUrl) setAvatarImage(uploadedUrl);
+        setAvatarSuccess('Profile photo updated!');
         try {
           const refreshed = await update({}); // Refresh session so header/avatar reflects the change
-          setAvatarImage(refreshed?.user?.image ?? uploadedUrl);
-          setAvatarSuccess('Profile photo updated!');
+          if (typeof refreshed?.user?.image === 'string' || refreshed?.user?.image === null) {
+            setAvatarImage(refreshed.user.image);
+          }
         } catch {
-          setAvatarError('Profile photo saved, but refresh failed. Please reload to see it everywhere.');
+          if (uploadedUrl) setAvatarImage(uploadedUrl);
+          setAvatarSuccess('Profile photo updated! Please refresh the page to see changes in other areas.');
         }
       }
     } catch {
@@ -181,12 +183,12 @@ export default function AccountPage() {
         setAvatarError(data.error ?? 'Failed to remove photo.');
       } else {
         setAvatarImage(null);
+        setAvatarSuccess('Profile photo removed.');
         try {
           const refreshed = await update({});
           setAvatarImage(refreshed?.user?.image ?? null);
-          setAvatarSuccess('Profile photo removed.');
         } catch {
-          setAvatarError('Profile photo removed, but refresh failed. Please reload to see it everywhere.');
+          setAvatarSuccess('Profile photo removed. Please refresh the page to see changes in other areas.');
         }
       }
     } catch {
