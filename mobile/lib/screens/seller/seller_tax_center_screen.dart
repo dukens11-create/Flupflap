@@ -320,6 +320,14 @@ class _SellerTaxCenterScreenState extends State<SellerTaxCenterScreen> {
     final uri = Uri.parse('${_service.baseUrl}$path');
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Could not open the download link. Please try again or use a browser.',
+          ),
+        ),
+      );
     }
   }
 }

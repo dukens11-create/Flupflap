@@ -2,7 +2,18 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
+import { Form1099Status } from '@prisma/client';
 import { computeTaxYearSummary, getSellerTaxYears } from '@/lib/tax-center';
+
+/** Map the Stripe-derived string status to the Prisma Form1099Status enum. */
+function toForm1099Status(status: string): Form1099Status {
+  const map: Record<string, Form1099Status> = {
+    FILED: Form1099Status.FILED,
+    AVAILABLE: Form1099Status.AVAILABLE,
+    PENDING: Form1099Status.PENDING,
+  };
+  return map[status] ?? Form1099Status.NOT_ELIGIBLE;
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -142,7 +153,7 @@ export async function GET(req: Request) {
         paymentFeesCents: summary.paymentFeesCents,
         netPayoutsCents: summary.netPayoutsCents,
         salesTaxCollectedCents: summary.salesTaxCollectedCents,
-        form1099Status: form1099Status as any,
+        form1099Status: toForm1099Status(form1099Status),
         form1099DownloadUrl,
       },
       update: {
@@ -153,7 +164,7 @@ export async function GET(req: Request) {
         paymentFeesCents: summary.paymentFeesCents,
         netPayoutsCents: summary.netPayoutsCents,
         salesTaxCollectedCents: summary.salesTaxCollectedCents,
-        form1099Status: form1099Status as any,
+        form1099Status: toForm1099Status(form1099Status),
         form1099DownloadUrl,
       },
     });

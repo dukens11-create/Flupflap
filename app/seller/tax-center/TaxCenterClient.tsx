@@ -163,9 +163,9 @@ export default function TaxCenterClient() {
           <section className="card p-6 mb-6">
             <div className="flex items-start justify-between gap-4 mb-4">
               <h2 className="text-lg font-bold">Seller Tax Profile</h2>
-              <a href="/account" className="btn-outline text-xs">
+              <Link href="/account" className="btn-outline text-xs">
                 Update Tax Information
-              </a>
+              </Link>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
