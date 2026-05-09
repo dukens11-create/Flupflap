@@ -2,8 +2,12 @@ import { getToken } from 'next-auth/jwt';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-function trimPort(host: string) {
-  return host.split(':')[0]?.toLowerCase() ?? host.toLowerCase();
+function toHostname(hostOrHostPort: string) {
+  try {
+    return new URL(`http://${hostOrHostPort}`).hostname.toLowerCase();
+  } catch {
+    return hostOrHostPort.toLowerCase();
+  }
 }
 
 function getConfiguredAuthOrigin() {
@@ -11,15 +15,19 @@ function getConfiguredAuthOrigin() {
   if (!raw) return null;
   try {
     const url = new URL(raw);
-    return { host: url.host.toLowerCase(), protocol: url.protocol };
+    return {
+      host: url.host.toLowerCase(),
+      hostname: url.hostname.toLowerCase(),
+      protocol: url.protocol,
+    };
   } catch {
     return null;
   }
 }
 
 function isWwwVariant(a: string, b: string) {
-  const hostA = trimPort(a);
-  const hostB = trimPort(b);
+  const hostA = toHostname(a);
+  const hostB = toHostname(b);
   return hostA === hostB || hostA === `www.${hostB}` || hostB === `www.${hostA}`;
 }
 
@@ -27,12 +35,12 @@ export async function proxy(req: NextRequest) {
   // Keep auth/login traffic on a single configured host to avoid cross-domain
   // session cookie and CSRF issues when users mix www and non-www URLs.
   const configuredOrigin = getConfiguredAuthOrigin();
-  const requestHost = req.headers.get('x-forwarded-host') ?? req.headers.get('host');
+  const incomingHostWithPort = req.nextUrl.host;
   if (
     configuredOrigin &&
-    requestHost &&
-    isWwwVariant(requestHost, configuredOrigin.host) &&
-    trimPort(requestHost) !== trimPort(configuredOrigin.host)
+    incomingHostWithPort &&
+    isWwwVariant(incomingHostWithPort, configuredOrigin.host) &&
+    toHostname(incomingHostWithPort) !== configuredOrigin.hostname
   ) {
     const canonical = req.nextUrl.clone();
     canonical.host = configuredOrigin.host;
