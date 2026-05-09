@@ -12,7 +12,8 @@
     "logout": "Cerrar sesión",
     "login": "Iniciar sesión",
     "signUp": "Registrarse",
-    "language": "Idioma"
+    "language": "Idioma",
+    "taxCenter": "Centro Fiscal"
   },
   "footer": {
     "description": "Descubre anuncios confiables, pagos protegidos y una forma más clara de comprar y vender todos los días.",

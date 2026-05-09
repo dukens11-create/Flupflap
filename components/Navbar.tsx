@@ -129,6 +129,7 @@ export default function Navbar() {
                 <>
                   <Link href="/seller" className={navLinkClass}>{t('nav.dashboard')}</Link>
                   <Link href="/seller/new" className={navLinkClass}>{t('nav.listItem')}</Link>
+                  <Link href="/seller/tax-center" className={navLinkClass}>{t('nav.taxCenter')}</Link>
                 </>
               )}
               {role === 'ADMIN' && (

@@ -127,4 +127,16 @@ class SellerService {
     if (!res.ok) throw ServiceException(res.error ?? 'Could not get upload URL');
     return res.data as Map<String, dynamic>;
   }
+
+  // ── Tax Center ─────────────────────────────────────────────────────────────
+
+  /// Base URL exposed so screens can build full URLs for file downloads.
+  String get baseUrl => _client.baseUrl;
+
+  /// Fetch tax center data for the given [year].
+  Future<Map<String, dynamic>> fetchTaxCenterData({required int year}) async {
+    final res = await _client.get('/api/seller/tax-center?year=$year');
+    if (!res.ok) throw ServiceException(res.error ?? 'Failed to load tax data');
+    return res.data as Map<String, dynamic>;
+  }
 }

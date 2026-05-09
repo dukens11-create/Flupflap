@@ -139,6 +139,8 @@ model User {
   checkoutSessionSnapshots CheckoutSessionSnapshot[]
   buyerOffers              Offer[]                   @relation("BuyerOffers")
   sellerOffers             Offer[]                   @relation("SellerOffers")
+  sellerTaxProfile         SellerTaxProfile?
+  sellerTaxReports         SellerTaxReport[]
   // Seller subscription billing
   // Keep these nullable identifiers non-unique so production `prisma db push`
   // stays deploy-safe for existing databases with legacy duplicate values.
@@ -607,4 +609,54 @@ model CheckoutSessionSnapshot {
   updatedAt        DateTime @updatedAt
 
   @@index([buyerId])
+}
+
+// ── Seller Tax Center ─────────────────────────────────────────────────────────
+
+enum Form1099Status {
+  NOT_ELIGIBLE
+  PENDING
+  AVAILABLE
+  FILED
+}
+
+model SellerTaxProfile {
+  id                 String   @id @default(cuid())
+  sellerId           String   @unique
+  seller             User     @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  legalName          String?
+  businessName       String?
+  // Masked/status-only tax ID. Raw SSN/EIN must never be stored here.
+  taxIdStatus        String?  // e.g. "PROVIDED", "PENDING", "NOT_PROVIDED"
+  addressLine1       String?
+  addressLine2       String?
+  city               String?
+  state              String?
+  postalCode         String?
+  country            String?
+  verificationStatus String?  // mirrors SellerVerification status for convenience
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model SellerTaxReport {
+  id                    String         @id @default(cuid())
+  sellerId              String
+  seller                User           @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  taxYear               Int
+  grossSalesCents       Int            @default(0)
+  totalOrders           Int            @default(0)
+  refundsCents          Int            @default(0)
+  marketplaceFeesCents  Int            @default(0)
+  paymentFeesCents      Int            @default(0)
+  netPayoutsCents       Int            @default(0)
+  salesTaxCollectedCents Int           @default(0)
+  form1099Status        Form1099Status @default(NOT_ELIGIBLE)
+  form1099DownloadUrl   String?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  @@unique([sellerId, taxYear])
+  @@index([sellerId])
+  @@index([taxYear])
 }
