@@ -374,6 +374,9 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
               <p className="mt-3 text-sm text-slate-600 max-w-2xl">
                 Upload your government ID (front and back), a selfie / face verification photo, your physical address, and your phone number. Listings stay locked until an admin approves your seller verification.
               </p>
+              <p className="mt-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+                For Stripe metadata, use <span className="font-mono">userId</span> = <span className="font-mono">{session.user.id}</span> and <span className="font-mono">sellerId</span> = the same value in FlupFlap.
+              </p>
               {verificationSubmission?.status === 'REJECTED' && verificationSubmission.rejectionReason && (
                 <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
                   <span className="font-semibold">Rejected by a FlupFlap admin:</span> {verificationSubmission.rejectionReason}

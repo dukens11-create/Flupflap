@@ -68,6 +68,7 @@ export default function AccountPage() {
   const [deleteOtherDetails, setDeleteOtherDetails] = useState('');
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState('');
+  const [idCopyMessage, setIdCopyMessage] = useState('');
 
   // Load current phone info from server
   useEffect(() => {
@@ -347,6 +348,18 @@ export default function AccountPage() {
     }
   }
 
+  async function copyUserId() {
+    const userId = session?.user?.id;
+    if (!userId) return;
+    setIdCopyMessage('');
+    try {
+      await navigator.clipboard.writeText(userId);
+      setIdCopyMessage('User ID copied.');
+    } catch {
+      setIdCopyMessage('Unable to copy automatically. Please copy it manually.');
+    }
+  }
+
   return (
     <main className="max-w-md mx-auto">
       <h1 className="text-3xl font-black mb-6">My Account</h1>
@@ -516,6 +529,25 @@ export default function AccountPage() {
         <div>
           <p className="label">Role</p>
           <p className="font-medium capitalize">{role?.toLowerCase()}</p>
+        </div>
+
+        <div>
+          <p className="label">User ID</p>
+          <p className="text-xs text-slate-500 mt-1">
+            Use this value for Stripe metadata keys <span className="font-mono">userId</span> and <span className="font-mono">sellerId</span>.
+          </p>
+          <div className="mt-2 flex items-center gap-2">
+            <input
+              className="input flex-1 font-mono text-sm"
+              value={session.user.id}
+              readOnly
+              aria-label="Internal FlupFlap user ID"
+            />
+            <button type="button" onClick={copyUserId} className="btn-outline text-sm">
+              Copy
+            </button>
+          </div>
+          {idCopyMessage && <p className="text-xs text-slate-600 mt-1">{idCopyMessage}</p>}
         </div>
 
         {/* Phone */}
