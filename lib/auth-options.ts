@@ -1,10 +1,10 @@
 import { PrismaAdapter } from '@next-auth/prisma-adapter';
 import CredentialsProvider from 'next-auth/providers/credentials';
-import bcrypt from 'bcryptjs';
 import { prisma } from './db';
 import { verifyOtp } from './otp';
 import { isSmsOtpEnabled, SELLER_OTP_FORCE_DISABLED } from './feature-flags';
 import { recordLoginActivity } from './login-security';
+import { safeComparePassword } from './password';
 import type { NextAuthOptions } from 'next-auth';
 
 function toSessionImage(image: string | null | undefined, cacheBuster?: number) {
@@ -32,7 +32,11 @@ export const authOptions: NextAuthOptions = {
         if (!credentials?.email || !credentials.password) return null;
         const user = await prisma.user.findUnique({ where: { email: credentials.email.toLowerCase() } });
         if (!user) return null;
-        const ok = await bcrypt.compare(credentials.password, user.password);
+        const ok = await safeComparePassword(
+          credentials.password,
+          user.password,
+          'authorize',
+        );
         if (!ok) return null;
 
         // Sellers must supply a valid one-time code (when SMS OTP is enabled).

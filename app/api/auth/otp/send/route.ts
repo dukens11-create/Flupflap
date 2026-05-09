@@ -24,6 +24,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { createAndSendOtp } from '@/lib/otp';
 import { isSmsOtpEnabled, SELLER_OTP_FORCE_DISABLED } from '@/lib/feature-flags';
+import { safeComparePassword } from '@/lib/password';
 
 const schema = z.object({
   email: z.string().email(),
@@ -44,7 +45,11 @@ export async function POST(req: Request) {
     const timingAttackPreventionHash = '$2b$08$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
     let passwordOk: boolean;
     if (user) {
-      passwordOk = await bcrypt.compare(password, user.password);
+      passwordOk = await safeComparePassword(
+        password,
+        user.password,
+        'otp/send',
+      );
     } else {
       await bcrypt.compare(password, timingAttackPreventionHash);
       passwordOk = false;
