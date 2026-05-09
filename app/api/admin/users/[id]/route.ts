@@ -188,6 +188,10 @@ export async function POST(
 
     const phoneChanged = existingUser.phone !== phone;
     const emailChanged = existingUser.email !== email;
+    if (!phoneChanged && !emailChanged) {
+      return NextResponse.redirect(new URL(`/admin/users/${id}?contactNoop=1`, req.url));
+    }
+
     await prisma.user.update({
       where: { id },
       data: {

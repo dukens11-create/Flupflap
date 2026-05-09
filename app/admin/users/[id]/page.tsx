@@ -53,7 +53,7 @@ export default async function AdminUserDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ contactUpdated?: string; contactError?: string }>;
+  searchParams: Promise<{ contactUpdated?: string; contactNoop?: string; contactError?: string }>;
 }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect('/login');
@@ -62,6 +62,7 @@ export default async function AdminUserDetailPage({
   const { id } = await params;
   const sp = await searchParams;
   const contactUpdated = sp.contactUpdated === '1';
+  const contactNoop = sp.contactNoop === '1';
   const contactError = sp.contactError ?? '';
 
   const user = await prisma.user.findUnique({
@@ -154,6 +155,11 @@ export default async function AdminUserDetailPage({
       {contactUpdated && (
         <div className="card p-3 mb-6 bg-green-50 border-green-200 text-green-800 text-sm">
           Contact details updated successfully.
+        </div>
+      )}
+      {contactNoop && (
+        <div className="card p-3 mb-6 bg-slate-50 border-slate-200 text-slate-700 text-sm">
+          No contact changes were detected.
         </div>
       )}
       {contactError && (
