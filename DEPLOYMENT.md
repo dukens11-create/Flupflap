@@ -685,17 +685,75 @@ Admins can view and manage buyer and seller accounts from the admin panel at
 - Raw authentication secrets or tokens
 - Full payment card data (handled by Stripe, never stored)
 
+### Granting admin access to an existing user
+
+Use the `POST /api/admin/grant-admin` endpoint to promote an existing user to
+the `ADMIN` role.  The caller must already be authenticated as an `ADMIN`.
+
+**Request**
+
+```http
+POST /api/admin/grant-admin
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "phone": "+17753891414"
+}
+```
+
+At least one of `email` or `phone` must be provided (both are accepted).
+Phone numbers are normalized to E.164 automatically, so formats like
+`7753891414`, `17753891414`, or `+1 (775) 389-1414` all work.
+
+**cURL example** (run from a terminal with a valid session cookie):
+
+```bash
+curl -X POST https://<your-app>.onrender.com/api/admin/grant-admin \
+  -H "Content-Type: application/json" \
+  -H "Cookie: next-auth.session-token=<your-admin-session-cookie>" \
+  -d '{"email":"edith@example.com","phone":"+17753891414"}'
+```
+
+**Success response (200)**
+
+```json
+{
+  "message": "User Edith has been granted ADMIN access.",
+  "user": {
+    "id": "...",
+    "name": "Edith",
+    "email": "edith@example.com",
+    "phone": "+17753891414",
+    "role": "ADMIN"
+  }
+}
+```
+
+**Error responses**
+
+| Status | Meaning |
+|--------|---------|
+| 400 | Missing/invalid inputs, or user is already ADMIN |
+| 401 | Not authenticated |
+| 403 | Caller is not an ADMIN |
+| 404 | No user found for the supplied email/phone |
+| 500 | Unexpected server error |
+
+Every successful promotion is written to `AdminAccessLog` with
+`action = 'grant_admin'` for auditing.
+
 ### Audit trail
 
-Every admin access to a user detail page creates an `AdminAccessLog` entry
-recording:
+Every admin action creates an `AdminAccessLog` entry recording:
 
 | Field | Value |
 |---|---|
-| `adminId` | The admin who accessed the account |
-| `targetId` | The user whose account was accessed |
-| `action` | `view_account` |
-| `createdAt` | Timestamp of access |
+| `adminId` | The admin who performed the action |
+| `targetId` | The user whose account was affected |
+| `action` | `view_account` or `grant_admin` |
+| `notes` | Free-text details (e.g. who initiated the promotion) |
+| `createdAt` | Timestamp |
 
 This provides a complete audit trail of admin account access for security
 and compliance review.
