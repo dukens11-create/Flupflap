@@ -14,12 +14,12 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { sendSms } from '@/lib/twilio';
 import { normalizePhone } from '@/lib/phone';
+import { findConflictingSellerByPhone } from '@/lib/seller-phone';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { z } from 'zod';
 
 const EXPIRY_MINUTES = 10;
-const MAX_ATTEMPTS = 5;
 const RESEND_COOLDOWN_SECONDS = 60;
 
 const schema = z.object({
@@ -47,6 +47,19 @@ export async function POST(req: Request) {
         { error: 'Invalid phone number. US/Canada numbers can be entered with or without +1.' },
         { status: 400 },
       );
+    }
+
+    if (session.user.role === 'SELLER') {
+      const conflictingSeller = await findConflictingSellerByPhone({
+        phone: normalizedPhone,
+        excludeUserId: session.user.id,
+      });
+      if (conflictingSeller) {
+        return NextResponse.json(
+          { error: 'Phone number is already in use by another seller account.' },
+          { status: 409 },
+        );
+      }
     }
 
     // Enforce resend cooldown

@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { normalizePhone } from '@/lib/phone';
+import { findConflictingSellerByPhone } from '@/lib/seller-phone';
 
 const schema = z.object({
   name: z.string().min(1),
@@ -39,6 +40,15 @@ export async function POST(req: Request) {
     const existing = await prisma.user.findUnique({ where: { email: data.email.toLowerCase() } });
     if (existing) {
       return NextResponse.json({ error: 'An account with this email already exists.' }, { status: 409 });
+    }
+    if (data.role === 'SELLER' && normalizedPhone) {
+      const conflictingSeller = await findConflictingSellerByPhone({ phone: normalizedPhone });
+      if (conflictingSeller) {
+        return NextResponse.json(
+          { error: 'Phone number is already in use by another seller account.' },
+          { status: 409 },
+        );
+      }
     }
 
     const password = await bcrypt.hash(data.password, 12);

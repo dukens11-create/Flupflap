@@ -755,6 +755,7 @@ Admins can update a buyer or seller's email and phone from
   - Email is required and must be valid
   - Phone is optional, but when provided it is normalized to E.164 format
   - Email uniqueness conflicts are rejected
+  - Seller phone conflicts are rejected if another seller already uses that normalized number
   - Unknown/non-buyer/non-seller users return not found
 - Security behavior:
   - User role is never changed by this endpoint
