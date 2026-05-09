@@ -7,6 +7,16 @@
  * GET returns profile, orders, listings (for sellers), and moderation history.
  * Both handlers avoid exposing password hashes or raw authentication secrets and
  * log admin actions to AdminAccessLog for audit purposes.
+ *
+ * Origin handling (POST):
+ *   Legitimate admin requests are validated against the app's configured trusted
+ *   origins (`NEXTAUTH_URL` and `NEXT_PUBLIC_APP_URL` env vars) rather than
+ *   against the raw `req.url` origin alone.  This prevents false rejections when
+ *   the frontend is served from a custom domain while the backend request URL
+ *   resolves to the hosting provider's hostname (e.g. Render), or when www/non-www
+ *   variants are in use.  Requests without an Origin header (same-origin form
+ *   posts) are always allowed.  Requests from an unrecognised origin are still
+ *   rejected with 403.
  */
 
 import { NextResponse } from 'next/server';
@@ -15,6 +25,26 @@ import { z } from 'zod';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { normalizePhone } from '@/lib/phone';
+
+/**
+ * Origins derived from the configured app URL env vars, computed once at
+ * module load.  Mirrors the env-var convention used in proxy.ts and
+ * lib/stripe.ts (`NEXTAUTH_URL` / `NEXT_PUBLIC_APP_URL`).
+ */
+function buildConfiguredTrustedOrigins(): Set<string> {
+  const origins = new Set<string>();
+  for (const raw of [process.env.NEXTAUTH_URL, process.env.NEXT_PUBLIC_APP_URL]) {
+    if (!raw) continue;
+    try {
+      origins.add(new URL(raw).origin);
+    } catch {
+      // ignore malformed env value
+    }
+  }
+  return origins;
+}
+
+const CONFIGURED_TRUSTED_ORIGINS = buildConfiguredTrustedOrigins();
 
 const contactSchema = z.object({
   email: z.string().trim().email('Invalid email format.').transform(value => value.toLowerCase()),
@@ -117,9 +147,23 @@ export async function POST(
   let targetId = '';
   try {
     const origin = req.headers.get('origin');
-    const expectedOrigin = new URL(req.url).origin;
-    if (origin && origin !== expectedOrigin) {
-      return NextResponse.json({ error: 'Invalid request origin.' }, { status: 403 });
+    if (origin) {
+      // Check configured env-var origins first (covers custom domain vs Render
+      // hostname, www/non-www, and other multi-origin deployment topologies).
+      // Fall back to comparing against the server's own resolved request origin
+      // so that same-host deploys work even when env vars are not set — this
+      // matches the behaviour of the original check.
+      let trusted = CONFIGURED_TRUSTED_ORIGINS.has(origin);
+      if (!trusted) {
+        try {
+          trusted = new URL(req.url).origin === origin;
+        } catch {
+          // malformed req.url — treat as untrusted
+        }
+      }
+      if (!trusted) {
+        return NextResponse.json({ error: 'Invalid request origin.' }, { status: 403 });
+      }
     }
 
     const session = await getServerSession(authOptions);
