@@ -12,7 +12,8 @@
     "logout": "Logout",
     "login": "Login",
     "signUp": "Sign up",
-    "language": "Language"
+    "language": "Language",
+    "taxCenter": "Tax Center"
   },
   "footer": {
     "description": "Discover trusted listings, protected checkout, and a cleaner way to buy and sell every day.",

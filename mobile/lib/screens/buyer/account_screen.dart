@@ -123,6 +123,11 @@ class AccountScreen extends StatelessWidget {
                 title: 'Subscription',
                 onTap: () => context.push('/seller/subscription'),
               ),
+              _MenuItem(
+                icon: Icons.receipt_long_outlined,
+                title: 'Tax Center',
+                onTap: () => context.push('/seller/tax-center'),
+              ),
             ],
 
             const SizedBox(height: 8),
