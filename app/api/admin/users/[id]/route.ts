@@ -21,6 +21,8 @@ const contactSchema = z.object({
   phone: z.string().optional(),
 });
 
+const EDITABLE_ROLES: ReadonlyArray<string> = ['SELLER', 'CUSTOMER'];
+
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -114,6 +116,12 @@ export async function POST(
 ) {
   let targetId = '';
   try {
+    const origin = req.headers.get('origin');
+    const expectedOrigin = new URL(req.url).origin;
+    if (origin && origin !== expectedOrigin) {
+      return NextResponse.json({ error: 'Invalid request origin.' }, { status: 403 });
+    }
+
     const session = await getServerSession(authOptions);
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -144,7 +152,7 @@ export async function POST(
       where: { id },
       select: { id: true, role: true, phone: true },
     });
-    if (!existingUser || (existingUser.role !== 'SELLER' && existingUser.role !== 'CUSTOMER')) {
+    if (!existingUser || !EDITABLE_ROLES.includes(existingUser.role)) {
       return NextResponse.redirect(
         new URL(
           `/admin/users/${id}?contactError=${encodeURIComponent('User not found.')}`,
