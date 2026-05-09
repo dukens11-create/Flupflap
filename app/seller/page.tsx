@@ -23,6 +23,7 @@ import {
   sellerPhoneVerificationLabel,
   sellerVerificationStatusTone,
 } from '@/lib/seller-verification';
+import { isCloudinaryConfigured } from '@/lib/cloudinary';
 
 export const dynamic = 'force-dynamic';
 
@@ -203,6 +204,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   const revenueThisWeekCents = soldItemsThisWeek.reduce((s, i) => s + i.sellerNetCents, 0);
   const revenueThisMonthCents = soldItemsThisMonth.reduce((s, i) => s + i.sellerNetCents, 0);
   const verificationApproved = isSellerVerificationApproved(verificationSubmission);
+  const cloudinaryConfigured = isCloudinaryConfigured();
   const inboxConversations = await getInboxConversations(session.user.id);
   const unreadInboxCount = inboxConversations.reduce(
     (sum, conversation) => sum + conversation.unreadCount,
@@ -341,7 +343,9 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
       )}
       {sp.verification === 'manual_required' && (
         <div className="card p-4 mb-6 bg-slate-50 border-slate-200 text-slate-700 text-sm">
-          Manual verification mode is enabled. Submit documents below for admin review.
+          {cloudinaryConfigured
+            ? 'Manual verification mode is enabled. Submit documents below for admin review.'
+            : 'Manual document upload is not available on this server. Please use the provider verification (Stripe Identity or Persona) above to complete your verification.'}
         </div>
       )}
 
@@ -377,7 +381,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                 )}
               </div>
               <p className="mt-3 text-sm text-slate-600 max-w-2xl">
-                Upload your government ID (front and back), a selfie / face verification photo, your physical address, and your phone number. Listings stay locked until an admin approves your seller verification.
+                Complete seller verification to unlock listings. Use the provider verification below (recommended) to start automated KYC with Stripe Identity or Persona. Listings stay locked until an admin approves your seller verification.
               </p>
               <p className="mt-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
                 For Stripe metadata, use <span className="font-mono">userId</span> = <span className="font-mono">{session.user.id}</span> and <span className="font-mono">sellerId</span> = the same value in FlupFlap.
@@ -422,7 +426,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
             <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
               <p className="text-sm font-semibold text-slate-900">Start provider verification</p>
               <p className="mt-1 text-xs text-slate-600">
-                Use Stripe Identity + Connect (default) or Persona. If provider checks are incomplete, admins can finalize with manual fallback review.
+                Use Stripe Identity + Connect (recommended) or Persona to complete automated KYC. Provider verification opens a guided, secure flow — no manual file upload needed.
               </p>
               <form action="/api/seller/verification/initiate" method="POST" className="mt-3 flex flex-wrap items-center gap-3">
                 <select name="provider" className="input text-sm max-w-[220px]" defaultValue={verificationSubmission?.provider ?? defaultKycProvider}>
@@ -441,13 +445,17 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
             </div>
           )}
 
-          {!verificationApproved && (
+          {!verificationApproved && cloudinaryConfigured && (
             <form
               action="/api/seller/verification"
               method="POST"
               encType="multipart/form-data"
               className="mt-6 space-y-4 border-t border-slate-100 pt-6"
             >
+              <p className="text-sm font-semibold text-slate-900">Manual document upload (admin fallback)</p>
+              <p className="text-xs text-slate-500">
+                Use this only if instructed by an admin. Select photos of your ID and a selfie from your device's gallery or file system — the camera does not open automatically here.
+              </p>
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
                   <label className="label">Phone number</label>
@@ -540,7 +548,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                   />
                 </div>
                 <div>
-                  <label className="label">Selfie / face verification</label>
+                  <label className="label">Selfie / face photo</label>
                   <input
                     name="selfieImage"
                     type="file"
@@ -559,6 +567,15 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                 {verificationSubmission?.status === 'REJECTED' ? 'Resubmit verification' : verificationSubmission ? 'Update verification' : 'Submit verification'}
               </button>
             </form>
+          )}
+
+          {!verificationApproved && !cloudinaryConfigured && (
+            <div className="mt-6 border-t border-slate-100 pt-6">
+              <p className="text-sm font-semibold text-slate-500">Manual document upload unavailable</p>
+              <p className="mt-1 text-xs text-slate-400">
+                Document upload storage is not configured on this server. Use the provider verification above (Stripe Identity or Persona) to complete your verification.
+              </p>
+            </div>
           )}
         </section>
       )}
