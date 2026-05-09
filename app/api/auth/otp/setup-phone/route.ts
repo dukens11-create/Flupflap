@@ -27,6 +27,7 @@ import { createAndSendOtp } from '@/lib/otp';
 import { normalizePhone } from '@/lib/phone';
 import { isSmsOtpEnabled, SELLER_OTP_FORCE_DISABLED } from '@/lib/feature-flags';
 import { safeComparePassword } from '@/lib/password';
+import { findConflictingSellerByPhone } from '@/lib/seller-phone';
 
 const schema = z.object({
   email: z.string().email(),
@@ -102,6 +103,20 @@ export async function POST(req: Request) {
         { error: 'Invalid phone number. US/Canada numbers can be entered with or without +1.' },
         { status: 400 },
       );
+    }
+
+    const phoneChanged = user.phone !== normalizedPhone;
+    if (phoneChanged) {
+      const conflictingSeller = await findConflictingSellerByPhone({
+        phone: normalizedPhone,
+        excludeUserId: user.id,
+      });
+      if (conflictingSeller) {
+        return NextResponse.json(
+          { error: 'Phone number is already in use by another seller account.' },
+          { status: 409 },
+        );
+      }
     }
 
     // Save phone (unverified); it will be marked verified on successful OTP login.

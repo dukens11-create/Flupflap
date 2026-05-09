@@ -23,6 +23,7 @@ import { z } from 'zod';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { normalizePhone } from '@/lib/phone';
+import { findConflictingSellerByPhone } from '@/lib/seller-phone';
 
 /**
  * Origins derived from the configured app URL env vars, computed once at
@@ -256,6 +257,21 @@ export async function POST(
       return NextResponse.redirect(new URL(`/admin/users/${id}?contactNoop=1`, req.url));
     }
 
+    if (existingUser.role === 'SELLER' && phoneChanged && phone) {
+      const conflictingSeller = await findConflictingSellerByPhone({
+        phone,
+        excludeUserId: id,
+      });
+      if (conflictingSeller) {
+        return NextResponse.redirect(
+          new URL(
+            `/admin/users/${id}?contactError=${encodeURIComponent('Phone number is already in use by another seller account.')}`,
+            req.url,
+          ),
+        );
+      }
+    }
+
     await prisma.user.update({
       where: { id },
       data: {
@@ -283,9 +299,15 @@ export async function POST(
     return NextResponse.redirect(new URL(`/admin/users/${id}?contactUpdated=1`, req.url));
   } catch (err: any) {
     if (err?.code === 'P2002') {
+      const conflictTarget = Array.isArray(err?.meta?.target)
+        ? err.meta.target.join(',')
+        : String(err?.meta?.target ?? '');
+      const conflictMessage = conflictTarget.includes('email')
+        ? 'Email is already in use by another account.'
+        : 'Phone number is already in use by another seller account.';
       return NextResponse.redirect(
         new URL(
-          `/admin/users/${targetId}?contactError=${encodeURIComponent('Phone number is already in use by another account.')}`,
+          `/admin/users/${targetId}?contactError=${encodeURIComponent(conflictMessage)}`,
           req.url,
         ),
       );
