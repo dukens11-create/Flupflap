@@ -67,6 +67,9 @@
         "description": "Clear trust messaging reinforces safer transactions from browse to delivery."
       }
     },
+    "categories": {
+      "title": "Shop by Category"
+    },
     "loadingProducts": "Loading products…",
     "noProducts": "No products found. Try adjusting your filters."
   },

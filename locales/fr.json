@@ -67,6 +67,9 @@
         "description": "Des messages de confiance clairs renforcent des transactions plus sûres de la recherche à la livraison."
       }
     },
+    "categories": {
+      "title": "Acheter par catégorie"
+    },
     "loadingProducts": "Chargement des produits…",
     "noProducts": "Aucun produit trouvé. Essayez d'ajuster vos filtres."
   },
