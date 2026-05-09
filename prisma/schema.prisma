@@ -620,14 +620,20 @@ enum Form1099Status {
   FILED
 }
 
+enum TaxIdStatus {
+  NOT_PROVIDED
+  PENDING
+  PROVIDED
+}
+
 model SellerTaxProfile {
-  id                 String   @id @default(cuid())
-  sellerId           String   @unique
-  seller             User     @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  id                 String      @id @default(cuid())
+  sellerId           String      @unique
+  seller             User        @relation(fields: [sellerId], references: [id], onDelete: Cascade)
   legalName          String?
   businessName       String?
-  // Masked/status-only tax ID. Raw SSN/EIN must never be stored here.
-  taxIdStatus        String?  // e.g. "PROVIDED", "PENDING", "NOT_PROVIDED"
+  // Status-only tax ID field — raw SSN/EIN must never be stored here.
+  taxIdStatus        TaxIdStatus @default(NOT_PROVIDED)
   addressLine1       String?
   addressLine2       String?
   city               String?
@@ -635,8 +641,8 @@ model SellerTaxProfile {
   postalCode         String?
   country            String?
   verificationStatus String?  // mirrors SellerVerification status for convenience
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
 }
 
 model SellerTaxReport {

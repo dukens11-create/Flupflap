@@ -15,6 +15,13 @@ export type TaxYearSummary = {
 };
 
 /**
+ * Stripe standard payment processing rate used for fee estimates.
+ * These are informational estimates only — actual charges may differ.
+ */
+const STRIPE_PROCESSING_PERCENT = 0.029; // 2.9%
+const STRIPE_PROCESSING_FIXED_CENTS = 30; // $0.30 per transaction
+
+/**
  * Compute a tax year summary by aggregating live order data for a seller.
  * All amounts are in cents.
  *
@@ -98,13 +105,11 @@ export async function computeTaxYearSummary(
   }
 
   // Stripe standard processing fee estimate: 2.9% + $0.30 per transaction
-  const STRIPE_PERCENT = 0.029;
-  const STRIPE_FIXED_CENTS = 30;
   const paymentFeesCents =
     completedRows.length > 0
       ? Math.round(
-          grossSalesCents * STRIPE_PERCENT +
-            completedRows.length * STRIPE_FIXED_CENTS,
+          grossSalesCents * STRIPE_PROCESSING_PERCENT +
+            completedRows.length * STRIPE_PROCESSING_FIXED_CENTS,
         )
       : 0;
 

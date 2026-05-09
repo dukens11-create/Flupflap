@@ -111,7 +111,7 @@ export default function TaxCenterClient() {
 
     fetch(`/api/seller/tax-center?year=${selectedYear}`)
       .then(res => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) throw new Error(`Failed to load tax data (HTTP ${res.status})`);
         return res.json();
       })
       .then((json: TaxCenterData) => {

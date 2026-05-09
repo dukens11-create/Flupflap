@@ -228,14 +228,14 @@ class _SellerTaxCenterScreenState extends State<SellerTaxCenterScreen> {
                               icon: const Icon(Icons.download, size: 16),
                               label: const Text('CSV Report'),
                               onPressed: () => _openUrl(
-                                '/api/seller/tax-center/csv?year=$_selectedYear',
+                                _service.taxCenterCsvUrl(_selectedYear),
                               ),
                             ),
                             OutlinedButton.icon(
                               icon: const Icon(Icons.picture_as_pdf, size: 16),
                               label: const Text('PDF Statement'),
                               onPressed: () => _openUrl(
-                                '/api/seller/tax-center/pdf?year=$_selectedYear',
+                                _service.taxCenterPdfUrl(_selectedYear),
                               ),
                             ),
                           ],
@@ -315,14 +315,13 @@ class _SellerTaxCenterScreenState extends State<SellerTaxCenterScreen> {
     }
   }
 
-  Future<void> _openUrl(String path) async {
-    // The base URL is derived from the API client configuration
-    final uri = Uri.parse('${_service.baseUrl}$path');
+  Future<void> _openUrl(String url) async {
+    final uri = Uri.parse(url);
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
             'Could not open the download link. Please try again or use a browser.',
           ),

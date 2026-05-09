@@ -130,13 +130,18 @@ class SellerService {
 
   // ── Tax Center ─────────────────────────────────────────────────────────────
 
-  /// Base URL exposed so screens can build full URLs for file downloads.
-  String get baseUrl => _client.baseUrl;
-
   /// Fetch tax center data for the given [year].
   Future<Map<String, dynamic>> fetchTaxCenterData({required int year}) async {
     final res = await _client.get('/api/seller/tax-center?year=$year');
     if (!res.ok) throw ServiceException(res.error ?? 'Failed to load tax data');
     return res.data as Map<String, dynamic>;
   }
+
+  /// Returns the full URL for downloading the CSV tax report for [year].
+  String taxCenterCsvUrl(int year) =>
+      '${_client.baseUrl}/api/seller/tax-center/csv?year=$year';
+
+  /// Returns the full URL for downloading the PDF tax statement for [year].
+  String taxCenterPdfUrl(int year) =>
+      '${_client.baseUrl}/api/seller/tax-center/pdf?year=$year';
 }

@@ -2,17 +2,19 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
-import { Form1099Status } from '@prisma/client';
+import { Form1099Status, TaxIdStatus } from '@prisma/client';
 import { computeTaxYearSummary, getSellerTaxYears } from '@/lib/tax-center';
 
-/** Map the Stripe-derived string status to the Prisma Form1099Status enum. */
-function toForm1099Status(status: string): Form1099Status {
-  const map: Record<string, Form1099Status> = {
-    FILED: Form1099Status.FILED,
-    AVAILABLE: Form1099Status.AVAILABLE,
-    PENDING: Form1099Status.PENDING,
-  };
-  return map[status] ?? Form1099Status.NOT_ELIGIBLE;
+/** Known Stripe Tax Form statuses for type-safe handling. */
+type StripeTaxFormStatus = 'draft' | 'pending' | 'issued' | 'filed';
+
+function toForm1099StatusFromStripe(stripeStatus: StripeTaxFormStatus): Form1099Status {
+  switch (stripeStatus) {
+    case 'filed': return Form1099Status.FILED;
+    case 'issued': return Form1099Status.AVAILABLE;
+    case 'pending': return Form1099Status.PENDING;
+    default: return Form1099Status.NOT_ELIGIBLE;
+  }
 }
 
 export const dynamic = 'force-dynamic';
@@ -83,7 +85,7 @@ export async function GET(req: Request) {
     const summary = await computeTaxYearSummary(sellerId, taxYear);
 
     // Try to retrieve 1099-K info from Stripe if connected
-    let form1099Status: string = 'NOT_ELIGIBLE';
+    let form1099EnumStatus: Form1099Status = Form1099Status.NOT_ELIGIBLE;
     let form1099DownloadUrl: string | null = null;
 
     const stripeAccountId = user?.stripeAccountId;
@@ -95,7 +97,7 @@ export async function GET(req: Request) {
         // resorting to unsafe `any` casts on the Stripe client object.
         type StripeTaxForm = {
           tax_year: number;
-          status: 'draft' | 'pending' | 'issued' | 'filed' | string;
+          status: StripeTaxFormStatus;
           pdf: string | null;
         };
         type StripeTaxFormsListResponse = {
@@ -122,21 +124,17 @@ export async function GET(req: Request) {
         if (res.ok) {
           const taxForms = (await res.json()) as StripeTaxFormsListResponse;
           const form = taxForms?.data?.find(f => f.tax_year === taxYear);
-
           if (form) {
-            if (form.status === 'filed') {
-              form1099Status = 'FILED';
-            } else if (form.status === 'issued') {
-              form1099Status = 'AVAILABLE';
-            } else if (form.status === 'pending') {
-              form1099Status = 'PENDING';
-            }
+            form1099EnumStatus = toForm1099StatusFromStripe(form.status);
             form1099DownloadUrl = form.pdf ?? null;
           }
+        } else {
+          console.warn('[api/seller/tax-center] Stripe Tax Forms API returned', res.status);
         }
-      } catch {
-        // Stripe Tax Forms API may not be available in all environments;
-        // fall back gracefully to NOT_ELIGIBLE.
+      } catch (stripeErr) {
+        // Stripe Tax Forms API may not be available in all environments or
+        // may fail transiently; fall back gracefully to NOT_ELIGIBLE.
+        console.warn('[api/seller/tax-center] Stripe Tax Forms API error:', stripeErr);
       }
     }
 
@@ -153,7 +151,7 @@ export async function GET(req: Request) {
         paymentFeesCents: summary.paymentFeesCents,
         netPayoutsCents: summary.netPayoutsCents,
         salesTaxCollectedCents: summary.salesTaxCollectedCents,
-        form1099Status: toForm1099Status(form1099Status),
+        form1099Status: form1099EnumStatus,
         form1099DownloadUrl,
       },
       update: {
@@ -164,7 +162,7 @@ export async function GET(req: Request) {
         paymentFeesCents: summary.paymentFeesCents,
         netPayoutsCents: summary.netPayoutsCents,
         salesTaxCollectedCents: summary.salesTaxCollectedCents,
-        form1099Status: toForm1099Status(form1099Status),
+        form1099Status: form1099EnumStatus,
         form1099DownloadUrl,
       },
     });
@@ -175,7 +173,7 @@ export async function GET(req: Request) {
       taxProfile: {
         legalName: taxProfile.legalName,
         businessName: taxProfile.businessName,
-        taxIdStatus: taxProfile.taxIdStatus ?? 'NOT_PROVIDED',
+        taxIdStatus: taxProfile.taxIdStatus,
         addressLine1: taxProfile.addressLine1,
         addressLine2: taxProfile.addressLine2,
         city: taxProfile.city,
@@ -187,7 +185,7 @@ export async function GET(req: Request) {
       },
       summary: {
         ...summary,
-        form1099Status,
+        form1099Status: form1099EnumStatus,
         form1099DownloadUrl,
       },
       availableYears,
