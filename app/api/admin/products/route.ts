@@ -27,8 +27,25 @@ export async function POST(req: Request) {
   }
   const form = await req.formData();
   const data = schema.parse(Object.fromEntries(form.entries()));
-  let seller = await prisma.user.findUnique({ where: { email: data.sellerEmail.toLowerCase() } });
-  if (!seller) { seller = await prisma.user.create({ data: { name: data.sellerEmail.split('@')[0], email: data.sellerEmail.toLowerCase(), password: '', role: 'SELLER' } }); }
-  const product = await prisma.product.create({ data: { title: data.title, description: data.description, priceCents: cents(data.price), condition: data.condition, category: data.category, imageUrl: data.imageUrl, sellerId: seller.id, shippingCents: cents(data.shipping || '0'), inventory: Number(data.inventory || 1) } });
+  const seller = await prisma.user.findUnique({ where: { email: data.sellerEmail.toLowerCase() } });
+  if (!seller) {
+    return NextResponse.json(
+      { error: 'Seller account not found. Ask the seller to sign up before adding products.' },
+      { status: 400 },
+    );
+  }
+  const product = await prisma.product.create({
+    data: {
+      title: data.title,
+      description: data.description,
+      priceCents: cents(data.price),
+      condition: data.condition,
+      category: data.category,
+      imageUrl: data.imageUrl,
+      sellerId: seller.id,
+      shippingCents: cents(data.shipping || '0'),
+      inventory: Number(data.inventory || 1),
+    },
+  });
   return NextResponse.redirect(new URL(`/seller?created=${product.id}`, req.url));
 }
