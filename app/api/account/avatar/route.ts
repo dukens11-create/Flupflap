@@ -9,6 +9,43 @@ const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
 const AVATAR_WIDTH = 400;
 const AVATAR_HEIGHT = 400;
+const DATA_URL_IMAGE_REGEX = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/;
+
+export async function GET() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { image: true },
+  });
+
+  if (!user?.image) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
+
+  const dataUrlMatch = DATA_URL_IMAGE_REGEX.exec(user.image);
+  if (dataUrlMatch) {
+    const mimeType = dataUrlMatch[1];
+    const base64Payload = dataUrlMatch[2];
+    try {
+      const buffer = Buffer.from(base64Payload, 'base64');
+      return new NextResponse(buffer, {
+        status: 200,
+        headers: {
+          'Content-Type': mimeType,
+          'Cache-Control': 'private, max-age=31536000, immutable',
+        },
+      });
+    } catch {
+      return NextResponse.json({ error: 'Invalid avatar image.' }, { status: 500 });
+    }
+  }
+
+  return NextResponse.json({ error: 'Not found' }, { status: 404 });
+}
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);

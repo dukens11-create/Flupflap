@@ -7,6 +7,15 @@ import { isSmsOtpEnabled, SELLER_OTP_FORCE_DISABLED } from './feature-flags';
 import { recordLoginActivity } from './login-security';
 import type { NextAuthOptions } from 'next-auth';
 
+function toSessionImage(image: string | null | undefined, cacheBuster?: number) {
+  if (!image) return null;
+  if (image.startsWith('data:image/')) {
+    const v = cacheBuster ?? Date.now();
+    return `/api/account/avatar?v=${v}`;
+  }
+  return image;
+}
+
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   session: { strategy: 'jwt' },
@@ -67,7 +76,7 @@ export const authOptions: NextAuthOptions = {
         token.role = (user as any).role;
         token.stripeAccountId = (user as any).stripeAccountId;
         token.stripeOnboardingComplete = (user as any).stripeOnboardingComplete;
-        token.image = (user as any).image ?? null;
+        token.image = toSessionImage((user as any).image);
       }
       // On session update (e.g. after avatar upload) re-fetch image from DB.
       if (trigger === 'update') {
@@ -76,7 +85,7 @@ export const authOptions: NextAuthOptions = {
           select: { image: true, name: true },
         });
         if (dbUser) {
-          token.image = dbUser.image ?? null;
+          token.image = toSessionImage(dbUser.image, Date.now());
           token.name = dbUser.name;
         }
       }
