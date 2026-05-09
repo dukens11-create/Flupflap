@@ -428,6 +428,11 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
               <p className="mt-1 text-xs text-slate-600">
                 Use Stripe Identity + Connect (recommended) or Persona to complete automated KYC. Provider verification opens a guided, secure flow — no manual file upload needed.
               </p>
+              {!cloudinaryConfigured && (
+                <p className="mt-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+                  Manual document upload is unavailable on this server. Please continue with Stripe Identity or Persona.
+                </p>
+              )}
               <form action="/api/seller/verification/initiate" method="POST" className="mt-3 flex flex-wrap items-center gap-3">
                 <select name="provider" className="input text-sm max-w-[220px]" defaultValue={verificationSubmission?.provider ?? defaultKycProvider}>
                   <option value="STRIPE">Stripe Identity + Connect</option>
@@ -569,14 +574,6 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
             </form>
           )}
 
-          {!verificationApproved && !cloudinaryConfigured && (
-            <div className="mt-6 border-t border-slate-100 pt-6">
-              <p className="text-sm font-semibold text-slate-500">Manual document upload unavailable</p>
-              <p className="mt-1 text-xs text-slate-400">
-                Document upload storage is not configured on this server. Use the provider verification above (Stripe Identity or Persona) to complete your verification.
-              </p>
-            </div>
-          )}
         </section>
       )}
 

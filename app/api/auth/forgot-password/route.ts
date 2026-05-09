@@ -42,6 +42,10 @@ export async function POST(req: Request) {
     const sent = await sendEmail(email, subject, html);
     if (!sent) {
       console.warn('[forgot-password] Email delivery failed for', email);
+      return NextResponse.json(
+        { error: 'Unable to send reset email right now. Please try again shortly.' },
+        { status: 503 },
+      );
     }
 
     return NextResponse.json({ ok: true });
