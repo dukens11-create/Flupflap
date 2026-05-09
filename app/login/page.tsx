@@ -3,6 +3,7 @@ import { Suspense, useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { Eye, EyeOff } from 'lucide-react';
 import { useI18n } from '@/components/I18nProvider';
 
 function LoginForm() {
@@ -13,6 +14,7 @@ function LoginForm() {
 
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   // Multi-step seller flow: credentials → (add_phone?) → otp
   const [step, setStep] = useState<'credentials' | 'add_phone' | 'otp'>('credentials');
@@ -254,7 +256,23 @@ function LoginForm() {
       </div>
       <div>
         <label className="label">{t('login.password')}</label>
-        <input name="password" type="password" className="input" placeholder={t('login.password')} required />
+        <div className="relative">
+          <input
+            name="password"
+            type={showPassword ? 'text' : 'password'}
+            className="input pr-10"
+            placeholder={t('login.password')}
+            required
+          />
+          <button
+            type="button"
+            className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:rounded-r-xl"
+            onClick={() => setShowPassword(v => !v)}
+            aria-label={showPassword ? t('login.hidePassword') : t('login.showPassword')}
+          >
+            {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+          </button>
+        </div>
       </div>
       {error && <p className="text-red-600 text-sm">{error}</p>}
       <button className="btn-primary w-full" disabled={loading}>
