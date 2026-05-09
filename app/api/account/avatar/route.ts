@@ -16,13 +16,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  if (!isCloudinaryConfigured()) {
-    return NextResponse.json(
-      { error: 'Image upload is not configured on this server.' },
-      { status: 503 },
-    );
-  }
-
   let form: FormData;
   try {
     form = await req.formData();
@@ -52,31 +45,43 @@ export async function POST(req: Request) {
   try {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
-    const cloudinary = getCloudinary();
 
-    const result = await new Promise<{ secure_url: string }>((resolve, reject) => {
-      cloudinary.uploader
-        .upload_stream(
-          {
-            folder: AVATAR_FOLDER,
-            resource_type: 'image',
-            // Crop to a square, centered on the face if detected.
-            transformation: [{ width: AVATAR_WIDTH, height: AVATAR_HEIGHT, crop: 'fill', gravity: 'auto' }],
-          },
-          (err, res) => {
-            if (err || !res) reject(err ?? new Error('No result from Cloudinary'));
-            else resolve(res as { secure_url: string });
-          },
-        )
-        .end(buffer);
-    });
+    let imageUrl: string;
+
+    if (isCloudinaryConfigured()) {
+      // Upload to Cloudinary when credentials are available.
+      const cloudinary = getCloudinary();
+      const result = await new Promise<{ secure_url: string }>((resolve, reject) => {
+        cloudinary.uploader
+          .upload_stream(
+            {
+              folder: AVATAR_FOLDER,
+              resource_type: 'image',
+              // Crop to a square, centered on the face if detected.
+              transformation: [{ width: AVATAR_WIDTH, height: AVATAR_HEIGHT, crop: 'fill', gravity: 'auto' }],
+            },
+            (err, res) => {
+              if (err || !res) reject(err ?? new Error('No result from Cloudinary'));
+              else resolve(res as { secure_url: string });
+            },
+          )
+          .end(buffer);
+      });
+      imageUrl = result.secure_url;
+    } else {
+      // Cloudinary is not configured — store the image as a base64 data URL
+      // directly in the database. This works for all deployment environments
+      // without requiring additional storage infrastructure, though Cloudinary
+      // is recommended for production to keep database sizes manageable.
+      imageUrl = `data:${file.type};base64,${buffer.toString('base64')}`;
+    }
 
     await prisma.user.update({
       where: { id: session.user.id },
-      data: { image: result.secure_url },
+      data: { image: imageUrl },
     });
 
-    return NextResponse.json({ url: result.secure_url });
+    return NextResponse.json({ url: imageUrl });
   } catch (err) {
     console.error('[api/account/avatar]', err);
     return NextResponse.json({ error: 'Upload failed. Please try again.' }, { status: 500 });
