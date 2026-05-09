@@ -80,12 +80,11 @@ export async function POST(req: Request) {
     }
 
     if (SELLER_OTP_FORCE_DISABLED || !isSmsOtpEnabled()) {
-      console.warn('[setup-phone] Seller OTP forcibly bypassed: pending Twilio A2P 10DLC approval', {
+      // Seller OTP is not active in the current sign-in flow.
+      // Skip phone setup and let the seller sign in with email + password only.
+      console.info('[setup-phone] Seller OTP bypassed: not active in current sign-in flow', {
         userId: user.id,
-        role: user.role,
-        reason: SELLER_OTP_FORCE_DISABLED
-          ? 'SELLER_OTP_FORCE_DISABLED=true (pending Twilio A2P 10DLC approval)'
-          : 'feature flag ENABLE_SMS_OTP=false',
+        reason: SELLER_OTP_FORCE_DISABLED ? 'SELLER_OTP_FORCE_DISABLED=true' : 'ENABLE_SMS_OTP=false',
       });
       return NextResponse.json({ step: 'signin' });
     }

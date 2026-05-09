@@ -59,7 +59,8 @@ function LoginForm() {
       setPendingPassword(password);
       setStep('add_phone');
     } else {
-      // Non-seller: sign in directly
+      // Buyer, or seller when OTP is not active in the current sign-in flow:
+      // sign in directly with email + password.
       const result = await signIn('credentials', { email, password, redirect: false });
       if (result?.error) {
         setError(t('login.invalidCredentials'));
