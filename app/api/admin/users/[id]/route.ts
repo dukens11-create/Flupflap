@@ -9,14 +9,12 @@
  * log admin actions to AdminAccessLog for audit purposes.
  *
  * Origin handling (POST):
- *   Legitimate admin requests are validated against the app's configured trusted
- *   origins (`NEXTAUTH_URL` and `NEXT_PUBLIC_APP_URL` env vars) rather than
- *   against the raw `req.url` origin alone.  This prevents false rejections when
- *   the frontend is served from a custom domain while the backend request URL
- *   resolves to the hosting provider's hostname (e.g. Render), or when www/non-www
- *   variants are in use.  Requests without an Origin header (same-origin form
- *   posts) are always allowed.  Requests from an unrecognised origin are still
- *   rejected with 403.
+ *   Legitimate admin requests are validated against trusted origins derived from
+ *   configured app URLs (`NEXTAUTH_URL` / `NEXT_PUBLIC_APP_URL`) plus the request
+ *   host headers forwarded by the deployment platform. This prevents false
+ *   rejections when frontend and backend hostnames differ in production.
+ *   Requests without an Origin header (same-origin form posts) are always allowed.
+ *   Requests from an unrecognised origin are still rejected with 403.
  */
 
 import { NextResponse } from 'next/server';
@@ -35,10 +33,43 @@ function buildConfiguredTrustedOrigins(): Set<string> {
   const origins = new Set<string>();
   for (const raw of [process.env.NEXTAUTH_URL, process.env.NEXT_PUBLIC_APP_URL]) {
     if (!raw) continue;
+    const normalized = normalizeOrigin(raw);
+    if (normalized) origins.add(normalized);
+  }
+  return origins;
+}
+
+function normalizeOrigin(raw: string): string | null {
+  const value = raw.trim();
+  if (!value) return null;
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return null;
+    }
+    return parsed.origin.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+function deriveTrustedRequestOrigins(req: Request): Set<string> {
+  const origins = new Set<string>(CONFIGURED_TRUSTED_ORIGINS);
+  const requestOrigin = normalizeOrigin(req.url);
+  if (requestOrigin) origins.add(requestOrigin);
+
+  const forwardedHost = req.headers
+    .get('x-forwarded-host')
+    ?.split(',')
+    .map(value => value.trim())
+    .find(Boolean);
+  const host = forwardedHost ?? req.headers.get('host')?.trim();
+  const proto = req.headers.get('x-forwarded-proto')?.split(',')[0]?.trim() || 'https';
+  if (host && (proto === 'http' || proto === 'https')) {
     try {
-      origins.add(new URL(raw).origin);
+      origins.add(new URL(`${proto}://${host}`).origin.toLowerCase());
     } catch {
-      // ignore malformed env value
+      // ignore malformed host/proto values
     }
   }
   return origins;
@@ -148,20 +179,9 @@ export async function POST(
   try {
     const origin = req.headers.get('origin');
     if (origin) {
-      // Check configured env-var origins first (covers custom domain vs Render
-      // hostname, www/non-www, and other multi-origin deployment topologies).
-      // Fall back to comparing against the server's own resolved request origin
-      // so that same-host deploys work even when env vars are not set — this
-      // matches the behaviour of the original check.
-      let trusted = CONFIGURED_TRUSTED_ORIGINS.has(origin);
-      if (!trusted) {
-        try {
-          trusted = new URL(req.url).origin === origin;
-        } catch {
-          // malformed req.url — treat as untrusted
-        }
-      }
-      if (!trusted) {
+      const normalizedOrigin = normalizeOrigin(origin);
+      const trustedOrigins = deriveTrustedRequestOrigins(req);
+      if (!normalizedOrigin || !trustedOrigins.has(normalizedOrigin)) {
         return NextResponse.json({ error: 'Invalid request origin.' }, { status: 403 });
       }
     }
