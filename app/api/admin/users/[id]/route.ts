@@ -17,7 +17,7 @@ import { prisma } from '@/lib/db';
 import { normalizePhone } from '@/lib/phone';
 
 const contactSchema = z.object({
-  email: z.string().trim().email('Invalid email format.'),
+  email: z.string().trim().email('Invalid email format.').transform(value => value.toLowerCase()),
   phone: z.string().optional(),
 });
 
@@ -150,7 +150,7 @@ export async function POST(
 
     const existingUser = await prisma.user.findUnique({
       where: { id },
-      select: { id: true, role: true, phone: true },
+      select: { id: true, role: true, email: true, phone: true },
     });
     if (!existingUser || !EDITABLE_ROLES.includes(existingUser.role)) {
       return NextResponse.redirect(
@@ -161,7 +161,7 @@ export async function POST(
       );
     }
 
-    const email = parsed.data.email.trim().toLowerCase();
+    const email = parsed.data.email;
     const phoneInput = parsed.data.phone?.trim() ?? '';
     const phone = phoneInput === '' ? null : normalizePhone(phoneInput);
     if (phoneInput && !phone) {
@@ -187,6 +187,7 @@ export async function POST(
     }
 
     const phoneChanged = existingUser.phone !== phone;
+    const emailChanged = existingUser.email !== email;
     await prisma.user.update({
       where: { id },
       data: {
@@ -201,7 +202,13 @@ export async function POST(
         adminId: session.user.id,
         targetId: id,
         action: 'update_contact',
-        notes: `Updated contact details by ${session.user.email ?? session.user.id}`,
+        notes: [
+          emailChanged ? `email: ${existingUser.email} -> ${email}` : null,
+          phoneChanged ? `phone: ${existingUser.phone ?? 'none'} -> ${phone ?? 'none'}` : null,
+          `by ${session.user.email ?? session.user.id}`,
+        ]
+          .filter(Boolean)
+          .join('; '),
       },
     });
 
@@ -210,7 +217,7 @@ export async function POST(
     if (err?.code === 'P2002') {
       return NextResponse.redirect(
         new URL(
-          `/admin/users/${targetId}?contactError=${encodeURIComponent('Email or phone is already in use by another account.')}`,
+          `/admin/users/${targetId}?contactError=${encodeURIComponent('Phone number is already in use by another account.')}`,
           req.url,
         ),
       );
