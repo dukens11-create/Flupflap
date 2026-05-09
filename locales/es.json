@@ -67,6 +67,9 @@
         "description": "Los mensajes de confianza refuerzan transacciones más seguras desde la búsqueda hasta la entrega."
       }
     },
+    "categories": {
+      "title": "Comprar por categoría"
+    },
     "loadingProducts": "Cargando productos…",
     "noProducts": "No se encontraron productos. Intenta ajustar los filtros."
   },
