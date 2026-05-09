@@ -448,7 +448,9 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                   <label className="label">Phone number</label>
                   <input
                     name="phoneNumber"
-                    type="tel"
+                    type="text"
+                    inputMode="tel"
+                    autoComplete="tel"
                     className="input"
                     required
                     defaultValue={verificationSubmission?.phoneNumber ?? dbUser?.phone ?? ''}

@@ -94,7 +94,7 @@ export async function POST(req: Request) {
         hadPlusPrefix: phone.trim().startsWith('+'),
       });
       return NextResponse.json(
-        { error: 'Invalid phone number. Please include your country code (e.g. +1 for US/Canada).' },
+        { error: 'Invalid phone number. US/Canada numbers can be entered with or without +1.' },
         { status: 400 },
       );
     }

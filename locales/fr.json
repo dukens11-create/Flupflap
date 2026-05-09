@@ -145,7 +145,7 @@
     "customerOption": "Acheteur – Je veux acheter",
     "sellerOption": "Vendeur – Je veux vendre",
     "mobilePhone": "Numéro de téléphone mobile",
-    "phoneHelp": "Utilisé pour l'authentification à deux facteurs lors de la connexion. Des frais de messagerie peuvent s'appliquer.",
+    "phoneHelp": "Utilisé pour l'authentification à deux facteurs lors de la connexion. Les numéros États-Unis/Canada peuvent être saisis avec ou sans +1. Des frais de messagerie peuvent s'appliquer.",
     "creatingAccount": "Création du compte…",
     "createAccount": "Créer un compte",
     "alreadyHave": "Vous avez déjà un compte ?",

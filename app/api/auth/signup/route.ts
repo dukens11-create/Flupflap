@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
+import { normalizePhone } from '@/lib/phone';
 
 const schema = z.object({
   name: z.string().min(1),
@@ -23,6 +24,17 @@ export async function POST(req: Request) {
       );
     }
 
+    const normalizedPhone = data.role === 'SELLER'
+      ? normalizePhone(data.phone ?? '')
+      : null;
+
+    if (data.role === 'SELLER' && !normalizedPhone) {
+      return NextResponse.json(
+        { error: 'Enter a valid phone number. US/Canada numbers can be entered with or without +1.' },
+        { status: 400 },
+      );
+    }
+
     const existing = await prisma.user.findUnique({ where: { email: data.email.toLowerCase() } });
     if (existing) {
       return NextResponse.json({ error: 'An account with this email already exists.' }, { status: 409 });
@@ -35,7 +47,7 @@ export async function POST(req: Request) {
         email: data.email.toLowerCase(),
         password,
         role: data.role,
-        phone: data.role === 'SELLER' ? (data.phone?.trim() ?? null) : null,
+        phone: normalizedPhone,
       },
     });
 
