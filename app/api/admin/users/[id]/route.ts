@@ -135,7 +135,7 @@ export async function POST(
     const form = await req.formData();
     const parsed = contactSchema.safeParse({
       email: form.get('email'),
-      phone: form.get('phone')?.toString(),
+      phone: form.get('phone'),
     });
     if (!parsed.success) {
       return NextResponse.redirect(
@@ -192,8 +192,7 @@ export async function POST(
       data: {
         email,
         phone,
-        phoneVerified: phoneChanged ? false : undefined,
-        phoneVerifiedAt: phoneChanged ? null : undefined,
+        ...(phoneChanged ? { phoneVerified: false, phoneVerifiedAt: null } : {}),
       },
     });
 
