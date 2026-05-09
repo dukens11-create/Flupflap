@@ -1,8 +1,6 @@
 import { PrismaAdapter } from '@next-auth/prisma-adapter';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { prisma } from './db';
-import { verifyOtp } from './otp';
-import { isSmsOtpEnabled, SELLER_OTP_FORCE_DISABLED } from './feature-flags';
 import { recordLoginActivity } from './login-security';
 import { safeComparePassword } from './password';
 import type { NextAuthOptions } from 'next-auth';
@@ -39,29 +37,8 @@ export const authOptions: NextAuthOptions = {
         );
         if (!ok) return null;
 
-        // Sellers must supply a valid one-time code (when SMS OTP is enabled).
-        if (user.role === 'SELLER') {
-          if (SELLER_OTP_FORCE_DISABLED || !isSmsOtpEnabled()) {
-            // Seller OTP is not active in the current sign-in flow.
-            // Either SELLER_OTP_FORCE_DISABLED=true or ENABLE_SMS_OTP=false.
-            // Sellers sign in with email + password only.
-            console.info('[auth] Seller OTP bypassed: not active in current sign-in flow', {
-              userId: user.id,
-              reason: SELLER_OTP_FORCE_DISABLED ? 'SELLER_OTP_FORCE_DISABLED=true' : 'ENABLE_SMS_OTP=false',
-            });
-          } else {
-            if (!credentials.otp) return null;
-            const result = await verifyOtp(user.id, credentials.otp);
-            if (!result.ok) return null;
-            // Mark phone as verified on first successful OTP sign-in.
-            if (user.phone && !user.phoneVerified) {
-              await prisma.user.update({
-                where: { id: user.id },
-                data: { phoneVerified: true, phoneVerifiedAt: new Date() },
-              }).catch(() => null);
-            }
-          }
-        }
+        // Seller OTP is no longer part of the active credentials sign-in flow.
+        // Sellers (like buyers) authenticate with email + password.
 
         try {
           await recordLoginActivity(user.id, request);
