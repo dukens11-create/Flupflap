@@ -50,14 +50,20 @@ function productStatusBadge(status: string) {
 
 export default async function AdminUserDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ contactUpdated?: string; contactNoop?: string; contactError?: string }>;
 }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect('/login');
   if (session.user.role !== 'ADMIN') redirect('/');
 
   const { id } = await params;
+  const sp = await searchParams;
+  const contactUpdated = sp.contactUpdated === '1';
+  const contactNoop = sp.contactNoop === '1';
+  const contactError = sp.contactError ?? '';
 
   const user = await prisma.user.findUnique({
     where: { id },
@@ -146,6 +152,22 @@ export default async function AdminUserDetailPage({
         <span>You are viewing this account as admin support. This access is logged.</span>
       </div>
 
+      {contactUpdated && (
+        <div className="card p-3 mb-6 bg-green-50 border-green-200 text-green-800 text-sm">
+          Contact details updated successfully.
+        </div>
+      )}
+      {contactNoop && (
+        <div className="card p-3 mb-6 bg-slate-50 border-slate-200 text-slate-700 text-sm">
+          No contact changes were detected.
+        </div>
+      )}
+      {contactError && (
+        <div className="card p-3 mb-6 bg-red-50 border-red-200 text-red-800 text-sm">
+          {contactError}
+        </div>
+      )}
+
       {/* Account details */}
       <div className="card p-6 mb-6">
         <h2 className="text-lg font-bold mb-4">Account Details</h2>
@@ -208,6 +230,23 @@ export default async function AdminUserDetailPage({
             </Link>
           </div>
         )}
+
+        <div className="mt-6 pt-4 border-t border-slate-100">
+          <h3 className="text-base font-bold mb-3">Update Contact Details</h3>
+          <form action={`/api/admin/users/${user.id}`} method="POST" className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="email" className="label">Email</label>
+              <input id="email" name="email" type="email" required defaultValue={user.email} className="input w-full" />
+            </div>
+            <div>
+              <label htmlFor="phone" className="label">Phone</label>
+              <input id="phone" name="phone" type="tel" defaultValue={user.phone ?? ''} className="input w-full" />
+            </div>
+            <div className="sm:col-span-2">
+              <button type="submit" className="btn-primary">Save contact details</button>
+            </div>
+          </form>
+        </div>
       </div>
 
       {/* Orders */}

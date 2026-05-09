@@ -743,6 +743,24 @@ curl -X POST https://<your-app>.onrender.com/api/admin/grant-admin \
 Every successful promotion is written to `AdminAccessLog` with
 `action = 'grant_admin'` for auditing.
 
+### Updating buyer/seller contact details (admin-only)
+
+Admins can update a buyer or seller's email and phone from
+`/admin/users/[id]` in the **Update Contact Details** section.
+
+- Backend endpoint: `POST /api/admin/users/[id]`
+- Authorization: caller must be authenticated with `role = ADMIN`
+- Targets: only `CUSTOMER` and `SELLER` accounts
+- Validation:
+  - Email is required and must be valid
+  - Phone is optional, but when provided it is normalized to E.164 format
+  - Email uniqueness conflicts are rejected
+  - Unknown/non-buyer/non-seller users return not found
+- Security behavior:
+  - User role is never changed by this endpoint
+  - If phone changes, `phoneVerified` is reset to `false` and `phoneVerifiedAt` to `null`
+  - Successful updates are recorded in `AdminAccessLog` with `action = 'update_contact'`
+
 ### Audit trail
 
 Every admin action creates an `AdminAccessLog` entry recording:
@@ -751,7 +769,7 @@ Every admin action creates an `AdminAccessLog` entry recording:
 |---|---|
 | `adminId` | The admin who performed the action |
 | `targetId` | The user whose account was affected |
-| `action` | `view_account` or `grant_admin` |
+| `action` | `view_account`, `grant_admin`, or `update_contact` |
 | `notes` | Free-text details (e.g. who initiated the promotion) |
 | `createdAt` | Timestamp |
 
