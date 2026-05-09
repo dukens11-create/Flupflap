@@ -5,7 +5,7 @@ import { signOut, useSession } from 'next-auth/react';
 import { ShoppingCart, Package, LayoutDashboard, LogIn, UserPlus, LogOut, User, MessageCircle, Bell, Search } from 'lucide-react';
 import LanguageSelector from '@/components/LanguageSelector';
 import { useI18n } from '@/components/I18nProvider';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 function useCartCount() {
@@ -105,7 +105,6 @@ export default function Navbar() {
   const { t } = useI18n();
   const router = useRouter();
   const [searchValue, setSearchValue] = useState('');
-  const searchRef = useRef<HTMLInputElement>(null);
 
   const navLinkClass = 'rounded-full px-3 py-1.5 text-sm font-medium transition-colors hover:bg-amber-50 hover:text-amber-700';
   const actionLinkClass = 'relative flex items-center gap-1 rounded-full px-3 py-2 text-sm font-medium transition-colors hover:bg-slate-100 hover:text-amber-700';
@@ -145,7 +144,6 @@ export default function Navbar() {
             <div className="relative flex w-full max-w-xl items-center">
               <Search size={16} className="pointer-events-none absolute left-3 text-slate-400" />
               <input
-                ref={searchRef}
                 type="search"
                 value={searchValue}
                 onChange={e => setSearchValue(e.target.value)}
