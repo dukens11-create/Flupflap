@@ -145,7 +145,7 @@
     "customerOption": "Comprador – Quiero comprar",
     "sellerOption": "Vendedor – Quiero vender",
     "mobilePhone": "Número de teléfono móvil",
-    "phoneHelp": "Se usa para autenticación de dos factores cuando inicias sesión. Pueden aplicarse tarifas de mensajería.",
+    "phoneHelp": "Se usa para autenticación de dos factores cuando inicias sesión. Los números de EE. UU./Canadá se pueden ingresar con o sin +1. Pueden aplicarse tarifas de mensajería.",
     "creatingAccount": "Creando cuenta…",
     "createAccount": "Crear cuenta",
     "alreadyHave": "¿Ya tienes una cuenta?",

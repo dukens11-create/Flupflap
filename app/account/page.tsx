@@ -592,7 +592,9 @@ export default function AccountPage() {
           {phoneStep === 'enter_phone' && (
             <form onSubmit={sendPhoneCode} className="space-y-2 mt-1">
               <input
-                type="tel"
+                type="text"
+                inputMode="tel"
+                autoComplete="tel"
                 className="input"
                 placeholder="+1 555 000 1234"
                 value={phoneInput}

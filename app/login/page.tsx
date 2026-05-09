@@ -177,7 +177,9 @@ function LoginForm() {
           <label className="label">{t('login.phoneNumber')}</label>
           <input
             name="phone"
-            type="tel"
+            type="text"
+            inputMode="tel"
+            autoComplete="tel"
             className="input"
             placeholder="+1 555 000 1234"
             required

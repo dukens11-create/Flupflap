@@ -145,7 +145,7 @@
     "customerOption": "Customer – I want to buy",
     "sellerOption": "Seller – I want to sell",
     "mobilePhone": "Mobile phone number",
-    "phoneHelp": "Used for two-factor authentication when you sign in. Standard messaging rates may apply.",
+    "phoneHelp": "Used for two-factor authentication when you sign in. US/Canada numbers can be entered with or without +1. Standard messaging rates may apply.",
     "creatingAccount": "Creating account…",
     "createAccount": "Create account",
     "alreadyHave": "Already have an account?",
