@@ -7,15 +7,6 @@ import { recordLoginActivity } from './login-security';
 import { safeComparePassword } from './password';
 import type { NextAuthOptions } from 'next-auth';
 
-function toSessionImage(image: string | null | undefined, cacheBuster?: number) {
-  if (!image) return null;
-  if (image.startsWith('data:image/')) {
-    const v = cacheBuster ?? Date.now();
-    return `/api/account/avatar?v=${v}`;
-  }
-  return image;
-}
-
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   session: { strategy: 'jwt' },
@@ -76,16 +67,14 @@ export const authOptions: NextAuthOptions = {
         token.role = (user as any).role;
         token.stripeAccountId = (user as any).stripeAccountId;
         token.stripeOnboardingComplete = (user as any).stripeOnboardingComplete;
-        token.image = toSessionImage((user as any).image);
       }
-      // On session update (e.g. after avatar upload) re-fetch image from DB.
+      // On session update re-fetch lightweight account fields from DB.
       if (trigger === 'update') {
         const dbUser = await prisma.user.findUnique({
           where: { id: token.id as string },
-          select: { image: true, name: true },
+          select: { name: true },
         });
         if (dbUser) {
-          token.image = toSessionImage(dbUser.image, Date.now());
           token.name = dbUser.name;
         }
       }
@@ -97,7 +86,6 @@ export const authOptions: NextAuthOptions = {
         session.user.role = token.role as any;
         session.user.stripeAccountId = token.stripeAccountId as any;
         session.user.stripeOnboardingComplete = Boolean(token.stripeOnboardingComplete);
-        session.user.image = (token.image as string | null) ?? null;
       }
       return session;
     }

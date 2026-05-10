@@ -42,6 +42,7 @@ export default function AccountPage() {
   const [avatarError, setAvatarError] = useState('');
   const [avatarSuccess, setAvatarSuccess] = useState('');
   const [avatarImage, setAvatarImage] = useState<string | null>(null);
+  const sessionImage = (session?.user as { image?: string | null } | undefined)?.image ?? null;
 
   // Phone management
   const [phoneStep, setPhoneStep] = useState<'idle' | 'enter_phone' | 'enter_code'>('idle');
@@ -118,8 +119,8 @@ export default function AccountPage() {
   }, [session?.user?.id]);
 
   useEffect(() => {
-    setAvatarImage(session?.user?.image ?? null);
-  }, [session?.user?.image]);
+    setAvatarImage(sessionImage);
+  }, [sessionImage]);
 
   if (status === 'loading') {
     return (
@@ -155,9 +156,9 @@ export default function AccountPage() {
         setAvatarSuccess('Profile photo updated!');
         try {
           const refreshed = await update({}); // Refresh session so header/avatar reflects the change
-          if (typeof refreshed?.user?.image === 'string' || refreshed?.user?.image === null) {
-            setAvatarImage(refreshed.user.image);
-          }
+          const refreshedImage = (refreshed?.user as { image?: string | null } | undefined)?.image;
+          if (typeof refreshedImage === 'string' || refreshedImage === null) setAvatarImage(refreshedImage);
+          else if (uploadedUrl) setAvatarImage(uploadedUrl);
         } catch {
           if (uploadedUrl) setAvatarImage(uploadedUrl);
           setAvatarSuccess('Profile photo updated! Please refresh the page to see changes in other areas.');
@@ -186,7 +187,8 @@ export default function AccountPage() {
         setAvatarSuccess('Profile photo removed.');
         try {
           const refreshed = await update({});
-          setAvatarImage(refreshed?.user?.image ?? null);
+          const refreshedImage = (refreshed?.user as { image?: string | null } | undefined)?.image;
+          setAvatarImage(refreshedImage ?? null);
         } catch {
           setAvatarSuccess('Profile photo removed. Please refresh the page to see changes in other areas.');
         }

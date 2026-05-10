@@ -7,7 +7,6 @@ declare module "next-auth" {
       id: string;
       name?: string | null;
       email?: string | null;
-      image?: string | null;
       role: Role;
       stripeAccountId?: string | null;
       stripeOnboardingComplete?: boolean;
@@ -26,6 +25,5 @@ declare module "next-auth/jwt" {
     role: Role;
     stripeAccountId?: string | null;
     stripeOnboardingComplete?: boolean;
-    image?: string | null;
   }
 }
