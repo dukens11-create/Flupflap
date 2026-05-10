@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import crypto from 'crypto';
+import { sendEmail } from '@/lib/email';
+import { passwordResetEmail } from '@/lib/email-templates';
 
 export async function POST(req: Request) {
   try {
@@ -33,15 +35,18 @@ export async function POST(req: Request) {
       },
     });
 
-    // In production, send an email with the reset link.
-    // For now, only log in development — in production configure an email provider
-    // (e.g. Resend, SendGrid, Nodemailer) and remove this log.
-    if (process.env.NODE_ENV === 'development') {
-      console.log(
-        `[forgot-password] Reset link for ${email}: /reset-password?token=${token}&email=${encodeURIComponent(email)}`
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+    const resetUrl = `${appUrl}/reset-password?token=${token}&email=${encodeURIComponent(email)}`;
+
+    const { subject, html } = passwordResetEmail(resetUrl);
+    const sent = await sendEmail(email, subject, html);
+    if (!sent) {
+      console.warn('[forgot-password] Email delivery failed for', email);
+      return NextResponse.json(
+        { error: 'Unable to send reset email right now. Please try again shortly.' },
+        { status: 503 },
       );
     }
-    // TODO: send email with reset link
 
     return NextResponse.json({ ok: true });
   } catch (err) {

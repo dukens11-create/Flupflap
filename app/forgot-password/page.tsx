@@ -42,10 +42,6 @@ export default function ForgotPasswordPage() {
             If an account exists for <strong>{email}</strong>, we&apos;ve sent a password reset link.
             Check your inbox (and spam folder).
           </p>
-          <p className="text-xs text-slate-400 border-t pt-3">
-            Note: Email delivery requires configuration in production.
-            If you don&apos;t receive an email, ask an administrator for assistance.
-          </p>
           <Link href="/login" className="btn-outline block">Back to sign in</Link>
         </div>
       ) : (
