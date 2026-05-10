@@ -9,6 +9,17 @@ const NEXTAUTH_CREDENTIALS_ERROR = 'error=CredentialsSignin';
 // Keep scan bounded to avoid expensive full-body searches on unexpected large HTML payloads.
 const MAX_CALLBACK_ERROR_SCAN_BYTES = 2048;
 
+function isCredentialsSigninError(
+  callbackData: { url?: string; error?: string },
+  callbackStatus: number,
+  callbackSnippet: string,
+) {
+  return callbackData.error === 'CredentialsSignin'
+    || callbackStatus === 401
+    || (callbackData.url ?? '').includes(NEXTAUTH_CREDENTIALS_ERROR)
+    || callbackSnippet.includes(NEXTAUTH_CREDENTIALS_ERROR);
+}
+
 function LoginForm() {
   const { t } = useI18n();
   const router = useRouter();
@@ -102,11 +113,7 @@ function LoginForm() {
       } else {
         // NextAuth encodes the failure reason in the redirect URL it would have used
         const callbackSnippet = callbackText.slice(0, MAX_CALLBACK_ERROR_SCAN_BYTES);
-        const isCredentialsError =
-          callbackData.error === 'CredentialsSignin'
-          || callbackRes.status === 401
-          || (callbackData.url ?? '').includes(NEXTAUTH_CREDENTIALS_ERROR)
-          || callbackSnippet.includes(NEXTAUTH_CREDENTIALS_ERROR);
+        const isCredentialsError = isCredentialsSigninError(callbackData, callbackRes.status, callbackSnippet);
         console.error('[login] authentication failed', {
           callbackStatus: callbackRes.status,
           callbackError: callbackData.error ?? null,

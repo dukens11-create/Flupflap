@@ -27,7 +27,9 @@ export const authOptions: NextAuthOptions = {
         otp:      { label: 'Code',     type: 'text' },
       },
       async authorize(credentials, request) {
-        const email = credentials?.email?.trim().toLowerCase();
+        const email = typeof credentials?.email === 'string'
+          ? credentials.email.trim().toLowerCase()
+          : '';
         if (!email || !credentials?.password) {
           console.warn('[auth] authorize missing credentials');
           return null;
