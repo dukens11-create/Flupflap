@@ -26,20 +26,20 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Your seller account is currently restricted.' }, { status: 403 });
     }
 
-    const verification = await prisma.sellerVerification.findUnique({
-      where: { sellerId: session.user.id },
-      select: {
-        status: true,
-        eligibleToListAt: true,
-        adminFallbackStatus: true,
-      },
-    });
-    if (!isSellerVerificationApproved(verification)) {
-      return NextResponse.json({ error: 'Seller verification is required to create shipping labels.' }, { status: 403 });
-    }
-
     const isJsonRequest = req.headers.get('content-type')?.includes('application/json');
     if (isJsonRequest) {
+      const verification = await prisma.sellerVerification.findUnique({
+        where: { sellerId: session.user.id },
+        select: {
+          status: true,
+          eligibleToListAt: true,
+          adminFallbackStatus: true,
+        },
+      });
+      if (!isSellerVerificationApproved(verification)) {
+        return NextResponse.json({ error: 'Seller verification is required to create shipping labels.' }, { status: 403 });
+      }
+
       const body = await req.json() as {
         action?: 'rates' | 'purchase';
         orderId?: string;
@@ -122,7 +122,7 @@ export async function POST(req: Request) {
             country: order.shippingCountry ?? 'US',
           },
           fromAddress: {
-            name: (process.env.SHIP_FROM_NAME ?? 'FlupFlap Seller').trim(),
+            name: (process.env.SHIP_FROM_NAME ?? 'Seller Fulfillment').trim(),
             street1: fromStreet1,
             city: fromCity,
             state: fromState,
@@ -155,7 +155,7 @@ export async function POST(req: Request) {
         }
 
         const purchased = await purchaseShipmentRate({ shipmentId, rateId });
-        const carrier = purchased.carrier || order.carrier || order.shippingCarrier;
+        const carrier = purchased.carrier;
 
         await prisma.order.update({
           where: { id: order.id },
@@ -163,7 +163,9 @@ export async function POST(req: Request) {
             status: 'SHIPPED',
             trackingNumber: purchased.trackingNumber || order.trackingNumber || null,
             carrier: carrier || null,
-            shippingCarrier: carrier || null,
+            // Keep legacy field in sync for existing consumers while `carrier`
+            // becomes the canonical shipment carrier field.
+            shippingCarrier: carrier || order.shippingCarrier || null,
             shipmentId: purchased.shipmentId || shipmentId,
             shipmentStatus: purchased.shipmentStatus || 'LABEL_PURCHASED',
             labelUrl: purchased.labelUrl || null,
@@ -205,10 +207,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Unsupported shipping action.' }, { status: 400 });
     }
 
-    // Legacy fallback: manual mark shipped form submits
+    // Legacy fallback for existing HTML form submits that still post `trackingNumber`
+    // + `shippingCarrier` directly to this endpoint (non-JSON request path).
     const form = await req.formData();
     const orderId = form.get('orderId') as string;
     const trackingNumber = form.get('trackingNumber') as string;
+    // Legacy field name `shippingCarrier` maps to canonical `carrier`.
     const shippingCarrier = form.get('shippingCarrier') as string;
     if (!orderId) {
       return NextResponse.json({ error: 'Order ID required.' }, { status: 400 });
@@ -234,10 +238,32 @@ export async function POST(req: Request) {
         status: 'SHIPPED',
         trackingNumber: trackingNumber || null,
         carrier: shippingCarrier || null,
+        // Legacy compatibility mirror.
         shippingCarrier: shippingCarrier || null,
         shipmentStatus: 'SHIPPED_MANUAL',
       },
     });
+
+    await createNotifications([
+      {
+        userId: order.buyerId,
+        type: NotificationType.SHIPPING,
+        title: 'Your order has shipped',
+        body: trackingNumber
+          ? `Tracking is now available${shippingCarrier ? ` with ${shippingCarrier}` : ''}: ${trackingNumber}.`
+          : 'The seller marked your order as shipped.',
+        link: `/orders/${order.id}`,
+        data: { orderId: order.id },
+      },
+      {
+        userId: order.buyerId,
+        type: NotificationType.ORDER_UPDATE,
+        title: 'Order status updated',
+        body: 'Your order moved to Shipped.',
+        link: `/orders/${order.id}`,
+        data: { orderId: order.id, status: 'SHIPPED' },
+      },
+    ]);
 
     return NextResponse.redirect(new URL('/seller', req.url));
   } catch (err: any) {

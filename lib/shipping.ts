@@ -46,7 +46,7 @@ function serializeAddress(address: AddressInput) {
     city: address.city,
     state: address.state,
     zip: address.zip,
-    country: address.country?.trim().toUpperCase() || 'US',
+    country: address.country?.trim() || 'US',
     phone: address.phone?.trim() || undefined,
   };
 }
@@ -69,6 +69,15 @@ async function easyPostRequest(path: string, method: 'GET' | 'POST', body?: unkn
     throw new Error(message);
   }
   return payload;
+}
+
+function parseDeliveryDays(value: unknown) {
+  if (typeof value === 'number' && Number.isInteger(value) && value > 0) return value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+  }
+  return null;
 }
 
 export async function createShipmentRates(params: {
@@ -100,22 +109,30 @@ export async function createShipmentRates(params: {
   const rates: ShipmentRateQuote[] = Array.isArray(payload?.rates)
     ? payload.rates
       .filter((rate: any) => SUPPORTED_CARRIERS.has(String(rate?.carrier ?? '').toUpperCase()))
-      .map((rate: any) => ({
-        id: String(rate.id),
-        carrier: String(rate.carrier),
-        service: String(rate.service),
-        rate: String(rate.rate),
-        currency: String(rate.currency || 'USD'),
-        deliveryDays: (() => {
-          if (typeof rate.delivery_days === 'number') return rate.delivery_days;
-          if (typeof rate.delivery_days === 'string' && rate.delivery_days.trim() !== '') {
-            const parsed = Number(rate.delivery_days);
-            return Number.isFinite(parsed) ? parsed : null;
-          }
-          return null;
-        })(),
+      .map((rate: any) => {
+        const carrier = String(rate?.carrier ?? '').toUpperCase();
+        const currency = String(rate?.currency ?? '').toUpperCase();
+        return {
+          id: String(rate?.id ?? ''),
+          carrier,
+          service: String(rate?.service ?? ''),
+          rate: String(rate?.rate ?? ''),
+          currency,
+          deliveryDays: parseDeliveryDays(rate?.delivery_days),
+        };
+      })
+      .filter((rate: ShipmentRateQuote) => (
+        !!rate.id
+        && !!rate.carrier
+        && !!rate.service
+        && !!rate.rate
+        && !!rate.currency
+      ))
+      .filter((rate: ShipmentRateQuote) => Number.isFinite(Number(rate.rate)))
+      .map((rate: ShipmentRateQuote) => ({
+        ...rate,
+        rate: Number(rate.rate).toFixed(2),
       }))
-      .filter((rate: ShipmentRateQuote) => !!rate.id && !!rate.carrier && !!rate.service && !!rate.rate)
       .sort((a: ShipmentRateQuote, b: ShipmentRateQuote) => Number(a.rate) - Number(b.rate))
     : [];
 
@@ -130,22 +147,26 @@ export async function purchaseShipmentRate(params: {
     rate: { id: params.rateId },
   });
 
-  const trackingNumber = typeof payload?.tracking_code === 'string' ? payload.tracking_code : null;
+  const trackingCode = typeof payload?.tracking_code === 'string' ? payload.tracking_code : null;
   const selectedCarrier = typeof payload?.selected_rate?.carrier === 'string'
-    ? payload.selected_rate.carrier
+    ? payload.selected_rate.carrier.toUpperCase()
     : null;
-  const carrier = selectedCarrier || (typeof payload?.tracker?.carrier === 'string' ? payload.tracker.carrier : null);
+  const carrier = selectedCarrier || (
+    typeof payload?.tracker?.carrier === 'string'
+      ? payload.tracker.carrier.toUpperCase()
+      : null
+  );
   const labelUrl = typeof payload?.postage_label?.label_pdf_url === 'string'
     ? payload.postage_label.label_pdf_url
     : null;
   const trackingUrl = typeof payload?.tracker?.public_url === 'string'
     ? payload.tracker.public_url
-    : buildTrackingUrl(carrier, trackingNumber);
+    : buildTrackingUrl(carrier, trackingCode);
 
   return {
     shipmentId: typeof payload?.id === 'string' ? payload.id : params.shipmentId,
     shipmentStatus: typeof payload?.status === 'string' ? payload.status : null,
-    trackingNumber,
+    trackingNumber: trackingCode,
     carrier,
     labelUrl,
     trackingUrl,

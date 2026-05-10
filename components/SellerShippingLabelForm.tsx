@@ -11,6 +11,25 @@ type RateQuote = {
   deliveryDays: number | null;
 };
 
+function toRateQuote(value: unknown): RateQuote | null {
+  if (!value || typeof value !== 'object') return null;
+  const raw = value as Record<string, unknown>;
+  const id = typeof raw.id === 'string' ? raw.id : '';
+  const carrier = typeof raw.carrier === 'string' ? raw.carrier : '';
+  const service = typeof raw.service === 'string' ? raw.service : '';
+  const rate = typeof raw.rate === 'string' ? raw.rate : '';
+  const currency = typeof raw.currency === 'string' ? raw.currency : '';
+  if (!id || !carrier || !service || !rate || !currency) return null;
+  return {
+    id,
+    carrier,
+    service,
+    rate,
+    currency,
+    deliveryDays: typeof raw.deliveryDays === 'number' ? raw.deliveryDays : null,
+  };
+}
+
 export default function SellerShippingLabelForm({
   orderId,
   canCreateLabel,
@@ -64,11 +83,14 @@ export default function SellerShippingLabelForm({
         setError(data.error ?? 'Failed to fetch rates.');
         return;
       }
-      setRates(Array.isArray(data.rates) ? data.rates : []);
+      const sanitizedRates = Array.isArray(data.rates)
+        ? data.rates.map(toRateQuote).filter((rate: RateQuote | null): rate is RateQuote => rate !== null)
+        : [];
+      setRates(sanitizedRates);
       setShipmentId(data.shipmentId ?? '');
-      setSelectedRateId(data.rates?.[0]?.id ?? '');
+      setSelectedRateId(sanitizedRates[0]?.id ?? '');
     } catch {
-      setError('Network error. Please try again.');
+      setError('An error occurred. Please try again.');
     } finally {
       setLoadingRates(false);
     }
@@ -101,7 +123,7 @@ export default function SellerShippingLabelForm({
       setTrackingUrl(data.trackingUrl ?? '');
       setSuccess('Label purchased successfully.');
     } catch {
-      setError('Network error. Please try again.');
+      setError('An error occurred. Please try again.');
     } finally {
       setLoadingPurchase(false);
     }

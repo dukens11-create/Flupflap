@@ -875,42 +875,45 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
           <div className="card p-6 text-slate-500">No orders yet.</div>
         ) : (
           <div className="space-y-3">
-            {orders.map(o => (
-              <div key={o.id} className="card p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-slate-400 font-mono">{o.id.slice(-8)}</span>
-                  <span className={`badge ${o.status === 'PAID' || o.status === 'SHIPPED' || o.status === 'DELIVERED' ? 'badge-green' : 'badge-yellow'}`}>{o.status}</span>
-                </div>
-                {o.items.map(i => (
-                  <p key={i.id} className="text-sm text-slate-700">{i.product.title} × {i.quantity}</p>
-                ))}
-                <p className="text-sm font-bold mt-2">{dollars(o.items.reduce((s, i) => s + i.lineSubtotalCents + i.shippingCents * i.quantity, 0))}</p>
-                {/* Shipping label fulfillment for non-pickup orders */}
-                {!o.isPickup && !isRestricted && (
-                  <SellerShippingLabelForm
-                    orderId={o.id}
-                    canCreateLabel={o.status === 'PAID'}
-                    existingLabelUrl={o.labelUrl}
-                    existingTrackingNumber={o.trackingNumber}
-                    existingCarrier={o.carrier ?? o.shippingCarrier}
-                    existingTrackingUrl={buildTrackingUrl(o.carrier ?? o.shippingCarrier, o.trackingNumber)}
-                  />
-                )}
-                {/* Pickup verification for pickup orders */}
-                {o.isPickup && ['PAID', 'READY_FOR_PICKUP'].includes(o.status) && !isRestricted && (
-                  <div className="mt-3">
-                    <p className="text-xs text-slate-500 mb-2">📦 Pickup order — verify the buyer&apos;s code at handoff:</p>
-                    <PickupVerifyForm orderId={o.id} />
+            {orders.map(o => {
+              const orderCarrier = o.carrier ?? o.shippingCarrier;
+              return (
+                <div key={o.id} className="card p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs text-slate-400 font-mono">{o.id.slice(-8)}</span>
+                    <span className={`badge ${o.status === 'PAID' || o.status === 'SHIPPED' || o.status === 'DELIVERED' ? 'badge-green' : 'badge-yellow'}`}>{o.status}</span>
                   </div>
-                )}
-                {o.isPickup && o.status === 'PICKED_UP' && (
-                  <p className="text-xs text-green-700 mt-2 font-medium">✅ Pickup confirmed</p>
-                )}
-                {o.trackingNumber && (
-                  <p className="text-xs text-slate-500 mt-2">📦 {o.carrier ?? o.shippingCarrier}: {o.trackingNumber}</p>
-                )}
-              </div>
-            ))}
+                  {o.items.map(i => (
+                    <p key={i.id} className="text-sm text-slate-700">{i.product.title} × {i.quantity}</p>
+                  ))}
+                  <p className="text-sm font-bold mt-2">{dollars(o.items.reduce((s, i) => s + i.lineSubtotalCents + i.shippingCents * i.quantity, 0))}</p>
+                  {/* Shipping label fulfillment for non-pickup orders */}
+                  {!o.isPickup && !isRestricted && (
+                    <SellerShippingLabelForm
+                      orderId={o.id}
+                      canCreateLabel={o.status === 'PAID'}
+                      existingLabelUrl={o.labelUrl}
+                      existingTrackingNumber={o.trackingNumber}
+                      existingCarrier={orderCarrier}
+                      existingTrackingUrl={buildTrackingUrl(orderCarrier, o.trackingNumber)}
+                    />
+                  )}
+                  {/* Pickup verification for pickup orders */}
+                  {o.isPickup && ['PAID', 'READY_FOR_PICKUP'].includes(o.status) && !isRestricted && (
+                    <div className="mt-3">
+                      <p className="text-xs text-slate-500 mb-2">📦 Pickup order — verify the buyer&apos;s code at handoff:</p>
+                      <PickupVerifyForm orderId={o.id} />
+                    </div>
+                  )}
+                  {o.isPickup && o.status === 'PICKED_UP' && (
+                    <p className="text-xs text-green-700 mt-2 font-medium">✅ Pickup confirmed</p>
+                  )}
+                  {o.trackingNumber && (
+                    <p className="text-xs text-slate-500 mt-2">📦 {orderCarrier}: {o.trackingNumber}</p>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </section>
