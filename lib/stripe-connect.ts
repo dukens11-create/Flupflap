@@ -5,7 +5,6 @@ export type StripeConnectLinkResult = {
   url: string;
   stripeAccountId: string;
   stripeConnectStatus: 'connected' | 'in_progress';
-  stripeConnectCompletedAt: string | null;
 };
 
 export async function createStripeConnectLinkForSeller(sellerId: string): Promise<StripeConnectLinkResult> {
@@ -49,7 +48,6 @@ export async function createStripeConnectLinkForSeller(sellerId: string): Promis
         url: loginLink.url,
         stripeAccountId: effectiveAccountId,
         stripeConnectStatus: 'connected',
-        stripeConnectCompletedAt: null,
       };
     } catch (err: unknown) {
       if (classifyStripeError(err).reason === 'stale_account') {
@@ -73,7 +71,6 @@ export async function createStripeConnectLinkForSeller(sellerId: string): Promis
         url: accountLink.url,
         stripeAccountId: effectiveAccountId,
         stripeConnectStatus: 'in_progress',
-        stripeConnectCompletedAt: null,
       };
     } catch (err: unknown) {
       if (classifyStripeError(err).reason === 'stale_account') {
@@ -105,6 +102,5 @@ export async function createStripeConnectLinkForSeller(sellerId: string): Promis
     url: accountLink.url,
     stripeAccountId: account.id,
     stripeConnectStatus: 'in_progress',
-    stripeConnectCompletedAt: null,
   };
 }

@@ -27,7 +27,7 @@ export default function StripeConnectButton({
       const data = await res.json().catch(() => null);
 
       if (!res.ok) {
-        setError(data?.error ?? 'Unable to connect Stripe right now. Please try again.');
+        setError(data?.error ?? 'Unable to initiate Stripe Connect onboarding right now. Please try again.');
         setLoading(false);
         return;
       }
