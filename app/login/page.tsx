@@ -25,20 +25,29 @@ function LoginForm() {
     const email = form.get('email') as string;
     const password = form.get('password') as string;
 
-    const result = await signIn('credentials', { email, password, redirect: false });
-    setLoading(false);
+    try {
+      const result = await signIn('credentials', { email, password, redirect: false, callbackUrl });
 
-    if (result?.error) {
-      // Log safe diagnostic fields (no passwords/tokens) so devtools/production logs
-      // can distinguish credential rejection from server-side failures.
-      console.error('[login] signIn error', { ok: result.ok, status: result.status, error: result.error });
-      setError(result.status !== 401 ? t('login.signInServerError') : t('login.invalidCredentials'));
-    } else if (!result?.ok) {
-      console.error('[login] signIn returned no error but ok is false', { ok: result?.ok, status: result?.status });
+      if (result?.error) {
+        // Log safe diagnostic fields (no passwords/tokens) so devtools/production logs
+        // can distinguish credential rejection from server-side failures.
+        console.error('[login] signIn error', { ok: result.ok, status: result.status, error: result.error });
+        setError(result.status !== 401 ? t('login.signInServerError') : t('login.invalidCredentials'));
+      } else if (result?.url) {
+        router.push(result.url);
+        router.refresh();
+      } else if (result?.ok) {
+        router.push(callbackUrl);
+        router.refresh();
+      } else {
+        console.error('[login] signIn returned unexpected result', { ok: result?.ok, status: result?.status, hasUrl: !!result?.url });
+        setError(t('login.signInServerError'));
+      }
+    } catch (err) {
+      console.error('[login] signIn threw unexpectedly', { message: err instanceof Error ? err.message : String(err) });
       setError(t('login.signInServerError'));
-    } else {
-      router.push(callbackUrl);
-      router.refresh();
+    } finally {
+      setLoading(false);
     }
   }
 
