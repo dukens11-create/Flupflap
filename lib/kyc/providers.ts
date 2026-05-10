@@ -130,6 +130,7 @@ export async function applyAutomatedKycResult(input: {
         : SellerPhoneVerificationStatus.PENDING,
       providerReviewedAt: now,
       eligibleToListAt: status === 'APPROVED' ? now : null,
+      verifiedAt: status === 'APPROVED' ? now : null,
       adminFallbackStatus:
         status === 'APPROVED'
           ? SellerAdminFallbackStatus.NOT_REQUIRED
@@ -169,6 +170,7 @@ export async function applyAutomatedKycResult(input: {
       kycStartedAt: now,
       providerReviewedAt: now,
       eligibleToListAt: status === 'APPROVED' ? now : null,
+      verifiedAt: status === 'APPROVED' ? now : null,
       adminFallbackStatus:
         status === 'APPROVED'
           ? SellerAdminFallbackStatus.NOT_REQUIRED

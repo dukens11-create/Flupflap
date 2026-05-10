@@ -22,6 +22,7 @@ import {
 } from '@/lib/seller-verification';
 import { buildTrackingUrl } from '@/lib/shipping';
 import SellerShippingLabelForm from '@/components/SellerShippingLabelForm';
+import KycVerifyButton from '@/components/KycVerifyButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -406,9 +407,10 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                 </p>
               )}
               {verificationSubmission?.status === 'APPROVED' && (
-                <p className="mt-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
-                  Your seller verification is approved. You can now create listings once your subscription is active.
-                </p>
+                <div className="mt-3 flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2">
+                  <span className="text-sm font-semibold text-green-800" aria-label="Verified Seller">&#10003; Verified Seller</span>
+                  <p className="text-sm text-green-700">Your identity has been verified. You can create listings once your subscription is active.</p>
+                </div>
               )}
               {verificationSubmission?.status === 'PENDING' && (
                 <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
@@ -416,11 +418,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                 </p>
               )}
               {!verificationApproved && (
-                <form action="/api/seller/verification/initiate" method="POST" className="mt-6">
-                  <button className="btn-primary" type="submit">
-                    Verify Identity
-                  </button>
-                </form>
+                <KycVerifyButton />
               )}
             </div>
           </div>

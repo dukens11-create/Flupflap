@@ -81,7 +81,7 @@ export async function POST(req: Request) {
     });
 
     if (verificationUrl) {
-      return NextResponse.redirect(verificationUrl);
+      return NextResponse.json({ sessionUrl: verificationUrl });
     }
 
     console.error('[seller/verification/initiate POST] Stripe Identity returned no hosted URL', {
