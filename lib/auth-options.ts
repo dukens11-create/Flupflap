@@ -6,10 +6,32 @@ import { isSmsOtpEnabled, SELLER_OTP_FORCE_DISABLED } from './feature-flags';
 import { recordLoginActivity } from './login-security';
 import { safeComparePassword } from './password';
 import type { NextAuthOptions } from 'next-auth';
+import type { Role } from '@prisma/client';
 
-function stripAvatarFields(target: { image?: unknown; picture?: unknown }) {
-  delete target.image;
-  delete target.picture;
+type AuthSessionUser = {
+  id: string;
+  name: string | null;
+  email: string;
+  role: Role;
+  stripeAccountId: string | null;
+  stripeOnboardingComplete: boolean;
+};
+
+function isAuthSessionUser(user: unknown): user is AuthSessionUser {
+  if (!user || typeof user !== 'object') return false;
+  const candidate = user as Partial<AuthSessionUser>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.email === 'string' &&
+    typeof candidate.role === 'string'
+  );
+}
+
+/** Remove image fields that can bloat JWT/session payloads. */
+function stripImageFields(target: unknown) {
+  if (!target || typeof target !== 'object') return;
+  Reflect.deleteProperty(target, 'image');
+  Reflect.deleteProperty(target, 'picture');
 }
 
 export const authOptions: NextAuthOptions = {
@@ -77,28 +99,27 @@ export const authOptions: NextAuthOptions = {
           console.error('[auth] failed to record login activity', error);
         }
 
-        return {
+        const sessionUser: AuthSessionUser = {
           id: user.id,
           name: user.name,
           email: user.email,
           role: user.role,
           stripeAccountId: user.stripeAccountId,
           stripeOnboardingComplete: user.stripeOnboardingComplete,
-        } as any;
+        };
+        return sessionUser;
       }
     })
   ],
   callbacks: {
     async jwt({ token, user, trigger }) {
-      stripAvatarFields(token as any);
-      if (user) {
-        stripAvatarFields(user as any);
+      stripImageFields(token);
+      if (user && isAuthSessionUser(user)) {
+        stripImageFields(user);
         token.id = user.id;
-        token.name = user.name;
-        token.email = user.email;
-        token.role = (user as any).role;
-        token.stripeAccountId = (user as any).stripeAccountId;
-        token.stripeOnboardingComplete = (user as any).stripeOnboardingComplete;
+        token.role = user.role;
+        token.stripeAccountId = user.stripeAccountId;
+        token.stripeOnboardingComplete = user.stripeOnboardingComplete;
       }
       // On session update refetch lightweight account fields from DB.
       if (trigger === 'update') {
@@ -114,10 +135,10 @@ export const authOptions: NextAuthOptions = {
     },
     async session({ session, token }) {
       if (session.user) {
-        stripAvatarFields(session.user as any);
+        stripImageFields(session.user);
         session.user.id = token.id as string;
-        session.user.role = token.role as any;
-        session.user.stripeAccountId = token.stripeAccountId as any;
+        session.user.role = token.role as Role;
+        session.user.stripeAccountId = typeof token.stripeAccountId === 'string' ? token.stripeAccountId : null;
         session.user.stripeOnboardingComplete = Boolean(token.stripeOnboardingComplete);
       }
       return session;
