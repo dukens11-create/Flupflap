@@ -620,6 +620,12 @@ enum Form1099Status {
   FILED
 }
 
+enum TaxIdStatus {
+  NOT_PROVIDED
+  PENDING
+  PROVIDED
+}
+
 model SellerTaxProfile {
   id                 String   @id @default(cuid())
   sellerId           String   @unique
@@ -627,7 +633,7 @@ model SellerTaxProfile {
   legalName          String?
   businessName       String?
   // Masked/status-only tax ID. Raw SSN/EIN must never be stored here.
-  taxIdStatus        String?  // e.g. "PROVIDED", "PENDING", "NOT_PROVIDED"
+  taxIdStatus        TaxIdStatus @default(NOT_PROVIDED)
   addressLine1       String?
   addressLine2       String?
   city               String?
