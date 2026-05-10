@@ -7,6 +7,11 @@ import { recordLoginActivity } from './login-security';
 import { safeComparePassword } from './password';
 import type { NextAuthOptions } from 'next-auth';
 
+function stripAvatarFields(target: { image?: unknown; picture?: unknown }) {
+  delete target.image;
+  delete target.picture;
+}
+
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   session: { strategy: 'jwt' },
@@ -21,7 +26,21 @@ export const authOptions: NextAuthOptions = {
       },
       async authorize(credentials, request) {
         if (!credentials?.email || !credentials.password) return null;
-        const user = await prisma.user.findUnique({ where: { email: credentials.email.toLowerCase() } });
+        const user = await prisma.user.findUnique({
+          where: { email: credentials.email.toLowerCase() },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            password: true,
+            role: true,
+            stripeAccountId: true,
+            stripeOnboardingComplete: true,
+            deletedAt: true,
+            phone: true,
+            phoneVerified: true,
+          },
+        });
         if (!user) return null;
         // Reject soft-deleted accounts before touching the password.
         if (user.deletedAt) return null;
@@ -58,14 +77,25 @@ export const authOptions: NextAuthOptions = {
           console.error('[auth] failed to record login activity', error);
         }
 
-        return user as any;
+        return {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          stripeAccountId: user.stripeAccountId,
+          stripeOnboardingComplete: user.stripeOnboardingComplete,
+        } as any;
       }
     })
   ],
   callbacks: {
     async jwt({ token, user, trigger }) {
+      stripAvatarFields(token as any);
       if (user) {
+        stripAvatarFields(user as any);
         token.id = user.id;
+        token.name = user.name;
+        token.email = user.email;
         token.role = (user as any).role;
         token.stripeAccountId = (user as any).stripeAccountId;
         token.stripeOnboardingComplete = (user as any).stripeOnboardingComplete;
@@ -84,6 +114,7 @@ export const authOptions: NextAuthOptions = {
     },
     async session({ session, token }) {
       if (session.user) {
+        stripAvatarFields(session.user as any);
         session.user.id = token.id as string;
         session.user.role = token.role as any;
         session.user.stripeAccountId = token.stripeAccountId as any;
