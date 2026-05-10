@@ -6,6 +6,7 @@ import { Eye, EyeOff } from 'lucide-react';
 import { useI18n } from '@/components/I18nProvider';
 
 const NEXTAUTH_CREDENTIALS_ERROR = 'error=CredentialsSignin';
+// Keep scan bounded to avoid expensive full-body searches on unexpected large HTML payloads.
 const MAX_CALLBACK_ERROR_SCAN_BYTES = 2048;
 
 function LoginForm() {

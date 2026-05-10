@@ -59,7 +59,7 @@ export const authOptions: NextAuthOptions = {
             console.error('[auth] failed to record login activity', error);
           }
 
-          console.info('[auth] authorize success', { userId: user.id, role: user.role });
+          console.info('[auth] authorize success', { role: user.role });
           return user as any;
         } catch (error) {
           console.error('[auth] authorize unexpected error', { message: error instanceof Error ? error.message : String(error) });
@@ -77,8 +77,7 @@ export const authOptions: NextAuthOptions = {
         token.stripeOnboardingComplete = (user as any).stripeOnboardingComplete;
         token.image = toSessionImage((user as any).image);
         console.info('[auth] jwt callback attached user', {
-          userId: user.id,
-          role: (user as any).role,
+          hasUser: true,
           trigger: trigger ?? 'signIn',
         });
       }
@@ -96,11 +95,11 @@ export const authOptions: NextAuthOptions = {
           if (dbUser) {
             token.image = toSessionImage(dbUser.image, Date.now());
             token.name = dbUser.name;
-            console.info('[auth] jwt callback refreshed token user fields', { tokenId: token.id });
+            console.info('[auth] jwt callback refreshed token user fields');
           }
         } catch (error) {
           console.error('[auth] jwt callback update failed', {
-            tokenId: token.id,
+            hasTokenId: Boolean(token.id),
             message: error instanceof Error ? error.message : String(error),
           });
         }
@@ -117,8 +116,7 @@ export const authOptions: NextAuthOptions = {
       }
       console.info('[auth] session callback', {
         hasSessionUser: Boolean(session.user),
-        sessionUserId: session.user?.id ?? null,
-        tokenId: token.id ?? null,
+        hasTokenId: Boolean(token.id),
         tokenRole: token.role ?? null,
       });
       return session;
