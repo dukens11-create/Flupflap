@@ -337,7 +337,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
       )}
       {sp.verification === 'provider_pending' && (
         <div className="card p-4 mb-6 bg-amber-50 border-amber-300 text-amber-900 text-sm">
-          Stripe Identity verification is in progress. Listings remain locked until your identity is verified.
+          Identity verification is in progress. Listings remain locked until your identity is verified.
         </div>
       )}
 
@@ -356,7 +356,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
         <section className="card p-6 mb-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <h2 className="text-lg font-semibold text-slate-900">Seller Identity Verification</h2>
+              <p className="text-lg font-semibold text-slate-900">Seller Identity Verification</p>
               <div className="mt-2 flex items-center gap-2">
                 <span className={`badge ${sellerVerificationStatusTone(verificationSubmission?.status)}`}>
                   {sellerVerificationStatusLabel(verificationSubmission?.status)}

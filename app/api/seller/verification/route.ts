@@ -53,5 +53,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  return NextResponse.redirect(new URL('/api/seller/verification/initiate', req.url), 303);
+  return NextResponse.json(
+    {
+      error: 'Manual verification uploads are no longer supported. Start Stripe Identity hosted verification instead.',
+      startUrl: '/api/seller/verification/initiate',
+    },
+    { status: 410 },
+  );
 }

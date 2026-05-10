@@ -43,7 +43,7 @@ export async function POST(req: Request) {
         provider: SellerKycProvider.STRIPE,
         providerStatus: 'pending',
         providerAccountId: providerAccountId ?? undefined,
-        providerVerificationId: providerVerificationId ?? undefined,
+        providerVerificationId,
         status: SellerVerificationStatus.PENDING,
         rejectionReason: null,
         adminFallbackStatus: SellerAdminFallbackStatus.PENDING_REVIEW,
@@ -80,14 +80,20 @@ export async function POST(req: Request) {
       },
     });
 
-    const redirectUrl = verificationUrl
-      ?? new URL('/api/stripe/connect', req.url).toString();
-
-    if (redirectUrl) {
-      return NextResponse.redirect(redirectUrl);
+    if (verificationUrl) {
+      return NextResponse.redirect(verificationUrl);
     }
 
-    return NextResponse.redirect(new URL('/seller?verification=provider_started', req.url));
+    console.error('[seller/verification/initiate POST] Stripe Identity returned no hosted URL', {
+      sellerId: session.user.id,
+      stripeVerificationSessionId: providerVerificationId,
+      stripeVerificationStatus: identitySession.status,
+      stripeLastErrorCode: identitySession.last_error?.code ?? null,
+    });
+    return NextResponse.json(
+      { error: 'Stripe Identity failed to generate a hosted verification URL.' },
+      { status: 500 },
+    );
   } catch (err: any) {
     console.error('[seller/verification/initiate POST]', err);
     return NextResponse.json(
