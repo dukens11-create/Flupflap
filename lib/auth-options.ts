@@ -5,13 +5,49 @@ import { recordLoginActivity } from './login-security';
 import { safeComparePassword } from './password';
 import type { NextAuthOptions } from 'next-auth';
 
+const SESSION_IMAGE_MAX_LENGTH = 2048;
+const AVATAR_ROUTE = '/api/account/avatar';
+
 function toSessionImage(image: string | null | undefined, cacheBuster?: number) {
-  if (!image) return null;
-  if (image.startsWith('data:image/')) {
-    const v = cacheBuster ?? Date.now();
-    return `/api/account/avatar?v=${v}`;
+  if (typeof image !== 'string') return null;
+
+  const value = image.trim();
+  if (!value) return null;
+
+  if (value.length > SESSION_IMAGE_MAX_LENGTH) {
+    console.warn('[auth] blocked oversized session image value', { length: value.length });
+    return null;
   }
-  return image;
+
+  if (value.toLowerCase().startsWith('data:image/')) {
+    const v = cacheBuster ?? Date.now();
+    return `${AVATAR_ROUTE}?v=${v}`;
+  }
+
+  if (value.startsWith(AVATAR_ROUTE)) {
+    if (cacheBuster == null) return value;
+    const separator = value.includes('?') ? '&' : '?';
+    return `${value}${separator}v=${cacheBuster}`;
+  }
+
+  if (value.startsWith('/') && !value.startsWith('//')) {
+    return value;
+  }
+
+  if (value.toLowerCase().startsWith('http://') || value.toLowerCase().startsWith('https://')) {
+    try {
+      const url = new URL(value);
+      if (url.protocol === 'http:' || url.protocol === 'https:') {
+        return value;
+      }
+    } catch {
+      console.warn('[auth] blocked malformed image URL');
+      return null;
+    }
+  }
+
+  console.warn('[auth] blocked unsafe session image value', { length: value.length });
+  return null;
 }
 
 export const authOptions: NextAuthOptions = {
