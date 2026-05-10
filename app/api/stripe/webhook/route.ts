@@ -308,10 +308,6 @@ export async function POST(req: Request) {
             WHEN ${periodEnd}::timestamptz IS NULL THEN u."subscriptionCurrentPeriodEnd"
             ELSE ${periodEnd}
           END,
-          "hasFreePromotion" = CASE
-            WHEN ${settings.freePromotionEnabled}::boolean = true THEN u."hasFreePromotion"
-            ELSE u."hasFreePromotion"
-          END,
           "freePromotionStart" = CASE
             WHEN ${settings.freePromotionEnabled}::boolean = true THEN COALESCE(u."freePromotionStart", ${now})
             ELSE u."freePromotionStart"

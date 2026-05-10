@@ -84,7 +84,7 @@ export default function ProductCard({ p: product }:{p:any}){
               </span>
               {!sellerVerified && !phoneVerified && (
                 <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600">
-                  {t('product.newSellerBadge')}
+                  {t('product.newSeller')}
                 </span>
               )}
               {isTrending && (
