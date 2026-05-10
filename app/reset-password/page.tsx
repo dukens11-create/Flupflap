@@ -11,6 +11,7 @@ function ResetForm() {
 
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [showPasswords, setShowPasswords] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -76,7 +77,7 @@ function ResetForm() {
       <div>
         <label className="label">New password</label>
         <input
-          type="password"
+          type={showPasswords ? 'text' : 'password'}
           className="input"
           placeholder="Minimum 8 characters"
           value={password}
@@ -89,7 +90,7 @@ function ResetForm() {
       <div>
         <label className="label">Confirm new password</label>
         <input
-          type="password"
+          type={showPasswords ? 'text' : 'password'}
           className="input"
           placeholder="Repeat your new password"
           value={confirm}
@@ -98,6 +99,15 @@ function ResetForm() {
           minLength={8}
         />
       </div>
+      <label className="inline-flex items-center gap-2 text-xs text-slate-500">
+        <input
+          type="checkbox"
+          checked={showPasswords}
+          onChange={(e) => setShowPasswords(e.target.checked)}
+          aria-label={showPasswords ? 'Hide passwords' : 'Show passwords'}
+        />
+        {showPasswords ? 'Hide passwords' : 'Show passwords'}
+      </label>
       {error && <p className="text-red-600 text-sm">{error}</p>}
       <button className="btn-primary w-full" disabled={loading}>
         {loading ? 'Saving…' : 'Set new password'}

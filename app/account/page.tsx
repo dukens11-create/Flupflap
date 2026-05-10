@@ -32,6 +32,7 @@ export default function AccountPage() {
 
   const [changingPassword, setChangingPassword] = useState(false);
   const [pwForm, setPwForm] = useState({ currentPassword: '', newPassword: '', confirm: '' });
+  const [showPasswordFields, setShowPasswordFields] = useState(false);
   const [pwLoading, setPwLoading] = useState(false);
   const [pwError, setPwError] = useState('');
   const [pwSuccess, setPwSuccess] = useState('');
@@ -57,6 +58,7 @@ export default function AccountPage() {
   // Account deletion
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deletePassword, setDeletePassword] = useState('');
+  const [showDeletePassword, setShowDeletePassword] = useState(false);
   const [deleteReason, setDeleteReason] = useState<AccountDeletionReason | ''>('');
   const [deleteOtherDetails, setDeleteOtherDetails] = useState('');
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -519,7 +521,7 @@ export default function AccountPage() {
           {changingPassword ? (
             <form onSubmit={savePassword} className="space-y-2 mt-1">
               <input
-                type="password"
+                type={showPasswordFields ? 'text' : 'password'}
                 className="input"
                 placeholder="Current password"
                 value={pwForm.currentPassword}
@@ -528,7 +530,7 @@ export default function AccountPage() {
                 autoFocus
               />
               <input
-                type="password"
+                type={showPasswordFields ? 'text' : 'password'}
                 className="input"
                 placeholder="New password (min 8 chars)"
                 value={pwForm.newPassword}
@@ -537,7 +539,7 @@ export default function AccountPage() {
                 minLength={8}
               />
               <input
-                type="password"
+                type={showPasswordFields ? 'text' : 'password'}
                 className="input"
                 placeholder="Confirm new password"
                 value={pwForm.confirm}
@@ -545,6 +547,15 @@ export default function AccountPage() {
                 required
                 minLength={8}
               />
+              <label className="inline-flex items-center gap-2 text-xs text-slate-500">
+                <input
+                  type="checkbox"
+                  checked={showPasswordFields}
+                  onChange={(e) => setShowPasswordFields(e.target.checked)}
+                  aria-label={showPasswordFields ? 'Hide passwords' : 'Show passwords'}
+                />
+                {showPasswordFields ? 'Hide passwords' : 'Show passwords'}
+              </label>
               {pwError && <p className="text-red-600 text-xs">{pwError}</p>}
               <div className="flex gap-2">
                 <button className="btn-primary text-sm" disabled={pwLoading}>
@@ -641,7 +652,7 @@ export default function AccountPage() {
               Enter your password to confirm deletion:
             </p>
             <input
-              type="password"
+              type={showDeletePassword ? 'text' : 'password'}
               className="input"
               placeholder="Your current password"
               value={deletePassword}
@@ -649,6 +660,15 @@ export default function AccountPage() {
               required
               autoFocus
             />
+            <label className="inline-flex items-center gap-2 text-xs text-slate-500">
+              <input
+                type="checkbox"
+                checked={showDeletePassword}
+                onChange={(e) => setShowDeletePassword(e.target.checked)}
+                aria-label={showDeletePassword ? 'Hide password' : 'Show password'}
+              />
+              {showDeletePassword ? 'Hide password' : 'Show password'}
+            </label>
             {deleteError && <p className="text-red-600 text-xs">{deleteError}</p>}
             <div className="flex gap-2">
               <button
