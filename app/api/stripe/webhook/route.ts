@@ -140,6 +140,8 @@ export async function POST(req: Request) {
         select: {
           providerAccountId: true,
           providerInquiryId: true,
+          governmentIdVerified: true,
+          selfieVerified: true,
           addressVerified: true,
           phoneVerified: true,
           rejectionReason: true,
@@ -152,22 +154,26 @@ export async function POST(req: Request) {
     ]);
 
     const isVerified = event.type === 'identity.verification_session.verified';
+    const hadPassedIdentityChecks =
+      Boolean(existingVerification?.governmentIdVerified)
+      && Boolean(existingVerification?.selfieVerified);
+    const identityChecksVerified = hadPassedIdentityChecks || isVerified;
     const checks = {
-      governmentIdVerified: isVerified,
-      selfieVerified: isVerified,
+      governmentIdVerified: identityChecksVerified,
+      selfieVerified: identityChecksVerified,
       addressVerified: existingVerification?.addressVerified ?? false,
       phoneVerified: existingVerification?.phoneVerified ?? false,
     };
 
     let forcedStatus: SellerVerificationStatus | undefined;
     let rejectionReason: string | null = null;
-    if (event.type === 'identity.verification_session.requires_input') {
+    if (event.type === 'identity.verification_session.requires_input' && !hadPassedIdentityChecks) {
       forcedStatus = SellerVerificationStatus.REJECTED;
       rejectionReason =
         sessionObject.last_error?.reason
         ?? sessionObject.last_error?.code
         ?? 'Identity verification requires additional input.';
-    } else if (event.type === 'identity.verification_session.canceled') {
+    } else if (event.type === 'identity.verification_session.canceled' && !hadPassedIdentityChecks) {
       forcedStatus = SellerVerificationStatus.REJECTED;
       rejectionReason = 'Seller canceled identity verification.';
     }

@@ -326,7 +326,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
 
       {sp.verification === 'submitted' && (
         <div className="card p-4 mb-6 bg-green-50 border-green-200 text-green-800 text-sm">
-          ✅ Seller verification submitted. An admin will review your documents before you can list products.
+          ✅ Seller verification submitted. You&apos;ll be automatically approved once required checks pass. Admin review is only used as fallback when checks are incomplete or fail.
         </div>
       )}
       {sp.verification === 'provider_started' && (
@@ -377,11 +377,11 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                 )}
               </div>
               <p className="mt-3 text-sm text-slate-600 max-w-2xl">
-                Upload your government ID (front and back), a selfie / face verification photo, your physical address, and your phone number. Listings stay locked until an admin approves your seller verification.
+                Upload your government ID (front and back), a selfie / face verification photo, your physical address, and your phone number. Listings unlock automatically after all required checks are verified. Admin review is only used as fallback for incomplete or failed checks.
               </p>
               {verificationSubmission?.status === 'REJECTED' && verificationSubmission.rejectionReason && (
                 <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-                  <span className="font-semibold">Rejected by a FlupFlap admin:</span> {verificationSubmission.rejectionReason}
+                  <span className="font-semibold">Verification was rejected:</span> {verificationSubmission.rejectionReason}
                 </p>
               )}
               {verificationSubmission?.status === 'APPROVED' && (
@@ -391,7 +391,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
               )}
               {verificationSubmission?.status === 'PENDING' && (
                 <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                  Your verification is pending review. We&apos;ll notify you here once a FlupFlap admin approves or rejects it.
+                  Your verification is pending while provider checks finish syncing. Once required checks pass, approval happens automatically. We&apos;ll only route to admin fallback review if checks are incomplete or fail.
                 </p>
               )}
               <div className="mt-4 grid gap-2 text-xs text-slate-600 sm:grid-cols-2 lg:grid-cols-4">
