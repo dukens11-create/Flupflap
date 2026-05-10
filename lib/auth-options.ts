@@ -5,6 +5,11 @@ import { recordLoginActivity } from './login-security';
 import { safeComparePassword } from './password';
 import type { NextAuthOptions } from 'next-auth';
 
+function stripAvatarFields(target: { image?: unknown; picture?: unknown }) {
+  delete target.image;
+  delete target.picture;
+}
+
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   session: { strategy: 'jwt' },
@@ -29,9 +34,10 @@ export const authOptions: NextAuthOptions = {
         try {
           const user = await prisma.user.findUnique({ where: { email } });
           if (!user) {
-            console.warn('[auth] authorize user not found');
+            console.warn('[auth] authorize user lookup failed');
             return null;
           }
+          console.info('[auth] authorize user lookup succeeded');
 
           const ok = await safeComparePassword(
             credentials.password,
@@ -39,9 +45,10 @@ export const authOptions: NextAuthOptions = {
             'authorize',
           );
           if (!ok) {
-            console.warn('[auth] authorize invalid password or hash mismatch');
+            console.warn('[auth] authorize password verification failed');
             return null;
           }
+          console.info('[auth] authorize password verification succeeded');
 
           // Seller OTP is no longer part of the active credentials sign-in flow.
           // Sellers (like buyers) authenticate with email + password.
@@ -53,7 +60,12 @@ export const authOptions: NextAuthOptions = {
           }
 
           console.info('[auth] authorize success', { role: user.role });
-          return user as any;
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            role: user.role,
+          };
         } catch (error) {
           console.error('[auth] authorize unexpected error', { message: error instanceof Error ? error.message : String(error) });
           return null;
@@ -63,19 +75,22 @@ export const authOptions: NextAuthOptions = {
   ],
   callbacks: {
     async jwt({ token, user, trigger }) {
+      console.info('[auth] jwt callback invoked', {
+        hasUser: Boolean(user),
+        hasTokenId: Boolean(token.id),
+        trigger: trigger ?? 'signIn',
+      });
       if (user) {
         token.id = user.id;
-        token.role = (user as any).role;
-        token.stripeAccountId = (user as any).stripeAccountId;
-        token.stripeOnboardingComplete = (user as any).stripeOnboardingComplete;
-        delete (token as { image?: unknown }).image;
-        delete (token as { picture?: unknown }).picture;
+        token.email = user.email;
+        token.name = user.name;
+        token.role = user.role;
+        stripAvatarFields(token);
         console.info('[auth] jwt callback attached user', {
           hasUser: true,
-          trigger: trigger ?? 'signIn',
         });
       }
-      // On session update refresh only minimal user-identifying fields.
+      // On session update, refresh minimal display fields from DB.
       if (trigger === 'update') {
         if (!token.id) {
           console.warn('[auth] jwt update skipped due to missing token id');
@@ -88,8 +103,7 @@ export const authOptions: NextAuthOptions = {
           });
           if (dbUser) {
             token.name = dbUser.name;
-            delete (token as { image?: unknown }).image;
-            delete (token as { picture?: unknown }).picture;
+            stripAvatarFields(token);
             console.info('[auth] jwt callback refreshed token user fields');
           }
         } catch (error) {
@@ -102,13 +116,18 @@ export const authOptions: NextAuthOptions = {
       return token;
     },
     async session({ session, token }) {
+      console.info('[auth] session callback invoked', {
+        hasSessionUser: Boolean(session.user),
+        hasTokenId: Boolean(token.id),
+      });
       if (session.user) {
-        session.user.id = token.id as string;
-        session.user.role = token.role as any;
-        session.user.stripeAccountId = token.stripeAccountId as any;
-        session.user.stripeOnboardingComplete = Boolean(token.stripeOnboardingComplete);
-        delete (session.user as { image?: unknown }).image;
-        delete (session.user as { picture?: unknown }).picture;
+        if (typeof token.id === 'string') {
+          session.user.id = token.id;
+        }
+        session.user.email = token.email ?? session.user.email;
+        session.user.name = token.name ?? session.user.name;
+        session.user.role = token.role ?? session.user.role;
+        stripAvatarFields(session.user);
       }
       console.info('[auth] session callback', {
         hasSessionUser: Boolean(session.user),
