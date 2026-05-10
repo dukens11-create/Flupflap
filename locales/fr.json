@@ -134,7 +134,8 @@
     "missingLoginInfo": "Informations de connexion introuvables. Veuillez réessayer.",
     "failedResendCode": "Impossible de renvoyer le code.",
     "showPassword": "Afficher le mot de passe",
-    "hidePassword": "Masquer le mot de passe"
+    "hidePassword": "Masquer le mot de passe",
+    "signInServerError": "La connexion a échoué de manière inattendue. Veuillez réessayer ou contacter le support."
   },
   "signup": {
     "title": "Créer un compte",

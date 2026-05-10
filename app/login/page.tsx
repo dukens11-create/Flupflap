@@ -63,7 +63,13 @@ function LoginForm() {
       // sign in directly with email + password.
       const result = await signIn('credentials', { email, password, redirect: false });
       if (result?.error) {
-        setError(t('login.invalidCredentials'));
+        // Log safe diagnostic fields (no passwords/tokens) so devtools/production logs
+        // can distinguish credential rejection from server-side failures.
+        console.error('[login] signIn error', { ok: result.ok, status: result.status, error: result.error });
+        setError(result.status !== 401 ? t('login.signInServerError') : t('login.invalidCredentials'));
+      } else if (!result?.ok) {
+        console.error('[login] signIn returned no error but ok is false', { ok: result?.ok, status: result?.status });
+        setError(t('login.signInServerError'));
       } else {
         router.push(callbackUrl);
         router.refresh();
@@ -107,7 +113,11 @@ function LoginForm() {
       });
 
       if (result?.error) {
-        setError(t('login.invalidCredentials'));
+        console.error('[login] signIn error (post-phone)', { ok: result.ok, status: result.status, error: result.error });
+        setError(result.status !== 401 ? t('login.signInServerError') : t('login.invalidCredentials'));
+      } else if (!result?.ok) {
+        console.error('[login] signIn returned no error but ok is false (post-phone)', { ok: result?.ok, status: result?.status });
+        setError(t('login.signInServerError'));
       } else {
         router.push(callbackUrl);
         router.refresh();
@@ -138,7 +148,11 @@ function LoginForm() {
     setLoading(false);
 
     if (result?.error) {
-      setError(t('login.invalidCode'));
+      console.error('[login] signIn error (OTP)', { ok: result.ok, status: result.status, error: result.error });
+      setError(result.status !== 401 ? t('login.signInServerError') : t('login.invalidCode'));
+    } else if (!result?.ok) {
+      console.error('[login] signIn returned no error but ok is false (OTP)', { ok: result?.ok, status: result?.status });
+      setError(t('login.signInServerError'));
     } else {
       router.push(callbackUrl);
       router.refresh();

@@ -134,7 +134,8 @@
     "missingLoginInfo": "Login information not found. Please try again.",
     "failedResendCode": "Failed to resend code.",
     "showPassword": "Show password",
-    "hidePassword": "Hide password"
+    "hidePassword": "Hide password",
+    "signInServerError": "Sign-in failed unexpectedly. Please try again or contact support."
   },
   "signup": {
     "title": "Create account",
