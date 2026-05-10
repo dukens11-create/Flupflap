@@ -310,7 +310,7 @@ export async function POST(req: Request) {
           END,
           "hasFreePromotion" = CASE
             WHEN ${settings.freePromotionEnabled}::boolean = true THEN u."hasFreePromotion"
-            ELSE false
+            ELSE u."hasFreePromotion"
           END,
           "freePromotionStart" = CASE
             WHEN ${settings.freePromotionEnabled}::boolean = true THEN COALESCE(u."freePromotionStart", ${now})

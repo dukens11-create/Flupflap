@@ -26,7 +26,7 @@ export async function POST(req: Request) {
     const freePromotionEnabled = form.get('freePromotionEnabled') === 'on';
     const durationRaw = Number(form.get('freePromotionDurationDays'));
     if (!Number.isFinite(durationRaw) || durationRaw < 1) {
-      return NextResponse.json({ error: 'Invalid free promotion duration.' }, { status: 400 });
+      return NextResponse.json({ error: 'Free promotion duration must be at least 1 day.' }, { status: 400 });
     }
     const freePromotionDurationDays = Math.round(durationRaw);
     await prisma.marketplaceSettings.update({
@@ -39,8 +39,11 @@ export async function POST(req: Request) {
   if (action === 'grant_credits') {
     const sellerId = String(form.get('sellerId') ?? '');
     const rawCredits = Number(form.get('credits'));
-    if (!sellerId || !Number.isFinite(rawCredits) || rawCredits < 1) {
-      return NextResponse.json({ error: 'Invalid seller or credit amount.' }, { status: 400 });
+    if (!sellerId) {
+      return NextResponse.json({ error: 'Seller is required.' }, { status: 400 });
+    }
+    if (!Number.isFinite(rawCredits) || rawCredits < 1) {
+      return NextResponse.json({ error: 'Credit amount must be at least 1.' }, { status: 400 });
     }
     const credits = Math.round(rawCredits);
     const updated = await prisma.user.updateMany({
