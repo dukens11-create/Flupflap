@@ -44,6 +44,17 @@ export async function GET() {
     }
   }
 
+  try {
+    const imageUrl = new URL(user.image);
+    if (imageUrl.protocol === 'http:' || imageUrl.protocol === 'https:') {
+      const response = NextResponse.redirect(imageUrl, 307);
+      response.headers.set('Cache-Control', 'private, no-store');
+      return response;
+    }
+  } catch {
+    // Fall through to 404 for invalid URL values.
+  }
+
   return NextResponse.json({ error: 'Not found' }, { status: 404 });
 }
 

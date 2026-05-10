@@ -15,8 +15,6 @@ type SecurityLoginEntry = {
   createdAt: string;
 };
 
-type UserWithOptionalImage = { image?: string | null };
-
 export default function AccountPage() {
   const { data: session, status, update } = useSession();
   const router = useRouter();
@@ -44,7 +42,7 @@ export default function AccountPage() {
   const [avatarError, setAvatarError] = useState('');
   const [avatarSuccess, setAvatarSuccess] = useState('');
   const [avatarImage, setAvatarImage] = useState<string | null>(null);
-  const sessionImage = (session?.user as UserWithOptionalImage | undefined)?.image ?? null;
+  const getAvatarUrl = () => `/api/account/avatar?ts=${Date.now()}`;
 
   // Phone management
   const [phoneStep, setPhoneStep] = useState<'idle' | 'enter_phone' | 'enter_code'>('idle');
@@ -121,8 +119,12 @@ export default function AccountPage() {
   }, [session?.user?.id]);
 
   useEffect(() => {
-    setAvatarImage(sessionImage);
-  }, [sessionImage]);
+    if (!session?.user?.id) {
+      setAvatarImage(null);
+      return;
+    }
+    setAvatarImage(getAvatarUrl());
+  }, [session?.user?.id]);
 
   if (status === 'loading') {
     return (
@@ -157,10 +159,8 @@ export default function AccountPage() {
         const uploadedUrl = typeof data.url === 'string' ? data.url : null;
         setAvatarSuccess('Profile photo updated!');
         try {
-          const refreshed = await update({}); // Refresh session so header/avatar reflects the change
-          const refreshedImage = (refreshed?.user as UserWithOptionalImage | undefined)?.image;
-          if (refreshedImage === undefined) setAvatarImage(uploadedUrl ?? null);
-          else setAvatarImage(refreshedImage);
+          await update({}); // Refresh session so header/avatar reflects the change
+          setAvatarImage(getAvatarUrl());
         } catch {
           if (uploadedUrl) setAvatarImage(uploadedUrl);
           setAvatarSuccess('Profile photo updated! Please refresh the page to see changes in other areas.');
@@ -188,9 +188,7 @@ export default function AccountPage() {
         setAvatarImage(null);
         setAvatarSuccess('Profile photo removed.');
         try {
-          const refreshed = await update({});
-          const refreshedImage = (refreshed?.user as UserWithOptionalImage | undefined)?.image;
-          setAvatarImage(refreshedImage ?? null);
+          await update({});
         } catch {
           setAvatarSuccess('Profile photo removed. Please refresh the page to see changes in other areas.');
         }
@@ -432,6 +430,7 @@ export default function AccountPage() {
                 src={avatarImage}
                 alt="Profile"
                 className="h-16 w-16 rounded-full object-cover border border-slate-200 shrink-0"
+                onError={() => setAvatarImage(null)}
               />
             ) : (
               <div className="h-16 w-16 rounded-full bg-slate-200 flex items-center justify-center shrink-0">
