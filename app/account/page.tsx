@@ -15,6 +15,9 @@ type SecurityLoginEntry = {
   createdAt: string;
 };
 
+const AVATAR_UPLOADS_TEMPORARILY_DISABLED_MESSAGE =
+  'Profile picture uploads are temporarily unavailable while we resolve a login stability issue.';
+
 export default function AccountPage() {
   const { data: session, status, update } = useSession();
   const router = useRouter();
@@ -141,36 +144,9 @@ export default function AccountPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setAvatarError('');
+    setAvatarError(AVATAR_UPLOADS_TEMPORARILY_DISABLED_MESSAGE);
     setAvatarSuccess('');
-    setAvatarUploading(true);
-    const fd = new FormData();
-    fd.append('file', file);
-    try {
-      const res = await fetch('/api/account/avatar', { method: 'POST', body: fd });
-      const data = await res.json();
-      if (!res.ok) {
-        setAvatarError(data.error ?? 'Upload failed.');
-      } else {
-        const uploadedUrl = typeof data.url === 'string' ? data.url : null;
-        setAvatarSuccess('Profile photo updated!');
-        try {
-          const refreshed = await update({}); // Refresh session so header/avatar reflects the change
-          if (typeof refreshed?.user?.image === 'string' || refreshed?.user?.image === null) {
-            setAvatarImage(refreshed.user.image);
-          }
-        } catch {
-          if (uploadedUrl) setAvatarImage(uploadedUrl);
-          setAvatarSuccess('Profile photo updated! Please refresh the page to see changes in other areas.');
-        }
-      }
-    } catch {
-      setAvatarError('Network error. Please try again.');
-    } finally {
-      setAvatarUploading(false);
-      // Reset the input so the same file can be re-selected if needed
-      if (avatarInputRef.current) avatarInputRef.current.value = '';
-    }
+    if (avatarInputRef.current) avatarInputRef.current.value = '';
   }
 
   async function removeAvatar() {
@@ -455,17 +431,14 @@ export default function AccountPage() {
                 type="file"
                 accept="image/jpeg,image/png,image/webp,image/gif"
                 onChange={handleAvatarChange}
-                disabled={avatarUploading}
+                disabled
                 className="hidden"
                 id="avatar-upload"
               />
               <div className="flex gap-2 flex-wrap">
-                <label
-                  htmlFor="avatar-upload"
-                  className={`text-xs font-medium px-3 py-1.5 rounded-lg border border-slate-300 cursor-pointer hover:bg-slate-50 transition-colors ${avatarUploading ? 'opacity-50 pointer-events-none' : ''}`}
-                >
-                  {avatarUploading ? 'Uploading…' : avatarImage ? 'Change photo' : 'Upload photo'}
-                </label>
+                <span className="text-xs font-medium px-3 py-1.5 rounded-lg border border-slate-300 bg-slate-100 text-slate-500 cursor-not-allowed">
+                  {avatarImage ? 'Change photo (temporarily unavailable)' : 'Upload photo (temporarily unavailable)'}
+                </span>
                 {avatarImage && !avatarUploading && (
                   <button
                     type="button"
@@ -477,6 +450,7 @@ export default function AccountPage() {
                 )}
               </div>
               <p className="text-xs text-slate-400">JPEG, PNG, WebP or GIF · max 5 MB</p>
+              <p className="text-xs text-amber-700">{AVATAR_UPLOADS_TEMPORARILY_DISABLED_MESSAGE}</p>
             </div>
           </div>
           {avatarError && <p className="text-red-600 text-xs mt-2">{avatarError}</p>}
