@@ -134,7 +134,8 @@
     "missingLoginInfo": "No se encontró la información de inicio de sesión. Inténtalo de nuevo.",
     "failedResendCode": "No se pudo reenviar el código.",
     "showPassword": "Mostrar contraseña",
-    "hidePassword": "Ocultar contraseña"
+    "hidePassword": "Ocultar contraseña",
+    "signInServerError": "El inicio de sesión falló inesperadamente. Inténtalo de nuevo o contacta al soporte."
   },
   "signup": {
     "title": "Crear cuenta",
