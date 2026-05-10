@@ -64,7 +64,7 @@ export default async function AdminSellersPage({
   });
 
   return (
-    <main className="max-w-5xl mx-auto">
+    <main id="kyc-verification" className="max-w-5xl mx-auto">
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-black">Seller Management</h1>

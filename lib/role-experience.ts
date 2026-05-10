@@ -60,7 +60,7 @@ const adminNav: RoleNavItem[] = [
   { label: 'Payments', href: '/admin#payments-panel' },
   { label: 'Reports', href: '/admin/reports' },
   { label: 'Disputes', href: '/admin/fraud' },
-  { label: 'KYC Verification', href: '/admin/sellers' },
+  { label: 'KYC Verification', href: '/admin/sellers#kyc-verification' },
   { label: 'Promotions', href: '/admin/promotions' },
   { label: 'Site Settings', href: '/admin#site-settings' },
 ];

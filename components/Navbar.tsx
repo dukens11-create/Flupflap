@@ -221,7 +221,7 @@ export default function Navbar() {
                   onClick={() => signOut({ callbackUrl: '/' })}
                   className="rounded-lg px-3 py-2 text-left hover:bg-white/80 hover:text-red-600"
                 >
-                  Logout
+                  {t('nav.logout')}
                 </button>
               ) : (
                 <>
