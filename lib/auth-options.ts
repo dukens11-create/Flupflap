@@ -28,6 +28,9 @@ export const authOptions: NextAuthOptions = {
 
         try {
           const user = await prisma.user.findUnique({ where: { email } });
+          console.info('[auth] authorize user lookup completed', {
+            userFound: Boolean(user),
+          });
           if (!user) {
             console.warn('[auth] authorize user not found');
             return null;
@@ -38,6 +41,9 @@ export const authOptions: NextAuthOptions = {
             user.password,
             'authorize',
           );
+          console.info('[auth] authorize password verification completed', {
+            passwordValid: ok,
+          });
           if (!ok) {
             console.warn('[auth] authorize invalid password or hash mismatch');
             return null;
@@ -53,7 +59,12 @@ export const authOptions: NextAuthOptions = {
           }
 
           console.info('[auth] authorize success', { role: user.role });
-          return user as any;
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            role: user.role,
+          } as any;
         } catch (error) {
           console.error('[auth] authorize unexpected error', { message: error instanceof Error ? error.message : String(error) });
           return null;
@@ -63,19 +74,22 @@ export const authOptions: NextAuthOptions = {
   ],
   callbacks: {
     async jwt({ token, user, trigger }) {
+      console.info('[auth] jwt callback invoked', {
+        hasUser: Boolean(user),
+        hasTokenId: Boolean(token.id),
+        trigger: trigger ?? 'signIn',
+      });
       if (user) {
         token.id = user.id;
+        token.email = user.email;
+        token.name = user.name;
         token.role = (user as any).role;
-        token.stripeAccountId = (user as any).stripeAccountId;
-        token.stripeOnboardingComplete = (user as any).stripeOnboardingComplete;
-        // Emergency mitigation: keep avatar data out of auth token/session state.
-        token.image = null;
         console.info('[auth] jwt callback attached user', {
           hasUser: true,
           trigger: trigger ?? 'signIn',
         });
       }
-      // On session update (e.g. after avatar upload) re-fetch image from DB.
+      // On session update, refresh minimal display fields from DB.
       if (trigger === 'update') {
         if (!token.id) {
           console.warn('[auth] jwt update skipped due to missing token id');
@@ -87,7 +101,6 @@ export const authOptions: NextAuthOptions = {
             select: { name: true },
           });
           if (dbUser) {
-            token.image = null;
             token.name = dbUser.name;
             console.info('[auth] jwt callback refreshed token user fields');
           }
@@ -101,13 +114,15 @@ export const authOptions: NextAuthOptions = {
       return token;
     },
     async session({ session, token }) {
+      console.info('[auth] session callback invoked', {
+        hasSessionUser: Boolean(session.user),
+        hasTokenId: Boolean(token.id),
+      });
       if (session.user) {
         session.user.id = token.id as string;
+        session.user.email = typeof token.email === 'string' ? token.email : session.user.email;
+        session.user.name = typeof token.name === 'string' ? token.name : session.user.name;
         session.user.role = token.role as any;
-        session.user.stripeAccountId = token.stripeAccountId as any;
-        session.user.stripeOnboardingComplete = Boolean(token.stripeOnboardingComplete);
-        // Emergency mitigation: keep avatar data out of auth token/session state.
-        session.user.image = null;
       }
       console.info('[auth] session callback', {
         hasSessionUser: Boolean(session.user),
