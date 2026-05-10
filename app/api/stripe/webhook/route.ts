@@ -13,6 +13,7 @@ import {
   applyAutomatedKycResult,
   stripeKycChecksFromAccount,
 } from '@/lib/kyc/providers';
+import { isSellerVerificationApproved } from '@/lib/seller-verification';
 import { createNotification, createNotifications, type CreateNotificationInput } from '@/lib/notifications';
 
 /** Generate a cryptographically secure 6-digit pickup confirmation code. */
@@ -364,6 +365,13 @@ export async function POST(req: Request) {
               id: true,
               stripeAccountId: true,
               stripeOnboardingComplete: true,
+              verificationSubmission: {
+                select: {
+                  status: true,
+                  eligibleToListAt: true,
+                  adminFallbackStatus: true,
+                },
+              },
               sellerPlan: { select: { code: true, commissionRateBps: true } },
             },
           },
@@ -553,7 +561,11 @@ export async function POST(req: Request) {
           const sellerTransfers = new Map<string, { destination: string; amount: number; sellerId: string }>();
 
           for (const item of orderItems) {
-            if (!item.product.seller.stripeOnboardingComplete || !item.product.seller.stripeAccountId) continue;
+            const sellerStripeAccountId = item.product.seller.stripeAccountId;
+            const payoutEligibleSeller = item.product.seller.stripeOnboardingComplete
+              && !!sellerStripeAccountId
+              && isSellerVerificationApproved(item.product.seller.verificationSubmission);
+            if (!payoutEligibleSeller) continue;
             const shippingPayoutCents = item.shippingCents * item.quantity;
             const transferAmount = item.sellerNetCents + shippingPayoutCents;
             if (transferAmount <= 0) continue;
@@ -563,7 +575,7 @@ export async function POST(req: Request) {
               existingTransfer.amount += transferAmount;
             } else {
               sellerTransfers.set(item.product.seller.id, {
-                destination: item.product.seller.stripeAccountId,
+                destination: sellerStripeAccountId,
                 amount: transferAmount,
                 sellerId: item.product.seller.id,
               });

@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db';
 import { appUrl, classifyStripeError, getCurrentStripeMode, stripe } from '@/lib/stripe';
 import { buildCheckoutCommissionItems, getMarketplaceSettings } from '@/lib/commission';
 import { checkoutErrorResponse } from '@/lib/checkout-errors';
+import { isSellerVerificationApproved } from '@/lib/seller-verification';
 
 export async function POST(req: Request) {
   try {
@@ -35,6 +36,13 @@ export async function POST(req: Request) {
             stripeAccountId: true,
             stripeAccountMode: true,
             stripeOnboardingComplete: true,
+            verificationSubmission: {
+              select: {
+                status: true,
+                eligibleToListAt: true,
+                adminFallbackStatus: true,
+              },
+            },
             sellerPlan: { select: { code: true, commissionRateBps: true } },
           },
         },
@@ -78,7 +86,11 @@ export async function POST(req: Request) {
     const uniqueSellerIds = new Set(products.map(p => p.sellerId));
     const isSingleSeller = uniqueSellerIds.size === 1;
     const seller = isSingleSeller ? products[0].seller : null;
-    let sellerStripeId = seller?.stripeOnboardingComplete ? seller.stripeAccountId : null;
+    let sellerStripeId = seller
+      && seller.stripeOnboardingComplete
+      && isSellerVerificationApproved(seller.verificationSubmission)
+      ? seller.stripeAccountId
+      : null;
     let sellerReconnectRequired = false;
 
     if (seller && sellerStripeId) {
