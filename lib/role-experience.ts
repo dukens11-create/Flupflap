@@ -52,17 +52,17 @@ const sellerNav: RoleNavItem[] = [
 ];
 
 const adminNav: RoleNavItem[] = [
-  { label: 'Admin Dashboard', href: '/admin/dashboard' },
+  { label: 'Dashboard', href: '/admin/dashboard' },
   { label: 'Users', href: '/admin/users' },
   { label: 'Sellers', href: '/admin/sellers' },
   { label: 'Products', href: '/admin#products-panel' },
   { label: 'Orders', href: '/admin#orders-panel' },
   { label: 'Payments', href: '/admin#payments-panel' },
   { label: 'Reports', href: '/admin/reports' },
-  { label: 'Disputes', href: '/admin/fraud' },
-  { label: 'KYC Verification', href: '/admin/sellers#kyc-verification' },
+  { label: 'Fraud', href: '/admin/fraud' },
   { label: 'Promotions', href: '/admin/promotions' },
-  { label: 'Site Settings', href: '/admin#site-settings' },
+  { label: 'KYC', href: '/admin/sellers#kyc-verification' },
+  { label: 'Settings', href: '/admin#site-settings' },
 ];
 
 export function getRoleNavigation(role?: string | null): RoleNavItem[] {

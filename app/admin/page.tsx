@@ -118,27 +118,31 @@ export default async function AdminPage({
   const soldItemsCount = soldItemsAgg._sum.quantity ?? 0;
 
   return (
-    <main className="max-w-5xl mx-auto">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-black">Admin Dashboard</h1>
-          <p className="text-slate-500 text-sm">Platform management</p>
-        </div>
-        <div className="flex gap-2">
-          <a href="/admin/users" className="btn-outline text-sm">Users →</a>
-          <a href="/admin/sellers" className="btn-outline text-sm">Seller Management →</a>
-          <a href="/admin/reports" className={`text-sm ${openReportsCount > 0 ? 'btn bg-red-600 hover:bg-red-700 text-white' : 'btn-outline'}`}>
+    <main className="w-full max-w-5xl mx-auto px-4 sm:px-6">
+      <div className="mb-4">
+        <h1 className="text-3xl font-black">Admin Dashboard</h1>
+        <p className="text-slate-500 text-sm">Platform management</p>
+      </div>
+
+      {/* Horizontally scrollable nav cards — does NOT make the page scroll sideways */}
+      <div className="mb-6 -mx-4 sm:-mx-6 px-4 sm:px-6 overflow-x-auto">
+        <div className="flex gap-2 w-max pb-1">
+          <a href="/admin/users" className="btn-outline text-sm whitespace-nowrap min-w-[120px]">Users →</a>
+          <a href="/admin/sellers" className="btn-outline text-sm whitespace-nowrap min-w-[120px]">Sellers →</a>
+          <a href="/admin/reports" className={`text-sm whitespace-nowrap min-w-[120px] ${openReportsCount > 0 ? 'btn bg-red-600 hover:bg-red-700 text-white' : 'btn-outline'}`}>
             Reports {openReportsCount > 0 ? `(${openReportsCount})` : '→'}
           </a>
           <a
             href="/admin/fraud"
-            className={`text-sm ${openSellerReportsCount > 0 || suspiciousLoginCount > 0 ? 'btn bg-amber-600 hover:bg-amber-700 text-white' : 'btn-outline'}`}
+            className={`text-sm whitespace-nowrap min-w-[120px] ${openSellerReportsCount > 0 || suspiciousLoginCount > 0 ? 'btn bg-amber-600 hover:bg-amber-700 text-white' : 'btn-outline'}`}
           >
             Fraud {openSellerReportsCount + suspiciousLoginCount > 0 ? `(${openSellerReportsCount + suspiciousLoginCount})` : '→'}
           </a>
-          <a href="/admin/promotions" className="btn-outline text-sm">
+          <a href="/admin/promotions" className="btn-outline text-sm whitespace-nowrap min-w-[120px]">
             Promotions {activePromotionsCount > 0 ? `(${activePromotionsCount})` : '→'}
           </a>
+          <a href="/admin/sellers#kyc-verification" className="btn-outline text-sm whitespace-nowrap min-w-[120px]">KYC →</a>
+          <a href="/admin#site-settings" className="btn-outline text-sm whitespace-nowrap min-w-[120px]">Settings →</a>
         </div>
       </div>
 
@@ -154,7 +158,7 @@ export default async function AdminPage({
         </div>
       )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
         <div className="card p-4 text-center">
           <p className="text-3xl font-black text-yellow-600">{pending.length}</p>
           <p className="text-sm text-slate-500">Pending review</p>
@@ -173,7 +177,7 @@ export default async function AdminPage({
         </a>
       </div>
 
-      <section className="mb-8 rounded-2xl border border-slate-200 bg-slate-900/95 p-5 text-white">
+      <section className="mb-8 rounded-2xl border border-slate-200 bg-slate-900/95 p-4 sm:p-5 text-white w-full max-w-full overflow-hidden">
         <h2 className="text-xl font-bold">Admin Control Panel</h2>
         <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
           <div className="rounded-xl bg-white/10 p-3"><p className="text-xs text-slate-200">Total Users</p><p className="text-2xl font-black">{totalUsersCount}</p></div>
@@ -190,7 +194,7 @@ export default async function AdminPage({
       {/* ── Product Statistics ── */}
       <section id="products-panel" className="mb-8">
         <h2 className="text-xl font-bold mb-3">Product Statistics</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 min-[380px]:grid-cols-2 sm:grid-cols-3 gap-3">
           <div className="card p-4 text-center">
             <p className="text-2xl font-black text-indigo-600">{productsThisWeek}</p>
             <p className="text-sm text-slate-500">Listed this week</p>
@@ -220,7 +224,7 @@ export default async function AdminPage({
 
       <section className="mb-8">
         <h2 className="text-xl font-bold mb-3">Traffic Analytics</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 min-[380px]:grid-cols-2 sm:grid-cols-3 gap-3">
           <div className="card p-4 text-center">
             <p className="text-2xl font-black text-blue-600">{visitorMetrics.dailyVisitors}</p>
             <p className="text-sm text-slate-500">Visitors today</p>
@@ -237,11 +241,11 @@ export default async function AdminPage({
       </section>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="card p-5 flex items-center gap-4">
+        <div className="card p-5 flex flex-col sm:flex-row items-start sm:items-center gap-3">
           <div className="text-3xl">👥</div>
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <p className="font-bold text-slate-800">User Management</p>
-            <div className="flex gap-3 mt-1">
+            <div className="flex flex-wrap gap-2 mt-1">
               <a href="/admin/users?role=CUSTOMER" className="text-sm text-blue-600 hover:underline font-medium">
                 🛒 {buyerCount} buyer{buyerCount !== 1 ? 's' : ''}
               </a>
@@ -251,7 +255,7 @@ export default async function AdminPage({
               </a>
             </div>
           </div>
-          <a href="/admin/users" className="btn-outline text-xs py-1 px-3">View all →</a>
+          <a href="/admin/users" className="btn-outline text-xs py-1 px-3 self-start sm:self-center shrink-0">View all →</a>
         </div>
         <a href="/admin/sellers" className="card p-5 flex items-center gap-4 hover:bg-slate-50 transition-colors">
           <div className="text-3xl">🔒</div>
