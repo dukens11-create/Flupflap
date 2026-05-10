@@ -12,9 +12,6 @@ export const SELLER_VERIFICATION_UPLOAD_FOLDER =
 export type SellerVerificationDocumentKind = 'front' | 'back' | 'selfie';
 
 export function getDefaultSellerKycProvider(): SellerKycProvider {
-  const configured = (process.env.KYC_PROVIDER ?? 'stripe').trim().toLowerCase();
-  if (configured === 'persona') return 'PERSONA';
-  if (configured === 'manual') return 'MANUAL';
   return 'STRIPE';
 }
 

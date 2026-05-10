@@ -6,31 +6,17 @@ import {
 } from '@prisma/client';
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { z } from 'zod';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import {
-  createPersonaInquiry,
   createStripeIdentitySession,
 } from '@/lib/kyc/providers';
-import { getDefaultSellerKycProvider } from '@/lib/seller-verification';
-
-const schema = z.object({
-  provider: z.enum([SellerKycProvider.STRIPE, SellerKycProvider.PERSONA]).optional(),
-});
 
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user || session.user.role !== 'SELLER') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
-    const form = await req.formData();
-    const data = schema.parse(Object.fromEntries(form.entries()));
-    const provider = data.provider ?? getDefaultSellerKycProvider();
-    if (provider === SellerKycProvider.MANUAL) {
-      return NextResponse.redirect(new URL('/seller?verification=manual_required', req.url));
     }
 
     const user = await prisma.user.findUnique({
@@ -46,35 +32,17 @@ export async function POST(req: Request) {
     }
 
     const now = new Date();
-    let providerAccountId: string | null = null;
-    let providerInquiryId: string | null = null;
-    let providerVerificationId: string | null = null;
-    let verificationUrl: string | null = null;
-
-    if (provider === SellerKycProvider.STRIPE) {
-      const identitySession = await createStripeIdentitySession(session.user.id);
-      providerVerificationId = identitySession.id;
-      verificationUrl = identitySession.url ?? null;
-      providerAccountId = user.stripeAccountId ?? null;
-    }
-
-    if (provider === SellerKycProvider.PERSONA) {
-      const inquiry = await createPersonaInquiry(session.user.id);
-      providerInquiryId = inquiry.data?.id ?? null;
-      // Stripe tracks account and verification session IDs separately, while
-      // Persona uses inquiry as the single verification entity, so we store
-      // the same inquiry ID in both tracking fields for consistent querying.
-      providerVerificationId = inquiry.data?.id ?? null;
-      verificationUrl = inquiry.data?.attributes?.['inquiry-link'] ?? null;
-    }
+    const identitySession = await createStripeIdentitySession(session.user.id);
+    const providerVerificationId = identitySession.id;
+    const verificationUrl = identitySession.url ?? null;
+    const providerAccountId = user.stripeAccountId ?? null;
 
     await prisma.sellerVerification.upsert({
       where: { sellerId: session.user.id },
       update: {
-        provider,
+        provider: SellerKycProvider.STRIPE,
         providerStatus: 'pending',
         providerAccountId: providerAccountId ?? undefined,
-        providerInquiryId: providerInquiryId ?? undefined,
         providerVerificationId: providerVerificationId ?? undefined,
         status: SellerVerificationStatus.PENDING,
         rejectionReason: null,
@@ -89,10 +57,9 @@ export async function POST(req: Request) {
       },
       create: {
         sellerId: session.user.id,
-        provider,
+        provider: SellerKycProvider.STRIPE,
         providerStatus: 'pending',
         providerAccountId,
-        providerInquiryId,
         providerVerificationId,
         status: SellerVerificationStatus.PENDING,
         phoneNumber: user.phone ?? '',
@@ -113,10 +80,8 @@ export async function POST(req: Request) {
       },
     });
 
-    const connectOnboardingUrl =
-      provider === SellerKycProvider.STRIPE ? '/api/stripe/connect' : null;
     const redirectUrl = verificationUrl
-      ?? (connectOnboardingUrl ? new URL(connectOnboardingUrl, req.url).toString() : null);
+      ?? new URL('/api/stripe/connect', req.url).toString();
 
     if (redirectUrl) {
       return NextResponse.redirect(redirectUrl);
@@ -124,9 +89,6 @@ export async function POST(req: Request) {
 
     return NextResponse.redirect(new URL('/seller?verification=provider_started', req.url));
   } catch (err: any) {
-    if (err?.name === 'ZodError') {
-      return NextResponse.json({ error: 'Invalid provider.' }, { status: 400 });
-    }
     console.error('[seller/verification/initiate POST]', err);
     return NextResponse.json(
       { error: 'Unable to start seller verification right now.' },
