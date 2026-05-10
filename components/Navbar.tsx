@@ -213,17 +213,21 @@ export default function Navbar() {
         {mobileOpen && (
           <div className={`mt-4 rounded-2xl border p-3 md:hidden ${
             experienceRole === 'admin'
-              ? 'border-slate-300 bg-slate-100'
+              ? 'border-slate-700 bg-slate-900 text-white'
               : experienceRole === 'seller'
                 ? 'border-indigo-200 bg-indigo-50'
                 : 'border-emerald-200 bg-emerald-50'
           }`}>
-            <nav className="flex flex-col gap-2 text-sm font-medium text-slate-700">
+            <nav className="flex flex-col gap-1 text-sm font-medium">
               {roleNavigation.map((item) => (
                 <Link
                   key={`mobile-${item.href}-${item.label}`}
                   href={item.href}
-                  className="rounded-lg px-3 py-2 hover:bg-white/80"
+                  className={`rounded-lg px-3 py-2.5 ${
+                    experienceRole === 'admin'
+                      ? 'text-slate-100 hover:bg-white/10'
+                      : 'text-slate-700 hover:bg-white/80'
+                  }`}
                   onClick={() => setMobileOpen(false)}
                   aria-label={item.label}
                   aria-current={pathname === item.href.split('#')[0] ? 'page' : undefined}
@@ -234,16 +238,20 @@ export default function Navbar() {
               {session?.user ? (
                 <button
                   onClick={() => signOut({ callbackUrl: '/' })}
-                  className="rounded-lg px-3 py-2 text-left hover:bg-white/80 hover:text-red-600"
+                  className={`rounded-lg px-3 py-2.5 text-left ${
+                    experienceRole === 'admin'
+                      ? 'text-red-400 hover:bg-white/10'
+                      : 'text-slate-700 hover:bg-white/80 hover:text-red-600'
+                  }`}
                 >
                   {t('nav.logout')}
                 </button>
               ) : (
                 <>
-                  <Link href="/login" className="rounded-lg px-3 py-2 hover:bg-white/80" onClick={() => setMobileOpen(false)}>
+                  <Link href="/login" className="rounded-lg px-3 py-2 hover:bg-white/80 text-slate-700" onClick={() => setMobileOpen(false)}>
                     {t('nav.login')}
                   </Link>
-                  <Link href="/signup" className="rounded-lg px-3 py-2 hover:bg-white/80" onClick={() => setMobileOpen(false)}>
+                  <Link href="/signup" className="rounded-lg px-3 py-2 hover:bg-white/80 text-slate-700" onClick={() => setMobileOpen(false)}>
                     {t('nav.signUp')}
                   </Link>
                 </>
