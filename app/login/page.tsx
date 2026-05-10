@@ -23,18 +23,23 @@ function LoginForm() {
     setLoading(true);
 
     const form = new FormData(e.currentTarget);
-    const email = form.get('email') as string;
+    const email = String(form.get('email') ?? '').trim();
     const password = form.get('password') as string;
 
     try {
       // Step 1: Fetch the CSRF token required by NextAuth
-      const csrfRes = await fetch('/api/auth/csrf');
+      const csrfRes = await fetch('/api/auth/csrf', {
+        method: 'GET',
+        credentials: 'include',
+        cache: 'no-store',
+      });
       if (!csrfRes.ok) {
         console.error('[login] failed to fetch CSRF token', { status: csrfRes.status });
         setError(t('login.signInServerError'));
         return;
       }
-      const { csrfToken } = await csrfRes.json() as { csrfToken?: string };
+      const csrfData = await csrfRes.json().catch(() => null) as { csrfToken?: string } | null;
+      const csrfToken = csrfData?.csrfToken;
       if (!csrfToken) {
         console.error('[login] CSRF response missing csrfToken field');
         setError(t('login.signInServerError'));
@@ -44,26 +49,41 @@ function LoginForm() {
       // Step 2: POST form-encoded credentials to the NextAuth callback endpoint
       const callbackRes = await fetch('/api/auth/callback/credentials', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Accept: 'application/json',
+        },
         body: new URLSearchParams({ email, password, csrfToken, callbackUrl, json: 'true' }).toString(),
+        redirect: 'follow',
       });
 
-      // Parse callback body once; NextAuth returns JSON {url} when json=true is sent
-      let callbackData: { url?: string } = {};
+      // Parse callback body once; NextAuth usually returns JSON, but production may return HTML/other payloads.
+      const callbackText = await callbackRes.text();
+      let callbackData: { url?: string; error?: string } = {};
       try {
-        callbackData = await callbackRes.json() as { url?: string };
+        callbackData = callbackText ? JSON.parse(callbackText) as { url?: string; error?: string } : {};
       } catch {
-        // Non-JSON response (e.g. unexpected HTML): treat as server error
-        console.error('[login] credentials callback returned non-JSON response', { status: callbackRes.status });
+        callbackData = {};
       }
 
       // Safe diagnostics — no passwords or tokens logged
-      console.log('[login] credentials callback', { status: callbackRes.status, redirectUrl: callbackData.url });
+      console.log('[login] credentials callback', {
+        status: callbackRes.status,
+        error: callbackData.error ?? null,
+        redirectUrl: callbackData.url ?? null,
+        responseContentType: callbackRes.headers.get('content-type'),
+        responseBytes: callbackText.length,
+      });
 
       // Step 3: Confirm authentication by inspecting the session
       let session: { user?: unknown } = {};
       try {
-        const sessionRes = await fetch('/api/auth/session');
+        const sessionRes = await fetch('/api/auth/session', {
+          method: 'GET',
+          credentials: 'include',
+          cache: 'no-store',
+        });
         session = await sessionRes.json() as { user?: unknown };
       } catch {
         console.error('[login] failed to parse session response');
@@ -74,9 +94,14 @@ function LoginForm() {
         router.refresh();
       } else {
         // NextAuth encodes the failure reason in the redirect URL it would have used
-        const isCredentialsError = (callbackData.url ?? '').includes(NEXTAUTH_CREDENTIALS_ERROR);
+        const isCredentialsError =
+          callbackData.error === 'CredentialsSignin'
+          || callbackRes.status === 401
+          || (callbackData.url ?? '').includes(NEXTAUTH_CREDENTIALS_ERROR)
+          || callbackText.includes(NEXTAUTH_CREDENTIALS_ERROR);
         console.error('[login] authentication failed', {
           callbackStatus: callbackRes.status,
+          callbackError: callbackData.error ?? null,
           hasCredentialsError: isCredentialsError,
         });
         setError(isCredentialsError ? t('login.invalidCredentials') : t('login.signInServerError'));
