@@ -157,9 +157,10 @@ export async function POST(req: Request) {
     const hadPassedIdentityChecks =
       Boolean(existingVerification?.governmentIdVerified)
       && Boolean(existingVerification?.selfieVerified);
+    const identityChecksVerified = hadPassedIdentityChecks || isVerified;
     const checks = {
-      governmentIdVerified: hadPassedIdentityChecks || isVerified,
-      selfieVerified: hadPassedIdentityChecks || isVerified,
+      governmentIdVerified: identityChecksVerified,
+      selfieVerified: identityChecksVerified,
       addressVerified: existingVerification?.addressVerified ?? false,
       phoneVerified: existingVerification?.phoneVerified ?? false,
     };
