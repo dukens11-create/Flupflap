@@ -128,7 +128,12 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
     }),
     prisma.order.findMany({
       where: { items: { some: { product: { sellerId: session.user.id } } } },
-      include: { items: { include: { product: { select: { title: true } } } } },
+      include: {
+        items: {
+          where: { product: { sellerId: session.user.id } },
+          include: { product: { select: { title: true } } },
+        },
+      },
       orderBy: { createdAt: 'desc' },
       take: 20,
     }),
@@ -877,7 +882,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                 {o.items.map(i => (
                   <p key={i.id} className="text-sm text-slate-700">{i.product.title} × {i.quantity}</p>
                 ))}
-                <p className="text-sm font-bold mt-2">{dollars(o.totalCents)}</p>
+                <p className="text-sm font-bold mt-2">{dollars(o.items.reduce((s, i) => s + i.lineSubtotalCents + i.shippingCents * i.quantity, 0))}</p>
                 {/* Shipping form for non-pickup PAID orders */}
                 {o.status === 'PAID' && !o.isPickup && !isRestricted && (
                   <form action="/api/seller/ship" method="POST" className="mt-3 flex gap-2">

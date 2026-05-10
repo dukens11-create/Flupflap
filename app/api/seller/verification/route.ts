@@ -111,7 +111,7 @@ export async function POST(req: Request) {
     const normalizedPhone = normalizePhone(data.phoneNumber);
     if (!normalizedPhone) {
       return NextResponse.json(
-        { error: 'Enter a valid phone number including country code.' },
+        { error: 'Enter a valid phone number. US/Canada numbers can be entered with or without +1.' },
         { status: 400 },
       );
     }

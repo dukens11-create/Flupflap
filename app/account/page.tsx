@@ -561,6 +561,8 @@ export default function AccountPage() {
             <form onSubmit={sendPhoneCode} className="space-y-2 mt-1">
               <input
                 type="tel"
+                inputMode="tel"
+                autoComplete="tel"
                 className="input"
                 placeholder="+1 555 000 1234"
                 value={phoneInput}
