@@ -108,6 +108,7 @@ export const authOptions: NextAuthOptions = {
         session.user.stripeAccountId = token.stripeAccountId as any;
         session.user.stripeOnboardingComplete = Boolean(token.stripeOnboardingComplete);
         delete (session.user as { image?: unknown }).image;
+        delete (session.user as { picture?: unknown }).picture;
       }
       console.info('[auth] session callback', {
         hasSessionUser: Boolean(session.user),
