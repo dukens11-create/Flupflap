@@ -48,28 +48,28 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <div>
                   <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-900">{t('footer.marketplace')}</p>
                   <div className="mt-4 space-y-3">
-                    <Link href="/" className="block hover-text-navy">{t('nav.browse')}</Link>
-                    <Link href="/cart" className="block hover-text-navy">{t('footer.cart')}</Link>
-                    <Link href="/orders" className="block hover-text-navy">{t('footer.orders')}</Link>
+                    <Link href="/" className="block link-hover-navy">{t('nav.browse')}</Link>
+                    <Link href="/cart" className="block link-hover-navy">{t('footer.cart')}</Link>
+                    <Link href="/orders" className="block link-hover-navy">{t('footer.orders')}</Link>
                   </div>
                 </div>
 
                 <div>
                   <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-900">{t('footer.sell')}</p>
                   <div className="mt-4 space-y-3">
-                    <Link href="/signup" className="block hover-text-navy">{t('home.startSelling')}</Link>
-                    <Link href="/seller/new" className="block hover-text-navy">{t('nav.listItem')}</Link>
-                    <Link href="/messages" className="block hover-text-navy">{t('nav.messages')}</Link>
+                    <Link href="/signup" className="block link-hover-navy">{t('home.startSelling')}</Link>
+                    <Link href="/seller/new" className="block link-hover-navy">{t('nav.listItem')}</Link>
+                    <Link href="/messages" className="block link-hover-navy">{t('nav.messages')}</Link>
                   </div>
                 </div>
 
                 <div>
                   <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-900">{t('footer.support')}</p>
                   <div className="mt-4 space-y-3">
-                    <Link href="/legal/terms" className="block hover-text-navy">{t('footer.terms')}</Link>
-                    <Link href="/legal/privacy" className="block hover-text-navy">{t('footer.privacy')}</Link>
-                    <Link href="/legal/seller-agreement" className="block hover-text-navy">{t('footer.sellerAgreement')}</Link>
-                    <Link href="/legal/refund" className="block hover-text-navy">{t('footer.refundPolicy')}</Link>
+                    <Link href="/legal/terms" className="block link-hover-navy">{t('footer.terms')}</Link>
+                    <Link href="/legal/privacy" className="block link-hover-navy">{t('footer.privacy')}</Link>
+                    <Link href="/legal/seller-agreement" className="block link-hover-navy">{t('footer.sellerAgreement')}</Link>
+                    <Link href="/legal/refund" className="block link-hover-navy">{t('footer.refundPolicy')}</Link>
                   </div>
                 </div>
               </div>
