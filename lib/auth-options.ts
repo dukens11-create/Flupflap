@@ -28,26 +28,22 @@ export const authOptions: NextAuthOptions = {
 
         try {
           const user = await prisma.user.findUnique({ where: { email } });
-          console.info('[auth] authorize user lookup completed', {
-            userFound: Boolean(user),
-          });
           if (!user) {
-            console.warn('[auth] authorize rejected credentials');
+            console.warn('[auth] authorize user lookup failed');
             return null;
           }
+          console.info('[auth] authorize user lookup succeeded');
 
           const ok = await safeComparePassword(
             credentials.password,
             user.password,
             'authorize',
           );
-          console.info('[auth] authorize password verification completed', {
-            passwordValid: ok,
-          });
           if (!ok) {
-            console.warn('[auth] authorize rejected credentials');
+            console.warn('[auth] authorize password verification failed');
             return null;
           }
+          console.info('[auth] authorize password verification succeeded');
 
           // Seller OTP is no longer part of the active credentials sign-in flow.
           // Sellers (like buyers) authenticate with email + password.
