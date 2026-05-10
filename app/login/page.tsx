@@ -4,6 +4,7 @@ import { signIn } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useI18n } from '@/components/I18nProvider';
+import { resolveRoleLoginDestination } from '@/lib/role-experience';
 
 function LoginForm() {
   const { t } = useI18n();
@@ -21,6 +22,21 @@ function LoginForm() {
   // Hold credentials for later steps
   const [pendingEmail, setPendingEmail] = useState('');
   const [pendingPassword, setPendingPassword] = useState('');
+
+  async function redirectByRole() {
+    let role: string | null = null;
+    try {
+      const sessionRes = await fetch('/api/auth/session');
+      if (sessionRes.ok) {
+        const data = await sessionRes.json();
+        role = data?.user?.role ?? null;
+      }
+    } catch {
+      // ignore and fallback to callback/default route
+    }
+    router.push(resolveRoleLoginDestination(role, callbackUrl));
+    router.refresh();
+  }
 
   /** Step 1 — validate credentials; send OTP to sellers. */
   async function submitCredentials(e: React.FormEvent<HTMLFormElement>) {
@@ -72,8 +88,7 @@ function LoginForm() {
       if (result?.error) {
         setError(t('login.invalidCredentials'));
       } else {
-        router.push(callbackUrl);
-        router.refresh();
+        await redirectByRole();
       }
     }
   }
@@ -125,8 +140,7 @@ function LoginForm() {
       if (result?.error) {
         setError(t('login.invalidCredentials'));
       } else {
-        router.push(callbackUrl);
-        router.refresh();
+        await redirectByRole();
       }
       return;
     }
@@ -156,8 +170,7 @@ function LoginForm() {
     if (result?.error) {
       setError(t('login.invalidCode'));
     } else {
-      router.push(callbackUrl);
-      router.refresh();
+      await redirectByRole();
     }
   }
 

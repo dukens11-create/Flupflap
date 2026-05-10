@@ -43,7 +43,7 @@ export default async function AdminPage({
 
   const suspiciousLoginSince = new Date(Date.now() - 1000 * 60 * 60 * 24 * 30);
 
-  const [settings, pending, all, recentOrders, restrictedSellersCount, buyerCount, sellerCount, openReportsCount, openSellerReportsCount, suspiciousLoginCount, activePromotionsCount, productsThisWeek, productsThisMonth, activeListingsCount, soldItemsAgg, revenueThisWeekAgg, revenueThisMonthAgg, visitorMetrics] = await Promise.all([
+  const [settings, pending, all, recentOrders, restrictedSellersCount, buyerCount, sellerCount, totalUsersCount, totalOrdersCount, pendingSellerApprovalsCount, pendingKycReviewsCount, paidRevenueAgg, platformCommissionAgg, openReportsCount, openSellerReportsCount, suspiciousLoginCount, activePromotionsCount, productsThisWeek, productsThisMonth, activeListingsCount, soldItemsAgg, revenueThisWeekAgg, revenueThisMonthAgg, visitorMetrics] = await Promise.all([
     getMarketplaceSettings(),
     prisma.product.findMany({
       where: { status: 'PENDING' },
@@ -65,6 +65,22 @@ export default async function AdminPage({
     }),
     prisma.user.count({ where: { role: 'CUSTOMER' } }),
     prisma.user.count({ where: { role: 'SELLER' } }),
+    prisma.user.count(),
+    prisma.order.count(),
+    prisma.sellerVerification.count({
+      where: { adminFallbackStatus: 'PENDING_REVIEW' },
+    }),
+    prisma.sellerVerification.count({
+      where: { status: 'PENDING' },
+    }),
+    prisma.order.aggregate({
+      _sum: { totalCents: true },
+      where: { status: { in: PAID_ORDER_STATUSES } },
+    }),
+    prisma.order.aggregate({
+      _sum: { platformFeeCents: true },
+      where: { status: { in: PAID_ORDER_STATUSES } },
+    }),
     prisma.productReport.count({
       where: { status: 'OPEN' },
     }),
@@ -97,6 +113,8 @@ export default async function AdminPage({
 
   const revenueThisWeekCents = revenueThisWeekAgg._sum.totalCents ?? 0;
   const revenueThisMonthCents = revenueThisMonthAgg._sum.totalCents ?? 0;
+  const totalRevenueCents = paidRevenueAgg._sum.totalCents ?? 0;
+  const platformCommissionEarnedCents = platformCommissionAgg._sum.platformFeeCents ?? 0;
   const soldItemsCount = soldItemsAgg._sum.quantity ?? 0;
 
   return (
@@ -155,8 +173,22 @@ export default async function AdminPage({
         </a>
       </div>
 
+      <section className="mb-8 rounded-2xl border border-slate-200 bg-slate-900/95 p-5 text-white">
+        <h2 className="text-xl font-bold">Admin Control Panel</h2>
+        <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+          <div className="rounded-xl bg-white/10 p-3"><p className="text-xs text-slate-200">Total Users</p><p className="text-2xl font-black">{totalUsersCount}</p></div>
+          <div className="rounded-xl bg-white/10 p-3"><p className="text-xs text-slate-200">Total Sellers</p><p className="text-2xl font-black">{sellerCount}</p></div>
+          <div className="rounded-xl bg-white/10 p-3"><p className="text-xs text-slate-200">Total Orders</p><p className="text-2xl font-black">{totalOrdersCount}</p></div>
+          <div className="rounded-xl bg-white/10 p-3"><p className="text-xs text-slate-200">Total Revenue</p><p className="text-2xl font-black">{dollars(totalRevenueCents)}</p></div>
+          <div className="rounded-xl bg-white/10 p-3"><p className="text-xs text-slate-200">Pending Seller Approvals</p><p className="text-2xl font-black">{pendingSellerApprovalsCount}</p></div>
+          <div className="rounded-xl bg-white/10 p-3"><p className="text-xs text-slate-200">Pending KYC Reviews</p><p className="text-2xl font-black">{pendingKycReviewsCount}</p></div>
+          <div className="rounded-xl bg-white/10 p-3"><p className="text-xs text-slate-200">Reported Products</p><p className="text-2xl font-black">{openReportsCount}</p></div>
+          <div className="rounded-xl bg-white/10 p-3"><p className="text-xs text-slate-200">Platform Commission Earned</p><p className="text-2xl font-black">{dollars(platformCommissionEarnedCents)}</p></div>
+        </div>
+      </section>
+
       {/* ── Product Statistics ── */}
-      <section className="mb-8">
+      <section id="products-panel" className="mb-8">
         <h2 className="text-xl font-bold mb-3">Product Statistics</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           <div className="card p-4 text-center">
@@ -262,7 +294,13 @@ export default async function AdminPage({
         </a>
       </div>
 
-      <section className="mb-8">
+      <section id="site-settings" className="mb-4">
+        <div className="card p-4 bg-slate-100 border-slate-200 text-sm text-slate-600">
+          Site settings and marketplace payment controls.
+        </div>
+      </section>
+
+      <section id="payments-panel" className="mb-8">
           <div className="card p-5">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
@@ -329,7 +367,7 @@ export default async function AdminPage({
         </div>
       </section>
 
-      <section>
+      <section id="orders-panel">
         <h2 className="text-xl font-bold mb-3">Recent Orders</h2>
         <div className="space-y-2">
           {recentOrders.map((o: (typeof recentOrders)[number]) => (
