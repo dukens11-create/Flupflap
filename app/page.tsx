@@ -11,7 +11,7 @@ import { getServerTranslations } from '@/lib/i18n/server';
 import { ArrowRight, BadgeCheck, CreditCard, ShieldCheck } from 'lucide-react';
 import { getSellerResponseStatsForSellers } from '@/lib/messages';
 import { authOptions } from '@/lib/auth-options';
-import { normalizeExperienceRole } from '@/lib/role-experience';
+import { getRoleDefaultPath, normalizeExperienceRole } from '@/lib/role-experience';
 
 export const dynamic = 'force-dynamic';
 
@@ -179,8 +179,9 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const { t } = await getServerTranslations();
   const session = await getServerSession(authOptions);
   const experienceRole = normalizeExperienceRole(session?.user?.role);
-  if (experienceRole === 'seller') redirect('/seller/dashboard');
-  if (experienceRole === 'admin') redirect('/admin/dashboard');
+  if (experienceRole === 'seller' || experienceRole === 'admin') {
+    redirect(getRoleDefaultPath(session?.user?.role));
+  }
   const trustBadges = [
     {
       key: 'verifiedSellers',

@@ -7,6 +7,7 @@ import LanguageSelector from '@/components/LanguageSelector';
 import { useI18n } from '@/components/I18nProvider';
 import { useEffect, useState } from 'react';
 import { getRoleNavigation, normalizeExperienceRole } from '@/lib/role-experience';
+import { usePathname } from 'next/navigation';
 
 function useCartCount() {
   const [count, setCount] = useState(0);
@@ -101,6 +102,7 @@ export default function Navbar() {
   const role = session?.user?.role ?? null;
   const experienceRole = normalizeExperienceRole(role);
   const roleNavigation = getRoleNavigation(role);
+  const pathname = usePathname();
   const cartCount = useCartCount();
   const unreadMessages = useUnreadMessages(!!session?.user);
   const unreadNotifications = useUnreadNotifications(!!session?.user);
@@ -138,7 +140,13 @@ export default function Navbar() {
           <div className="hidden flex-1 flex-col gap-3 md:flex lg:flex-row lg:items-center">
             <nav className="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-600">
               {roleNavigation.map((item) => (
-                <Link key={`${item.href}-${item.label}`} href={item.href} className={navLinkClass}>
+                <Link
+                  key={`${item.href}-${item.label}`}
+                  href={item.href}
+                  className={navLinkClass}
+                  aria-label={item.label}
+                  aria-current={pathname === item.href.split('#')[0] ? 'page' : undefined}
+                >
                   {item.label}
                 </Link>
               ))}
@@ -212,7 +220,14 @@ export default function Navbar() {
           }`}>
             <nav className="flex flex-col gap-2 text-sm font-medium text-slate-700">
               {roleNavigation.map((item) => (
-                <Link key={`mobile-${item.href}-${item.label}`} href={item.href} className="rounded-lg px-3 py-2 hover:bg-white/80" onClick={() => setMobileOpen(false)}>
+                <Link
+                  key={`mobile-${item.href}-${item.label}`}
+                  href={item.href}
+                  className="rounded-lg px-3 py-2 hover:bg-white/80"
+                  onClick={() => setMobileOpen(false)}
+                  aria-label={item.label}
+                  aria-current={pathname === item.href.split('#')[0] ? 'page' : undefined}
+                >
                   {item.label}
                 </Link>
               ))}
