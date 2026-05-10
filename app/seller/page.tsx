@@ -23,6 +23,8 @@ import {
   sellerPhoneVerificationLabel,
   sellerVerificationStatusTone,
 } from '@/lib/seller-verification';
+import { buildTrackingUrl } from '@/lib/shipping';
+import SellerShippingLabelForm from '@/components/SellerShippingLabelForm';
 
 export const dynamic = 'force-dynamic';
 
@@ -883,14 +885,16 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                   <p key={i.id} className="text-sm text-slate-700">{i.product.title} × {i.quantity}</p>
                 ))}
                 <p className="text-sm font-bold mt-2">{dollars(o.items.reduce((s, i) => s + i.lineSubtotalCents + i.shippingCents * i.quantity, 0))}</p>
-                {/* Shipping form for non-pickup PAID orders */}
-                {o.status === 'PAID' && !o.isPickup && !isRestricted && (
-                  <form action="/api/seller/ship" method="POST" className="mt-3 flex gap-2">
-                    <input type="hidden" name="orderId" value={o.id} />
-                    <input name="trackingNumber" className="input flex-1" placeholder="Tracking number" />
-                    <input name="shippingCarrier" className="input w-24" placeholder="Carrier" />
-                    <button type="submit" className="btn-primary text-sm">Mark Shipped</button>
-                  </form>
+                {/* Shipping label fulfillment for non-pickup orders */}
+                {!o.isPickup && !isRestricted && (
+                  <SellerShippingLabelForm
+                    orderId={o.id}
+                    canCreateLabel={o.status === 'PAID'}
+                    existingLabelUrl={o.labelUrl}
+                    existingTrackingNumber={o.trackingNumber}
+                    existingCarrier={o.carrier ?? o.shippingCarrier}
+                    existingTrackingUrl={buildTrackingUrl(o.carrier ?? o.shippingCarrier, o.trackingNumber)}
+                  />
                 )}
                 {/* Pickup verification for pickup orders */}
                 {o.isPickup && ['PAID', 'READY_FOR_PICKUP'].includes(o.status) && !isRestricted && (
@@ -903,7 +907,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                   <p className="text-xs text-green-700 mt-2 font-medium">✅ Pickup confirmed</p>
                 )}
                 {o.trackingNumber && (
-                  <p className="text-xs text-slate-500 mt-2">📦 {o.shippingCarrier}: {o.trackingNumber}</p>
+                  <p className="text-xs text-slate-500 mt-2">📦 {o.carrier ?? o.shippingCarrier}: {o.trackingNumber}</p>
                 )}
               </div>
             ))}

@@ -224,7 +224,11 @@ model Order {
   stripeCheckoutId      String?     @unique
   stripePaymentIntentId String?
   trackingNumber        String?
+  carrier               String?
   shippingCarrier       String?
+  labelUrl              String?
+  shipmentStatus        String?
+  shipmentId            String?
   shippingName          String?
   shippingLine1         String?
   shippingLine2         String?

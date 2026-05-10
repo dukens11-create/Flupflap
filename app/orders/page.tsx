@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { dollars } from '@/lib/money';
+import { buildTrackingUrl } from '@/lib/shipping';
 import type { Metadata } from 'next';
 
 export const dynamic = 'force-dynamic';
@@ -55,35 +56,50 @@ export default async function OrdersPage() {
         </div>
       ) : (
         <div className="space-y-4">
-          {orders.map(order => (
-            <div key={order.id} className="card p-5">
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <a href={`/orders/${order.id}`} className="text-xs font-mono text-slate-400 hover:text-blue-600">Order #{order.id.slice(-8).toUpperCase()}</a>
-                  <p className="text-xs text-slate-400">{new Date(order.createdAt).toLocaleDateString()}</p>
-                </div>
-                <span className={statusBadge(order.status)}>{STATUS_LABELS[order.status] ?? order.status}</span>
-              </div>
-              <div className="space-y-2 mb-3">
-                {order.items.map(item => (
-                  <div key={item.id} className="flex items-center gap-3">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={item.product.imageUrl} alt={item.product.title} className="w-12 h-12 object-cover rounded-lg flex-shrink-0" />
-                    <div>
-                      <a href={`/products/${item.product.id}`} className="text-sm font-medium hover:text-blue-600">{item.product.title}</a>
-                      <p className="text-xs text-slate-500">Qty: {item.quantity} · {dollars(item.priceCents)}</p>
-                    </div>
+          {orders.map(order => {
+            const trackingUrl = buildTrackingUrl(order.carrier ?? order.shippingCarrier, order.trackingNumber);
+            return (
+              <div key={order.id} className="card p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <a href={`/orders/${order.id}`} className="text-xs font-mono text-slate-400 hover:text-blue-600">Order #{order.id.slice(-8).toUpperCase()}</a>
+                    <p className="text-xs text-slate-400">{new Date(order.createdAt).toLocaleDateString()}</p>
                   </div>
-                ))}
+                  <span className={statusBadge(order.status)}>{STATUS_LABELS[order.status] ?? order.status}</span>
+                </div>
+                <div className="space-y-2 mb-3">
+                  {order.items.map(item => (
+                    <div key={item.id} className="flex items-center gap-3">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={item.product.imageUrl} alt={item.product.title} className="w-12 h-12 object-cover rounded-lg flex-shrink-0" />
+                      <div>
+                        <a href={`/products/${item.product.id}`} className="text-sm font-medium hover:text-blue-600">{item.product.title}</a>
+                        <p className="text-xs text-slate-500">Qty: {item.quantity} · {dollars(item.priceCents)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center justify-between border-t pt-3">
+                  <span className="text-sm font-bold">Total: {dollars(order.totalCents)}</span>
+                  {order.trackingNumber && (
+                    <div className="text-right">
+                      <p className="text-xs text-slate-500">📦 {order.carrier ?? order.shippingCarrier}: {order.trackingNumber}</p>
+                      {trackingUrl && (
+                        <a
+                          className="text-xs text-blue-600 hover:underline"
+                          href={trackingUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Track Package
+                        </a>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="flex items-center justify-between border-t pt-3">
-                <span className="text-sm font-bold">Total: {dollars(order.totalCents)}</span>
-                {order.trackingNumber && (
-                  <p className="text-xs text-slate-500">📦 {order.shippingCarrier}: {order.trackingNumber}</p>
-                )}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </main>

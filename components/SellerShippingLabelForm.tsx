@@ -1,0 +1,209 @@
+'use client';
+
+import { useState } from 'react';
+
+type RateQuote = {
+  id: string;
+  carrier: string;
+  service: string;
+  rate: string;
+  currency: string;
+  deliveryDays: number | null;
+};
+
+export default function SellerShippingLabelForm({
+  orderId,
+  canCreateLabel,
+  existingLabelUrl,
+  existingTrackingNumber,
+  existingCarrier,
+  existingTrackingUrl,
+}: {
+  orderId: string;
+  canCreateLabel: boolean;
+  existingLabelUrl?: string | null;
+  existingTrackingNumber?: string | null;
+  existingCarrier?: string | null;
+  existingTrackingUrl?: string | null;
+}) {
+  const [weightOz, setWeightOz] = useState('16');
+  const [lengthIn, setLengthIn] = useState('10');
+  const [widthIn, setWidthIn] = useState('8');
+  const [heightIn, setHeightIn] = useState('4');
+  const [rates, setRates] = useState<RateQuote[]>([]);
+  const [shipmentId, setShipmentId] = useState('');
+  const [selectedRateId, setSelectedRateId] = useState('');
+  const [labelUrl, setLabelUrl] = useState(existingLabelUrl ?? '');
+  const [trackingNumber, setTrackingNumber] = useState(existingTrackingNumber ?? '');
+  const [carrier, setCarrier] = useState(existingCarrier ?? '');
+  const [trackingUrl, setTrackingUrl] = useState(existingTrackingUrl ?? '');
+  const [loadingRates, setLoadingRates] = useState(false);
+  const [loadingPurchase, setLoadingPurchase] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  async function handleCreateLabel() {
+    setError('');
+    setSuccess('');
+    setLoadingRates(true);
+    try {
+      const res = await fetch('/api/seller/ship', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'rates',
+          orderId,
+          weightOz,
+          lengthIn,
+          widthIn,
+          heightIn,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? 'Failed to fetch rates.');
+        return;
+      }
+      setRates(Array.isArray(data.rates) ? data.rates : []);
+      setShipmentId(data.shipmentId ?? '');
+      setSelectedRateId(data.rates?.[0]?.id ?? '');
+    } catch {
+      setError('Network error. Please try again.');
+    } finally {
+      setLoadingRates(false);
+    }
+  }
+
+  async function handlePurchase() {
+    if (!shipmentId || !selectedRateId) return;
+    setError('');
+    setSuccess('');
+    setLoadingPurchase(true);
+    try {
+      const res = await fetch('/api/seller/ship', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'purchase',
+          orderId,
+          shipmentId,
+          rateId: selectedRateId,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? 'Failed to purchase label.');
+        return;
+      }
+      setLabelUrl(data.labelUrl ?? '');
+      setTrackingNumber(data.trackingNumber ?? '');
+      setCarrier(data.carrier ?? '');
+      setTrackingUrl(data.trackingUrl ?? '');
+      setSuccess('Label purchased successfully.');
+    } catch {
+      setError('Network error. Please try again.');
+    } finally {
+      setLoadingPurchase(false);
+    }
+  }
+
+  return (
+    <div className="mt-3 space-y-2">
+      {canCreateLabel && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <input
+              className="input"
+              inputMode="decimal"
+              value={weightOz}
+              onChange={e => setWeightOz(e.target.value)}
+              placeholder="Weight (oz)"
+            />
+            <input
+              className="input"
+              inputMode="decimal"
+              value={lengthIn}
+              onChange={e => setLengthIn(e.target.value)}
+              placeholder="Length (in)"
+            />
+            <input
+              className="input"
+              inputMode="decimal"
+              value={widthIn}
+              onChange={e => setWidthIn(e.target.value)}
+              placeholder="Width (in)"
+            />
+            <input
+              className="input"
+              inputMode="decimal"
+              value={heightIn}
+              onChange={e => setHeightIn(e.target.value)}
+              placeholder="Height (in)"
+            />
+          </div>
+          <button
+            type="button"
+            className="btn-primary text-sm"
+            onClick={handleCreateLabel}
+            disabled={loadingRates}
+          >
+            {loadingRates ? 'Loading rates…' : 'Create Label'}
+          </button>
+          {rates.length > 0 && (
+            <div className="space-y-2 rounded-xl border border-slate-200 p-3">
+              {rates.map(rate => (
+                <label key={rate.id} className="flex items-center justify-between gap-3 text-sm">
+                  <span className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name={`rate-${orderId}`}
+                      value={rate.id}
+                      checked={selectedRateId === rate.id}
+                      onChange={() => setSelectedRateId(rate.id)}
+                    />
+                    <span>{rate.carrier} · {rate.service}</span>
+                  </span>
+                  <span className="text-slate-600">
+                    ${rate.rate} {rate.currency}
+                    {rate.deliveryDays !== null ? ` · ${rate.deliveryDays}d` : ''}
+                  </span>
+                </label>
+              ))}
+              <button
+                type="button"
+                className="btn-primary text-sm"
+                disabled={!selectedRateId || loadingPurchase}
+                onClick={handlePurchase}
+              >
+                {loadingPurchase ? 'Purchasing…' : 'Purchase Label'}
+              </button>
+            </div>
+          )}
+        </>
+      )}
+
+      {(labelUrl || trackingNumber) && (
+        <div className="flex flex-wrap gap-2">
+          {labelUrl && (
+            <a href={labelUrl} target="_blank" rel="noreferrer" className="btn-outline text-sm">
+              Print Label
+            </a>
+          )}
+          {trackingUrl && (
+            <a href={trackingUrl} target="_blank" rel="noreferrer" className="btn-outline text-sm">
+              Track Package
+            </a>
+          )}
+          {trackingNumber && (
+            <p className="text-xs text-slate-500 self-center">
+              📦 {carrier ? `${carrier}: ` : ''}{trackingNumber}
+            </p>
+          )}
+        </div>
+      )}
+
+      {error && <p className="text-xs text-red-600">{error}</p>}
+      {success && <p className="text-xs text-green-700">{success}</p>}
+    </div>
+  );
+}
