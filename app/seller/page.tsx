@@ -17,10 +17,7 @@ import SubscriptionButton from '@/components/SubscriptionButton';
 import { getInboxConversations, getSellerResponseStats, SELLER_RESPONSE_WINDOW_HOURS } from '@/lib/messages';
 import { getFreePromotionWindowLabel, isFreePromotionEligible } from '@/lib/free-promotion';
 import {
-  getDefaultSellerKycProvider,
   isSellerVerificationApproved,
-  sellerKycProviderLabel,
-  sellerPhoneVerificationLabel,
   sellerVerificationStatusTone,
 } from '@/lib/seller-verification';
 
@@ -42,6 +39,12 @@ function statusBadge(status: string) {
 function orderStatusBadge(status: string) {
   const greenStatuses = ['PAID', 'SHIPPED', 'DELIVERED', 'READY_FOR_PICKUP', 'PICKED_UP'];
   return greenStatuses.includes(status) ? 'badge-green' : 'badge-yellow';
+}
+
+function sellerVerificationStatusLabel(status?: string | null) {
+  if (status === 'APPROVED') return 'verified';
+  if (status === 'REJECTED') return 'rejected';
+  return 'pending';
 }
 
 function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
@@ -104,8 +107,6 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   const subscriptionStatus = dbUser?.subscriptionStatus ?? null;
   const freePromotionEligible = dbUser ? isFreePromotionEligible(dbUser) : false;
   const freePromotionExpiresAt = dbUser?.freePromotionExpiresAt ?? null;
-  const defaultKycProvider = getDefaultSellerKycProvider();
-
   await expirePromotions();
   const [settings, products, orders, soldItems, verificationSubmission] = await Promise.all([
     getMarketplaceSettings(),
@@ -336,12 +337,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
       )}
       {sp.verification === 'provider_pending' && (
         <div className="card p-4 mb-6 bg-amber-50 border-amber-300 text-amber-900 text-sm">
-          Verification is in progress with your selected provider. Listings remain locked until all checks are approved.
-        </div>
-      )}
-      {sp.verification === 'manual_required' && (
-        <div className="card p-4 mb-6 bg-slate-50 border-slate-200 text-slate-700 text-sm">
-          Manual verification mode is enabled. Submit documents below for admin review.
+          Identity verification is in progress. Listings remain locked until your identity is verified.
         </div>
       )}
 
@@ -360,24 +356,14 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
         <section className="card p-6 mb-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Seller verification
-              </p>
+              <p className="text-lg font-semibold text-slate-900">Seller Identity Verification</p>
               <div className="mt-2 flex items-center gap-2">
                 <span className={`badge ${sellerVerificationStatusTone(verificationSubmission?.status)}`}>
-                  {verificationSubmission?.status ?? 'Not submitted'}
+                  {sellerVerificationStatusLabel(verificationSubmission?.status)}
                 </span>
-                <span className="text-xs text-slate-500">
-                  Provider: {sellerKycProviderLabel(verificationSubmission?.provider ?? defaultKycProvider)}
-                </span>
-                {verificationSubmission?.phoneVerificationStatus && (
-                  <span className="text-xs text-slate-500">
-                    Phone verification: {sellerPhoneVerificationLabel(verificationSubmission.phoneVerificationStatus)}
-                  </span>
-                )}
               </div>
               <p className="mt-3 text-sm text-slate-600 max-w-2xl">
-                Upload your government ID (front and back), a selfie / face verification photo, your physical address, and your phone number. Listings unlock automatically after all required checks are verified. Admin review is only used as fallback for incomplete or failed checks.
+                To sell on FlupFlap, verify your identity with a government ID and selfie.
               </p>
               {verificationSubmission?.status === 'REJECTED' && verificationSubmission.rejectionReason && (
                 <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
@@ -391,170 +377,18 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
               )}
               {verificationSubmission?.status === 'PENDING' && (
                 <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                  Your verification is pending while provider checks finish syncing. Once required checks pass, approval happens automatically. We&apos;ll only route to admin fallback review if checks are incomplete or fail.
+                  Your verification is pending while Stripe Identity checks finish syncing.
                 </p>
               )}
-              <div className="mt-4 grid gap-2 text-xs text-slate-600 sm:grid-cols-2 lg:grid-cols-4">
-                <p className={`rounded-lg border px-2 py-1 ${verificationSubmission?.governmentIdVerified ? 'border-green-200 bg-green-50 text-green-700' : 'border-slate-200 bg-white'}`}>Government ID: {verificationSubmission?.governmentIdVerified ? 'Verified' : 'Pending'}</p>
-                <p className={`rounded-lg border px-2 py-1 ${verificationSubmission?.selfieVerified ? 'border-green-200 bg-green-50 text-green-700' : 'border-slate-200 bg-white'}`}>Selfie / face: {verificationSubmission?.selfieVerified ? 'Verified' : 'Pending'}</p>
-                <p className={`rounded-lg border px-2 py-1 ${verificationSubmission?.addressVerified ? 'border-green-200 bg-green-50 text-green-700' : 'border-slate-200 bg-white'}`}>Address: {verificationSubmission?.addressVerified ? 'Verified' : 'Pending'}</p>
-                <p className={`rounded-lg border px-2 py-1 ${verificationSubmission?.phoneVerified ? 'border-green-200 bg-green-50 text-green-700' : 'border-slate-200 bg-white'}`}>Phone: {verificationSubmission?.phoneVerified ? 'Verified' : 'Pending'}</p>
-              </div>
+              {!verificationApproved && (
+                <form action="/api/seller/verification/initiate" method="POST" className="mt-6">
+                  <button className="btn-primary" type="submit">
+                    Verify Identity
+                  </button>
+                </form>
+              )}
             </div>
-            {verificationSubmission && (
-              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                <p className="font-medium text-slate-800">{verificationSubmission.phoneNumber}</p>
-                <p>
-                  {verificationSubmission.street}
-                  <br />
-                  {verificationSubmission.city}, {verificationSubmission.state} {verificationSubmission.zipCode}
-                  <br />
-                  {verificationSubmission.country}
-                </p>
-              </div>
-            )}
           </div>
-
-          {!verificationApproved && (
-            <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-sm font-semibold text-slate-900">Start provider verification</p>
-              <p className="mt-1 text-xs text-slate-600">
-                Use Stripe Identity + Connect (default) or Persona. If provider checks are incomplete, admins can finalize with manual fallback review.
-              </p>
-              <form action="/api/seller/verification/initiate" method="POST" className="mt-3 flex flex-wrap items-center gap-3">
-                <select name="provider" className="input text-sm max-w-[220px]" defaultValue={verificationSubmission?.provider ?? defaultKycProvider}>
-                  <option value="STRIPE">Stripe Identity + Connect</option>
-                  <option value="PERSONA">Persona</option>
-                </select>
-                <button className="btn-outline text-sm" type="submit">
-                  Start provider KYC
-                </button>
-                {defaultKycProvider === 'STRIPE' && (
-                  <a href="/api/stripe/connect" className="text-xs text-blue-700 hover:underline">
-                    Open Stripe Connect onboarding
-                  </a>
-                )}
-              </form>
-            </div>
-          )}
-
-          {!verificationApproved && (
-            <form
-              action="/api/seller/verification"
-              method="POST"
-              encType="multipart/form-data"
-              className="mt-6 space-y-4 border-t border-slate-100 pt-6"
-            >
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <label className="label">Phone number</label>
-                  <input
-                    name="phoneNumber"
-                    type="tel"
-                    className="input"
-                    required
-                    defaultValue={verificationSubmission?.phoneNumber ?? dbUser?.phone ?? ''}
-                    placeholder="+1 555 000 1234"
-                  />
-                </div>
-                <div>
-                  <label className="label">Country</label>
-                  <input
-                    name="country"
-                    className="input"
-                    required
-                    defaultValue={verificationSubmission?.country ?? 'US'}
-                    placeholder="United States"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="label">Street address</label>
-                <input
-                  name="street"
-                  className="input"
-                  required
-                  defaultValue={verificationSubmission?.street ?? ''}
-                  placeholder="123 Main Street"
-                />
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-3">
-                <div>
-                  <label className="label">City</label>
-                  <input
-                    name="city"
-                    className="input"
-                    required
-                    defaultValue={verificationSubmission?.city ?? ''}
-                    placeholder="Dallas"
-                  />
-                </div>
-                <div>
-                  <label className="label">State / Province</label>
-                  <input
-                    name="state"
-                    className="input"
-                    required
-                    defaultValue={verificationSubmission?.state ?? ''}
-                    placeholder="TX"
-                  />
-                </div>
-                <div>
-                  <label className="label">ZIP / Postal code</label>
-                  <input
-                    name="zipCode"
-                    className="input"
-                    required
-                    defaultValue={verificationSubmission?.zipCode ?? ''}
-                    placeholder="75001"
-                  />
-                </div>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-3">
-                <div>
-                  <label className="label">Government ID front</label>
-                  <input
-                    name="governmentIdFront"
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,image/gif"
-                    className="input py-2 text-sm file:mr-3 file:rounded file:border-0 file:bg-slate-100 file:px-3 file:py-1 file:text-sm file:font-medium cursor-pointer"
-                    required={!verificationSubmission}
-                  />
-                </div>
-                <div>
-                  <label className="label">Government ID back</label>
-                  <input
-                    name="governmentIdBack"
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,image/gif"
-                    className="input py-2 text-sm file:mr-3 file:rounded file:border-0 file:bg-slate-100 file:px-3 file:py-1 file:text-sm file:font-medium cursor-pointer"
-                    required={!verificationSubmission}
-                  />
-                </div>
-                <div>
-                  <label className="label">Selfie / face verification</label>
-                  <input
-                    name="selfieImage"
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,image/gif"
-                    className="input py-2 text-sm file:mr-3 file:rounded file:border-0 file:bg-slate-100 file:px-3 file:py-1 file:text-sm file:font-medium cursor-pointer"
-                    required={!verificationSubmission}
-                  />
-                </div>
-              </div>
-
-              <p className="text-xs text-slate-500">
-                Verification documents are stored privately and are only available to you and FlupFlap admins during review.
-              </p>
-
-              <button className="btn-primary" type="submit">
-                {verificationSubmission?.status === 'REJECTED' ? 'Resubmit verification' : verificationSubmission ? 'Update verification' : 'Submit verification'}
-              </button>
-            </form>
-          )}
         </section>
       )}
 
