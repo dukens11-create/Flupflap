@@ -346,21 +346,6 @@ export default function AccountPage() {
       )}
 
       <div className="card p-6 space-y-5 mb-6">
-        {/* Profile picture */}
-        <div>
-          <p className="label">Profile photo</p>
-          <div className="flex items-center gap-4 mt-1">
-            <div className="h-16 w-16 rounded-full bg-slate-200 flex items-center justify-center shrink-0">
-              <span className="text-2xl text-slate-500 font-medium select-none">
-                {session.user.name?.trim().charAt(0).toUpperCase() || '?'}
-              </span>
-            </div>
-            <div className="space-y-1">
-              <p className="text-xs text-slate-500">Profile photos are temporarily disabled for login reliability.</p>
-            </div>
-          </div>
-        </div>
-
         {/* Name */}
         <div>
           <p className="label">Name</p>
