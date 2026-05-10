@@ -48,6 +48,7 @@ export async function POST() {
   if (!session?.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  // Emergency mitigation: temporarily block new avatar uploads while login stability is investigated.
   return NextResponse.json(
     { error: AVATAR_UPLOAD_TEMPORARILY_DISABLED_MESSAGE },
     { status: 503 },

@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -40,7 +40,6 @@ export default function AccountPage() {
   const [pwSuccess, setPwSuccess] = useState('');
 
   // Avatar upload
-  const avatarInputRef = useRef<HTMLInputElement>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarError, setAvatarError] = useState('');
   const [avatarSuccess, setAvatarSuccess] = useState('');
@@ -139,15 +138,6 @@ export default function AccountPage() {
   }
 
   const { email, role } = session.user;
-
-  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setAvatarError(AVATAR_UPLOADS_TEMPORARILY_DISABLED_MESSAGE);
-    setAvatarSuccess('');
-    if (avatarInputRef.current) avatarInputRef.current.value = '';
-  }
 
   async function removeAvatar() {
     setAvatarError('');
@@ -426,15 +416,6 @@ export default function AccountPage() {
               </div>
             )}
             <div className="space-y-1">
-              <input
-                ref={avatarInputRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp,image/gif"
-                onChange={handleAvatarChange}
-                disabled
-                className="hidden"
-                id="avatar-upload"
-              />
               <div className="flex gap-2 flex-wrap">
                 <span className="text-xs font-medium px-3 py-1.5 rounded-lg border border-slate-300 bg-slate-100 text-slate-500 cursor-not-allowed">
                   {avatarImage ? 'Change photo (temporarily unavailable)' : 'Upload photo (temporarily unavailable)'}
