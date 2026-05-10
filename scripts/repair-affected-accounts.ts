@@ -46,7 +46,8 @@ async function run() {
 
   if (targetEmails.length === 0) {
     console.log('[repair-affected-accounts] No target accounts provided.');
-    console.log('[repair-affected-accounts] Usage: npm run repair:affected-accounts -- --emails=email1@example.com,email2@example.com [--confirm]');
+    console.log('[repair-affected-accounts] Usage:');
+    console.log('  npm run repair:affected-accounts -- --emails=email1@example.com,email2@example.com [--confirm]');
     return;
   }
 
