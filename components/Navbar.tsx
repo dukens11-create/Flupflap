@@ -102,8 +102,8 @@ export default function Navbar() {
   const unreadMessages = useUnreadMessages(!!session?.user);
   const unreadNotifications = useUnreadNotifications(!!session?.user);
   const { t } = useI18n();
-  const navLinkClass = 'rounded-full px-3 py-2 transition-colors hover:bg-amber-50 hover:text-amber-700';
-  const actionLinkClass = 'relative flex items-center gap-1 rounded-full px-3 py-2 transition-colors hover:bg-slate-100 hover:text-amber-700';
+  const navLinkClass = 'rounded-full px-3 py-2 transition-colors hover:bg-slate-100 hover:text-[#16325C]';
+  const actionLinkClass = 'relative flex items-center gap-1 rounded-full px-3 py-2 transition-colors hover:bg-slate-100 hover:text-[#16325C]';
 
   return (
     <header className="sticky top-0 z-30 border-b border-slate-200 bg-white">
