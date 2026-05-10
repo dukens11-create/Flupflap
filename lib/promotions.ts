@@ -43,11 +43,32 @@ export async function getPromotionPlan(durationDays: number) {
 }
 
 export async function expirePromotions() {
-  return prisma.promotion.updateMany({
+  const now = new Date();
+  const expiredPromotions = await prisma.promotion.findMany({
     where: {
       status: 'ACTIVE',
-      expiresAt: { lte: new Date() },
+      expiresAt: { lte: now },
     },
-    data: { status: 'EXPIRED' },
+    select: { id: true, productId: true },
   });
+
+  if (!expiredPromotions.length) return { expiredPromotions: 0, productsReset: 0 };
+
+  const uniqueProductIds = [...new Set(expiredPromotions.map((promotion) => promotion.productId))];
+  const [expired, productsReset] = await prisma.$transaction([
+    prisma.promotion.updateMany({
+      where: { id: { in: expiredPromotions.map((promotion) => promotion.id) } },
+      data: { status: 'EXPIRED' },
+    }),
+    prisma.product.updateMany({
+      where: {
+        id: { in: uniqueProductIds },
+        isPromoted: true,
+        promotionEnd: { lte: now },
+      },
+      data: { isPromoted: false },
+    }),
+  ]);
+
+  return { expiredPromotions: expired.count, productsReset: productsReset.count };
 }

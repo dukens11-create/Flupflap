@@ -101,6 +101,9 @@ async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?
           orderBy: { expiresAt: 'desc' },
           take: 1,
         },
+        cartInterest: {
+          select: { totalAdds: true },
+        },
       },
     });
     const promotionIds = products

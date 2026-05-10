@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db';
 import { stripe, appUrl } from '@/lib/stripe';
 import { expirePromotions, getPromotionLabel, getPromotionPlan } from '@/lib/promotions';
 import { isFreePromotionEligible } from '@/lib/free-promotion';
+import { getMarketplaceSettings } from '@/lib/commission';
 
 export async function POST(req: Request) {
   try {
@@ -19,6 +20,10 @@ export async function POST(req: Request) {
       select: {
         id: true,
         sellerStatus: true,
+        hasFreePromotion: true,
+        freePromotionStart: true,
+        freePromotionEnd: true,
+        promotionCredits: true,
         freePromotionGrantedAt: true,
         freePromotionExpiresAt: true,
       },
@@ -33,8 +38,10 @@ export async function POST(req: Request) {
     if (!plan || !plan.isActive) {
       return NextResponse.json({ error: 'Invalid promotion duration.' }, { status: 400 });
     }
-    const hasFreePromotion = dbUser ? isFreePromotionEligible(dbUser) : false;
-    const priceCents = hasFreePromotion ? 0 : plan.priceCents;
+    const settings = await getMarketplaceSettings();
+    const hasFreePromotion = settings.freePromotionEnabled && !!dbUser && isFreePromotionEligible(dbUser);
+    const hasCreditPromotion = !hasFreePromotion && (dbUser?.promotionCredits ?? 0) > 0;
+    const priceCents = hasFreePromotion || hasCreditPromotion ? 0 : plan.priceCents;
 
     // Verify the product exists, is owned by this seller, and is APPROVED
     const product = await prisma.product.findUnique({ where: { id: productId } });
@@ -73,9 +80,21 @@ export async function POST(req: Request) {
     if (priceCents === 0) {
       const now = new Date();
       const expiresAt = new Date(now.getTime() + durationDays * 24 * 60 * 60 * 1000);
-      await prisma.promotion.update({
-        where: { id: promotion.id },
-        data: { status: 'ACTIVE', startsAt: now, expiresAt },
+      await prisma.$transaction(async (tx) => {
+        await tx.promotion.update({
+          where: { id: promotion.id },
+          data: { status: 'ACTIVE', startsAt: now, expiresAt },
+        });
+        await tx.product.update({
+          where: { id: productId },
+          data: { isPromoted: true, promotionStart: now, promotionEnd: expiresAt },
+        });
+        if (hasCreditPromotion) {
+          await tx.user.update({
+            where: { id: session.user.id },
+            data: { promotionCredits: { decrement: 1 } },
+          });
+        }
       });
       return NextResponse.json({ url: `${appUrl}/seller?promoted=free` });
     }

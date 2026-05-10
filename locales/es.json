@@ -94,7 +94,7 @@
     }
   },
   "product": {
-    "sponsored": "Patrocinado",
+    "sponsored": "Promocionado",
     "shipping": "Envío {amount}",
     "pickupIn": "🏠 Recogida en {location}",
     "viewItem": "Ver artículo",
@@ -102,7 +102,8 @@
     "phoneVerified": "Teléfono verificado",
     "newSeller": "Vendedor nuevo",
     "responseRate": "{value}% responde",
-    "sellerFallback": "Vendedor del marketplace"
+    "sellerFallback": "Vendedor del marketplace",
+    "trending": "Tendencia"
   },
   "login": {
     "title": "Iniciar sesión",

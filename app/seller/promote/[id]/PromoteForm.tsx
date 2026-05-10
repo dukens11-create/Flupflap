@@ -15,18 +15,21 @@ export default function PromoteForm({
   productId,
   plans,
   freePromotionEligible,
+  hasPromotionCredits,
 }: {
   productId: string;
   plans: PromotionPlan[];
   freePromotionEligible?: boolean;
+  hasPromotionCredits?: boolean;
 }) {
   const [selected, setSelected] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const router = useRouter();
+  const isFreeCheckout = !!freePromotionEligible || !!hasPromotionCredits;
   const buttonLabel = loading
-    ? (freePromotionEligible ? 'Activating promotion…' : 'Redirecting to payment…')
-    : (freePromotionEligible ? 'Activate Free Promotion →' : 'Pay & Promote →');
+    ? (isFreeCheckout ? 'Activating promotion…' : 'Redirecting to payment…')
+    : (isFreeCheckout ? 'Activate Promotion →' : 'Pay & Promote →');
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -74,7 +77,7 @@ export default function PromoteForm({
               <p className="font-semibold text-slate-800">{plan.label}</p>
               <p className="text-sm text-slate-500">{plan.description}</p>
             </div>
-            <p className="font-black text-blue-700 text-lg">{freePromotionEligible ? '$0.00' : dollars(plan.priceCents)}</p>
+            <p className="font-black text-blue-700 text-lg">{isFreeCheckout ? '$0.00' : dollars(plan.priceCents)}</p>
           </label>
         ))}
       </div>
@@ -91,9 +94,9 @@ export default function PromoteForm({
         {buttonLabel}
       </button>
 
-      {freePromotionEligible ? (
+      {isFreeCheckout ? (
         <p className="text-xs text-slate-400 text-center">
-          Eligible promotions activate instantly while your new-seller free promotion window is active.
+          Eligible promotions activate instantly with free-promotion access or promotion credits.
         </p>
       ) : (
         <p className="text-xs text-slate-400 text-center">

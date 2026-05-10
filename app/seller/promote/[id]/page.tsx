@@ -7,7 +7,8 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import PromoteForm from './PromoteForm';
 import { expirePromotions, getPromotionPlans } from '@/lib/promotions';
-import { getFreePromotionWindowLabel, isFreePromotionEligible } from '@/lib/free-promotion';
+import { isFreePromotionEligible } from '@/lib/free-promotion';
+import { getMarketplaceSettings } from '@/lib/commission';
 
 export const metadata: Metadata = { title: 'Promote Listing' };
 
@@ -25,6 +26,10 @@ export default async function SellerPromotePage({
     where: { id: session.user.id },
     select: {
       sellerStatus: true,
+      hasFreePromotion: true,
+      freePromotionStart: true,
+      freePromotionEnd: true,
+      promotionCredits: true,
       freePromotionGrantedAt: true,
       freePromotionExpiresAt: true,
     },
@@ -34,7 +39,9 @@ export default async function SellerPromotePage({
   }
 
   const { id } = await params;
-  const freePromotionEligible = dbUser ? isFreePromotionEligible(dbUser) : false;
+  const settings = await getMarketplaceSettings();
+  const freePromotionEligible = settings.freePromotionEnabled && !!dbUser && isFreePromotionEligible(dbUser);
+  const hasPromotionCredits = !freePromotionEligible && (dbUser?.promotionCredits ?? 0) > 0;
   const product = await prisma.product.findUnique({ where: { id } });
 
   if (!product || product.sellerId !== session.user.id) {
@@ -106,12 +113,22 @@ export default async function SellerPromotePage({
       ) : (
         <>
           <h2 className="text-lg font-bold mb-3">Choose a promotion package</h2>
-          {freePromotionEligible && dbUser?.freePromotionExpiresAt && (
+          {freePromotionEligible && (dbUser?.freePromotionEnd ?? dbUser?.freePromotionExpiresAt) && (
             <div className="card p-4 mb-4 bg-blue-50 border-blue-200 text-blue-900 text-sm">
-              🎁 New seller benefit active: promotion checkout is free for {getFreePromotionWindowLabel()} (until {dbUser.freePromotionExpiresAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}).
+              Free Promotion Active: expires on {(dbUser.freePromotionEnd ?? dbUser.freePromotionExpiresAt)?.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}.
             </div>
           )}
-          <PromoteForm productId={id} plans={plans} freePromotionEligible={freePromotionEligible} />
+          {hasPromotionCredits && (
+            <div className="card p-4 mb-4 bg-green-50 border-green-200 text-green-900 text-sm">
+              {dbUser?.promotionCredits} promotion credit{dbUser?.promotionCredits === 1 ? '' : 's'} available.
+            </div>
+          )}
+          <PromoteForm
+            productId={id}
+            plans={plans}
+            freePromotionEligible={freePromotionEligible}
+            hasPromotionCredits={hasPromotionCredits}
+          />
         </>
       )}
     </main>

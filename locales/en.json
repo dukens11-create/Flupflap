@@ -94,7 +94,7 @@
     }
   },
   "product": {
-    "sponsored": "Sponsored",
+    "sponsored": "Promoted",
     "shipping": "Shipping {amount}",
     "pickupIn": "🏠 Pickup in {location}",
     "viewItem": "View item",
@@ -102,7 +102,8 @@
     "phoneVerified": "Phone verified",
     "newSeller": "New seller",
     "responseRate": "{value}% responsive",
-    "sellerFallback": "Marketplace seller"
+    "sellerFallback": "Marketplace seller",
+    "trending": "Trending"
   },
   "login": {
     "title": "Sign in",
