@@ -27,26 +27,46 @@ export const authOptions: NextAuthOptions = {
         otp:      { label: 'Code',     type: 'text' },
       },
       async authorize(credentials, request) {
-        if (!credentials?.email || !credentials.password) return null;
-        const user = await prisma.user.findUnique({ where: { email: credentials.email.toLowerCase() } });
-        if (!user) return null;
-        const ok = await safeComparePassword(
-          credentials.password,
-          user.password,
-          'authorize',
-        );
-        if (!ok) return null;
-
-        // Seller OTP is no longer part of the active credentials sign-in flow.
-        // Sellers (like buyers) authenticate with email + password.
-
-        try {
-          await recordLoginActivity(user.id, request);
-        } catch (error) {
-          console.error('[auth] failed to record login activity', error);
+        const email = typeof credentials?.email === 'string'
+          ? credentials.email.trim().toLowerCase()
+          : '';
+        if (!email || !credentials?.password) {
+          console.warn('[auth] authorize missing credentials');
+          return null;
         }
 
-        return user as any;
+        try {
+          const user = await prisma.user.findUnique({ where: { email } });
+          if (!user) {
+            console.warn('[auth] authorize user not found');
+            return null;
+          }
+
+          const ok = await safeComparePassword(
+            credentials.password,
+            user.password,
+            'authorize',
+          );
+          if (!ok) {
+            console.warn('[auth] authorize invalid password or hash mismatch');
+            return null;
+          }
+
+          // Seller OTP is no longer part of the active credentials sign-in flow.
+          // Sellers (like buyers) authenticate with email + password.
+
+          try {
+            await recordLoginActivity(user.id, request);
+          } catch (error) {
+            console.error('[auth] failed to record login activity', error);
+          }
+
+          console.info('[auth] authorize success', { role: user.role });
+          return user as any;
+        } catch (error) {
+          console.error('[auth] authorize unexpected error', { message: error instanceof Error ? error.message : String(error) });
+          return null;
+        }
       }
     })
   ],
@@ -58,16 +78,32 @@ export const authOptions: NextAuthOptions = {
         token.stripeAccountId = (user as any).stripeAccountId;
         token.stripeOnboardingComplete = (user as any).stripeOnboardingComplete;
         token.image = toSessionImage((user as any).image);
+        console.info('[auth] jwt callback attached user', {
+          hasUser: true,
+          trigger: trigger ?? 'signIn',
+        });
       }
       // On session update (e.g. after avatar upload) re-fetch image from DB.
       if (trigger === 'update') {
-        const dbUser = await prisma.user.findUnique({
-          where: { id: token.id as string },
-          select: { image: true, name: true },
-        });
-        if (dbUser) {
-          token.image = toSessionImage(dbUser.image, Date.now());
-          token.name = dbUser.name;
+        if (!token.id) {
+          console.warn('[auth] jwt update skipped due to missing token id');
+          return token;
+        }
+        try {
+          const dbUser = await prisma.user.findUnique({
+            where: { id: token.id as string },
+            select: { image: true, name: true },
+          });
+          if (dbUser) {
+            token.image = toSessionImage(dbUser.image, Date.now());
+            token.name = dbUser.name;
+            console.info('[auth] jwt callback refreshed token user fields');
+          }
+        } catch (error) {
+          console.error('[auth] jwt callback update failed', {
+            hasTokenId: Boolean(token.id),
+            message: error instanceof Error ? error.message : String(error),
+          });
         }
       }
       return token;
@@ -80,6 +116,11 @@ export const authOptions: NextAuthOptions = {
         session.user.stripeOnboardingComplete = Boolean(token.stripeOnboardingComplete);
         session.user.image = (token.image as string | null) ?? null;
       }
+      console.info('[auth] session callback', {
+        hasSessionUser: Boolean(session.user),
+        hasTokenId: Boolean(token.id),
+        tokenRole: token.role ?? null,
+      });
       return session;
     }
   }
