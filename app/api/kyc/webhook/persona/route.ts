@@ -88,6 +88,11 @@ export async function POST(req: Request) {
     addressVerified: existing?.addressVerified ?? false,
     phoneVerified: existing?.phoneVerified ?? false,
   };
+  const alreadyApprovedByProvider =
+    checks.governmentIdVerified
+    && checks.selfieVerified
+    && checks.addressVerified
+    && checks.phoneVerified;
 
   let forcedStatus: SellerVerificationStatus | undefined;
   let rejectionReason: string | null = null;
@@ -97,10 +102,10 @@ export async function POST(req: Request) {
     checks.selfieVerified = true;
     checks.addressVerified = true;
     checks.phoneVerified = true;
-  } else if (eventName === 'inquiry.declined') {
+  } else if (eventName === 'inquiry.declined' && !alreadyApprovedByProvider) {
     forcedStatus = SellerVerificationStatus.REJECTED;
     rejectionReason = 'Persona verification was declined.';
-  } else if (eventName === 'inquiry.failed') {
+  } else if (eventName === 'inquiry.failed' && !alreadyApprovedByProvider) {
     forcedStatus = SellerVerificationStatus.REJECTED;
     rejectionReason = 'Persona verification failed.';
   }
