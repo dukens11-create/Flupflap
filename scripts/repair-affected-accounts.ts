@@ -23,7 +23,7 @@ type UserDiagnostic = {
   role: string;
   deletedAt: Date | null;
   image: string | null;
-  password: string;
+  password: unknown;
 };
 
 function toDiagnostic(user: UserDiagnostic) {
