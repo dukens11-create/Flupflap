@@ -94,7 +94,7 @@
     }
   },
   "product": {
-    "sponsored": "Sponsored",
+    "sponsored": "Promoted",
     "shipping": "Shipping {amount}",
     "pickupIn": "🏠 Pickup in {location}",
     "viewItem": "View item",

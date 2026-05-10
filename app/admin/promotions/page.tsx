@@ -106,7 +106,8 @@ export default async function AdminPromotionsPage() {
           <input type="hidden" name="action" value="grant_credits" />
           <div>
             <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Seller</label>
-            <select name="sellerId" className="input w-full">
+            <select name="sellerId" className="input w-full" defaultValue="" required>
+              <option value="" disabled>Select a seller…</option>
               {sellers.map((seller) => (
                 <option key={seller.id} value={seller.id}>
                   {seller.name} ({seller.email}) — credits: {seller.promotionCredits}

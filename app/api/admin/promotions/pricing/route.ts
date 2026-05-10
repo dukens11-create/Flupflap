@@ -41,10 +41,13 @@ export async function POST(req: Request) {
     if (!sellerId || !Number.isFinite(credits) || credits < 1) {
       return NextResponse.json({ error: 'Invalid seller or credit amount.' }, { status: 400 });
     }
-    await prisma.user.updateMany({
+    const updated = await prisma.user.updateMany({
       where: { id: sellerId, role: 'SELLER' },
       data: { promotionCredits: { increment: credits } },
     });
+    if (updated.count === 0) {
+      return NextResponse.json({ error: 'Seller not found.' }, { status: 404 });
+    }
     return NextResponse.redirect(new URL('/admin/promotions', req.url));
   }
 

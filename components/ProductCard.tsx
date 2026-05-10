@@ -40,7 +40,7 @@ export default function ProductCard({ p: product }:{p:any}){
       <div className="relative aspect-[4/3] bg-slate-100">
         <Image src={product.imageUrl} alt={product.title} fill className="object-cover transition-transform duration-300 group-hover:scale-105"/>
         {isFeatured && (
-          <span className="absolute left-3 top-3 rounded-full bg-amber-400 px-2.5 py-1 text-[11px] font-bold text-amber-950 shadow-sm">Promoted</span>
+          <span className="absolute left-3 top-3 rounded-full bg-amber-400 px-2.5 py-1 text-[11px] font-bold text-amber-950 shadow-sm">{t('product.sponsored')}</span>
         )}
       </div>
       <div className="flex flex-1 flex-col gap-3 p-3 sm:p-4">

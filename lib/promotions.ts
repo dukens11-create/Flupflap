@@ -52,7 +52,7 @@ export async function expirePromotions() {
     select: { id: true, productId: true },
   });
 
-  if (!expiredPromotions.length) return { count: 0 };
+  if (!expiredPromotions.length) return { expiredPromotions: 0, productsReset: 0 };
 
   const productIds = [...new Set(expiredPromotions.map((promotion) => promotion.productId))];
   const [expired, productsReset] = await prisma.$transaction([
@@ -70,5 +70,5 @@ export async function expirePromotions() {
     }),
   ]);
 
-  return { count: expired.count + productsReset.count };
+  return { expiredPromotions: expired.count, productsReset: productsReset.count };
 }

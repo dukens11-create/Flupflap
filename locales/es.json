@@ -94,7 +94,7 @@
     }
   },
   "product": {
-    "sponsored": "Patrocinado",
+    "sponsored": "Promocionado",
     "shipping": "Envío {amount}",
     "pickupIn": "🏠 Recogida en {location}",
     "viewItem": "Ver artículo",

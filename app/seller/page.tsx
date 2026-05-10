@@ -455,7 +455,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
       )}
       {freePromotionEligible && freePromotionExpiresAt && (
         <div className="card p-4 mb-6 bg-blue-50 border-blue-200 text-blue-900 text-sm">
-          Free Promotion Active — expires on {freePromotionExpiresAt.toLocaleDateString('en-US', DEFAULT_DATE_FORMAT_OPTIONS)}. Your free promotion ends in {freePromotionDaysLeft} day{freePromotionDaysLeft === 1 ? '' : 's'}.
+          Free Promotion Active — expires on {freePromotionExpiresAt.toLocaleDateString('en-US', DEFAULT_DATE_FORMAT_OPTIONS)} ({freePromotionDaysLeft} day{freePromotionDaysLeft === 1 ? '' : 's'} left).
         </div>
       )}
       {subscribedFromCheckout && !subscriptionActive && (

@@ -94,7 +94,7 @@
     }
   },
   "product": {
-    "sponsored": "Sponsorisé",
+    "sponsored": "Promu",
     "shipping": "Livraison {amount}",
     "pickupIn": "🏠 Retrait à {location}",
     "viewItem": "Voir l'article",
