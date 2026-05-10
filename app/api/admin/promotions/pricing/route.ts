@@ -25,9 +25,10 @@ export async function POST(req: Request) {
     const settings = await getMarketplaceSettings();
     const freePromotionEnabled = form.get('freePromotionEnabled') === 'on';
     const durationRaw = Number(form.get('freePromotionDurationDays'));
-    const freePromotionDurationDays = Number.isFinite(durationRaw) && durationRaw >= 1
-      ? Math.round(durationRaw)
-      : settings.freePromotionDurationDays;
+    if (!Number.isFinite(durationRaw) || durationRaw < 1) {
+      return NextResponse.json({ error: 'Invalid free promotion duration.' }, { status: 400 });
+    }
+    const freePromotionDurationDays = Math.round(durationRaw);
     await prisma.marketplaceSettings.update({
       where: { id: settings.id },
       data: { freePromotionEnabled, freePromotionDurationDays },

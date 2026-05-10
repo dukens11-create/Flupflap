@@ -15,6 +15,8 @@ import {
 import { isSellerVerificationApproved } from '@/lib/seller-verification';
 import { createNotification, createNotifications, type CreateNotificationInput } from '@/lib/notifications';
 
+const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
+
 /** Generate a cryptographically secure 6-digit pickup confirmation code. */
 function generatePickupCode(): string {
   // crypto.randomInt is CSPRNG; range [100000, 1000000) gives 900,000
@@ -286,7 +288,7 @@ export async function POST(req: Request) {
       const now = new Date();
       const settings = await getMarketplaceSettings();
       const expiry = settings.freePromotionEnabled
-        ? new Date(now.getTime() + settings.freePromotionDurationDays * 24 * 60 * 60 * 1000)
+        ? new Date(now.getTime() + settings.freePromotionDurationDays * MILLISECONDS_PER_DAY)
         : null;
       const updatedRows = await prisma.$executeRaw`
         WITH target AS (

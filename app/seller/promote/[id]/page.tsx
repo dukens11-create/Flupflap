@@ -115,7 +115,7 @@ export default async function SellerPromotePage({
           <h2 className="text-lg font-bold mb-3">Choose a promotion package</h2>
           {freePromotionEligible && (dbUser?.freePromotionEnd ?? dbUser?.freePromotionExpiresAt) && (
             <div className="card p-4 mb-4 bg-blue-50 border-blue-200 text-blue-900 text-sm">
-              Free Promotion Active — expires on {(dbUser.freePromotionEnd ?? dbUser.freePromotionExpiresAt)?.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}.
+              Free Promotion Active: expires on {(dbUser.freePromotionEnd ?? dbUser.freePromotionExpiresAt)?.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}.
             </div>
           )}
           {hasPromotionCredits && (

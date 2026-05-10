@@ -152,6 +152,7 @@ model User {
   freePromotionEnd              DateTime?
   hasFreePromotion              Boolean   @default(true)
   promotionCredits              Int       @default(0)
+  // Legacy aliases retained for backward compatibility while existing data migrates.
   freePromotionGrantedAt        DateTime?
   freePromotionExpiresAt        DateTime?
   // Profile picture

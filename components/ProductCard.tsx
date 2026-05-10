@@ -5,6 +5,8 @@ import { ShieldCheck, Star, Store } from 'lucide-react';
 import { dollars } from '@/lib/money';
 import { useI18n } from '@/components/I18nProvider';
 
+const TRENDING_THRESHOLD = 5;
+
 function isApprovedSeller(verification?: {
   status?: string | null;
   eligibleToListAt?: string | Date | null;
@@ -22,7 +24,7 @@ function percentageToStarCount(rate: number) {
 export default function ProductCard({ p: product }:{p:any}){
   const { t } = useI18n();
   const isFeatured = !!product.activePromotion;
-  const isTrending = (product.cartInterest?.totalAdds ?? 0) >= 5;
+  const isTrending = (product.cartInterest?.totalAdds ?? 0) >= TRENDING_THRESHOLD;
   const pickupLocation = `${product.pickupCity}${product.pickupState ? `, ${product.pickupState}` : ''}`;
   const sellerVerified = isApprovedSeller(product.seller?.verificationSubmission);
   const phoneVerified = !!product.seller?.phoneVerified;

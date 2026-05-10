@@ -54,7 +54,7 @@ export async function expirePromotions() {
 
   if (!expiredPromotions.length) return { expiredPromotions: 0, productsReset: 0 };
 
-  const productIds = [...new Set(expiredPromotions.map((promotion) => promotion.productId))];
+  const uniqueProductIds = [...new Set(expiredPromotions.map((promotion) => promotion.productId))];
   const [expired, productsReset] = await prisma.$transaction([
     prisma.promotion.updateMany({
       where: { id: { in: expiredPromotions.map((promotion) => promotion.id) } },
@@ -62,7 +62,7 @@ export async function expirePromotions() {
     }),
     prisma.product.updateMany({
       where: {
-        id: { in: productIds },
+        id: { in: uniqueProductIds },
         isPromoted: true,
         promotionEnd: { lte: now },
       },
