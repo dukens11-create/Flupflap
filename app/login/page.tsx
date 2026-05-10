@@ -13,6 +13,7 @@ function LoginForm() {
 
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   // Multi-step seller flow: credentials → (add_phone?) → otp
   const [step, setStep] = useState<'credentials' | 'add_phone' | 'otp'>('credentials');
@@ -254,7 +255,22 @@ function LoginForm() {
       </div>
       <div>
         <label className="label">{t('login.password')}</label>
-        <input name="password" type="password" className="input" placeholder={t('login.password')} required />
+        <input
+          name="password"
+          type={showPassword ? 'text' : 'password'}
+          className="input"
+          placeholder={t('login.password')}
+          required
+        />
+        <label className="mt-1 inline-flex items-center gap-2 text-xs text-slate-500">
+          <input
+            type="checkbox"
+            checked={showPassword}
+            onChange={(e) => setShowPassword(e.target.checked)}
+            aria-label={showPassword ? 'Hide password' : 'Show password'}
+          />
+          {showPassword ? 'Hide password' : 'Show password'}
+        </label>
       </div>
       {error && <p className="text-red-600 text-sm">{error}</p>}
       <button className="btn-primary w-full" disabled={loading}>

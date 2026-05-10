@@ -11,6 +11,7 @@ export default function SignupPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [role, setRole] = useState('CUSTOMER');
+  const [showPassword, setShowPassword] = useState(false);
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -54,7 +55,23 @@ export default function SignupPage() {
         </div>
         <div>
           <label className="label">{t('signup.password')}</label>
-          <input name="password" type="password" className="input" placeholder={t('signup.passwordPlaceholder')} required minLength={8} />
+          <input
+            name="password"
+            type={showPassword ? 'text' : 'password'}
+            className="input"
+            placeholder={t('signup.passwordPlaceholder')}
+            required
+            minLength={8}
+          />
+          <label className="mt-1 inline-flex items-center gap-2 text-xs text-slate-500">
+            <input
+              type="checkbox"
+              checked={showPassword}
+              onChange={(e) => setShowPassword(e.target.checked)}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+            />
+            {showPassword ? 'Hide password' : 'Show password'}
+          </label>
         </div>
         <div>
           <label className="label">{t('signup.accountType')}</label>
