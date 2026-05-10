@@ -2,6 +2,7 @@ import { prisma } from '@/lib/db';
 
 const FIXED_COMMISSION_PERCENT = 7;
 const MARKETPLACE_SETTINGS_ID = 1;
+const DEFAULT_FREE_PROMOTION_DAYS = 60;
 
 type SellerPlanLike = {
   code: string;
@@ -89,15 +90,23 @@ export async function getMarketplaceSettings() {
       data: {
         id: MARKETPLACE_SETTINGS_ID,
         defaultSellerCommissionBps: DEFAULT_BOOTSTRAP_COMMISSION_BPS,
+        freePromotionEnabled: true,
+        freePromotionDurationDays: DEFAULT_FREE_PROMOTION_DAYS,
       },
     });
   }
 
-  if (existing.defaultSellerCommissionBps !== DEFAULT_BOOTSTRAP_COMMISSION_BPS) {
+  if (
+    existing.defaultSellerCommissionBps !== DEFAULT_BOOTSTRAP_COMMISSION_BPS
+    || existing.freePromotionDurationDays < 1
+  ) {
     return prisma.marketplaceSettings.update({
       where: { id: MARKETPLACE_SETTINGS_ID },
       data: {
         defaultSellerCommissionBps: DEFAULT_BOOTSTRAP_COMMISSION_BPS,
+        ...(existing.freePromotionDurationDays < 1
+          ? { freePromotionDurationDays: DEFAULT_FREE_PROMOTION_DAYS }
+          : {}),
       },
     });
   }

@@ -148,6 +148,10 @@ model User {
   subscriptionId                String?
   subscriptionStatus            String?   // ACTIVE | INACTIVE | PAST_DUE | CANCELLED
   subscriptionCurrentPeriodEnd  DateTime?
+  freePromotionStart            DateTime?
+  freePromotionEnd              DateTime?
+  hasFreePromotion              Boolean   @default(true)
+  promotionCredits              Int       @default(0)
   freePromotionGrantedAt        DateTime?
   freePromotionExpiresAt        DateTime?
   // Profile picture
@@ -179,6 +183,9 @@ model Product {
   seller           User            @relation(fields: [sellerId], references: [id])
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
+  isPromoted       Boolean         @default(false)
+  promotionStart   DateTime?
+  promotionEnd     DateTime?
   orderItems       OrderItem[]
   conversations    Conversation[]
   reports          ProductReport[]
@@ -567,6 +574,8 @@ model PromotionPlan {
 model MarketplaceSettings {
   id                         Int      @id @default(1)
   defaultSellerCommissionBps Int      @default(700)
+  freePromotionEnabled       Boolean  @default(true)
+  freePromotionDurationDays  Int      @default(60)
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
 }

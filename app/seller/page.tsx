@@ -15,7 +15,7 @@ import { isSubscriptionActive, SELLER_SUBSCRIPTION_PRICE_LABEL } from '@/lib/sub
 import { syncSellerSubscriptionFromStripe } from '@/lib/subscription-sync';
 import SubscriptionButton from '@/components/SubscriptionButton';
 import { getInboxConversations, getSellerResponseStats, SELLER_RESPONSE_WINDOW_HOURS } from '@/lib/messages';
-import { getFreePromotionWindowLabel, isFreePromotionEligible } from '@/lib/free-promotion';
+import { getFreePromotionDaysLeft, isFreePromotionEligible } from '@/lib/free-promotion';
 import {
   isSellerVerificationApproved,
   sellerVerificationStatusTone,
@@ -107,11 +107,12 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   const subscriptionActive = dbUser ? isSubscriptionActive(dbUser) : false;
   const subscriptionPeriodEnd = dbUser?.subscriptionCurrentPeriodEnd ?? null;
   const subscriptionStatus = dbUser?.subscriptionStatus ?? null;
-  const freePromotionEligible = dbUser ? isFreePromotionEligible(dbUser) : false;
-  const freePromotionExpiresAt = dbUser?.freePromotionExpiresAt ?? null;
+  const settings = await getMarketplaceSettings();
+  const freePromotionEligible = settings.freePromotionEnabled && !!dbUser && isFreePromotionEligible(dbUser);
+  const freePromotionExpiresAt = dbUser?.freePromotionEnd ?? dbUser?.freePromotionExpiresAt ?? null;
+  const freePromotionDaysLeft = dbUser ? getFreePromotionDaysLeft(dbUser) : 0;
   await expirePromotions();
-  const [settings, products, orders, soldItems, verificationSubmission] = await Promise.all([
-    getMarketplaceSettings(),
+  const [products, orders, soldItems, verificationSubmission] = await Promise.all([
     prisma.product.findMany({
       where: { sellerId: session.user.id },
       orderBy: { createdAt: 'desc' },
@@ -452,9 +453,9 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
           🎉 Subscription activated! You can now list and sell items on FlupFlap.
         </div>
       )}
-      {subscribedFromCheckout && freePromotionEligible && freePromotionExpiresAt && (
+      {freePromotionEligible && freePromotionExpiresAt && (
         <div className="card p-4 mb-6 bg-blue-50 border-blue-200 text-blue-900 text-sm">
-          🎁 New seller benefit unlocked: free promotions for {getFreePromotionWindowLabel()} (until {freePromotionExpiresAt.toLocaleDateString('en-US', DEFAULT_DATE_FORMAT_OPTIONS)}).
+          Free Promotion Active — expires on {freePromotionExpiresAt.toLocaleDateString('en-US', DEFAULT_DATE_FORMAT_OPTIONS)}. Your free promotion ends in {freePromotionDaysLeft} day{freePromotionDaysLeft === 1 ? '' : 's'}.
         </div>
       )}
       {subscribedFromCheckout && !subscriptionActive && (
@@ -675,7 +676,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-semibold truncate">{p.title}</p>
                       {activePromo && (
-                        <span className="badge badge-blue flex-shrink-0">Boosted until {activePromo.expiresAt ? activePromo.expiresAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}</span>
+                        <span className="badge badge-blue flex-shrink-0">Promoted until {activePromo.expiresAt ? activePromo.expiresAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}</span>
                       )}
                     </div>
                     <p className="text-sm text-slate-500">{p.condition} · {p.category} · {dollars(p.priceCents)}</p>
@@ -689,7 +690,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                   <span className={statusBadge(p.status)}>{p.status}</span>
                   <div className="flex gap-2 flex-shrink-0">
                     {p.status === 'APPROVED' && !activePromo && !isRestricted && (
-                      <Link href={`/seller/promote/${p.id}`} className="btn bg-yellow-500 hover:bg-yellow-600 text-white text-xs py-1 px-2">⭐ Promote</Link>
+                      <Link href={`/seller/promote/${p.id}`} className="btn bg-yellow-500 hover:bg-yellow-600 text-white text-xs py-1 px-2">Promote Listing</Link>
                     )}
                     {p.status !== 'SOLD' && (
                       <Link href={`/seller/edit/${p.id}`} className="btn-outline text-xs py-1 px-2">Edit</Link>

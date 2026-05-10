@@ -6,6 +6,7 @@ import { dollars } from '@/lib/money';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { expirePromotions, getPromotionLabel, getPromotionPlans } from '@/lib/promotions';
+import { getMarketplaceSettings } from '@/lib/commission';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,7 +30,7 @@ export default async function AdminPromotionsPage() {
   await expirePromotions();
   const now = new Date();
 
-  const [activePromotions, pendingPromotions, recentExpired, promotionPlans] = await Promise.all([
+  const [activePromotions, pendingPromotions, recentExpired, promotionPlans, settings, sellers] = await Promise.all([
     prisma.promotion.findMany({
       where: { status: 'ACTIVE', expiresAt: { gt: now } },
       include: {
@@ -57,6 +58,13 @@ export default async function AdminPromotionsPage() {
       take: 20,
     }),
     getPromotionPlans(),
+    getMarketplaceSettings(),
+    prisma.user.findMany({
+      where: { role: 'SELLER' },
+      select: { id: true, name: true, email: true, promotionCredits: true },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    }),
   ]);
 
   const formatDate = (d: Date | null) =>
@@ -74,10 +82,51 @@ export default async function AdminPromotionsPage() {
 
       <section className="card p-5 mb-8">
         <div className="mb-4">
+          <h2 className="text-xl font-bold">Free promotion settings</h2>
+          <p className="text-sm text-slate-500">Control new-seller free promotion availability and duration.</p>
+        </div>
+        <form action="/api/admin/promotions/pricing" method="POST" className="space-y-4 mb-8">
+          <input type="hidden" name="action" value="free_settings" />
+          <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+            <input type="checkbox" name="freePromotionEnabled" defaultChecked={settings.freePromotionEnabled} />
+            Enable free promotion for new sellers
+          </label>
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Free promotion duration (days)</label>
+            <input type="number" name="freePromotionDurationDays" min="1" defaultValue={settings.freePromotionDurationDays} className="input w-full max-w-xs" />
+          </div>
+          <button type="submit" className="btn-primary">Save free promotion settings</button>
+        </form>
+
+        <div className="mb-4">
+          <h2 className="text-xl font-bold">Grant promotion credits</h2>
+          <p className="text-sm text-slate-500">Manually add free promotion credits to a seller account.</p>
+        </div>
+        <form action="/api/admin/promotions/pricing" method="POST" className="space-y-4 mb-8">
+          <input type="hidden" name="action" value="grant_credits" />
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Seller</label>
+            <select name="sellerId" className="input w-full">
+              {sellers.map((seller) => (
+                <option key={seller.id} value={seller.id}>
+                  {seller.name} ({seller.email}) — credits: {seller.promotionCredits}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Credits to grant</label>
+            <input type="number" name="credits" min="1" step="1" defaultValue={1} className="input w-full max-w-xs" />
+          </div>
+          <button type="submit" className="btn-primary">Grant credits</button>
+        </form>
+
+        <div className="mb-4">
           <h2 className="text-xl font-bold">Promotion pricing</h2>
           <p className="text-sm text-slate-500">Update seller promotion pricing from the admin dashboard.</p>
         </div>
         <form action="/api/admin/promotions/pricing" method="POST" className="space-y-4">
+          <input type="hidden" name="action" value="pricing" />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             {promotionPlans.map(plan => (
               <label key={plan.id} className="card p-4 block">

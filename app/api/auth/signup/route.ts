@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
+import { getMarketplaceSettings } from '@/lib/commission';
 
 const schema = z.object({
   name: z.string().min(1),
@@ -29,6 +30,12 @@ export async function POST(req: Request) {
     }
 
     const password = await bcrypt.hash(data.password, 12);
+    const now = new Date();
+    const settings = data.role === 'SELLER' ? await getMarketplaceSettings() : null;
+    const freePromotionEnd = settings && settings.freePromotionEnabled
+      ? new Date(now.getTime() + settings.freePromotionDurationDays * 24 * 60 * 60 * 1000)
+      : null;
+
     await prisma.user.create({
       data: {
         name: data.name,
@@ -36,6 +43,15 @@ export async function POST(req: Request) {
         password,
         role: data.role,
         phone: data.role === 'SELLER' ? (data.phone?.trim() ?? null) : null,
+        ...(data.role === 'SELLER'
+          ? {
+              hasFreePromotion: !!settings?.freePromotionEnabled,
+              freePromotionStart: settings?.freePromotionEnabled ? now : null,
+              freePromotionEnd,
+              freePromotionGrantedAt: settings?.freePromotionEnabled ? now : null,
+              freePromotionExpiresAt: freePromotionEnd,
+            }
+          : {}),
       },
     });
 

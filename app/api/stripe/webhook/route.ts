@@ -8,7 +8,6 @@ import crypto from 'crypto';
 import Stripe from 'stripe';
 import { expirePromotions } from '@/lib/promotions';
 import { NotificationType, SellerKycProvider, SellerVerificationStatus } from '@prisma/client';
-import { getFreePromotionExpiry } from '@/lib/free-promotion';
 import {
   applyAutomatedKycResult,
   stripeKycChecksFromAccount,
@@ -285,7 +284,10 @@ export async function POST(req: Request) {
       }
 
       const now = new Date();
-      const expiry = getFreePromotionExpiry(now);
+      const settings = await getMarketplaceSettings();
+      const expiry = settings.freePromotionEnabled
+        ? new Date(now.getTime() + settings.freePromotionDurationDays * 24 * 60 * 60 * 1000)
+        : null;
       const updatedRows = await prisma.$executeRaw`
         WITH target AS (
           SELECT "id"
@@ -304,8 +306,26 @@ export async function POST(req: Request) {
             WHEN ${periodEnd}::timestamptz IS NULL THEN u."subscriptionCurrentPeriodEnd"
             ELSE ${periodEnd}
           END,
-          "freePromotionGrantedAt" = COALESCE(u."freePromotionGrantedAt", ${now}),
-          "freePromotionExpiresAt" = COALESCE(u."freePromotionExpiresAt", ${expiry})
+          "hasFreePromotion" = CASE
+            WHEN ${settings.freePromotionEnabled}::boolean = true THEN u."hasFreePromotion"
+            ELSE false
+          END,
+          "freePromotionStart" = CASE
+            WHEN ${settings.freePromotionEnabled}::boolean = true THEN COALESCE(u."freePromotionStart", ${now})
+            ELSE u."freePromotionStart"
+          END,
+          "freePromotionEnd" = CASE
+            WHEN ${expiry}::timestamptz IS NULL THEN u."freePromotionEnd"
+            ELSE COALESCE(u."freePromotionEnd", ${expiry})
+          END,
+          "freePromotionGrantedAt" = CASE
+            WHEN ${settings.freePromotionEnabled}::boolean = true THEN COALESCE(u."freePromotionGrantedAt", ${now})
+            ELSE u."freePromotionGrantedAt"
+          END,
+          "freePromotionExpiresAt" = CASE
+            WHEN ${expiry}::timestamptz IS NULL THEN u."freePromotionExpiresAt"
+            ELSE COALESCE(u."freePromotionExpiresAt", ${expiry})
+          END
         FROM target
         WHERE u."id" = target."id"
       `;
@@ -328,6 +348,10 @@ export async function POST(req: Request) {
       await prisma.promotion.update({
         where: { id: promotionId },
         data: { status: 'ACTIVE', startsAt: now, expiresAt },
+      });
+      await prisma.product.update({
+        where: { id: promo.productId },
+        data: { isPromoted: true, promotionStart: now, promotionEnd: expiresAt },
       });
 
       return new NextResponse('ok', { status: 200 });

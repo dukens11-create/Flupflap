@@ -22,6 +22,7 @@ function percentageToStarCount(rate: number) {
 export default function ProductCard({ p: product }:{p:any}){
   const { t } = useI18n();
   const isFeatured = !!product.activePromotion;
+  const isTrending = (product.cartInterest?.totalAdds ?? 0) >= 5;
   const pickupLocation = `${product.pickupCity}${product.pickupState ? `, ${product.pickupState}` : ''}`;
   const sellerVerified = isApprovedSeller(product.seller?.verificationSubmission);
   const phoneVerified = !!product.seller?.phoneVerified;
@@ -39,7 +40,7 @@ export default function ProductCard({ p: product }:{p:any}){
       <div className="relative aspect-[4/3] bg-slate-100">
         <Image src={product.imageUrl} alt={product.title} fill className="object-cover transition-transform duration-300 group-hover:scale-105"/>
         {isFeatured && (
-          <span className="absolute left-3 top-3 rounded-full bg-amber-400 px-2.5 py-1 text-[11px] font-bold text-amber-950 shadow-sm">{t('product.sponsored')}</span>
+          <span className="absolute left-3 top-3 rounded-full bg-amber-400 px-2.5 py-1 text-[11px] font-bold text-amber-950 shadow-sm">Promoted</span>
         )}
       </div>
       <div className="flex flex-1 flex-col gap-3 p-3 sm:p-4">
@@ -79,6 +80,16 @@ export default function ProductCard({ p: product }:{p:any}){
                 <ShieldCheck size={12} />
                 {sellerBadge}
               </span>
+              {!sellerVerified && !phoneVerified && (
+                <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600">
+                  New Seller
+                </span>
+              )}
+              {isTrending && (
+                <span className="inline-flex items-center rounded-full bg-rose-100 px-2.5 py-1 text-[11px] font-semibold text-rose-700">
+                  Trending
+                </span>
+              )}
             </div>
           </div>
 
