@@ -10,7 +10,7 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import PickupVerifyForm from '@/components/PickupVerifyForm';
-import { expirePromotions } from '@/lib/promotions';
+import { expirePromotions, getPromotionLabel } from '@/lib/promotions';
 import { isSubscriptionActive, SELLER_SUBSCRIPTION_PRICE_LABEL } from '@/lib/subscription';
 import { syncSellerSubscriptionFromStripe } from '@/lib/subscription-sync';
 import SubscriptionButton from '@/components/SubscriptionButton';
@@ -111,8 +111,12 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   const freePromotionEligible = settings.freePromotionEnabled && !!dbUser && isFreePromotionEligible(dbUser);
   const freePromotionExpiresAt = dbUser?.freePromotionEnd ?? dbUser?.freePromotionExpiresAt ?? null;
   const freePromotionDaysLeft = dbUser ? getFreePromotionDaysLeft(dbUser) : 0;
+  const freePromotionExpired = !freePromotionEligible && !!freePromotionExpiresAt && freePromotionExpiresAt < new Date();
+  const freePromotionExpiresAtFormatted = freePromotionExpiresAt
+    ? freePromotionExpiresAt.toLocaleDateString('en-US', DEFAULT_DATE_FORMAT_OPTIONS)
+    : null;
   await expirePromotions();
-  const [products, orders, soldItems, verificationSubmission] = await Promise.all([
+  const [products, orders, soldItems, verificationSubmission, promotionHistory] = await Promise.all([
     prisma.product.findMany({
       where: { sellerId: session.user.id },
       orderBy: { createdAt: 'desc' },
@@ -179,6 +183,13 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
         adminFallbackStatus: true,
         adminFallbackReason: true,
       },
+    }),
+    prisma.promotion.findMany({
+      where: { sellerId: session.user.id },
+      include: {
+        product: { select: { id: true, title: true } },
+      },
+      orderBy: { createdAt: 'desc' },
     }),
   ]);
 
@@ -325,8 +336,12 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
         <StatCard label="Pending Orders" value={String(pendingOrdersToShip)} />
         <div id="promotion-status" className="card p-5">
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Promotion Status</p>
-          <p className="mt-2 text-sm font-semibold text-indigo-700">
-            {freePromotionEligible ? '2 months free promotion active' : 'No free promotion active'}
+          <p className={`mt-2 text-sm font-semibold ${freePromotionEligible ? 'text-indigo-700' : 'text-slate-500'}`}>
+            {freePromotionEligible
+              ? `Free promotion active (${freePromotionDaysLeft} day${freePromotionDaysLeft === 1 ? '' : 's'} left)`
+              : freePromotionExpired
+                ? `Free promotion expired`
+                : 'No free promotion'}
           </p>
         </div>
         <div id="seller-health" className="card p-5">
@@ -472,7 +487,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
       )}
       {freePromotionEligible && freePromotionExpiresAt && (
         <div className="card p-4 mb-6 bg-blue-50 border-blue-200 text-blue-900 text-sm">
-          Free Promotion Active — expires on {freePromotionExpiresAt.toLocaleDateString('en-US', DEFAULT_DATE_FORMAT_OPTIONS)} ({freePromotionDaysLeft} day{freePromotionDaysLeft === 1 ? '' : 's'} left).
+          Free Promotion Active — expires on {freePromotionExpiresAtFormatted} ({freePromotionDaysLeft} day{freePromotionDaysLeft === 1 ? '' : 's'} left).
         </div>
       )}
       {subscribedFromCheckout && !subscriptionActive && (
@@ -718,6 +733,95 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
             })}
           </div>
         )}
+      </section>
+
+      {/* ── Promotions ── */}
+      <section id="promotions" className="mb-8">
+        <h2 className="text-xl font-bold mb-3">Promotions</h2>
+
+        {/* Free promotion status */}
+        <div className={`card p-4 mb-4 text-sm ${freePromotionEligible ? 'bg-blue-50 border-blue-200 text-blue-900' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+          {freePromotionEligible && freePromotionExpiresAt ? (
+            <span>🎁 <strong>Free promotion active</strong> — expires {freePromotionExpiresAtFormatted} ({freePromotionDaysLeft} day{freePromotionDaysLeft === 1 ? '' : 's'} remaining). Any package you select is free until then.</span>
+          ) : freePromotionExpired ? (
+            <span>ℹ️ Your <strong>60-day free promotion period has expired</strong> (ended {freePromotionExpiresAtFormatted}). Select a paid package to promote listings.</span>
+          ) : (
+            <span>ℹ️ No free promotion period configured for your account.</span>
+          )}
+        </div>
+
+        {/* Active promoted products */}
+        {(() => {
+          const activePromotedProducts = products.filter(p => p.promotions[0]?.status === 'ACTIVE');
+          return activePromotedProducts.length > 0 ? (
+            <div className="mb-4">
+              <p className="text-sm font-semibold text-slate-700 mb-2">Active promoted listings</p>
+              <div className="space-y-2">
+                {activePromotedProducts.map(p => {
+                  const promo = p.promotions[0];
+                  return (
+                    <div key={p.id} className="card p-3 flex items-center justify-between gap-3 bg-amber-50 border-amber-200">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm truncate" title={p.title}>{p.title}</p>
+                        <p className="text-xs text-amber-700">
+                          ⭐ Sponsored — ends {promo?.expiresAt ? promo.expiresAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                        </p>
+                      </div>
+                      <Link href={`/products/${p.id}`} className="btn-outline text-xs py-1 px-2 flex-shrink-0">View</Link>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null;
+        })()}
+
+        {/* Promotion payment history */}
+        <div>
+          <p className="text-sm font-semibold text-slate-700 mb-2">Promotion history</p>
+          {promotionHistory.length === 0 ? (
+            <div className="card p-4 text-slate-500 text-sm">No promotions yet.</div>
+          ) : (
+            <div className="card overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100 text-left">
+                    <th className="px-4 py-3 font-semibold text-slate-600">Listing</th>
+                    <th className="px-4 py-3 font-semibold text-slate-600 hidden sm:table-cell">Package</th>
+                    <th className="px-4 py-3 font-semibold text-slate-600 hidden md:table-cell">Started</th>
+                    <th className="px-4 py-3 font-semibold text-slate-600 hidden md:table-cell">Ends / Ended</th>
+                    <th className="px-4 py-3 font-semibold text-slate-600 text-right">Amount</th>
+                    <th className="px-4 py-3 font-semibold text-slate-600 text-right">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {promotionHistory.map(promo => (
+                    <tr key={promo.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                      <td className="px-4 py-3 font-medium text-slate-800 truncate max-w-[140px]" title={promo.product.title}>{promo.product.title}</td>
+                      <td className="px-4 py-3 text-slate-500 hidden sm:table-cell">
+                        {getPromotionLabel(promo.durationDays)}
+                      </td>
+                      <td className="px-4 py-3 text-slate-500 hidden md:table-cell">
+                        {promo.startsAt ? promo.startsAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-slate-500 hidden md:table-cell">
+                        {promo.expiresAt ? promo.expiresAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold text-slate-800">
+                        {promo.priceCents === 0 ? <span className="text-green-700">Free</span> : dollars(promo.priceCents)}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <span className={`badge ${promo.status === 'ACTIVE' ? 'badge-green' : promo.status === 'EXPIRED' ? 'badge-slate' : promo.status === 'CANCELLED' ? 'badge-red' : 'badge-yellow'}`}>
+                          {promo.status === 'PENDING_PAYMENT' ? 'PENDING' : promo.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </section>
 
       {/* ── Recent Orders (for shipping management) ── */}
