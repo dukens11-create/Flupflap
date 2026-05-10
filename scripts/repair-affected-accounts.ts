@@ -1,11 +1,21 @@
 import { prisma } from '../lib/db';
 import { looksLikeBcryptHash } from '../lib/password';
 
-const TARGET_EMAILS = [
-  'dukens0411@gmail.com',
-  'admin@flupflap.com',
-  'seller@flupflap.com',
-] as const;
+function parseTargetEmails(argv: string[]) {
+  const arg = argv.find((entry) => entry.startsWith('--emails='));
+  const csv = arg?.slice('--emails='.length).trim();
+
+  if (!csv) return [];
+
+  return Array.from(
+    new Set(
+      csv
+        .split(',')
+        .map((email) => email.trim().toLowerCase())
+        .filter(Boolean),
+    ),
+  );
+}
 
 type UserDiagnostic = {
   id: string;
@@ -17,8 +27,7 @@ type UserDiagnostic = {
 };
 
 function toDiagnostic(user: UserDiagnostic) {
-  const password = user.password;
-  const bcryptValid = looksLikeBcryptHash(password);
+  const bcryptValid = looksLikeBcryptHash(user.password);
 
   return {
     email: user.email,
@@ -28,17 +37,22 @@ function toDiagnostic(user: UserDiagnostic) {
     hasImage: Boolean(user.image),
     imageLength: user.image?.length ?? 0,
     passwordBcryptValid: bcryptValid,
-    passwordLength: typeof password === 'string' ? password.length : 0,
-    passwordPrefix: typeof password === 'string' ? password.slice(0, 4) : '(non-string)',
   };
 }
 
 async function run() {
   const confirm = process.argv.includes('--confirm');
+  const targetEmails = parseTargetEmails(process.argv);
+
+  if (targetEmails.length === 0) {
+    console.log('[repair-affected-accounts] No target accounts provided.');
+    console.log('[repair-affected-accounts] Usage: npm run repair:affected-accounts -- --emails=email1@example.com,email2@example.com [--confirm]');
+    return;
+  }
 
   try {
     const users = await prisma.user.findMany({
-      where: { email: { in: [...TARGET_EMAILS] } },
+      where: { email: { in: targetEmails } },
       select: {
         id: true,
         email: true,
@@ -54,7 +68,7 @@ async function run() {
     const withImage = diagnostics.filter((user) => user.hasImage);
     const invalidHashes = diagnostics.filter((user) => !user.passwordBcryptValid);
 
-    console.log('[repair-affected-accounts] Target emails:', TARGET_EMAILS.join(', '));
+    console.log('[repair-affected-accounts] Target emails:', targetEmails.join(', '));
     console.log('[repair-affected-accounts] Matched accounts:', diagnostics.map((user) => user.email).join(', ') || '(none)');
     console.log('[repair-affected-accounts] Diagnostics:');
     console.table(diagnostics);
@@ -68,7 +82,7 @@ async function run() {
 
     const result = await prisma.user.updateMany({
       where: {
-        email: { in: [...TARGET_EMAILS] },
+        email: { in: targetEmails },
         image: { not: null },
       },
       data: { image: null },
