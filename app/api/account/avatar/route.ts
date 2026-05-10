@@ -44,15 +44,24 @@ export async function GET() {
     }
   }
 
-  try {
-    const imageUrl = new URL(user.image);
-    if (imageUrl.protocol === 'http:' || imageUrl.protocol === 'https:') {
-      const response = NextResponse.redirect(imageUrl, 307);
-      response.headers.set('Cache-Control', 'private, no-store');
-      return response;
+  if (typeof user.image === 'string' && user.image.length > 0) {
+    try {
+      const imageUrl = new URL(user.image);
+      const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+      const pathParts = imageUrl.pathname.split('/').filter(Boolean);
+      const isTrustedCloudinaryUrl =
+        imageUrl.protocol === 'https:' &&
+        imageUrl.hostname === 'res.cloudinary.com' &&
+        !!cloudName &&
+        pathParts[0] === cloudName;
+      if (isTrustedCloudinaryUrl) {
+        const response = NextResponse.redirect(imageUrl, 302);
+        response.headers.set('Cache-Control', 'private, no-store');
+        return response;
+      }
+    } catch {
+      // Fall through to 404 for invalid URL values.
     }
-  } catch {
-    // Fall through to 404 for invalid URL values.
   }
 
   return NextResponse.json({ error: 'Not found' }, { status: 404 });

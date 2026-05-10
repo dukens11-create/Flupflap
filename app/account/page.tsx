@@ -42,7 +42,8 @@ export default function AccountPage() {
   const [avatarError, setAvatarError] = useState('');
   const [avatarSuccess, setAvatarSuccess] = useState('');
   const [avatarImage, setAvatarImage] = useState<string | null>(null);
-  const getAvatarUrl = () => `/api/account/avatar?ts=${Date.now()}`;
+  const [avatarVersion, setAvatarVersion] = useState(0);
+  const getAvatarUrl = (version: number) => `/api/account/avatar?v=${version}`;
 
   // Phone management
   const [phoneStep, setPhoneStep] = useState<'idle' | 'enter_phone' | 'enter_code'>('idle');
@@ -123,8 +124,8 @@ export default function AccountPage() {
       setAvatarImage(null);
       return;
     }
-    setAvatarImage(getAvatarUrl());
-  }, [session?.user?.id]);
+    setAvatarImage(getAvatarUrl(avatarVersion));
+  }, [session?.user?.id, avatarVersion]);
 
   if (status === 'loading') {
     return (
@@ -156,15 +157,8 @@ export default function AccountPage() {
       if (!res.ok) {
         setAvatarError(data.error ?? 'Upload failed.');
       } else {
-        const uploadedUrl = typeof data.url === 'string' ? data.url : null;
         setAvatarSuccess('Profile photo updated!');
-        try {
-          await update({}); // Refresh session so header/avatar reflects the change
-          setAvatarImage(getAvatarUrl());
-        } catch {
-          if (uploadedUrl) setAvatarImage(uploadedUrl);
-          setAvatarSuccess('Profile photo updated! Please refresh the page to see changes in other areas.');
-        }
+        setAvatarVersion((prevVersion) => prevVersion + 1);
       }
     } catch {
       setAvatarError('Network error. Please try again.');
@@ -187,11 +181,7 @@ export default function AccountPage() {
       } else {
         setAvatarImage(null);
         setAvatarSuccess('Profile photo removed.');
-        try {
-          await update({});
-        } catch {
-          setAvatarSuccess('Profile photo removed. Please refresh the page to see changes in other areas.');
-        }
+        setAvatarVersion((prevVersion) => prevVersion + 1);
       }
     } catch {
       setAvatarError('Network error. Please try again.');
