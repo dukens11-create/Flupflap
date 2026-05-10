@@ -408,7 +408,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
               )}
               {verificationSubmission?.status === 'APPROVED' && (
                 <div className="mt-3 flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2">
-                  <span className="text-sm font-semibold text-green-800">✓ Verified Seller</span>
+                  <span className="text-sm font-semibold text-green-800" aria-label="Verified Seller">&#10003; Verified Seller</span>
                   <p className="text-sm text-green-700">Your identity has been verified. You can create listings once your subscription is active.</p>
                 </div>
               )}

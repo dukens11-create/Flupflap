@@ -35,7 +35,7 @@ export default function KycVerifyButton() {
     <div className="mt-6">
       {loading ? (
         <p className="text-sm text-slate-600 animate-pulse">
-          Redirecting to secure identity verification…
+          Redirecting to secure identity verification...
         </p>
       ) : (
         <button className="btn-primary" onClick={handleVerify} disabled={loading}>
