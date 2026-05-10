@@ -23,6 +23,8 @@ export const authOptions: NextAuthOptions = {
         if (!credentials?.email || !credentials.password) return null;
         const user = await prisma.user.findUnique({ where: { email: credentials.email.toLowerCase() } });
         if (!user) return null;
+        // Reject soft-deleted accounts before touching the password.
+        if (user.deletedAt) return null;
         const ok = await safeComparePassword(credentials.password, user.password, 'authorize');
         if (!ok) return null;
 
