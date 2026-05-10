@@ -60,7 +60,7 @@ export const authOptions: NextAuthOptions = {
             email: user.email,
             name: user.name,
             role: user.role,
-          } as any;
+          };
         } catch (error) {
           console.error('[auth] authorize unexpected error', { message: error instanceof Error ? error.message : String(error) });
           return null;
@@ -79,7 +79,7 @@ export const authOptions: NextAuthOptions = {
         token.id = user.id;
         token.email = user.email;
         token.name = user.name;
-        token.role = (user as any).role;
+        token.role = user.role;
         console.info('[auth] jwt callback attached user', {
           hasUser: true,
         });
@@ -117,11 +117,9 @@ export const authOptions: NextAuthOptions = {
         if (typeof token.id === 'string') {
           session.user.id = token.id;
         }
-        session.user.email = typeof token.email === 'string' ? token.email : session.user.email;
-        session.user.name = typeof token.name === 'string' ? token.name : session.user.name;
-        if (typeof token.role === 'string') {
-          session.user.role = token.role as any;
-        }
+        session.user.email = token.email ?? session.user.email;
+        session.user.name = token.name ?? session.user.name;
+        session.user.role = token.role ?? session.user.role;
       }
       console.info('[auth] session callback', {
         hasSessionUser: Boolean(session.user),
