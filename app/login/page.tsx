@@ -1,10 +1,11 @@
 "use client";
 import { Suspense, useState } from 'react';
-import { signIn } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Eye, EyeOff } from 'lucide-react';
 import { useI18n } from '@/components/I18nProvider';
+
+const NEXTAUTH_CREDENTIALS_ERROR = 'error=CredentialsSignin';
 
 function LoginForm() {
   const { t } = useI18n();
@@ -26,25 +27,62 @@ function LoginForm() {
     const password = form.get('password') as string;
 
     try {
-      const result = await signIn('credentials', { email, password, redirect: false, callbackUrl });
+      // Step 1: Fetch the CSRF token required by NextAuth
+      const csrfRes = await fetch('/api/auth/csrf');
+      if (!csrfRes.ok) {
+        console.error('[login] failed to fetch CSRF token', { status: csrfRes.status });
+        setError(t('login.signInServerError'));
+        return;
+      }
+      const { csrfToken } = await csrfRes.json() as { csrfToken?: string };
+      if (!csrfToken) {
+        console.error('[login] CSRF response missing csrfToken field');
+        setError(t('login.signInServerError'));
+        return;
+      }
 
-      if (result?.error) {
-        // Log safe diagnostic fields (no passwords/tokens) so devtools/production logs
-        // can distinguish credential rejection from server-side failures.
-        console.error('[login] signIn error', { ok: result.ok, status: result.status, error: result.error });
-        setError(result.status !== 401 ? t('login.signInServerError') : t('login.invalidCredentials'));
-      } else if (result?.url) {
-        router.push(result.url);
-        router.refresh();
-      } else if (result?.ok) {
+      // Step 2: POST form-encoded credentials to the NextAuth callback endpoint
+      const callbackRes = await fetch('/api/auth/callback/credentials', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ email, password, csrfToken, callbackUrl, json: 'true' }).toString(),
+      });
+
+      // Parse callback body once; NextAuth returns JSON {url} when json=true is sent
+      let callbackData: { url?: string } = {};
+      try {
+        callbackData = await callbackRes.json() as { url?: string };
+      } catch {
+        // Non-JSON response (e.g. unexpected HTML): treat as server error
+        console.error('[login] credentials callback returned non-JSON response', { status: callbackRes.status });
+      }
+
+      // Safe diagnostics — no passwords or tokens logged
+      console.log('[login] credentials callback', { status: callbackRes.status, redirectUrl: callbackData.url });
+
+      // Step 3: Confirm authentication by inspecting the session
+      let session: { user?: unknown } = {};
+      try {
+        const sessionRes = await fetch('/api/auth/session');
+        session = await sessionRes.json() as { user?: unknown };
+      } catch {
+        console.error('[login] failed to parse session response');
+      }
+
+      if (session?.user) {
         router.push(callbackUrl);
         router.refresh();
       } else {
-        console.error('[login] signIn returned unexpected result', { ok: result?.ok, status: result?.status, hasUrl: !!result?.url });
-        setError(t('login.signInServerError'));
+        // NextAuth encodes the failure reason in the redirect URL it would have used
+        const isCredentialsError = (callbackData.url ?? '').includes(NEXTAUTH_CREDENTIALS_ERROR);
+        console.error('[login] authentication failed', {
+          callbackStatus: callbackRes.status,
+          hasCredentialsError: isCredentialsError,
+        });
+        setError(isCredentialsError ? t('login.invalidCredentials') : t('login.signInServerError'));
       }
     } catch (err) {
-      console.error('[login] signIn threw unexpectedly', { message: err instanceof Error ? err.message : String(err) });
+      console.error('[login] login flow threw unexpectedly', { message: err instanceof Error ? err.message : String(err) });
       setError(t('login.signInServerError'));
     } finally {
       setLoading(false);
