@@ -321,14 +321,14 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
       <section id="sales-overview" className="grid grid-cols-2 gap-4 mb-6 lg:grid-cols-5">
         <StatCard label="Total Sales" value={dollars(grossSalesCents)} />
         <StatCard label="Active Listings" value={String(activeListingsCount)} />
-        <StatCard label="Pending Orders" value={String(pendingOrdersToShip)} sub="orders to ship" />
+        <StatCard label="Pending Orders" value={String(pendingOrdersToShip)} />
         <div id="promotion-status" className="card p-5">
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Promotion Status</p>
           <p className="mt-2 text-sm font-semibold text-indigo-700">
             {freePromotionEligible ? '2 months free promotion active' : 'No free promotion active'}
           </p>
         </div>
-        <div id="verification-status-summary" className="card p-5">
+        <div id="seller-health" className="card p-5">
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Verification Status</p>
           <p className="mt-2 text-sm font-semibold text-slate-700">{sellerVerificationStatusLabel(verificationSubmission?.status)}</p>
         </div>

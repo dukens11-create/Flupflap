@@ -294,8 +294,14 @@ export default async function AdminPage({
         </a>
       </div>
 
+      <section id="site-settings" className="mb-4">
+        <div className="card p-4 bg-slate-100 border-slate-200 text-sm text-slate-600">
+          Site settings and marketplace payment controls.
+        </div>
+      </section>
+
       <section id="payments-panel" className="mb-8">
-          <div id="site-settings" className="card p-5">
+          <div className="card p-5">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <h2 className="text-xl font-bold">Marketplace Commission</h2>
