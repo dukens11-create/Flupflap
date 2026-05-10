@@ -13,13 +13,14 @@ function toSessionImage(image: string | null | undefined, cacheBuster?: number) 
 
   const value = image.trim();
   if (!value) return null;
+  const lowerValue = value.toLowerCase();
 
   if (value.length > SESSION_IMAGE_MAX_LENGTH) {
-    console.warn('[auth] blocked oversized session image value', { length: value.length });
+    console.warn('[auth] blocked unsafe session image value', { reason: 'oversized' });
     return null;
   }
 
-  if (value.toLowerCase().startsWith('data:image/')) {
+  if (lowerValue.startsWith('data:image/')) {
     const v = cacheBuster ?? Date.now();
     return `${AVATAR_ROUTE}?v=${v}`;
   }
@@ -30,23 +31,31 @@ function toSessionImage(image: string | null | undefined, cacheBuster?: number) 
     return `${value}${separator}v=${cacheBuster}`;
   }
 
-  if (value.startsWith('/') && !value.startsWith('//')) {
+  if (
+    value.startsWith('/') &&
+    !value.startsWith('//') &&
+    !value.startsWith('/..') &&
+    !value.includes('/../') &&
+    !value.includes('\\') &&
+    !lowerValue.includes('%2e%2e') &&
+    !lowerValue.includes('%2f') &&
+    !lowerValue.includes('%5c')
+  ) {
     return value;
   }
 
-  if (value.toLowerCase().startsWith('http://') || value.toLowerCase().startsWith('https://')) {
+  if (lowerValue.startsWith('http://') || lowerValue.startsWith('https://')) {
     try {
-      const url = new URL(value);
-      if (url.protocol === 'http:' || url.protocol === 'https:') {
-        return value;
-      }
+      new URL(value);
+      return value;
     } catch {
-      console.warn('[auth] blocked malformed image URL');
+      console.warn('[auth] blocked unsafe session image value', { reason: 'malformed-url' });
       return null;
     }
   }
 
-  console.warn('[auth] blocked unsafe session image value', { length: value.length });
+  const scheme = value.match(/^([a-zA-Z][a-zA-Z0-9+.-]*):/)?.[1]?.toLowerCase() ?? null;
+  console.warn('[auth] blocked unsafe session image value', { reason: scheme ? `protocol:${scheme}` : 'unsupported' });
   return null;
 }
 
