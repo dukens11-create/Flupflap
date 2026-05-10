@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { dollars } from '@/lib/money';
 import { getStoredLineSubtotalCents } from '@/lib/commission';
+import { buildTrackingUrl } from '@/lib/shipping';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 
@@ -67,6 +68,7 @@ export default async function OrderDetailPage({
   });
 
   if (!order) notFound();
+  const trackingUrl = buildTrackingUrl(order.carrier ?? order.shippingCarrier, order.trackingNumber);
 
   return (
     <main className="max-w-2xl mx-auto">
@@ -195,9 +197,19 @@ export default async function OrderDetailPage({
         <div className="card p-5 mb-4">
           <h2 className="font-bold mb-2">Tracking</h2>
           <p className="text-sm text-slate-600">
-            📦 {order.shippingCarrier && <strong>{order.shippingCarrier}: </strong>}
+            📦 {(order.carrier ?? order.shippingCarrier) && <strong>{order.carrier ?? order.shippingCarrier}: </strong>}
             {order.trackingNumber}
           </p>
+          {trackingUrl && (
+            <a
+              href={trackingUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex mt-2 text-sm text-blue-600 hover:underline"
+            >
+              Track Package
+            </a>
+          )}
         </div>
       )}
 

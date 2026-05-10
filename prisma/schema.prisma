@@ -224,7 +224,13 @@ model Order {
   stripeCheckoutId      String?     @unique
   stripePaymentIntentId String?
   trackingNumber        String?
+  // Canonical carrier value for new shipping-label flows.
+  carrier               String?
+  // Legacy field kept for backwards-compatible API/mobile payloads.
   shippingCarrier       String?
+  labelUrl              String?
+  shipmentStatus        String?
+  shipmentId            String?
   shippingName          String?
   shippingLine1         String?
   shippingLine2         String?
