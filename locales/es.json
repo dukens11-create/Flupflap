@@ -12,8 +12,7 @@
     "logout": "Cerrar sesión",
     "login": "Iniciar sesión",
     "signUp": "Registrarse",
-    "language": "Idioma",
-    "taxCenter": "Centro Fiscal"
+    "language": "Idioma"
   },
   "footer": {
     "description": "Descubre anuncios confiables, pagos protegidos y una forma más clara de comprar y vender todos los días.",
@@ -66,9 +65,6 @@
         "title": "Protección al comprador",
         "description": "Los mensajes de confianza refuerzan transacciones más seguras desde la búsqueda hasta la entrega."
       }
-    },
-    "categories": {
-      "title": "Comprar por categoría"
     },
     "loadingProducts": "Cargando productos…",
     "noProducts": "No se encontraron productos. Intenta ajustar los filtros."
@@ -132,10 +128,7 @@
     "invalidCode": "Código inválido o expirado. Inténtalo de nuevo.",
     "failedSavePhone": "No se pudo guardar el número de teléfono.",
     "missingLoginInfo": "No se encontró la información de inicio de sesión. Inténtalo de nuevo.",
-    "failedResendCode": "No se pudo reenviar el código.",
-    "showPassword": "Mostrar contraseña",
-    "hidePassword": "Ocultar contraseña",
-    "signInServerError": "El inicio de sesión falló inesperadamente. Inténtalo de nuevo o contacta al soporte."
+    "failedResendCode": "No se pudo reenviar el código."
   },
   "signup": {
     "title": "Crear cuenta",
@@ -146,7 +139,7 @@
     "customerOption": "Comprador – Quiero comprar",
     "sellerOption": "Vendedor – Quiero vender",
     "mobilePhone": "Número de teléfono móvil",
-    "phoneHelp": "Se usa para autenticación de dos factores cuando inicias sesión. Los números de EE. UU./Canadá se pueden ingresar con o sin +1. Pueden aplicarse tarifas de mensajería.",
+    "phoneHelp": "Se usa para autenticación de dos factores cuando inicias sesión. Pueden aplicarse tarifas de mensajería.",
     "creatingAccount": "Creando cuenta…",
     "createAccount": "Crear cuenta",
     "alreadyHave": "¿Ya tienes una cuenta?",

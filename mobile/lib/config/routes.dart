@@ -20,7 +20,6 @@ import '../screens/seller/seller_listings_screen.dart';
 import '../screens/seller/seller_new_listing_screen.dart';
 import '../screens/seller/seller_edit_listing_screen.dart';
 import '../screens/seller/seller_subscription_screen.dart';
-import '../screens/seller/seller_tax_center_screen.dart';
 
 class AppRouter {
   /// Creates a [GoRouter] that observes [authProvider] for redirect decisions.
@@ -148,11 +147,6 @@ class AppRouter {
           path: '/seller/subscription',
           name: 'seller-subscription',
           builder: (ctx, state) => const SellerSubscriptionScreen(),
-        ),
-        GoRoute(
-          path: '/seller/tax-center',
-          name: 'seller-tax-center',
-          builder: (ctx, state) => const SellerTaxCenterScreen(),
         ),
       ],
     );

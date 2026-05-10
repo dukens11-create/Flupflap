@@ -1,9 +1,20 @@
 import { PrismaAdapter } from '@next-auth/prisma-adapter';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { prisma } from './db';
+import { verifyOtp } from './otp';
+import { isSmsOtpEnabled, SELLER_OTP_FORCE_DISABLED } from './feature-flags';
 import { recordLoginActivity } from './login-security';
 import { safeComparePassword } from './password';
 import type { NextAuthOptions } from 'next-auth';
+
+function toSessionImage(image: string | null | undefined, cacheBuster?: number) {
+  if (!image) return null;
+  if (image.startsWith('data:image/')) {
+    const v = cacheBuster ?? Date.now();
+    return `/api/account/avatar?v=${v}`;
+  }
+  return image;
+}
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
@@ -18,114 +29,76 @@ export const authOptions: NextAuthOptions = {
         otp:      { label: 'Code',     type: 'text' },
       },
       async authorize(credentials, request) {
-        const email = typeof credentials?.email === 'string'
-          ? credentials.email.trim().toLowerCase()
-          : '';
-        if (!email || !credentials?.password) {
-          console.warn('[auth] authorize missing credentials');
-          return null;
+        if (!credentials?.email || !credentials.password) return null;
+        const user = await prisma.user.findUnique({ where: { email: credentials.email.toLowerCase() } });
+        if (!user) return null;
+        const ok = await safeComparePassword(credentials.password, user.password, 'authorize');
+        if (!ok) return null;
+
+        // Sellers must supply a valid one-time code (when SMS OTP is enabled).
+        if (user.role === 'SELLER') {
+          if (SELLER_OTP_FORCE_DISABLED || !isSmsOtpEnabled()) {
+            console.warn('[auth] Seller OTP forcibly bypassed: pending Twilio A2P 10DLC approval', {
+              userId: user.id,
+              role: user.role,
+              reason: SELLER_OTP_FORCE_DISABLED
+                ? 'SELLER_OTP_FORCE_DISABLED=true (pending Twilio A2P 10DLC approval)'
+                : 'feature flag ENABLE_SMS_OTP=false',
+            });
+          } else {
+            if (!credentials.otp) return null;
+            const result = await verifyOtp(user.id, credentials.otp);
+            if (!result.ok) return null;
+            // Mark phone as verified on first successful OTP sign-in.
+            if (user.phone && !user.phoneVerified) {
+              await prisma.user.update({
+                where: { id: user.id },
+                data: { phoneVerified: true, phoneVerifiedAt: new Date() },
+              }).catch(() => null);
+            }
+          }
         }
 
         try {
-          const user = await prisma.user.findUnique({ where: { email } });
-          if (!user) {
-            console.warn('[auth] authorize user lookup failed');
-            return null;
-          }
-          console.info('[auth] authorize user lookup succeeded');
-
-          const ok = await safeComparePassword(
-            credentials.password,
-            user.password,
-            'authorize',
-          );
-          if (!ok) {
-            console.warn('[auth] authorize password verification failed');
-            return null;
-          }
-          console.info('[auth] authorize password verification succeeded');
-
-          // Seller OTP is no longer part of the active credentials sign-in flow.
-          // Sellers (like buyers) authenticate with email + password.
-
-          try {
-            await recordLoginActivity(user.id, request);
-          } catch (error) {
-            console.error('[auth] failed to record login activity', error);
-          }
-
-          console.info('[auth] authorize success', { role: user.role });
-          return {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            role: user.role,
-          };
+          await recordLoginActivity(user.id, request);
         } catch (error) {
-          console.error('[auth] authorize unexpected error', { message: error instanceof Error ? error.message : String(error) });
-          return null;
+          console.error('[auth] failed to record login activity', error);
         }
+
+        return user as any;
       }
     })
   ],
   callbacks: {
     async jwt({ token, user, trigger }) {
-      console.info('[auth] jwt callback invoked', {
-        hasUser: Boolean(user),
-        hasTokenId: Boolean(token.id),
-        trigger: trigger ?? 'signIn',
-      });
       if (user) {
         token.id = user.id;
-        token.email = user.email;
-        token.name = user.name;
-        token.role = user.role;
-        console.info('[auth] jwt callback attached user', {
-          hasUser: true,
-        });
+        token.role = (user as any).role;
+        token.stripeAccountId = (user as any).stripeAccountId;
+        token.stripeOnboardingComplete = (user as any).stripeOnboardingComplete;
+        token.image = toSessionImage((user as any).image);
       }
-      // On session update, refresh minimal display fields from DB.
+      // On session update (e.g. after avatar upload) re-fetch image from DB.
       if (trigger === 'update') {
-        if (!token.id) {
-          console.warn('[auth] jwt update skipped due to missing token id');
-          return token;
-        }
-        try {
-          const dbUser = await prisma.user.findUnique({
-            where: { id: token.id as string },
-            select: { name: true },
-          });
-          if (dbUser) {
-            token.name = dbUser.name;
-            console.info('[auth] jwt callback refreshed token user fields');
-          }
-        } catch (error) {
-          console.error('[auth] jwt callback update failed', {
-            hasTokenId: Boolean(token.id),
-            message: error instanceof Error ? error.message : String(error),
-          });
+        const dbUser = await prisma.user.findUnique({
+          where: { id: token.id as string },
+          select: { image: true, name: true },
+        });
+        if (dbUser) {
+          token.image = toSessionImage(dbUser.image, Date.now());
+          token.name = dbUser.name;
         }
       }
       return token;
     },
     async session({ session, token }) {
-      console.info('[auth] session callback invoked', {
-        hasSessionUser: Boolean(session.user),
-        hasTokenId: Boolean(token.id),
-      });
       if (session.user) {
-        if (typeof token.id === 'string') {
-          session.user.id = token.id;
-        }
-        session.user.email = token.email ?? session.user.email;
-        session.user.name = token.name ?? session.user.name;
-        session.user.role = token.role ?? session.user.role;
+        session.user.id = token.id as string;
+        session.user.role = token.role as any;
+        session.user.stripeAccountId = token.stripeAccountId as any;
+        session.user.stripeOnboardingComplete = Boolean(token.stripeOnboardingComplete);
+        session.user.image = (token.image as string | null) ?? null;
       }
-      console.info('[auth] session callback', {
-        hasSessionUser: Boolean(session.user),
-        hasTokenId: Boolean(token.id),
-        tokenRole: token.role ?? null,
-      });
       return session;
     }
   }

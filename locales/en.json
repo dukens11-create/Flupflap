@@ -12,8 +12,7 @@
     "logout": "Logout",
     "login": "Login",
     "signUp": "Sign up",
-    "language": "Language",
-    "taxCenter": "Tax Center"
+    "language": "Language"
   },
   "footer": {
     "description": "Discover trusted listings, protected checkout, and a cleaner way to buy and sell every day.",
@@ -66,9 +65,6 @@
         "title": "Buyer Protection",
         "description": "Clear trust messaging reinforces safer transactions from browse to delivery."
       }
-    },
-    "categories": {
-      "title": "Shop by Category"
     },
     "loadingProducts": "Loading products…",
     "noProducts": "No products found. Try adjusting your filters."
@@ -132,10 +128,7 @@
     "invalidCode": "Invalid or expired code. Please try again.",
     "failedSavePhone": "Failed to save phone number.",
     "missingLoginInfo": "Login information not found. Please try again.",
-    "failedResendCode": "Failed to resend code.",
-    "showPassword": "Show password",
-    "hidePassword": "Hide password",
-    "signInServerError": "Sign-in failed unexpectedly. Please try again or contact support."
+    "failedResendCode": "Failed to resend code."
   },
   "signup": {
     "title": "Create account",
@@ -146,7 +139,7 @@
     "customerOption": "Customer – I want to buy",
     "sellerOption": "Seller – I want to sell",
     "mobilePhone": "Mobile phone number",
-    "phoneHelp": "Used for two-factor authentication when you sign in. US/Canada numbers can be entered with or without +1. Standard messaging rates may apply.",
+    "phoneHelp": "Used for two-factor authentication when you sign in. Standard messaging rates may apply.",
     "creatingAccount": "Creating account…",
     "createAccount": "Create account",
     "alreadyHave": "Already have an account?",

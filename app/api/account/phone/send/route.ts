@@ -14,7 +14,6 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { sendSms } from '@/lib/twilio';
 import { normalizePhone } from '@/lib/phone';
-import { findConflictingSellerByPhone } from '@/lib/seller-phone';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { z } from 'zod';
@@ -44,22 +43,9 @@ export async function POST(req: Request) {
     const normalizedPhone = normalizePhone(phone);
     if (!normalizedPhone) {
       return NextResponse.json(
-        { error: 'Invalid phone number. US/Canada numbers can be entered with or without +1.' },
+        { error: 'Invalid phone number. Please include your country code (e.g. +1 for US/Canada).' },
         { status: 400 },
       );
-    }
-
-    if (session.user.role === 'SELLER') {
-      const conflictingSeller = await findConflictingSellerByPhone({
-        phone: normalizedPhone,
-        excludeUserId: session.user.id,
-      });
-      if (conflictingSeller) {
-        return NextResponse.json(
-          { error: 'Phone number is already in use by another seller account.' },
-          { status: 409 },
-        );
-      }
     }
 
     // Enforce resend cooldown
