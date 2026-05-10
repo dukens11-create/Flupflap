@@ -19,7 +19,6 @@ import crypto from 'crypto';
 import { z } from 'zod';
 
 const EXPIRY_MINUTES = 10;
-const MAX_ATTEMPTS = 5;
 const RESEND_COOLDOWN_SECONDS = 60;
 
 const schema = z.object({
