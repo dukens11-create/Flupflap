@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ACCOUNT_DELETION_REASON_LABELS, type AccountDeletionReason } from '@/lib/account-deletion';
 import { STRIPE_ERROR_REASONS } from '@/lib/stripe';
+import StripeConnectButton from '@/components/StripeConnectButton';
 
 type SecurityLoginEntry = {
   id: string;
@@ -493,25 +494,27 @@ export default function AccountPage() {
         {role === 'SELLER' && (
           <div>
             <p className="label">Stripe Payouts</p>
-            <p className="font-medium">
+            <div className="font-medium">
               {stripeStatus === null ? (
                 <span className="text-slate-400 text-sm">Loading…</span>
               ) : stripeStatus === 'complete' ? (
                 <>
                   <span className="badge badge-green">Connected</span>
-                  {' '}
-                  <a href="/api/stripe/connect" className="text-xs text-blue-600 hover:underline ml-2">Manage →</a>
+                  <div className="mt-2">
+                    <StripeConnectButton label="Manage Stripe" className="btn-outline text-xs" />
+                  </div>
                 </>
               ) : stripeStatus === 'in_progress' ? (
                 <>
                   <span className="badge badge-yellow">Setup in progress</span>
-                  {' '}
-                  <a href="/api/stripe/connect" className="text-xs text-blue-600 hover:underline ml-2">Resume setup →</a>
+                  <div className="mt-2">
+                    <StripeConnectButton label="Resume setup" className="btn-outline text-xs" />
+                  </div>
                 </>
               ) : (
-                <a href="/api/stripe/connect" className="text-blue-600 hover:underline">Connect bank account →</a>
+                <StripeConnectButton label="Connect Stripe" className="btn-outline text-xs" />
               )}
-            </p>
+            </div>
           </div>
         )}
 

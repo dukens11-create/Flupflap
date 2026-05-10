@@ -11,6 +11,7 @@ import { prisma } from '@/lib/db';
 import {
   createStripeIdentitySession,
 } from '@/lib/kyc/providers';
+import { classifyStripeError } from '@/lib/stripe';
 
 export async function POST(req: Request) {
   try {
@@ -81,7 +82,11 @@ export async function POST(req: Request) {
     });
 
     if (verificationUrl) {
-      return NextResponse.json({ sessionUrl: verificationUrl });
+      return NextResponse.json({
+        sessionUrl: verificationUrl,
+        verificationSessionId: providerVerificationId,
+        verificationStatus: identitySession.status,
+      });
     }
 
     console.error('[seller/verification/initiate POST] Stripe Identity returned no hosted URL', {
@@ -91,13 +96,26 @@ export async function POST(req: Request) {
       stripeLastErrorCode: identitySession.last_error?.code ?? null,
     });
     return NextResponse.json(
-      { error: 'Stripe Identity failed to generate a hosted verification URL.' },
+      {
+        error: 'Stripe Identity failed to generate a hosted verification URL.',
+        code: 'STRIPE_IDENTITY_URL_MISSING',
+      },
       { status: 500 },
     );
   } catch (err: any) {
-    console.error('[seller/verification/initiate POST]', err);
+    const classified = classifyStripeError(err);
+    console.error('[seller/verification/initiate POST]', {
+      reason: classified.reason,
+      message: classified.message,
+      code: classified.code,
+      statusCode: classified.statusCode,
+    });
     return NextResponse.json(
-      { error: 'Unable to start seller verification right now.' },
+      {
+        error: 'Unable to start seller verification right now.',
+        code: 'STRIPE_IDENTITY_SESSION_FAILED',
+        reason: classified.reason,
+      },
       { status: 500 },
     );
   }

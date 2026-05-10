@@ -23,6 +23,7 @@ import {
 import { buildTrackingUrl } from '@/lib/shipping';
 import SellerShippingLabelForm from '@/components/SellerShippingLabelForm';
 import KycVerifyButton from '@/components/KycVerifyButton';
+import StripeConnectButton from '@/components/StripeConnectButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -546,7 +547,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
       {!isRestricted && !stripeOnboarded && !stripeInProgress && (
         <div className="card p-4 mb-6 bg-yellow-50 border-yellow-200 text-yellow-800 text-sm flex justify-between items-center gap-3">
           <span>⚠️ Connect your bank account via Stripe to receive payouts.</span>
-          <a href="/api/stripe/connect" className="btn-outline text-xs flex-shrink-0">Connect bank account</a>
+          <StripeConnectButton label="Connect Stripe" className="btn-outline text-xs flex-shrink-0" />
         </div>
       )}
 
@@ -558,7 +559,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
             {stripeRequirementsDue.length > 0 && ` ${stripeRequirementsDue.length} requirement(s) still due.`}
             {stripeRequirementsPastDue.length > 0 && ` ${stripeRequirementsPastDue.length} requirement(s) are past due.`}
           </span>
-          <a href="/api/stripe/connect" className="btn-outline text-xs flex-shrink-0">Resume setup</a>
+          <StripeConnectButton label="Resume Stripe setup" className="btn-outline text-xs flex-shrink-0" />
         </div>
       )}
 
@@ -592,9 +593,12 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
           )}
         </div>
         {stripeOnboarded && (
-          <p className="text-xs text-slate-400">
-            Stripe balance reflects your connected account. <a href="/api/stripe/connect" className="text-blue-500 hover:underline">Open Stripe dashboard →</a>
-          </p>
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs text-slate-400">
+              Stripe balance reflects your connected account.
+            </p>
+            <StripeConnectButton label="Open Stripe dashboard" className="btn-outline text-xs flex-shrink-0" />
+          </div>
         )}
         {stripeAccountId && stripeChargesEnabled !== null && stripePayoutsEnabled !== null && (
           <p className="text-xs text-slate-500 mt-2">
