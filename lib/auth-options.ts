@@ -6,6 +6,33 @@ import { isSmsOtpEnabled, SELLER_OTP_FORCE_DISABLED } from './feature-flags';
 import { recordLoginActivity } from './login-security';
 import { safeComparePassword } from './password';
 import type { NextAuthOptions } from 'next-auth';
+import type { Role } from '@prisma/client';
+
+type AuthSessionUser = {
+  id: string;
+  name: string | null;
+  email: string;
+  role: Role;
+  stripeAccountId: string | null;
+  stripeOnboardingComplete: boolean;
+};
+
+function isAuthSessionUser(user: unknown): user is AuthSessionUser {
+  if (!user || typeof user !== 'object') return false;
+  const candidate = user as Partial<AuthSessionUser>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.email === 'string' &&
+    typeof candidate.role === 'string'
+  );
+}
+
+/** Remove image fields that can bloat JWT/session payloads. */
+function stripImageFields(target: unknown) {
+  if (!target || typeof target !== 'object') return;
+  Reflect.deleteProperty(target, 'image');
+  Reflect.deleteProperty(target, 'picture');
+}
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
@@ -21,7 +48,21 @@ export const authOptions: NextAuthOptions = {
       },
       async authorize(credentials, request) {
         if (!credentials?.email || !credentials.password) return null;
-        const user = await prisma.user.findUnique({ where: { email: credentials.email.toLowerCase() } });
+        const user = await prisma.user.findUnique({
+          where: { email: credentials.email.toLowerCase() },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            password: true,
+            role: true,
+            stripeAccountId: true,
+            stripeOnboardingComplete: true,
+            deletedAt: true,
+            phone: true,
+            phoneVerified: true,
+          },
+        });
         if (!user) return null;
         // Reject soft-deleted accounts before touching the password.
         if (user.deletedAt) return null;
@@ -58,17 +99,27 @@ export const authOptions: NextAuthOptions = {
           console.error('[auth] failed to record login activity', error);
         }
 
-        return user as any;
+        const sessionUser: AuthSessionUser = {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          stripeAccountId: user.stripeAccountId,
+          stripeOnboardingComplete: user.stripeOnboardingComplete,
+        };
+        return sessionUser;
       }
     })
   ],
   callbacks: {
     async jwt({ token, user, trigger }) {
-      if (user) {
+      stripImageFields(token);
+      if (user && isAuthSessionUser(user)) {
+        stripImageFields(user);
         token.id = user.id;
-        token.role = (user as any).role;
-        token.stripeAccountId = (user as any).stripeAccountId;
-        token.stripeOnboardingComplete = (user as any).stripeOnboardingComplete;
+        token.role = user.role;
+        token.stripeAccountId = user.stripeAccountId;
+        token.stripeOnboardingComplete = user.stripeOnboardingComplete;
       }
       // On session update refetch lightweight account fields from DB.
       if (trigger === 'update') {
@@ -84,9 +135,10 @@ export const authOptions: NextAuthOptions = {
     },
     async session({ session, token }) {
       if (session.user) {
+        stripImageFields(session.user);
         session.user.id = token.id as string;
-        session.user.role = token.role as any;
-        session.user.stripeAccountId = token.stripeAccountId as any;
+        session.user.role = token.role as Role;
+        session.user.stripeAccountId = typeof token.stripeAccountId === 'string' ? token.stripeAccountId : null;
         session.user.stripeOnboardingComplete = Boolean(token.stripeOnboardingComplete);
       }
       return session;
