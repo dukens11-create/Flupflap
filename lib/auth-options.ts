@@ -32,7 +32,7 @@ export const authOptions: NextAuthOptions = {
             userFound: Boolean(user),
           });
           if (!user) {
-            console.warn('[auth] authorize user not found');
+            console.warn('[auth] authorize rejected credentials');
             return null;
           }
 
@@ -45,7 +45,7 @@ export const authOptions: NextAuthOptions = {
             passwordValid: ok,
           });
           if (!ok) {
-            console.warn('[auth] authorize invalid password or hash mismatch');
+            console.warn('[auth] authorize rejected credentials');
             return null;
           }
 
