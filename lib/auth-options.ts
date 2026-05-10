@@ -68,7 +68,7 @@ export const authOptions: NextAuthOptions = {
         token.stripeAccountId = (user as any).stripeAccountId;
         token.stripeOnboardingComplete = (user as any).stripeOnboardingComplete;
       }
-      // On session update re-fetch lightweight account fields from DB.
+      // On session update refetch lightweight account fields from DB.
       if (trigger === 'update') {
         const dbUser = await prisma.user.findUnique({
           where: { id: token.id as string },

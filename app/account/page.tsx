@@ -15,6 +15,8 @@ type SecurityLoginEntry = {
   createdAt: string;
 };
 
+type UserWithOptionalImage = { image?: string | null };
+
 export default function AccountPage() {
   const { data: session, status, update } = useSession();
   const router = useRouter();
@@ -42,7 +44,7 @@ export default function AccountPage() {
   const [avatarError, setAvatarError] = useState('');
   const [avatarSuccess, setAvatarSuccess] = useState('');
   const [avatarImage, setAvatarImage] = useState<string | null>(null);
-  const sessionImage = (session?.user as { image?: string | null } | undefined)?.image ?? null;
+  const sessionImage = (session?.user as UserWithOptionalImage | undefined)?.image ?? null;
 
   // Phone management
   const [phoneStep, setPhoneStep] = useState<'idle' | 'enter_phone' | 'enter_code'>('idle');
@@ -156,9 +158,9 @@ export default function AccountPage() {
         setAvatarSuccess('Profile photo updated!');
         try {
           const refreshed = await update({}); // Refresh session so header/avatar reflects the change
-          const refreshedImage = (refreshed?.user as { image?: string | null } | undefined)?.image;
-          if (typeof refreshedImage === 'string' || refreshedImage === null) setAvatarImage(refreshedImage);
-          else if (uploadedUrl) setAvatarImage(uploadedUrl);
+          const refreshedImage = (refreshed?.user as UserWithOptionalImage | undefined)?.image;
+          if (refreshedImage === undefined) setAvatarImage(uploadedUrl ?? null);
+          else setAvatarImage(refreshedImage);
         } catch {
           if (uploadedUrl) setAvatarImage(uploadedUrl);
           setAvatarSuccess('Profile photo updated! Please refresh the page to see changes in other areas.');
@@ -187,7 +189,7 @@ export default function AccountPage() {
         setAvatarSuccess('Profile photo removed.');
         try {
           const refreshed = await update({});
-          const refreshedImage = (refreshed?.user as { image?: string | null } | undefined)?.image;
+          const refreshedImage = (refreshed?.user as UserWithOptionalImage | undefined)?.image;
           setAvatarImage(refreshedImage ?? null);
         } catch {
           setAvatarSuccess('Profile photo removed. Please refresh the page to see changes in other areas.');
