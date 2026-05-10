@@ -38,7 +38,12 @@ function LoginForm() {
         setError(t('login.signInServerError'));
         return;
       }
-      const csrfData = await csrfRes.json().catch(() => null) as { csrfToken?: string } | null;
+      const csrfData = await csrfRes.json().catch((error) => {
+        console.error('[login] failed to parse CSRF response', {
+          message: error instanceof Error ? error.message : String(error),
+        });
+        return null;
+      }) as { csrfToken?: string } | null;
       const csrfToken = csrfData?.csrfToken;
       if (!csrfToken) {
         console.error('[login] CSRF response missing csrfToken field');
@@ -94,11 +99,12 @@ function LoginForm() {
         router.refresh();
       } else {
         // NextAuth encodes the failure reason in the redirect URL it would have used
+        const callbackSnippet = callbackText.slice(0, 2048);
         const isCredentialsError =
           callbackData.error === 'CredentialsSignin'
           || callbackRes.status === 401
           || (callbackData.url ?? '').includes(NEXTAUTH_CREDENTIALS_ERROR)
-          || callbackText.includes(NEXTAUTH_CREDENTIALS_ERROR);
+          || callbackSnippet.includes(NEXTAUTH_CREDENTIALS_ERROR);
         console.error('[login] authentication failed', {
           callbackStatus: callbackRes.status,
           callbackError: callbackData.error ?? null,

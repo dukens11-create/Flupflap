@@ -36,7 +36,7 @@ export const authOptions: NextAuthOptions = {
         try {
           const user = await prisma.user.findUnique({ where: { email } });
           if (!user) {
-            console.warn('[auth] authorize user not found', { email });
+            console.warn('[auth] authorize user not found');
             return null;
           }
 
@@ -46,7 +46,7 @@ export const authOptions: NextAuthOptions = {
             'authorize',
           );
           if (!ok) {
-            console.warn('[auth] authorize invalid password or hash mismatch', { userId: user.id, email: user.email });
+            console.warn('[auth] authorize invalid password or hash mismatch', { userId: user.id });
             return null;
           }
 
