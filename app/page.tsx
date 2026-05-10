@@ -182,7 +182,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
     {
       key: 'securePayments',
       icon: CreditCard,
-      tone: 'bg-amber-50 text-amber-700 border-amber-100',
+      tone: 'bg-slate-100 text-slate-800 border-slate-200',
     },
     {
       key: 'buyerProtection',
@@ -193,8 +193,8 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
 
   return (
     <main className="space-y-6 pb-6">
-      <section className="relative overflow-hidden rounded-[28px] border border-amber-100 bg-gradient-to-br from-amber-50 via-white to-emerald-50 px-5 py-6 shadow-sm sm:px-8 sm:py-8 lg:px-10 lg:py-10">
-        <div className="absolute inset-y-0 right-0 hidden w-1/3 bg-[radial-gradient(circle_at_top,_rgba(16,185,129,0.14),_transparent_60%)] lg:block" />
+      <section className="relative overflow-hidden rounded-[28px] border border-slate-200 bg-slate-50 px-5 py-6 shadow-sm sm:px-8 sm:py-8 lg:px-10 lg:py-10">
+        <div className="absolute inset-y-0 right-0 hidden w-1/3 bg-[radial-gradient(circle_at_top,_rgba(11,31,58,0.12),_transparent_60%)] lg:block" />
         <div className="max-w-3xl space-y-5">
           <div className="space-y-4">
             <h1 className="max-w-2xl text-3xl font-black tracking-tight text-slate-900 sm:text-5xl">{t('home.title')}</h1>
