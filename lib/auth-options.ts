@@ -82,7 +82,6 @@ export const authOptions: NextAuthOptions = {
         token.role = (user as any).role;
         console.info('[auth] jwt callback attached user', {
           hasUser: true,
-          trigger: trigger ?? 'signIn',
         });
       }
       // On session update, refresh minimal display fields from DB.
@@ -115,10 +114,14 @@ export const authOptions: NextAuthOptions = {
         hasTokenId: Boolean(token.id),
       });
       if (session.user) {
-        session.user.id = token.id as string;
+        if (typeof token.id === 'string') {
+          session.user.id = token.id;
+        }
         session.user.email = typeof token.email === 'string' ? token.email : session.user.email;
         session.user.name = typeof token.name === 'string' ? token.name : session.user.name;
-        session.user.role = token.role as any;
+        if (typeof token.role === 'string') {
+          session.user.role = token.role as any;
+        }
       }
       console.info('[auth] session callback', {
         hasSessionUser: Boolean(session.user),
