@@ -1,5 +1,7 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { getServerSession } from 'next-auth';
 import { prisma, isDatabaseConfigured } from '@/lib/db';
 import ProductCard from '@/components/ProductCard';
 import BrowseFilters from '@/components/BrowseFilters';
@@ -8,6 +10,8 @@ import { expirePromotions } from '@/lib/promotions';
 import { getServerTranslations } from '@/lib/i18n/server';
 import { ArrowRight, BadgeCheck, CreditCard, ShieldCheck } from 'lucide-react';
 import { getSellerResponseStatsForSellers } from '@/lib/messages';
+import { authOptions } from '@/lib/auth-options';
+import { normalizeExperienceRole } from '@/lib/role-experience';
 
 export const dynamic = 'force-dynamic';
 
@@ -173,6 +177,10 @@ async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?
 export default async function HomePage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const sp = await searchParams;
   const { t } = await getServerTranslations();
+  const session = await getServerSession(authOptions);
+  const experienceRole = normalizeExperienceRole(session?.user?.role);
+  if (experienceRole === 'seller') redirect('/seller/dashboard');
+  if (experienceRole === 'admin') redirect('/admin/dashboard');
   const trustBadges = [
     {
       key: 'verifiedSellers',
@@ -227,6 +235,26 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
             </div>
           </div>
         ))}
+      </section>
+
+      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <article className="card p-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Search Products</p>
+          <p className="mt-2 text-sm text-slate-600">Find what you need fast using keyword, condition, and price filters.</p>
+        </article>
+        <article className="card p-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Categories</p>
+          <p className="mt-2 text-sm text-slate-600">Browse listings by category to quickly discover trusted local offers.</p>
+        </article>
+        <article className="card p-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Order Tracking</p>
+          <p className="mt-2 text-sm text-slate-600">Track every order status from payment to delivery or pickup.</p>
+          <Link href="/orders" className="mt-3 inline-flex text-sm font-semibold text-blue-600 hover:underline">View orders</Link>
+        </article>
+        <article className="card p-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Buyer Protection</p>
+          <p className="mt-2 text-sm text-slate-600">Secure checkout and trusted seller verification keep purchases safer.</p>
+        </article>
       </section>
 
       <section id="featured-products" className="space-y-4">

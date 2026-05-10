@@ -205,6 +205,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   const soldCountThisMonth = soldItemsThisMonth.reduce((s, i) => s + i.quantity, 0);
   const revenueThisWeekCents = soldItemsThisWeek.reduce((s, i) => s + i.sellerNetCents, 0);
   const revenueThisMonthCents = soldItemsThisMonth.reduce((s, i) => s + i.sellerNetCents, 0);
+  const pendingOrdersToShip = orders.filter((order) => order.status === 'PAID').length;
   const verificationApproved = isSellerVerificationApproved(verificationSubmission);
   const inboxConversations = await getInboxConversations(session.user.id);
   const unreadInboxCount = inboxConversations.reduce(
@@ -314,8 +315,24 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
           <h1 className="text-3xl font-black">Seller Dashboard</h1>
           <p className="text-slate-500 text-sm">Welcome back, {session.user.name}</p>
         </div>
-        {!isRestricted && subscriptionActive && verificationApproved && <Link href="/seller/new" className="btn-primary">+ New listing</Link>}
+        {!isRestricted && subscriptionActive && verificationApproved && <Link href="/seller/new" className="btn-primary">Add New Product</Link>}
       </div>
+
+      <section id="sales-overview" className="grid grid-cols-2 gap-4 mb-6 lg:grid-cols-5">
+        <StatCard label="Total Sales" value={dollars(grossSalesCents)} />
+        <StatCard label="Active Listings" value={String(activeListingsCount)} />
+        <StatCard label="Pending Orders" value={String(pendingOrdersToShip)} sub="orders to ship" />
+        <div id="promotion-status" className="card p-5">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Promotion Status</p>
+          <p className="mt-2 text-sm font-semibold text-indigo-700">
+            {freePromotionEligible ? '2 months free promotion active' : 'No free promotion active'}
+          </p>
+        </div>
+        <div id="verification-status-summary" className="card p-5">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Verification Status</p>
+          <p className="mt-2 text-sm font-semibold text-slate-700">{sellerVerificationStatusLabel(verificationSubmission?.status)}</p>
+        </div>
+      </section>
 
       {isRestricted && (
         <div className="card p-5 mb-6 bg-red-50 border-red-200 text-red-800">
@@ -355,7 +372,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
       )}
 
       {!isRestricted && (
-        <section className="card p-6 mb-6">
+        <section id="verification-status" className="card p-6 mb-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-lg font-semibold text-slate-900">Seller Identity Verification</p>
@@ -532,7 +549,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
       )}
 
       {/* ── Earnings Summary ── */}
-      <section className="mb-8">
+      <section id="payouts" className="mb-8">
         <h2 className="text-xl font-bold mb-3">Earnings Summary</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
           <StatCard label="Items Sold" value={String(itemsSoldCount)} sub="paid/shipped/delivered" />
@@ -658,7 +675,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
       </section>
 
       {/* ── My Listings ── */}
-      <section className="mb-8">
+      <section id="my-listings" className="mb-8">
         <h2 className="text-xl font-bold mb-3">My Listings</h2>
         {products.length === 0 ? (
           <div className="card p-6 text-slate-500">
@@ -703,7 +720,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
       </section>
 
       {/* ── Recent Orders (for shipping management) ── */}
-      <section>
+      <section id="orders-to-ship">
         <h2 className="text-xl font-bold mb-3">Recent Orders</h2>
         {orders.length === 0 ? (
           <div className="card p-6 text-slate-500">No orders yet.</div>

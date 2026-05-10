@@ -2,10 +2,11 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { signOut, useSession } from 'next-auth/react';
-import { ShoppingCart, Package, LayoutDashboard, LogIn, UserPlus, LogOut, User, MessageCircle, Bell } from 'lucide-react';
+import { ShoppingCart, Package, LogIn, UserPlus, LogOut, User, MessageCircle, Bell, Menu, X } from 'lucide-react';
 import LanguageSelector from '@/components/LanguageSelector';
 import { useI18n } from '@/components/I18nProvider';
 import { useEffect, useState } from 'react';
+import { getRoleNavigation, normalizeExperienceRole } from '@/lib/role-experience';
 
 function useCartCount() {
   const [count, setCount] = useState(0);
@@ -97,10 +98,13 @@ function useUnreadNotifications(loggedIn: boolean) {
 
 export default function Navbar() {
   const { data: session } = useSession();
-  const role = session?.user?.role;
+  const role = session?.user?.role ?? null;
+  const experienceRole = normalizeExperienceRole(role);
+  const roleNavigation = getRoleNavigation(role);
   const cartCount = useCartCount();
   const unreadMessages = useUnreadMessages(!!session?.user);
   const unreadNotifications = useUnreadNotifications(!!session?.user);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const { t } = useI18n();
   const navLinkClass = 'rounded-full px-3 py-2 transition-colors hover:bg-slate-100 link-hover-navy';
   const actionLinkClass = 'relative flex items-center gap-1 rounded-full px-3 py-2 transition-colors hover:bg-slate-100 link-hover-navy';
@@ -120,58 +124,64 @@ export default function Navbar() {
                 className="h-14 w-auto sm:h-16"
               />
             </Link>
+            <button
+              type="button"
+              className="inline-flex items-center justify-center rounded-full border border-slate-200 p-2 text-slate-600 md:hidden"
+              onClick={() => setMobileOpen((open) => !open)}
+              aria-label="Toggle mobile menu"
+              aria-expanded={mobileOpen}
+            >
+              {mobileOpen ? <X size={18} /> : <Menu size={18} />}
+            </button>
           </div>
 
-          <div className="flex flex-1 flex-col gap-3 lg:flex-row lg:items-center">
+          <div className="hidden flex-1 flex-col gap-3 md:flex lg:flex-row lg:items-center">
             <nav className="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-600">
-              <Link href="/" className={navLinkClass}>{t('nav.browse')}</Link>
-              {role === 'SELLER' && (
-                <>
-                  <Link href="/seller" className={navLinkClass}>{t('nav.dashboard')}</Link>
-                  <Link href="/seller/new" className={navLinkClass}>{t('nav.listItem')}</Link>
-                </>
-              )}
-              {role === 'ADMIN' && (
-                <Link href="/admin" className={`${navLinkClass} flex items-center gap-1`}>
-                  <LayoutDashboard size={14} /> {t('nav.admin')}
+              {roleNavigation.map((item) => (
+                <Link key={`${item.href}-${item.label}`} href={item.href} className={navLinkClass}>
+                  {item.label}
                 </Link>
-              )}
+              ))}
             </nav>
 
             <div className="flex flex-wrap items-center gap-2 text-sm font-medium lg:ml-auto">
               <LanguageSelector />
-              <Link href="/cart" className={actionLinkClass}>
-                <ShoppingCart size={16} /> {t('nav.cart')}
-                {cartCount > 0 && (
-                  <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-amber-500 px-1 text-xs font-bold text-white">
-                    {cartCount}
-                  </span>
-                )}
-              </Link>
               {session?.user ? (
                 <>
-                  <Link href="/orders" className={actionLinkClass}>
-                    <Package size={16} /> {t('nav.orders')}
-                  </Link>
-                  <Link href="/messages" className={actionLinkClass}>
-                    <MessageCircle size={16} /> {t('nav.messages')}
-                    {unreadMessages > 0 && (
-                      <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-emerald-500 px-1 text-xs font-bold text-white">
-                        {unreadMessages}
-                      </span>
-                    )}
-                  </Link>
-                  <Link href="/notifications" className={actionLinkClass}>
-                    <Bell size={16} /> {t('nav.notifications')}
-                    {unreadNotifications > 0 && (
-                      <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-emerald-500 px-1 text-xs font-bold text-white">
-                        {unreadNotifications}
-                      </span>
-                    )}
-                  </Link>
-                  <Link href="/account" className={actionLinkClass}>
-                    <User size={16} /> {t('nav.account')}
-                  </Link>
+                  {experienceRole === 'buyer' && (
+                    <>
+                      <Link href="/cart" className={actionLinkClass}>
+                        <ShoppingCart size={16} /> {t('nav.cart')}
+                        {cartCount > 0 && (
+                          <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-amber-500 px-1 text-xs font-bold text-white">
+                            {cartCount}
+                          </span>
+                        )}
+                      </Link>
+                      <Link href="/orders" className={actionLinkClass}>
+                        <Package size={16} /> {t('nav.orders')}
+                      </Link>
+                      <Link href="/messages" className={actionLinkClass}>
+                        <MessageCircle size={16} /> {t('nav.messages')}
+                        {unreadMessages > 0 && (
+                          <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-emerald-500 px-1 text-xs font-bold text-white">
+                            {unreadMessages}
+                          </span>
+                        )}
+                      </Link>
+                      <Link href="/notifications" className={actionLinkClass}>
+                        <Bell size={16} /> {t('nav.notifications')}
+                        {unreadNotifications > 0 && (
+                          <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-emerald-500 px-1 text-xs font-bold text-white">
+                            {unreadNotifications}
+                          </span>
+                        )}
+                      </Link>
+                      <Link href="/account" className={actionLinkClass}>
+                        <User size={16} /> {t('nav.account')}
+                      </Link>
+                    </>
+                  )}
                   <button
                     onClick={() => signOut({ callbackUrl: '/' })}
                     className="flex items-center gap-1 rounded-full px-3 py-2 transition-colors hover:bg-red-50 hover:text-red-600"
@@ -192,6 +202,40 @@ export default function Navbar() {
             </div>
           </div>
         </div>
+        {mobileOpen && (
+          <div className={`mt-4 rounded-2xl border p-3 md:hidden ${
+            experienceRole === 'admin'
+              ? 'border-slate-300 bg-slate-100'
+              : experienceRole === 'seller'
+                ? 'border-indigo-200 bg-indigo-50'
+                : 'border-emerald-200 bg-emerald-50'
+          }`}>
+            <nav className="flex flex-col gap-2 text-sm font-medium text-slate-700">
+              {roleNavigation.map((item) => (
+                <Link key={`mobile-${item.href}-${item.label}`} href={item.href} className="rounded-lg px-3 py-2 hover:bg-white/80" onClick={() => setMobileOpen(false)}>
+                  {item.label}
+                </Link>
+              ))}
+              {session?.user ? (
+                <button
+                  onClick={() => signOut({ callbackUrl: '/' })}
+                  className="rounded-lg px-3 py-2 text-left hover:bg-white/80 hover:text-red-600"
+                >
+                  Logout
+                </button>
+              ) : (
+                <>
+                  <Link href="/login" className="rounded-lg px-3 py-2 hover:bg-white/80" onClick={() => setMobileOpen(false)}>
+                    {t('nav.login')}
+                  </Link>
+                  <Link href="/signup" className="rounded-lg px-3 py-2 hover:bg-white/80" onClick={() => setMobileOpen(false)}>
+                    {t('nav.signUp')}
+                  </Link>
+                </>
+              )}
+            </nav>
+          </div>
+        )}
       </div>
     </header>
   );
