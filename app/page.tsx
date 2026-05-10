@@ -8,7 +8,7 @@ import BrowseFilters from '@/components/BrowseFilters';
 import type { Metadata } from 'next';
 import { expirePromotions } from '@/lib/promotions';
 import { getServerTranslations } from '@/lib/i18n/server';
-import { ArrowRight, BadgeCheck, CreditCard, ShieldCheck } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { getSellerResponseStatsForSellers } from '@/lib/messages';
 import { authOptions } from '@/lib/auth-options';
 import { getRoleDefaultPath, normalizeExperienceRole } from '@/lib/role-experience';
@@ -185,23 +185,6 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   if (experienceRole === 'seller' || experienceRole === 'admin') {
     redirect(getRoleDefaultPath(session?.user?.role));
   }
-  const trustBadges = [
-    {
-      key: 'verifiedSellers',
-      icon: BadgeCheck,
-      tone: 'bg-emerald-50 text-emerald-700 border-emerald-100',
-    },
-    {
-      key: 'securePayments',
-      icon: CreditCard,
-      tone: 'bg-slate-100 text-slate-800 border-slate-200',
-    },
-    {
-      key: 'buyerProtection',
-      icon: ShieldCheck,
-      tone: 'bg-slate-100 text-slate-700 border-slate-200',
-    },
-  ] as const;
 
   return (
     <main className="space-y-6 pb-6">
@@ -225,42 +208,6 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
         </div>
       </section>
 
-      <section className="grid gap-3 md:grid-cols-3">
-        {trustBadges.map(({ key, icon: Icon, tone }) => (
-          <div key={key} className={`rounded-2xl border p-3 shadow-sm sm:p-4 ${tone}`}>
-            <div className="flex items-start gap-3">
-              <div className="rounded-xl bg-white/70 p-2.5">
-                <Icon size={18} />
-              </div>
-              <div>
-                <h2 className="text-sm font-semibold">{t(`home.trustBadges.${key}.title`)}</h2>
-                <p className="mt-1 text-xs leading-5 opacity-90 sm:text-sm">{t(`home.trustBadges.${key}.description`)}</p>
-              </div>
-            </div>
-          </div>
-        ))}
-      </section>
-
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <article className="card p-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Search Products</p>
-          <p className="mt-2 text-sm text-slate-600">Find what you need fast using keyword, condition, and price filters.</p>
-        </article>
-        <article className="card p-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Categories</p>
-          <p className="mt-2 text-sm text-slate-600">Browse listings by category to quickly discover trusted local offers.</p>
-        </article>
-        <article className="card p-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Order Tracking</p>
-          <p className="mt-2 text-sm text-slate-600">Track every order status from payment to delivery or pickup.</p>
-          <Link href="/orders" className="mt-3 inline-flex text-sm font-semibold text-blue-600 hover:underline">View orders</Link>
-        </article>
-        <article className="card p-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Buyer Protection</p>
-          <p className="mt-2 text-sm text-slate-600">Secure checkout and trusted seller verification keep purchases safer.</p>
-        </article>
-      </section>
-
       <section id="featured-products" className="space-y-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -277,6 +224,10 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
           <ProductGrid sp={sp} t={t} />
         </Suspense>
       </section>
+
+      <p className="text-center text-xs text-slate-500 sm:text-sm">
+        Verified sellers. Secure payments. Buyer protection.
+      </p>
     </main>
   );
 }
