@@ -357,6 +357,7 @@ model SellerVerification {
   kycStartedAt                 DateTime?
   providerReviewedAt           DateTime?
   eligibleToListAt             DateTime?
+  verifiedAt                   DateTime?
   adminFallbackStatus          SellerAdminFallbackStatus      @default(NOT_REQUIRED)
   adminFallbackReason          String?
   webhookLastEventId           String?
