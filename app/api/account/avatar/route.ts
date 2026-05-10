@@ -52,6 +52,7 @@ export async function POST(req: Request) {
   if (!session?.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  // Keep avatar uploads enabled as an explicit exception to the broader post-cutoff rollback.
 
   let form: FormData;
   try {
