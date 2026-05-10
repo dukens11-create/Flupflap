@@ -182,7 +182,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
     {
       key: 'securePayments',
       icon: CreditCard,
-      tone: 'bg-slate-100 text-[#16325C] border-slate-200',
+      tone: 'bg-slate-100 text-slate-800 border-slate-200',
     },
     {
       key: 'buyerProtection',
@@ -193,7 +193,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
 
   return (
     <main className="space-y-6 pb-6">
-      <section className="relative overflow-hidden rounded-[28px] border border-slate-200 bg-[#F8FAFC] px-5 py-6 shadow-sm sm:px-8 sm:py-8 lg:px-10 lg:py-10">
+      <section className="relative overflow-hidden rounded-[28px] border border-slate-200 bg-slate-50 px-5 py-6 shadow-sm sm:px-8 sm:py-8 lg:px-10 lg:py-10">
         <div className="absolute inset-y-0 right-0 hidden w-1/3 bg-[radial-gradient(circle_at_top,_rgba(11,31,58,0.12),_transparent_60%)] lg:block" />
         <div className="max-w-3xl space-y-5">
           <div className="space-y-4">
