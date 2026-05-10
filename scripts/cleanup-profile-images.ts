@@ -1,5 +1,4 @@
-import { PrismaClient } from '@prisma/client';
-import { PrismaPg } from '@prisma/adapter-pg';
+import { prisma } from '../lib/db';
 
 const TARGET_EMAILS = [
   'dukens0411@gmail.com',
@@ -8,14 +7,7 @@ const TARGET_EMAILS = [
 ] as const;
 
 async function run() {
-  const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) {
-    throw new Error('DATABASE_URL is required.');
-  }
-
   const confirm = process.argv.includes('--confirm');
-  const adapter = new PrismaPg({ connectionString });
-  const prisma = new PrismaClient({ adapter });
 
   try {
     const users = await prisma.user.findMany({
