@@ -5,6 +5,11 @@ import { recordLoginActivity } from './login-security';
 import { safeComparePassword } from './password';
 import type { NextAuthOptions } from 'next-auth';
 
+function stripAvatarFields(target: { image?: unknown; picture?: unknown }) {
+  delete target.image;
+  delete target.picture;
+}
+
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   session: { strategy: 'jwt' },
@@ -80,6 +85,7 @@ export const authOptions: NextAuthOptions = {
         token.email = user.email;
         token.name = user.name;
         token.role = user.role;
+        stripAvatarFields(token);
         console.info('[auth] jwt callback attached user', {
           hasUser: true,
         });
@@ -97,6 +103,7 @@ export const authOptions: NextAuthOptions = {
           });
           if (dbUser) {
             token.name = dbUser.name;
+            stripAvatarFields(token);
             console.info('[auth] jwt callback refreshed token user fields');
           }
         } catch (error) {
@@ -120,6 +127,7 @@ export const authOptions: NextAuthOptions = {
         session.user.email = token.email ?? session.user.email;
         session.user.name = token.name ?? session.user.name;
         session.user.role = token.role ?? session.user.role;
+        stripAvatarFields(session.user);
       }
       console.info('[auth] session callback', {
         hasSessionUser: Boolean(session.user),
