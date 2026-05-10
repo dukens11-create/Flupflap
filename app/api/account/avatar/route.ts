@@ -4,10 +4,10 @@ export async function GET() {
   return NextResponse.json({ error: 'Profile pictures are temporarily disabled.' }, { status: 410 });
 }
 
-export async function POST(_req: Request) {
+export async function POST() {
   return NextResponse.json({ error: 'Profile pictures are temporarily disabled.' }, { status: 410 });
 }
 
-export async function DELETE(_req: Request) {
+export async function DELETE() {
   return NextResponse.json({ error: 'Profile pictures are temporarily disabled.' }, { status: 410 });
 }
