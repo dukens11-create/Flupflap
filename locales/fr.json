@@ -102,7 +102,9 @@
     "phoneVerified": "Téléphone vérifié",
     "newSeller": "Nouveau vendeur",
     "responseRate": "{value}% répond rapidement",
-    "sellerFallback": "Vendeur du marketplace"
+    "sellerFallback": "Vendeur du marketplace",
+    "newSellerBadge": "Nouveau vendeur",
+    "trending": "Tendance"
   },
   "login": {
     "title": "Se connecter",

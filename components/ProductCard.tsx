@@ -82,12 +82,12 @@ export default function ProductCard({ p: product }:{p:any}){
               </span>
               {!sellerVerified && !phoneVerified && (
                 <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600">
-                  New Seller
+                  {t('product.newSellerBadge')}
                 </span>
               )}
               {isTrending && (
                 <span className="inline-flex items-center rounded-full bg-rose-100 px-2.5 py-1 text-[11px] font-semibold text-rose-700">
-                  Trending
+                  {t('product.trending')}
                 </span>
               )}
             </div>

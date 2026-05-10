@@ -37,10 +37,11 @@ export async function POST(req: Request) {
 
   if (action === 'grant_credits') {
     const sellerId = String(form.get('sellerId') ?? '');
-    const credits = Math.round(Number(form.get('credits')));
-    if (!sellerId || !Number.isFinite(credits) || credits < 1) {
+    const rawCredits = Number(form.get('credits'));
+    if (!sellerId || !Number.isFinite(rawCredits) || rawCredits < 1) {
       return NextResponse.json({ error: 'Invalid seller or credit amount.' }, { status: 400 });
     }
+    const credits = Math.round(rawCredits);
     const updated = await prisma.user.updateMany({
       where: { id: sellerId, role: 'SELLER' },
       data: { promotionCredits: { increment: credits } },

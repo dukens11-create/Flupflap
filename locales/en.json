@@ -102,7 +102,9 @@
     "phoneVerified": "Phone verified",
     "newSeller": "New seller",
     "responseRate": "{value}% responsive",
-    "sellerFallback": "Marketplace seller"
+    "sellerFallback": "Marketplace seller",
+    "newSellerBadge": "New Seller",
+    "trending": "Trending"
   },
   "login": {
     "title": "Sign in",

@@ -1,7 +1,3 @@
-export function getFreePromotionExpiry(fromDate = new Date()): Date {
-  return new Date(fromDate.getTime() + 60 * 24 * 60 * 60 * 1000);
-}
-
 export function isFreePromotionEligible(user: {
   hasFreePromotion?: boolean | null;
   freePromotionStart?: Date | null;
@@ -15,10 +11,6 @@ export function isFreePromotionEligible(user: {
   if (!hasFreePromotion || !freePromotionStart || !freePromotionEnd) return false;
   const now = Date.now();
   return freePromotionStart.getTime() <= now && freePromotionEnd.getTime() > now;
-}
-
-export function getFreePromotionWindowLabel(): string {
-  return '60 days';
 }
 
 export function getFreePromotionDaysLeft(user: {
