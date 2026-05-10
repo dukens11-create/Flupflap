@@ -23,11 +23,11 @@ type UserDiagnostic = {
   role: string;
   deletedAt: Date | null;
   image: string | null;
-  password: unknown;
+  password: string | null;
 };
 
 function toDiagnostic(user: UserDiagnostic) {
-  const bcryptValid = looksLikeBcryptHash(user.password);
+  const hasValidBcryptFormat = looksLikeBcryptHash(user.password);
 
   return {
     email: user.email,
@@ -36,7 +36,7 @@ function toDiagnostic(user: UserDiagnostic) {
     deletedAt: user.deletedAt?.toISOString() ?? null,
     hasImage: Boolean(user.image),
     imageLength: user.image?.length ?? 0,
-    passwordBcryptValid: bcryptValid,
+    passwordBcryptValid: hasValidBcryptFormat,
   };
 }
 
