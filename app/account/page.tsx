@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -14,9 +14,6 @@ type SecurityLoginEntry = {
   suspiciousReasons: string[];
   createdAt: string;
 };
-
-const AVATAR_UPLOADS_TEMPORARILY_DISABLED_MESSAGE =
-  'Profile picture uploads are temporarily unavailable while we resolve a login stability issue.';
 
 export default function AccountPage() {
   const { data: session, status, update } = useSession();
@@ -40,6 +37,7 @@ export default function AccountPage() {
   const [pwSuccess, setPwSuccess] = useState('');
 
   // Avatar upload
+  const avatarInputRef = useRef<HTMLInputElement>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarError, setAvatarError] = useState('');
   const [avatarSuccess, setAvatarSuccess] = useState('');
@@ -70,7 +68,6 @@ export default function AccountPage() {
   const [deleteOtherDetails, setDeleteOtherDetails] = useState('');
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState('');
-  const [idCopyMessage, setIdCopyMessage] = useState('');
 
   // Load current phone info from server
   useEffect(() => {
@@ -138,6 +135,42 @@ export default function AccountPage() {
   }
 
   const { email, role } = session.user;
+
+  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setAvatarError('');
+    setAvatarSuccess('');
+    setAvatarUploading(true);
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+      const res = await fetch('/api/account/avatar', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) {
+        setAvatarError(data.error ?? 'Upload failed.');
+      } else {
+        const uploadedUrl = typeof data.url === 'string' ? data.url : null;
+        setAvatarSuccess('Profile photo updated!');
+        try {
+          const refreshed = await update({}); // Refresh session so header/avatar reflects the change
+          if (typeof refreshed?.user?.image === 'string' || refreshed?.user?.image === null) {
+            setAvatarImage(refreshed.user.image);
+          }
+        } catch {
+          if (uploadedUrl) setAvatarImage(uploadedUrl);
+          setAvatarSuccess('Profile photo updated! Please refresh the page to see changes in other areas.');
+        }
+      }
+    } catch {
+      setAvatarError('Network error. Please try again.');
+    } finally {
+      setAvatarUploading(false);
+      // Reset the input so the same file can be re-selected if needed
+      if (avatarInputRef.current) avatarInputRef.current.value = '';
+    }
+  }
 
   async function removeAvatar() {
     setAvatarError('');
@@ -314,18 +347,6 @@ export default function AccountPage() {
     }
   }
 
-  async function copyUserId() {
-    const userId = session?.user?.id;
-    if (!userId) return;
-    setIdCopyMessage('');
-    try {
-      await navigator.clipboard.writeText(userId);
-      setIdCopyMessage('User ID copied.');
-    } catch {
-      setIdCopyMessage('Unable to copy automatically. Please copy it manually.');
-    }
-  }
-
   return (
     <main className="max-w-md mx-auto">
       <h1 className="text-3xl font-black mb-6">My Account</h1>
@@ -416,10 +437,22 @@ export default function AccountPage() {
               </div>
             )}
             <div className="space-y-1">
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                onChange={handleAvatarChange}
+                disabled={avatarUploading}
+                className="hidden"
+                id="avatar-upload"
+              />
               <div className="flex gap-2 flex-wrap">
-                <span className="text-xs font-medium px-3 py-1.5 rounded-lg border border-slate-300 bg-slate-100 text-slate-500 cursor-not-allowed">
-                  {avatarImage ? 'Change photo (temporarily unavailable)' : 'Upload photo (temporarily unavailable)'}
-                </span>
+                <label
+                  htmlFor="avatar-upload"
+                  className={`text-xs font-medium px-3 py-1.5 rounded-lg border border-slate-300 cursor-pointer hover:bg-slate-50 transition-colors ${avatarUploading ? 'opacity-50 pointer-events-none' : ''}`}
+                >
+                  {avatarUploading ? 'Uploading…' : avatarImage ? 'Change photo' : 'Upload photo'}
+                </label>
                 {avatarImage && !avatarUploading && (
                   <button
                     type="button"
@@ -431,7 +464,6 @@ export default function AccountPage() {
                 )}
               </div>
               <p className="text-xs text-slate-400">JPEG, PNG, WebP or GIF · max 5 MB</p>
-              <p className="text-xs text-amber-700">{AVATAR_UPLOADS_TEMPORARILY_DISABLED_MESSAGE}</p>
             </div>
           </div>
           {avatarError && <p className="text-red-600 text-xs mt-2">{avatarError}</p>}
@@ -486,25 +518,6 @@ export default function AccountPage() {
           <p className="font-medium capitalize">{role?.toLowerCase()}</p>
         </div>
 
-        <div>
-          <p className="label">User ID</p>
-          <p className="text-xs text-slate-500 mt-1">
-            Use this value for Stripe metadata keys <span className="font-mono">userId</span> and <span className="font-mono">sellerId</span>.
-          </p>
-          <div className="mt-2 flex items-center gap-2">
-            <input
-              className="input flex-1 font-mono text-sm"
-              value={session.user.id}
-              readOnly
-              aria-label="Internal FlupFlap user ID"
-            />
-            <button type="button" onClick={copyUserId} className="btn-outline text-sm">
-              Copy
-            </button>
-          </div>
-          {idCopyMessage && <p className="text-xs text-slate-600 mt-1">{idCopyMessage}</p>}
-        </div>
-
         {/* Phone */}
         <div>
           <p className="label">Phone number</p>
@@ -547,9 +560,7 @@ export default function AccountPage() {
           {phoneStep === 'enter_phone' && (
             <form onSubmit={sendPhoneCode} className="space-y-2 mt-1">
               <input
-                type="text"
-                inputMode="tel"
-                autoComplete="tel"
+                type="tel"
                 className="input"
                 placeholder="+1 555 000 1234"
                 value={phoneInput}

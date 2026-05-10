@@ -24,7 +24,6 @@ import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { createAndSendOtp } from '@/lib/otp';
 import { isSmsOtpEnabled, SELLER_OTP_FORCE_DISABLED } from '@/lib/feature-flags';
-import { safeComparePassword } from '@/lib/password';
 
 const schema = z.object({
   email: z.string().email(),
@@ -45,11 +44,7 @@ export async function POST(req: Request) {
     const timingAttackPreventionHash = '$2b$08$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
     let passwordOk: boolean;
     if (user) {
-      passwordOk = await safeComparePassword(
-        password,
-        user.password,
-        'otp/send',
-      );
+      passwordOk = await bcrypt.compare(password, user.password);
     } else {
       await bcrypt.compare(password, timingAttackPreventionHash);
       passwordOk = false;
@@ -68,11 +63,12 @@ export async function POST(req: Request) {
     }
 
     if (SELLER_OTP_FORCE_DISABLED || !isSmsOtpEnabled()) {
-      // Seller OTP is not active in the current sign-in flow.
-      // Return 'signin' so the client proceeds with email + password only.
-      console.info('[otp/send] Seller OTP bypassed: not active in current sign-in flow', {
+      console.warn('[otp/send] Seller OTP forcibly bypassed: pending Twilio A2P 10DLC approval', {
         userId: user.id,
-        reason: SELLER_OTP_FORCE_DISABLED ? 'SELLER_OTP_FORCE_DISABLED=true' : 'ENABLE_SMS_OTP=false',
+        role: user.role,
+        reason: SELLER_OTP_FORCE_DISABLED
+          ? 'SELLER_OTP_FORCE_DISABLED=true (pending Twilio A2P 10DLC approval)'
+          : 'feature flag ENABLE_SMS_OTP=false',
       });
       return NextResponse.json({ step: 'signin' });
     }

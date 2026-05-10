@@ -12,7 +12,6 @@ import { prisma } from '@/lib/db';
 import { isCloudinaryConfigured } from '@/lib/cloudinary';
 import { normalizePhone } from '@/lib/phone';
 import { uploadSellerVerificationDocument } from '@/lib/seller-verification';
-import { findConflictingSellerByPhone } from '@/lib/seller-phone';
 
 const schema = z.object({
   phoneNumber: z.string().min(7).max(20),
@@ -112,7 +111,7 @@ export async function POST(req: Request) {
     const normalizedPhone = normalizePhone(data.phoneNumber);
     if (!normalizedPhone) {
       return NextResponse.json(
-        { error: 'Enter a valid phone number. US/Canada numbers can be entered with or without +1.' },
+        { error: 'Enter a valid phone number including country code.' },
         { status: 400 },
       );
     }
@@ -129,18 +128,6 @@ export async function POST(req: Request) {
     const backFile = getOptionalFile(form, 'governmentIdBack');
     const selfieFile = getOptionalFile(form, 'selfieImage');
     const phoneMatchesExisting = user?.phone === normalizedPhone;
-    if (!phoneMatchesExisting) {
-      const conflictingSeller = await findConflictingSellerByPhone({
-        phone: normalizedPhone,
-        excludeUserId: session.user.id,
-      });
-      if (conflictingSeller) {
-        return NextResponse.json(
-          { error: 'Phone number is already in use by another seller account.' },
-          { status: 409 },
-        );
-      }
-    }
     const phoneMatchesVerifiedSubmission =
       existingVerification?.phoneNumber === normalizedPhone
       && existingVerification.phoneVerificationStatus === 'VERIFIED';

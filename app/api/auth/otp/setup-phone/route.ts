@@ -26,8 +26,6 @@ import { prisma } from '@/lib/db';
 import { createAndSendOtp } from '@/lib/otp';
 import { normalizePhone } from '@/lib/phone';
 import { isSmsOtpEnabled, SELLER_OTP_FORCE_DISABLED } from '@/lib/feature-flags';
-import { safeComparePassword } from '@/lib/password';
-import { findConflictingSellerByPhone } from '@/lib/seller-phone';
 
 const schema = z.object({
   email: z.string().email(),
@@ -57,11 +55,7 @@ export async function POST(req: Request) {
       '$2b$08$/q5WhRImkX8WonE9ckvfMOUqkcgRD24wzjyJpBuDu3UnZ.XYRudFu';
     let passwordOk: boolean;
     if (user) {
-      passwordOk = await safeComparePassword(
-        password,
-        user.password,
-        'otp/setup-phone',
-      );
+      passwordOk = await bcrypt.compare(password, user.password);
     } else {
       await bcrypt.compare(password, timingAttackPreventionHash);
       passwordOk = false;
@@ -80,11 +74,12 @@ export async function POST(req: Request) {
     }
 
     if (SELLER_OTP_FORCE_DISABLED || !isSmsOtpEnabled()) {
-      // Seller OTP is not active in the current sign-in flow.
-      // Skip phone setup and let the seller sign in with email + password only.
-      console.info('[setup-phone] Seller OTP bypassed: not active in current sign-in flow', {
+      console.warn('[setup-phone] Seller OTP forcibly bypassed: pending Twilio A2P 10DLC approval', {
         userId: user.id,
-        reason: SELLER_OTP_FORCE_DISABLED ? 'SELLER_OTP_FORCE_DISABLED=true' : 'ENABLE_SMS_OTP=false',
+        role: user.role,
+        reason: SELLER_OTP_FORCE_DISABLED
+          ? 'SELLER_OTP_FORCE_DISABLED=true (pending Twilio A2P 10DLC approval)'
+          : 'feature flag ENABLE_SMS_OTP=false',
       });
       return NextResponse.json({ step: 'signin' });
     }
@@ -99,23 +94,9 @@ export async function POST(req: Request) {
         hadPlusPrefix: phone.trim().startsWith('+'),
       });
       return NextResponse.json(
-        { error: 'Invalid phone number. US/Canada numbers can be entered with or without +1.' },
+        { error: 'Invalid phone number. Please include your country code (e.g. +1 for US/Canada).' },
         { status: 400 },
       );
-    }
-
-    const phoneChanged = user.phone !== normalizedPhone;
-    if (phoneChanged) {
-      const conflictingSeller = await findConflictingSellerByPhone({
-        phone: normalizedPhone,
-        excludeUserId: user.id,
-      });
-      if (conflictingSeller) {
-        return NextResponse.json(
-          { error: 'Phone number is already in use by another seller account.' },
-          { status: 409 },
-        );
-      }
     }
 
     // Save phone (unverified); it will be marked verified on successful OTP login.

@@ -59,20 +59,6 @@ export default async function AdminSellersPage({
         take: 5,
         include: { admin: { select: { name: true, email: true } } },
       },
-      sellerTaxProfile: {
-        select: {
-          taxIdStatus: true,
-          verificationStatus: true,
-        },
-      },
-      sellerTaxReports: {
-        orderBy: { taxYear: 'desc' },
-        take: 1,
-        select: {
-          taxYear: true,
-          form1099Status: true,
-        },
-      },
       _count: { select: { products: true } },
     },
   });
@@ -133,17 +119,6 @@ export default async function AdminSellersPage({
                     {seller.verificationSubmission?.phoneVerificationStatus && (
                       <span className="text-slate-500">
                         Phone verification: {sellerPhoneVerificationLabel(seller.verificationSubmission.phoneVerificationStatus)}
-                      </span>
-                    )}
-                    {/* Tax status — status-level only, no raw SSN/EIN */}
-                    {seller.sellerTaxProfile && (
-                      <span className="text-slate-500">
-                        Tax ID: {seller.sellerTaxProfile.taxIdStatus ?? 'NOT_PROVIDED'}
-                      </span>
-                    )}
-                    {seller.sellerTaxReports[0] && (
-                      <span className="text-slate-500">
-                        1099-K {seller.sellerTaxReports[0].taxYear}: {seller.sellerTaxReports[0].form1099Status}
                       </span>
                     )}
                   </div>

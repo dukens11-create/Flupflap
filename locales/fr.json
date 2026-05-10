@@ -12,8 +12,7 @@
     "logout": "Se déconnecter",
     "login": "Se connecter",
     "signUp": "S'inscrire",
-    "language": "Langue",
-    "taxCenter": "Centre fiscal"
+    "language": "Langue"
   },
   "footer": {
     "description": "Découvrez des annonces fiables, un paiement protégé et une façon plus claire d'acheter et de vendre au quotidien.",
@@ -66,9 +65,6 @@
         "title": "Protection acheteur",
         "description": "Des messages de confiance clairs renforcent des transactions plus sûres de la recherche à la livraison."
       }
-    },
-    "categories": {
-      "title": "Acheter par catégorie"
     },
     "loadingProducts": "Chargement des produits…",
     "noProducts": "Aucun produit trouvé. Essayez d'ajuster vos filtres."
@@ -132,10 +128,7 @@
     "invalidCode": "Code invalide ou expiré. Veuillez réessayer.",
     "failedSavePhone": "Impossible d'enregistrer le numéro de téléphone.",
     "missingLoginInfo": "Informations de connexion introuvables. Veuillez réessayer.",
-    "failedResendCode": "Impossible de renvoyer le code.",
-    "showPassword": "Afficher le mot de passe",
-    "hidePassword": "Masquer le mot de passe",
-    "signInServerError": "La connexion a échoué de manière inattendue. Veuillez réessayer ou contacter le support."
+    "failedResendCode": "Impossible de renvoyer le code."
   },
   "signup": {
     "title": "Créer un compte",
@@ -146,7 +139,7 @@
     "customerOption": "Acheteur – Je veux acheter",
     "sellerOption": "Vendeur – Je veux vendre",
     "mobilePhone": "Numéro de téléphone mobile",
-    "phoneHelp": "Utilisé pour l'authentification à deux facteurs lors de la connexion. Les numéros États-Unis/Canada peuvent être saisis avec ou sans +1. Des frais de messagerie peuvent s'appliquer.",
+    "phoneHelp": "Utilisé pour l'authentification à deux facteurs lors de la connexion. Des frais de messagerie peuvent s'appliquer.",
     "creatingAccount": "Création du compte…",
     "createAccount": "Créer un compte",
     "alreadyHave": "Vous avez déjà un compte ?",

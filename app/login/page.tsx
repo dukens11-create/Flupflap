@@ -1,24 +1,9 @@
 "use client";
 import { Suspense, useState } from 'react';
+import { signIn } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Eye, EyeOff } from 'lucide-react';
 import { useI18n } from '@/components/I18nProvider';
-
-const NEXTAUTH_CREDENTIALS_ERROR = 'error=CredentialsSignin';
-// Keep scan bounded to avoid expensive full-body searches on unexpected large HTML payloads.
-const MAX_CALLBACK_ERROR_SCAN_BYTES = 2048;
-
-function isCredentialsSigninError(
-  callbackData: { url?: string; error?: string },
-  callbackStatus: number,
-  callbackSnippet: string,
-) {
-  return callbackData.error === 'CredentialsSignin'
-    || callbackStatus === 401
-    || (callbackData.url ?? '').includes(NEXTAUTH_CREDENTIALS_ERROR)
-    || callbackSnippet.includes(NEXTAUTH_CREDENTIALS_ERROR);
-}
 
 function LoginForm() {
   const { t } = useI18n();
@@ -28,105 +13,237 @@ function LoginForm() {
 
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
 
+  // Multi-step seller flow: credentials → (add_phone?) → otp
+  const [step, setStep] = useState<'credentials' | 'add_phone' | 'otp'>('credentials');
+  const [maskedPhone, setMaskedPhone] = useState('');
+  // Hold credentials for later steps
+  const [pendingEmail, setPendingEmail] = useState('');
+  const [pendingPassword, setPendingPassword] = useState('');
+
+  /** Step 1 — validate credentials; send OTP to sellers. */
   async function submitCredentials(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError('');
     setLoading(true);
 
     const form = new FormData(e.currentTarget);
-    const email = String(form.get('email') ?? '').trim();
+    const email = form.get('email') as string;
     const password = form.get('password') as string;
 
-    try {
-      // Step 1: Fetch the CSRF token required by NextAuth
-      const csrfRes = await fetch('/api/auth/csrf', {
-        method: 'GET',
-        credentials: 'include',
-        cache: 'no-store',
-      });
-      if (!csrfRes.ok) {
-        console.error('[login] failed to fetch CSRF token', { status: csrfRes.status });
-        setError(t('login.signInServerError'));
-        return;
-      }
-      const csrfData = await csrfRes.json().catch((error) => {
-        console.error('[login] failed to parse CSRF response', {
-          message: error instanceof Error ? error.message : String(error),
-        });
-        return null;
-      }) as { csrfToken?: string } | null;
-      const csrfToken = csrfData?.csrfToken;
-      if (!csrfToken) {
-        console.error('[login] CSRF response missing csrfToken field');
-        setError(t('login.signInServerError'));
-        return;
-      }
+    const res = await fetch('/api/auth/otp/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
 
-      // Step 2: POST form-encoded credentials to the NextAuth callback endpoint
-      const callbackRes = await fetch('/api/auth/callback/credentials', {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          Accept: 'application/json',
-        },
-        body: new URLSearchParams({ email, password, csrfToken, callbackUrl, json: 'true' }).toString(),
-        redirect: 'follow',
-      });
+    const data = await res.json();
+    setLoading(false);
 
-      // Parse callback body once; NextAuth usually returns JSON, but production may return HTML/other payloads.
-      const callbackText = await callbackRes.text();
-      let callbackData: { url?: string; error?: string } = {};
-      try {
-        callbackData = callbackText ? JSON.parse(callbackText) as { url?: string; error?: string } : {};
-      } catch {
-        callbackData = {};
-      }
+    if (!res.ok) {
+      setError(data.error ?? t('login.invalidCredentials'));
+      return;
+    }
 
-      // Safe diagnostics — no passwords or tokens logged
-      console.log('[login] credentials callback', {
-        status: callbackRes.status,
-        error: callbackData.error ?? null,
-        redirectUrl: callbackData.url ?? null,
-        responseContentType: callbackRes.headers.get('content-type'),
-        responseBytes: callbackText.length,
-      });
-
-      // Step 3: Confirm authentication by inspecting the session
-      let session: { user?: unknown } = {};
-      try {
-        const sessionRes = await fetch('/api/auth/session', {
-          method: 'GET',
-          credentials: 'include',
-          cache: 'no-store',
-        });
-        session = await sessionRes.json() as { user?: unknown };
-      } catch {
-        console.error('[login] failed to parse session response');
-      }
-
-      if (session?.user) {
+    if (data.step === 'otp') {
+      // Seller: show OTP form
+      setPendingEmail(email);
+      setPendingPassword(password);
+      setMaskedPhone(data.maskedPhone ?? '');
+      setStep('otp');
+    } else if (data.step === 'add_phone') {
+      // Seller without phone: show phone capture form
+      setPendingEmail(email);
+      setPendingPassword(password);
+      setStep('add_phone');
+    } else {
+      // Non-seller: sign in directly
+      const result = await signIn('credentials', { email, password, redirect: false });
+      if (result?.error) {
+        setError(t('login.invalidCredentials'));
+      } else {
         router.push(callbackUrl);
         router.refresh();
-      } else {
-        // NextAuth encodes the failure reason in the redirect URL it would have used
-        const callbackSnippet = callbackText.slice(0, MAX_CALLBACK_ERROR_SCAN_BYTES);
-        const isCredentialsError = isCredentialsSigninError(callbackData, callbackRes.status, callbackSnippet);
-        console.error('[login] authentication failed', {
-          callbackStatus: callbackRes.status,
-          callbackError: callbackData.error ?? null,
-          hasCredentialsError: isCredentialsError,
-        });
-        setError(isCredentialsError ? t('login.invalidCredentials') : t('login.signInServerError'));
       }
-    } catch (err) {
-      console.error('[login] login flow threw unexpectedly', { message: err instanceof Error ? err.message : String(err) });
-      setError(t('login.signInServerError'));
-    } finally {
-      setLoading(false);
     }
+  }
+
+  /** Step 1b — seller has no phone; save phone and send OTP. */
+  async function submitPhone(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    const form = new FormData(e.currentTarget);
+    const phone = form.get('phone') as string;
+
+    const res = await fetch('/api/auth/otp/setup-phone', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: pendingEmail, password: pendingPassword, phone }),
+    });
+
+    const data = await res.json();
+    setLoading(false);
+
+    if (!res.ok) {
+      setError(data.error ?? t('login.failedSavePhone'));
+      return;
+    }
+
+    if (data.step === 'signin') {
+      if (!pendingEmail || !pendingPassword) {
+        setError(t('login.missingLoginInfo'));
+        setStep('credentials');
+        return;
+      }
+      const result = await signIn('credentials', {
+        email: pendingEmail,
+        password: pendingPassword,
+        redirect: false,
+      });
+
+      if (result?.error) {
+        setError(t('login.invalidCredentials'));
+      } else {
+        router.push(callbackUrl);
+        router.refresh();
+      }
+      return;
+    }
+
+    setMaskedPhone(data.maskedPhone ?? '');
+    setStep('otp');
+  }
+
+  /** Step 2 — submit OTP code; complete the seller sign-in. */
+  async function submitOtp(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    const form = new FormData(e.currentTarget);
+    const otp = form.get('otp') as string;
+
+    const result = await signIn('credentials', {
+      email: pendingEmail,
+      password: pendingPassword,
+      otp,
+      redirect: false,
+    });
+
+    setLoading(false);
+
+    if (result?.error) {
+      setError(t('login.invalidCode'));
+    } else {
+      router.push(callbackUrl);
+      router.refresh();
+    }
+  }
+
+  /** Allow the seller to request a fresh code. */
+  async function resendOtp() {
+    setError('');
+    setLoading(true);
+    const res = await fetch('/api/auth/otp/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: pendingEmail, password: pendingPassword }),
+    });
+    const data = await res.json();
+    setLoading(false);
+    if (!res.ok) {
+      setError(data.error ?? t('login.failedResendCode'));
+    } else {
+      setError('');
+    }
+  }
+
+  function handleBackToCredentials() {
+    setStep('credentials');
+    setError('');
+  }
+
+  if (step === 'add_phone') {
+    return (
+      <form onSubmit={submitPhone} className="card p-6 mt-6 space-y-4">
+        <p className="text-sm text-slate-600">
+          {t('login.addPhoneIntro')}
+        </p>
+        <div>
+          <label className="label">{t('login.phoneNumber')}</label>
+          <input
+            name="phone"
+            type="tel"
+            className="input"
+            placeholder="+1 555 000 1234"
+            required
+          />
+          <p className="text-xs text-slate-400 mt-1">
+            {t('login.phoneHint')}
+          </p>
+        </div>
+        {error && <p className="text-red-600 text-sm">{error}</p>}
+        <button className="btn-primary w-full" disabled={loading}>
+          {loading ? t('login.sendingCode') : t('login.sendVerificationCode')}
+        </button>
+        <div className="text-right">
+          <button
+            type="button"
+            className="text-sm text-slate-500 hover:text-blue-600"
+            onClick={handleBackToCredentials}
+          >
+            {t('login.back')}
+          </button>
+        </div>
+      </form>
+    );
+  }
+
+  if (step === 'otp') {
+    return (
+      <form onSubmit={submitOtp} className="card p-6 mt-6 space-y-4">
+        <p className="text-sm text-slate-600">
+          {t('login.otpIntro', { phone: maskedPhone || '***' })}
+        </p>
+        <div>
+          <label className="label">{t('login.verificationCode')}</label>
+          <input
+            name="otp"
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]{6}"
+            maxLength={6}
+            className="input tracking-widest text-center text-xl"
+            placeholder="123456"
+            autoComplete="one-time-code"
+            required
+          />
+        </div>
+        {error && <p className="text-red-600 text-sm">{error}</p>}
+        <button className="btn-primary w-full" disabled={loading}>
+          {loading ? t('login.verifying') : t('login.verifyAndSignIn')}
+        </button>
+        <div className="flex justify-between text-sm text-slate-500">
+          <button
+            type="button"
+            className="hover:text-blue-600"
+            onClick={resendOtp}
+            disabled={loading}
+          >
+            {t('login.resendCode')}
+          </button>
+          <button
+            type="button"
+            className="hover:text-blue-600"
+            onClick={handleBackToCredentials}
+          >
+            {t('login.back')}
+          </button>
+        </div>
+      </form>
+    );
   }
 
   return (
@@ -137,23 +254,7 @@ function LoginForm() {
       </div>
       <div>
         <label className="label">{t('login.password')}</label>
-        <div className="relative">
-          <input
-            name="password"
-            type={showPassword ? 'text' : 'password'}
-            className="input pr-10"
-            placeholder={t('login.password')}
-            required
-          />
-          <button
-            type="button"
-            className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:rounded-r-xl"
-            onClick={() => setShowPassword(v => !v)}
-            aria-label={showPassword ? t('login.hidePassword') : t('login.showPassword')}
-          >
-            {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-          </button>
-        </div>
+        <input name="password" type="password" className="input" placeholder={t('login.password')} required />
       </div>
       {error && <p className="text-red-600 text-sm">{error}</p>}
       <button className="btn-primary w-full" disabled={loading}>

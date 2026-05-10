@@ -26,7 +26,6 @@
     "prisma": "latest",
     "react": "latest",
     "react-dom": "latest",
-    "resend": "^6.12.3",
     "stripe": "latest",
     "twilio": "^6.0.0",
     "zod": "latest"

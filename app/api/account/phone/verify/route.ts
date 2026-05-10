@@ -9,7 +9,6 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
-import { findConflictingSellerByPhone } from '@/lib/seller-phone';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 
@@ -59,28 +58,6 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: 'Too many failed attempts. Please request a new code.' }, { status: 400 });
       }
       return NextResponse.json({ error: 'Invalid code. Please try again.' }, { status: 400 });
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { id: true, role: true, phone: true },
-    });
-    if (!user) {
-      await prisma.phoneVerificationToken.delete({ where: { userId: session.user.id } }).catch(() => null);
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    if (user.role === 'SELLER' && user.phone !== record.phone) {
-      const conflictingSeller = await findConflictingSellerByPhone({
-        phone: record.phone,
-        excludeUserId: user.id,
-      });
-      if (conflictingSeller) {
-        await prisma.phoneVerificationToken.delete({ where: { userId: session.user.id } }).catch(() => null);
-        return NextResponse.json(
-          { error: 'Phone number is already in use by another seller account.' },
-          { status: 409 },
-        );
-      }
     }
 
     // Success: update user's phone and mark as verified
