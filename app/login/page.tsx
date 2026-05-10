@@ -32,13 +32,22 @@ function LoginForm() {
     const email = form.get('email') as string;
     const password = form.get('password') as string;
 
-    const res = await fetch('/api/auth/otp/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    });
+    let res: Response;
+    let data: { step?: string; maskedPhone?: string; error?: string };
+    try {
+      res = await fetch('/api/auth/otp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      data = await res.json();
+    } catch (err) {
+      console.error('[login] network error during credential check', err);
+      setLoading(false);
+      setError(t('login.invalidCredentials'));
+      return;
+    }
 
-    const data = await res.json();
     setLoading(false);
 
     if (!res.ok) {
@@ -78,13 +87,22 @@ function LoginForm() {
     const form = new FormData(e.currentTarget);
     const phone = form.get('phone') as string;
 
-    const res = await fetch('/api/auth/otp/setup-phone', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: pendingEmail, password: pendingPassword, phone }),
-    });
+    let res: Response;
+    let data: { step?: string; maskedPhone?: string; error?: string };
+    try {
+      res = await fetch('/api/auth/otp/setup-phone', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: pendingEmail, password: pendingPassword, phone }),
+      });
+      data = await res.json();
+    } catch (err) {
+      console.error('[login] network error during phone setup', err);
+      setLoading(false);
+      setError(t('login.failedSavePhone'));
+      return;
+    }
 
-    const data = await res.json();
     setLoading(false);
 
     if (!res.ok) {
@@ -147,12 +165,21 @@ function LoginForm() {
   async function resendOtp() {
     setError('');
     setLoading(true);
-    const res = await fetch('/api/auth/otp/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: pendingEmail, password: pendingPassword }),
-    });
-    const data = await res.json();
+    let res: Response;
+    let data: { error?: string };
+    try {
+      res = await fetch('/api/auth/otp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: pendingEmail, password: pendingPassword }),
+      });
+      data = await res.json();
+    } catch (err) {
+      console.error('[login] network error during OTP resend', err);
+      setLoading(false);
+      setError(t('login.failedResendCode'));
+      return;
+    }
     setLoading(false);
     if (!res.ok) {
       setError(data.error ?? t('login.failedResendCode'));

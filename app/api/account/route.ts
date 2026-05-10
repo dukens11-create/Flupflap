@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db';
 import { ACCOUNT_DELETION_REASONS } from '@/lib/account-deletion';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
+import { safeComparePassword } from '@/lib/password';
 
 const profileSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
@@ -30,7 +31,7 @@ export async function PATCH(req: Request) {
       const user = await prisma.user.findUnique({ where: { id: session.user.id } });
       if (!user) return NextResponse.json({ error: 'User not found.' }, { status: 404 });
 
-      const valid = await bcrypt.compare(currentPassword, user.password);
+      const valid = await safeComparePassword(currentPassword, user.password, 'account/password-change');
       if (!valid) {
         return NextResponse.json({ error: 'Current password is incorrect.' }, { status: 400 });
       }

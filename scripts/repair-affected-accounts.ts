@@ -1,5 +1,8 @@
+import crypto from 'crypto';
 import { prisma } from '../lib/db';
 import { looksLikeBcryptHash } from '../lib/password';
+import { sendEmail } from '../lib/email';
+import { passwordResetEmail } from '../lib/email-templates';
 
 function parseTargetEmails(argv: string[]) {
   const arg = argv.find((entry) => entry.startsWith('--emails='));
@@ -77,11 +80,12 @@ async function run() {
     console.log('[repair-affected-accounts] Accounts with invalid bcrypt hash:', invalidHashes.map((user) => user.email).join(', ') || '(none)');
 
     if (!confirm) {
-      console.log('[repair-affected-accounts] Dry run only. Re-run with --confirm to set image = null for affected accounts.');
+      console.log('[repair-affected-accounts] Dry run only. Re-run with --confirm to clear profile images and reset broken passwords for affected accounts.');
       return;
     }
 
-    const result = await prisma.user.updateMany({
+    // Step 1: Clear profile images.
+    const imageResult = await prisma.user.updateMany({
       where: {
         email: { in: targetEmails },
         image: { not: null },
@@ -89,7 +93,62 @@ async function run() {
       data: { image: null },
     });
 
-    console.log(`[repair-affected-accounts] Updated ${result.count} account(s).`);
+    console.log(`[repair-affected-accounts] Cleared profile images for ${imageResult.count} account(s).`);
+
+    // Step 2: Reset passwords that were corrupted by the profile-photo upload bug.
+    // For each account with an invalid bcrypt hash, set a non-loginable sentinel
+    // value and send a password-reset email so the user can recover their account.
+    const brokenUsers = users.filter((u) => !looksLikeBcryptHash(u.password) && !u.deletedAt);
+
+    if (brokenUsers.length === 0) {
+      console.log('[repair-affected-accounts] No accounts with broken passwords found.');
+    } else {
+      console.log(`[repair-affected-accounts] Resetting passwords for ${brokenUsers.length} account(s) with invalid hashes:`, brokenUsers.map((u) => u.email).join(', '));
+
+      const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL;
+      if (!appUrl) {
+        console.warn(
+          '[repair-affected-accounts] WARNING: Neither NEXTAUTH_URL nor NEXT_PUBLIC_APP_URL is set. ' +
+          'Password-reset links will contain localhost URLs and will not work in production. ' +
+          'Set the correct app URL before running this script.',
+        );
+      }
+      const resolvedAppUrl = appUrl ?? 'http://localhost:3000';
+
+      for (const user of brokenUsers) {
+        // Replace the corrupt value with a sentinel that safeComparePassword
+        // rejects cleanly (it fails the bcrypt regex, returns false).
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { password: '!NEEDS_RESET!' },
+        });
+
+        // Create a fresh password-reset token (1-hour expiry).
+        const token = crypto.randomBytes(32).toString('hex');
+        const expires = new Date(Date.now() + 60 * 60 * 1000);
+        const identifier = `password-reset:${user.email}`;
+
+        await prisma.verificationToken.deleteMany({ where: { identifier } });
+        await prisma.verificationToken.create({
+          data: { identifier, token, expires },
+        });
+
+        const resetUrl = `${resolvedAppUrl}/reset-password?token=${token}&email=${encodeURIComponent(user.email)}`;
+        const { subject, html } = passwordResetEmail(resetUrl);
+        const sent = await sendEmail(user.email, subject, html);
+
+        if (sent) {
+          console.log(`[repair-affected-accounts] ${user.email}: password sentinel set, reset email sent ✓`);
+        } else {
+          // The password sentinel is already written; log the reset URL so an
+          // operator can share it with the user out-of-band (e.g. via support chat).
+          console.error(
+            `[repair-affected-accounts] ${user.email}: password sentinel set but reset email FAILED to send ✗. ` +
+            `Share this link with the user manually (expires in 1 hour): ${resetUrl}`,
+          );
+        }
+      }
+    }
   } finally {
     await prisma.$disconnect();
   }
