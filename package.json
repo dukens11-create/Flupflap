@@ -10,7 +10,8 @@
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "seed": "tsx prisma/seed.ts",
-    "cleanup:profile-images": "tsx scripts/cleanup-profile-images.ts"
+    "cleanup:profile-images": "tsx scripts/cleanup-profile-images.ts",
+    "repair:affected-accounts": "tsx scripts/repair-affected-accounts.ts"
   },
   "dependencies": {
     "@next-auth/prisma-adapter": "latest",
