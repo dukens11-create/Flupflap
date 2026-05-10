@@ -25,10 +25,10 @@ export async function POST(req: Request) {
     const settings = await getMarketplaceSettings();
     const freePromotionEnabled = form.get('freePromotionEnabled') === 'on';
     const durationRaw = Number(form.get('freePromotionDurationDays'));
-    if (!Number.isFinite(durationRaw) || durationRaw < 1) {
-      return NextResponse.json({ error: 'Free promotion duration must be at least 1 day.' }, { status: 400 });
+    if (!Number.isInteger(durationRaw) || durationRaw < 1) {
+      return NextResponse.json({ error: 'Free promotion duration must be a whole number of days (minimum 1).' }, { status: 400 });
     }
-    const freePromotionDurationDays = Math.round(durationRaw);
+    const freePromotionDurationDays = durationRaw;
     await prisma.marketplaceSettings.update({
       where: { id: settings.id },
       data: { freePromotionEnabled, freePromotionDurationDays },
@@ -42,10 +42,10 @@ export async function POST(req: Request) {
     if (!sellerId) {
       return NextResponse.json({ error: 'Seller is required.' }, { status: 400 });
     }
-    if (!Number.isFinite(rawCredits) || rawCredits < 1) {
-      return NextResponse.json({ error: 'Credit amount must be at least 1.' }, { status: 400 });
+    if (!Number.isInteger(rawCredits) || rawCredits < 1) {
+      return NextResponse.json({ error: 'Credit amount must be a whole number (minimum 1).' }, { status: 400 });
     }
-    const credits = Math.round(rawCredits);
+    const credits = rawCredits;
     const updated = await prisma.user.updateMany({
       where: { id: sellerId, role: 'SELLER' },
       data: { promotionCredits: { increment: credits } },
