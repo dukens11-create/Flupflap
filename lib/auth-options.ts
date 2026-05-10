@@ -29,7 +29,7 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials, request) {
         const email = credentials?.email?.trim().toLowerCase();
         if (!email || !credentials?.password) {
-          console.warn('[auth] authorize missing credentials', { hasEmail: Boolean(email) });
+          console.warn('[auth] authorize missing credentials');
           return null;
         }
 
@@ -46,7 +46,7 @@ export const authOptions: NextAuthOptions = {
             'authorize',
           );
           if (!ok) {
-            console.warn('[auth] authorize invalid password or hash mismatch', { userId: user.id });
+            console.warn('[auth] authorize invalid password or hash mismatch');
             return null;
           }
 
@@ -62,7 +62,7 @@ export const authOptions: NextAuthOptions = {
           console.info('[auth] authorize success', { userId: user.id, role: user.role });
           return user as any;
         } catch (error) {
-          console.error('[auth] authorize unexpected error', { email, message: error instanceof Error ? error.message : String(error) });
+          console.error('[auth] authorize unexpected error', { message: error instanceof Error ? error.message : String(error) });
           return null;
         }
       }

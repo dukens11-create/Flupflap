@@ -6,6 +6,7 @@ import { Eye, EyeOff } from 'lucide-react';
 import { useI18n } from '@/components/I18nProvider';
 
 const NEXTAUTH_CREDENTIALS_ERROR = 'error=CredentialsSignin';
+const MAX_CALLBACK_ERROR_SCAN_BYTES = 2048;
 
 function LoginForm() {
   const { t } = useI18n();
@@ -99,7 +100,7 @@ function LoginForm() {
         router.refresh();
       } else {
         // NextAuth encodes the failure reason in the redirect URL it would have used
-        const callbackSnippet = callbackText.slice(0, 2048);
+        const callbackSnippet = callbackText.slice(0, MAX_CALLBACK_ERROR_SCAN_BYTES);
         const isCredentialsError =
           callbackData.error === 'CredentialsSignin'
           || callbackRes.status === 401
