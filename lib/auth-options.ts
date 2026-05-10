@@ -5,13 +5,58 @@ import { recordLoginActivity } from './login-security';
 import { safeComparePassword } from './password';
 import type { NextAuthOptions } from 'next-auth';
 
+const SESSION_IMAGE_MAX_LENGTH = 2048;
+const AVATAR_ROUTE = '/api/account/avatar';
+
 function toSessionImage(image: string | null | undefined, cacheBuster?: number) {
-  if (!image) return null;
-  if (image.startsWith('data:image/')) {
-    const v = cacheBuster ?? Date.now();
-    return `/api/account/avatar?v=${v}`;
+  if (typeof image !== 'string') return null;
+
+  const value = image.trim();
+  if (!value) return null;
+  const lowerValue = value.toLowerCase();
+
+  if (value.length > SESSION_IMAGE_MAX_LENGTH) {
+    console.warn('[auth] blocked unsafe session image value', { reason: 'oversized' });
+    return null;
   }
-  return image;
+
+  if (lowerValue.startsWith('data:image/')) {
+    const v = cacheBuster ?? Date.now();
+    return `${AVATAR_ROUTE}?v=${v}`;
+  }
+
+  if (value.startsWith(AVATAR_ROUTE)) {
+    if (cacheBuster == null) return value;
+    const separator = value.includes('?') ? '&' : '?';
+    return `${value}${separator}v=${cacheBuster}`;
+  }
+
+  if (
+    value.startsWith('/') &&
+    !value.startsWith('//') &&
+    !value.startsWith('/..') &&
+    !value.includes('/../') &&
+    !value.includes('\\') &&
+    !lowerValue.includes('%2e%2e') &&
+    !lowerValue.includes('%2f') &&
+    !lowerValue.includes('%5c')
+  ) {
+    return value;
+  }
+
+  if (lowerValue.startsWith('http://') || lowerValue.startsWith('https://')) {
+    try {
+      new URL(value);
+      return value;
+    } catch {
+      console.warn('[auth] blocked unsafe session image value', { reason: 'malformed-url' });
+      return null;
+    }
+  }
+
+  const scheme = value.match(/^([a-zA-Z][a-zA-Z0-9+.-]*):/)?.[1]?.toLowerCase() ?? null;
+  console.warn('[auth] blocked unsafe session image value', { reason: scheme ? `protocol:${scheme}` : 'unsupported' });
+  return null;
 }
 
 export const authOptions: NextAuthOptions = {
