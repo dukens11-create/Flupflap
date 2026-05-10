@@ -86,8 +86,9 @@ export async function POST(req: Request) {
     const uniqueSellerIds = new Set(products.map(p => p.sellerId));
     const isSingleSeller = uniqueSellerIds.size === 1;
     const seller = isSingleSeller ? products[0].seller : null;
-    const sellerVerified = seller ? isSellerVerificationApproved(seller.verificationSubmission) : false;
-    let sellerStripeId = seller && sellerVerified && seller.stripeOnboardingComplete
+    let sellerStripeId = seller
+      && seller.stripeOnboardingComplete
+      && isSellerVerificationApproved(seller.verificationSubmission)
       ? seller.stripeAccountId
       : null;
     let sellerReconnectRequired = false;
