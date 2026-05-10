@@ -68,14 +68,14 @@ export const authOptions: NextAuthOptions = {
         token.role = (user as any).role;
         token.stripeAccountId = (user as any).stripeAccountId;
         token.stripeOnboardingComplete = (user as any).stripeOnboardingComplete;
-        // Emergency mitigation: keep avatar data out of auth token/session state.
-        token.image = null;
+        delete (token as { image?: unknown }).image;
+        delete (token as { picture?: unknown }).picture;
         console.info('[auth] jwt callback attached user', {
           hasUser: true,
           trigger: trigger ?? 'signIn',
         });
       }
-      // On session update (e.g. after avatar upload) re-fetch image from DB.
+      // On session update refresh only minimal user-identifying fields.
       if (trigger === 'update') {
         if (!token.id) {
           console.warn('[auth] jwt update skipped due to missing token id');
@@ -87,8 +87,9 @@ export const authOptions: NextAuthOptions = {
             select: { name: true },
           });
           if (dbUser) {
-            token.image = null;
             token.name = dbUser.name;
+            delete (token as { image?: unknown }).image;
+            delete (token as { picture?: unknown }).picture;
             console.info('[auth] jwt callback refreshed token user fields');
           }
         } catch (error) {
@@ -106,8 +107,7 @@ export const authOptions: NextAuthOptions = {
         session.user.role = token.role as any;
         session.user.stripeAccountId = token.stripeAccountId as any;
         session.user.stripeOnboardingComplete = Boolean(token.stripeOnboardingComplete);
-        // Emergency mitigation: keep avatar data out of auth token/session state.
-        session.user.image = null;
+        delete (session.user as { image?: unknown }).image;
       }
       console.info('[auth] session callback', {
         hasSessionUser: Boolean(session.user),
