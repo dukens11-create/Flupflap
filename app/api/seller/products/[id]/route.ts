@@ -24,7 +24,7 @@ const optionalInputString = z.preprocess((value) => {
   if (value === undefined || value === null) return undefined;
   if (typeof value === 'string') return value.trim();
   if (typeof value === 'number') return String(value);
-  return value;
+  return undefined;
 }, z.string().optional());
 
 const updateSchema = z.object({
@@ -141,13 +141,13 @@ function resolveSubmittedPackageDetails(data: ProductUpdateInput) {
   const weightUnit = hasLegacyWeightInput
     ? 'oz'
     : normalizeWeightUnit(getFirstSubmittedValue(data.weightUnit, data.packageWeightUnit));
-  const distanceUnit = data.packageDimensionUnit?.trim().toLowerCase() || 'in';
+  const distanceUnit = data.packageDimensionUnit?.trim().toLowerCase();
   const weight = parsePositiveNumber(weightValue);
   const lengthIn = parsePositiveNumber(getFirstSubmittedValue(data.length, data.packageLength, data.lengthIn));
   const widthIn = parsePositiveNumber(getFirstSubmittedValue(data.width, data.packageWidth, data.widthIn));
   const heightIn = parsePositiveNumber(getFirstSubmittedValue(data.height, data.packageHeight, data.heightIn));
 
-  if (distanceUnit !== 'in' || !weight || !lengthIn || !widthIn || !heightIn) {
+  if ((distanceUnit && distanceUnit !== 'in') || !weight || !lengthIn || !widthIn || !heightIn) {
     return null;
   }
 
@@ -345,7 +345,7 @@ export async function POST(
       });
     } catch (dbError) {
       const message = getErrorMessage(dbError);
-      console.error('[seller/products/[id] POST] database update error', { productId: id, sellerId, message });
+      console.error('[seller/products/[id] POST] database update error', { productId: id, sellerId: sellerId ?? null, message });
       if (dbError instanceof Error && dbError.stack) {
         console.error('[seller/products/[id] POST] stack trace', dbError.stack);
       }
@@ -360,7 +360,7 @@ export async function POST(
       return redirectToEditForm(req, id, 'Please review the listing details and try again.');
     }
     const message = getErrorMessage(err);
-    console.error('[seller/products/[id] POST] request handling error', { productId: id, sellerId, message });
+    console.error('[seller/products/[id] POST] request handling error', { productId: id, sellerId: sellerId ?? null, message });
     if (err instanceof Error && err.stack) {
       console.error('[seller/products/[id] POST] stack trace', err.stack);
     }
