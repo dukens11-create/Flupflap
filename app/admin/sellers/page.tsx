@@ -9,6 +9,11 @@ import {
   sellerPhoneVerificationLabel,
 } from '@/lib/seller-verification';
 import { SellerStatus, KycStatus } from '@prisma/client';
+import {
+  getSellerKycCounts,
+  KYC_APPROVED_WHERE,
+  deriveEffectiveKycStatus,
+} from '@/lib/seller-kyc-stats';
 
 export const dynamic = 'force-dynamic';
 
@@ -94,11 +99,17 @@ export default async function AdminSellersPage({
   const sellerStatusFilter = parsedStatus ? { sellerStatus: parsedStatus } : {};
 
   // Build the KYC status filter using the canonical kycStatus field on User.
+  // When filtering for APPROVED, also include legacy sellers with verifiedSeller=true.
   const validKycStatuses = Object.values(KycStatus);
   const parsedKyc = validKycStatuses.includes(kycFilter as KycStatus)
     ? (kycFilter as KycStatus)
     : null;
-  const kycStatusFilter = parsedKyc ? { kycStatus: parsedKyc } : {};
+  const kycStatusFilter: Record<string, unknown> =
+    parsedKyc === 'APPROVED'
+      ? KYC_APPROVED_WHERE
+      : parsedKyc
+        ? { kycStatus: parsedKyc }
+        : {};
 
   const sellers = await prisma.user.findMany({
     where: { role: 'SELLER', ...sellerStatusFilter, ...kycStatusFilter },
@@ -119,26 +130,22 @@ export default async function AdminSellersPage({
   });
 
   // Count sellers per seller status and KYC status for tab badges.
+  // KYC counts use the shared helpers that check both kycStatus and the legacy
+  // verifiedSeller flag so previously-approved sellers are never miscounted.
   const [
     pendingStatusCount,
     activeStatusCount,
     restrictedStatusCount,
     suspendedStatusCount,
     bannedStatusCount,
-    kycPendingCount,
-    kycApprovedCount,
-    kycRejectedCount,
-    kycNotSubmittedCount,
+    { kycPendingCount, kycApprovedCount, kycRejectedCount, kycNotSubmittedCount },
   ] = await Promise.all([
     prisma.user.count({ where: { role: 'SELLER', sellerStatus: 'PENDING' } }),
     prisma.user.count({ where: { role: 'SELLER', sellerStatus: 'ACTIVE' } }),
     prisma.user.count({ where: { role: 'SELLER', sellerStatus: 'RESTRICTED' } }),
     prisma.user.count({ where: { role: 'SELLER', sellerStatus: 'SUSPENDED' } }),
     prisma.user.count({ where: { role: 'SELLER', sellerStatus: 'BANNED' } }),
-    prisma.user.count({ where: { role: 'SELLER', kycStatus: 'PENDING_REVIEW' } }),
-    prisma.user.count({ where: { role: 'SELLER', kycStatus: 'APPROVED' } }),
-    prisma.user.count({ where: { role: 'SELLER', kycStatus: 'REJECTED' } }),
-    prisma.user.count({ where: { role: 'SELLER', kycStatus: 'NOT_SUBMITTED' } }),
+    getSellerKycCounts(),
   ]);
 
   const totalSellerCount = pendingStatusCount + activeStatusCount + restrictedStatusCount + suspendedStatusCount + bannedStatusCount;
@@ -273,8 +280,8 @@ export default async function AdminSellersPage({
                     </p>
                   )}
                   <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-                    <span className={`badge ${kycStatusBadge(seller.kycStatus)}`}>
-                      {kycStatusLabel(seller.kycStatus)}
+                    <span className={`badge ${kycStatusBadge(deriveEffectiveKycStatus(seller))}`}>
+                      {kycStatusLabel(deriveEffectiveKycStatus(seller))}
                     </span>
                     {seller.verificationSubmission?.provider && (
                       <span className="text-slate-500">

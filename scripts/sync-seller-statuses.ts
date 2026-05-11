@@ -5,14 +5,18 @@
  * where `sellerStatus` and `kycStatus` are inconsistent with each other or
  * with the `SellerVerification` table.
  *
- * Rules applied (in order):
+ * Rules applied (in order, first match wins):
  * 1. Sellers with SellerVerification.status = APPROVED → kycStatus=APPROVED,
  *    sellerStatus=ACTIVE, verifiedSeller=true, approvedAt=verifiedAt (if null: eligibleToListAt)
- * 2. Sellers with SellerVerification.status = REJECTED → kycStatus=REJECTED
- * 3. Sellers with SellerVerification.status = PENDING  → kycStatus=PENDING_REVIEW
- * 4. Sellers with no SellerVerification record         → kycStatus=NOT_SUBMITTED
- * 5. Any seller still on sellerStatus=ACTIVE with no approved KYC is left as-is
- *    (they may be legacy sellers grandfathered in before KYC was required).
+ * 2. Sellers with verifiedSeller = true (legacy approval flag, no submission) →
+ *    kycStatus=APPROVED, sellerStatus=ACTIVE, approvedAt=now (if not already set)
+ * 3. Sellers with SellerVerification.status = REJECTED → kycStatus=REJECTED
+ * 4. Sellers with SellerVerification.status = PENDING  → kycStatus=PENDING_REVIEW
+ * 5. Sellers with no SellerVerification record AND verifiedSeller=false → kycStatus=NOT_SUBMITTED
+ *
+ * Rule 2 prevents the regression where sellers approved via the old
+ * `verifiedSeller` flag were incorrectly downgraded to NOT_SUBMITTED when
+ * the new kycStatus field defaulted to NOT_SUBMITTED for all rows.
  *
  * Run in dry-run mode (default) to preview changes without writing:
  *   npx ts-node -P tsconfig.json scripts/sync-seller-statuses.ts
@@ -69,19 +73,30 @@ async function run() {
     const kv = seller.verificationSubmission;
     const changes: SellerUpdate = {};
 
+    console.log(
+      `[sync-seller-statuses] ${seller.email} — kycStatus=${seller.kycStatus} verifiedSeller=${seller.verifiedSeller} verificationStatus=${kv?.status ?? 'none'}`,
+    );
+
     if (kv?.status === 'APPROVED') {
-      // KYC was approved — ensure all canonical fields are set.
+      // KYC was approved via verification submission — ensure all canonical fields are set.
       const approvedAt = kv.verifiedAt ?? kv.eligibleToListAt ?? new Date();
       if (seller.kycStatus !== 'APPROVED') changes.kycStatus = KycStatus.APPROVED;
       if (seller.sellerStatus !== 'ACTIVE') changes.sellerStatus = SellerStatus.ACTIVE;
       if (!seller.verifiedSeller) changes.verifiedSeller = true;
       if (!seller.approvedAt) changes.approvedAt = approvedAt;
+    } else if (seller.verifiedSeller) {
+      // Legacy approval: verifiedSeller=true but no APPROVED verification submission.
+      // This handles sellers approved before the SellerVerification model existed.
+      // Never downgrade these sellers — always treat verifiedSeller=true as APPROVED.
+      if (seller.kycStatus !== 'APPROVED') changes.kycStatus = KycStatus.APPROVED;
+      if (seller.sellerStatus !== 'ACTIVE') changes.sellerStatus = SellerStatus.ACTIVE;
+      if (!seller.approvedAt) changes.approvedAt = new Date();
     } else if (kv?.status === 'REJECTED') {
       if (seller.kycStatus !== 'REJECTED') changes.kycStatus = KycStatus.REJECTED;
     } else if (kv?.status === 'PENDING') {
       if (seller.kycStatus !== 'PENDING_REVIEW') changes.kycStatus = KycStatus.PENDING_REVIEW;
     } else {
-      // No verification record at all.
+      // No verification record and verifiedSeller is false — genuinely not submitted.
       if (seller.kycStatus !== 'NOT_SUBMITTED') changes.kycStatus = KycStatus.NOT_SUBMITTED;
     }
 
