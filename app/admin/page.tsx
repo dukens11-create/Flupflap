@@ -8,7 +8,7 @@ import { OrderStatus } from '@prisma/client';
 import type { Metadata } from 'next';
 import { getVisitorMetrics } from '@/lib/traffic';
 import AdminListingsTable from '@/components/AdminListingsTable';
-import { getSellerKycCounts } from '@/lib/seller-kyc-stats';
+import { getSellerKycStats } from '@/lib/seller-kyc-stats';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,7 +34,7 @@ export default async function AdminPage({
 
   const suspiciousLoginSince = new Date(Date.now() - 1000 * 60 * 60 * 24 * 30);
 
-  const [settings, pending, all, recentOrders, restrictedSellersCount, buyerCount, sellerCount, totalUsersCount, totalOrdersCount, pendingSellerApprovalsCount, pendingKycReviewsCount, paidRevenueAgg, platformCommissionAgg, openReportsCount, openSellerReportsCount, suspiciousLoginCount, activePromotionsCount, productsThisWeek, productsThisMonth, activeListingsCount, soldItemsAgg, revenueThisWeekAgg, revenueThisMonthAgg, visitorMetrics, kycCounts] = await Promise.all([
+  const [settings, pending, all, recentOrders, restrictedSellersCount, buyerCount, sellerCount, totalUsersCount, totalOrdersCount, pendingSellerApprovalsCount, paidRevenueAgg, platformCommissionAgg, openReportsCount, openSellerReportsCount, suspiciousLoginCount, activePromotionsCount, productsThisWeek, productsThisMonth, activeListingsCount, soldItemsAgg, revenueThisWeekAgg, revenueThisMonthAgg, visitorMetrics, kycCounts] = await Promise.all([
     getMarketplaceSettings(),
     prisma.product.findMany({
       where: { status: 'PENDING' },
@@ -75,10 +75,6 @@ export default async function AdminPage({
     prisma.user.count({
       where: { role: 'SELLER', sellerStatus: 'PENDING' },
     }),
-    // Pending KYC Reviews: uses canonical kycStatus field only (no legacy ambiguity here)
-    prisma.user.count({
-      where: { role: 'SELLER', kycStatus: 'PENDING_REVIEW', verifiedSeller: false },
-    }),
     prisma.order.aggregate({
       _sum: { totalCents: true },
       where: { status: { in: PAID_ORDER_STATUSES } },
@@ -117,10 +113,10 @@ export default async function AdminPage({
     getVisitorMetrics(now),
     // KYC counts use shared helpers that read both kycStatus and the legacy
     // verifiedSeller flag so previously-approved sellers are never miscounted.
-    getSellerKycCounts(),
+    getSellerKycStats(),
   ]);
 
-  const { kycApprovedCount, kycRejectedCount, kycNotSubmittedCount } = kycCounts;
+  const { kycApprovedCount, kycPendingCount, kycRejectedCount, kycNotSubmittedCount } = kycCounts;
 
   const revenueThisWeekCents = revenueThisWeekAgg._sum.totalCents ?? 0;
   const revenueThisMonthCents = revenueThisMonthAgg._sum.totalCents ?? 0;
@@ -202,7 +198,7 @@ export default async function AdminPage({
           </a>
           <a href="/admin/sellers?kyc=PENDING_REVIEW" aria-label="View sellers with KYC pending review" className="rounded-xl bg-white/10 p-3 hover:bg-white/20 transition-colors">
             <p className="text-xs text-slate-200">KYC Pending Review</p>
-            <p className={`text-2xl font-black ${pendingKycReviewsCount > 0 ? 'text-yellow-300' : ''}`}>{pendingKycReviewsCount}</p>
+            <p className={`text-2xl font-black ${kycPendingCount > 0 ? 'text-yellow-300' : ''}`}>{kycPendingCount}</p>
           </a>
           <a href="/admin/sellers?kyc=APPROVED" aria-label="View sellers with KYC approved" className="rounded-xl bg-white/10 p-3 hover:bg-white/20 transition-colors">
             <p className="text-xs text-slate-200">KYC Approved</p>

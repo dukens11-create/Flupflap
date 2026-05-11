@@ -11,7 +11,7 @@ import {
 import { SellerStatus, KycStatus } from '@prisma/client';
 import type { Prisma } from '@prisma/client';
 import {
-  getSellerKycCounts,
+  getSellerKycStats,
   KYC_APPROVED_WHERE,
   KYC_PENDING_REVIEW_WHERE,
   KYC_REJECTED_WHERE,
@@ -153,7 +153,7 @@ export default async function AdminSellersPage({
     prisma.user.count({ where: { role: 'SELLER', sellerStatus: 'RESTRICTED' } }),
     prisma.user.count({ where: { role: 'SELLER', sellerStatus: 'SUSPENDED' } }),
     prisma.user.count({ where: { role: 'SELLER', sellerStatus: 'BANNED' } }),
-    getSellerKycCounts(),
+    getSellerKycStats(),
   ]);
 
   const totalSellerCount = pendingStatusCount + activeStatusCount + restrictedStatusCount + suspendedStatusCount + bannedStatusCount;
