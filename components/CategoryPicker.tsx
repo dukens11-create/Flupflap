@@ -220,6 +220,30 @@ function flattenCategoryOptions(
   });
 }
 
+function toSubcategoryOption(node: CategoryNode, mainId: string, mainName: string): PickerOption {
+  return {
+    id: node.id,
+    name: node.name,
+    slug: node.slug,
+    aliases: resolveOptionAliases(node),
+    icon: null,
+    breadcrumb: mainName,
+    selection: { mainId, subId: node.id, childId: null },
+  };
+}
+
+function toChildCategoryOption(node: CategoryNode, mainId: string, subId: string, breadcrumb: string): PickerOption {
+  return {
+    id: node.id,
+    name: node.name,
+    slug: node.slug,
+    aliases: resolveOptionAliases(node),
+    icon: null,
+    breadcrumb,
+    selection: { mainId, subId, childId: node.id },
+  };
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function findNodeById(nodes: CategoryNode[], id: string): CategoryNode | null {
@@ -371,28 +395,16 @@ export default function CategoryPicker({ defaultCategoryId, defaultSubcategoryId
     [categories],
   );
   const subOptions = useMemo<PickerOption[]>(
-    () => subcategories.map(c => ({
-      id: c.id,
-      name: c.name,
-      slug: c.slug,
-      aliases: resolveOptionAliases(c),
-      icon: null,
-      breadcrumb: mainNode?.name ?? '',
-      selection: { mainId: mainId ?? c.parentId ?? c.id, subId: c.id, childId: null },
-    })),
-    [mainId, mainNode?.name, subcategories],
+    () => (mainId && mainNode
+      ? subcategories.map(c => toSubcategoryOption(c, mainId, mainNode.name))
+      : []),
+    [mainId, mainNode, subcategories],
   );
   const childOptions = useMemo<PickerOption[]>(
-    () => childCategories.map(c => ({
-      id: c.id,
-      name: c.name,
-      slug: c.slug,
-      aliases: resolveOptionAliases(c),
-      icon: null,
-      breadcrumb: [mainNode?.name, subNode?.name].filter(Boolean).join(' › '),
-      selection: { mainId: mainId ?? c.parentId ?? c.id, subId: subId ?? c.parentId, childId: c.id },
-    })),
-    [childCategories, mainId, mainNode?.name, subId, subNode?.name],
+    () => (mainId && subId && mainNode && subNode
+      ? childCategories.map(c => toChildCategoryOption(c, mainId, subId, `${mainNode.name} › ${subNode.name}`))
+      : []),
+    [childCategories, mainId, mainNode, subId, subNode],
   );
   const searchableMainOptions = useMemo<PickerOption[]>(() => flattenCategoryOptions(categories), [categories]);
 
