@@ -8,8 +8,11 @@ const LOW_STOCK_THRESHOLD = 5;
 export interface AdminListing {
   id: string;
   title: string;
+  /** Legacy single-image field (always present from old listings). */
   imageUrl: string;
+  /** Preferred primary image; supersedes imageUrl when non-empty. */
   mainImage: string;
+  /** Additional gallery images (new multi-image listings). */
   images: string[];
   priceCents: number;
   inventory: number;
@@ -22,6 +25,11 @@ export interface AdminListing {
 
 function dollars(cents: number) {
   return (cents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+}
+
+/** Returns the best available thumbnail URL for a listing (mainImage > images[0] > imageUrl). */
+function getProductThumbnail(l: AdminListing): string {
+  return l.mainImage || (l.images && l.images[0]) || l.imageUrl || '';
 }
 
 function StatusBadge({ status, inventory }: { status: string; inventory: number }) {
@@ -118,13 +126,19 @@ export default function AdminListingsTable({ listings }: { listings: AdminListin
   const safePage = Math.min(page, totalPages);
   const paginated = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
 
-  // Reset page on filter/search change
-  const handleSearch = (v: string) => { setSearch(v); setPage(1); };
-  const handleStatus = (v: string) => { setStatusFilter(v); setPage(1); };
-  const handleCondition = (v: string) => { setConditionFilter(v); setPage(1); };
-  const handleSeller = (v: string) => { setSellerFilter(v); setPage(1); };
-  const handleStock = (v: StockFilter) => { setStockFilter(v); setPage(1); };
-  const handlePageSize = (v: 10 | 25 | 50) => { setPageSize(v); setPage(1); };
+  // Reset page on filter/search change — generic setter factory
+  const withReset =
+    <T,>(setter: (v: T) => void) =>
+    (v: T) => {
+      setter(v);
+      setPage(1);
+    };
+  const handleSearch = withReset(setSearch);
+  const handleStatus = withReset(setStatusFilter);
+  const handleCondition = withReset(setConditionFilter);
+  const handleSeller = withReset(setSellerFilter);
+  const handleStock = withReset<StockFilter>(setStockFilter);
+  const handlePageSize = withReset<10 | 25 | 50>(setPageSize);
 
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -161,7 +175,7 @@ export default function AdminListingsTable({ listings }: { listings: AdminListin
   );
 
   const thumbnail = (l: AdminListing) => {
-    const src = l.mainImage || (l.images && l.images[0]) || l.imageUrl || '';
+    const src = getProductThumbnail(l);
     return src ? (
       // eslint-disable-next-line @next/next/no-img-element
       <img
