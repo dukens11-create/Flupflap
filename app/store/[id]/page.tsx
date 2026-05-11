@@ -149,6 +149,7 @@ export default async function SellerStorePage({ params }: Props) {
               src={seller.shopLogoUrl}
               alt={`${sellerPublicName} logo`}
               className="h-14 w-14 rounded-full object-cover"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
             />
           ) : (
             <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-200 text-slate-600">

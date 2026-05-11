@@ -18,6 +18,8 @@ export default function SellerShopProfileForm({
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState('');
 
+  const trimmedShopName = shopName.trim();
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setStatus('saving');
@@ -27,9 +29,9 @@ export default function SellerShopProfileForm({
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          shopName: shopName.trim() || undefined,
-          shopLogoUrl: shopLogoUrl.trim() || '',
-          shopDescription: shopDescription.trim() || '',
+          shopName: trimmedShopName,
+          shopLogoUrl: shopLogoUrl.trim(),
+          shopDescription: shopDescription.trim(),
         }),
       });
       const data = await res.json();
@@ -114,7 +116,7 @@ export default function SellerShopProfileForm({
 
       <button
         type="submit"
-        disabled={status === 'saving' || !shopName.trim()}
+        disabled={status === 'saving' || !trimmedShopName}
         className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {status === 'saving' ? 'Saving…' : 'Save shop profile'}

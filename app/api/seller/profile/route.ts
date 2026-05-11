@@ -5,7 +5,7 @@ import { prisma } from '@/lib/db';
 import { z } from 'zod';
 
 const schema = z.object({
-  shopName: z.string().trim().min(2).max(80).optional(),
+  shopName: z.string().trim().min(2).max(80),
   shopLogoUrl: z.string().url().max(2000).optional().or(z.literal('')),
   shopDescription: z.string().trim().max(500).optional().or(z.literal('')),
 });
@@ -39,9 +39,9 @@ export async function PATCH(req: Request) {
   const updated = await prisma.user.update({
     where: { id: session.user.id },
     data: {
-      ...(shopName !== undefined ? { shopName } : {}),
-      ...(shopLogoUrl !== undefined ? { shopLogoUrl: shopLogoUrl || null } : {}),
-      ...(shopDescription !== undefined ? { shopDescription: shopDescription || null } : {}),
+      shopName,
+      shopLogoUrl: shopLogoUrl || null,
+      shopDescription: shopDescription || null,
     },
     select: {
       id: true,
@@ -54,7 +54,7 @@ export async function PATCH(req: Request) {
   return NextResponse.json({ success: true, profile: updated });
 }
 
-export async function GET(req: Request) {
+export async function GET(_req: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
