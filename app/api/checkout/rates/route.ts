@@ -248,11 +248,14 @@ export async function POST(req: Request) {
       p => `Product "${p.title}" has no shipping rates available.`,
     );
 
+    const warnings = [
+      ...(errors.length ? ['Shipping rate unavailable. Please check address or package details.'] : []),
+      ...uncoveredWarnings,
+    ];
+
     return NextResponse.json({
       groups,
-      warnings: [...(errors.length ? ['Shipping rate unavailable. Please check address or package details.'] : []), ...uncoveredWarnings].length
-        ? [...(errors.length ? ['Shipping rate unavailable. Please check address or package details.'] : []), ...uncoveredWarnings]
-        : undefined,
+      warnings: warnings.length ? warnings : undefined,
     });
   } catch (err: any) {
     console.error('[checkout/rates]', err);
