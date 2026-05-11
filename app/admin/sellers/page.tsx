@@ -59,7 +59,7 @@ function kycStatusLabel(status: string) {
 
 const SELLER_STATUS_FILTER_OPTIONS = [
   { value: '', label: 'All Sellers' },
-  { value: 'PENDING', label: 'Pending Approval' },
+  { value: 'PENDING', label: 'Pending Seller Accounts' },
   { value: 'ACTIVE', label: 'Active' },
   { value: 'RESTRICTED', label: 'Restricted' },
   { value: 'SUSPENDED', label: 'Suspended' },
@@ -185,7 +185,11 @@ export default async function AdminSellersPage({
           {SELLER_STATUS_FILTER_OPTIONS.map(({ value, label }) => {
             const isActive = statusFilter === value;
             const count = sellerStatusCounts[value] ?? 0;
-            const href = value ? `/admin/sellers?status=${value}` : '/admin/sellers';
+            // Build href preserving the current kyc filter param if set.
+            const params = new URLSearchParams();
+            if (value) params.set('status', value);
+            if (kycFilter) params.set('kyc', kycFilter);
+            const href = `/admin/sellers${params.toString() ? `?${params}` : ''}`;
             return (
               <a
                 key={value}
@@ -215,7 +219,11 @@ export default async function AdminSellersPage({
           {KYC_FILTER_OPTIONS.map(({ value, label }) => {
             const isActive = kycFilter === value;
             const count = kycCounts[value] ?? 0;
-            const href = value ? `/admin/sellers?kyc=${value}` : '/admin/sellers';
+            // Build href preserving the current status filter param if set.
+            const params = new URLSearchParams();
+            if (statusFilter) params.set('status', statusFilter);
+            if (value) params.set('kyc', value);
+            const href = `/admin/sellers${params.toString() ? `?${params}` : ''}`;
             return (
               <a
                 key={value}

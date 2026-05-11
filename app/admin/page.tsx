@@ -191,7 +191,7 @@ export default async function AdminPage({
         </div>
         <a href="/admin/sellers" className="card p-4 text-center hover:bg-slate-50 transition-colors">
           <p className={`text-3xl font-black ${restrictedSellersCount > 0 ? 'text-red-600' : 'text-slate-600'}`}>{restrictedSellersCount}</p>
-          <p className="text-sm text-slate-500">Restricted sellers</p>
+          <p className="text-sm text-slate-500">Suspended/restricted</p>
         </a>
       </div>
 
@@ -222,8 +222,8 @@ export default async function AdminPage({
             <p className="text-xs text-slate-200">KYC Not Submitted</p>
             <p className="text-2xl font-black">{kycNotSubmittedCount}</p>
           </a>
-          <a href="/admin/sellers?status=RESTRICTED" className="rounded-xl bg-white/10 p-3 hover:bg-white/20 transition-colors">
-            <p className="text-xs text-slate-200">Restricted Sellers</p>
+          <a href="/admin/sellers" className="rounded-xl bg-white/10 p-3 hover:bg-white/20 transition-colors">
+            <p className="text-xs text-slate-200">Suspended/Restricted Sellers</p>
             <p className={`text-2xl font-black ${restrictedSellersCount > 0 ? 'text-red-300' : ''}`}>{restrictedSellersCount}</p>
           </a>
           <div className="rounded-xl bg-white/10 p-3"><p className="text-xs text-slate-200">Reported Products</p><p className="text-2xl font-black">{openReportsCount}</p></div>
