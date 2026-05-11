@@ -134,6 +134,13 @@ function redirectToEditForm(id: string, message: string) {
   return NextResponse.redirect(url, 303);
 }
 
+function respondWithError(id: string, message: string, acceptsJson: boolean, status = 400) {
+  if (acceptsJson) {
+    return NextResponse.json({ error: message }, { status });
+  }
+  return redirectToEditForm(id, message);
+}
+
 function resolveSubmittedPackageDetails(data: ProductUpdateInput) {
   const weightValue = getFirstNonEmptyString(data.weight, data.packageWeight, data.weightOz);
   const hasLegacyWeightInput = !getFirstNonEmptyString(data.weight, data.packageWeight) && !!data.weightOz?.trim();
@@ -216,13 +223,16 @@ export async function POST(
 ) {
   let id = '';
   let sellerId: string | undefined;
+  const acceptsJson = (req.headers.get('Accept') ?? '').includes('application/json');
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user || session.user.role !== 'SELLER') {
+      if (acceptsJson) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
       return NextResponse.redirect(new URL('/login', getSiteUrl()), 303);
     }
     sellerId = session.user.id;
     if (!sellerId) {
+      if (acceptsJson) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
       return NextResponse.redirect(new URL('/login', getSiteUrl()), 303);
     }
     ({ id } = await params);
@@ -230,7 +240,7 @@ export async function POST(
     // Block restricted sellers from editing or deleting listings
     const dbUser = await prisma.user.findUnique({ where: { id: sellerId } });
     if (dbUser?.sellerStatus === 'SUSPENDED' || dbUser?.sellerStatus === 'BANNED' || dbUser?.sellerStatus === 'RESTRICTED') {
-      return redirectToEditForm(id, 'Your seller account is currently restricted.');
+      return respondWithError(id, 'Your seller account is currently restricted.', acceptsJson, 403);
     }
 
     const verification = await prisma.sellerVerification.findUnique({
@@ -238,9 +248,11 @@ export async function POST(
       select: { status: true },
     });
     if (!isSellerVerificationApproved(verification?.status)) {
-      return redirectToEditForm(
+      return respondWithError(
         id,
         'Submit and pass seller verification before listing products.',
+        acceptsJson,
+        403,
       );
     }
 
@@ -278,7 +290,7 @@ export async function POST(
     });
     const packageDetails = resolveSubmittedPackageDetails(data);
     if (!packageDetails) {
-      return redirectToEditForm(id, getPackageDetailsErrorMessage(data));
+      return respondWithError(id, getPackageDetailsErrorMessage(data), acceptsJson);
     }
 
     const submittedImages = imagesRaw.length ? imagesRaw : data.imageUrl ? [data.imageUrl] : null;
@@ -355,22 +367,27 @@ export async function POST(
       if (dbError instanceof Error && dbError.stack) {
         console.error('[seller/products/[id] POST] stack trace', dbError.stack);
       }
-      return redirectToEditForm(id, 'Unable to save listing changes. Please review the form and try again.');
+      return respondWithError(id, 'Unable to save listing changes. Please review the form and try again.', acceptsJson, 500);
     }
 
     const fraudQuery = shouldRecommendFraudReview(riskAssessment) ? '&fraud=review' : '';
+    const redirectTo = `/seller?updated=${updated.id}${fraudQuery}`;
 
-    return NextResponse.redirect(new URL(`/seller?updated=${updated.id}${fraudQuery}`, getSiteUrl()));
+    if (acceptsJson) {
+      return NextResponse.json({ success: true, redirectTo });
+    }
+    return NextResponse.redirect(new URL(redirectTo, getSiteUrl()));
   } catch (err: any) {
     if (err?.name === 'ZodError') {
-      return redirectToEditForm(id, 'Please review the listing details and try again.');
+      const zodMessage = err.errors?.[0]?.message ?? 'Please review the listing details and try again.';
+      return respondWithError(id, zodMessage, acceptsJson);
     }
     const message = getErrorMessage(err);
     console.error('[seller/products/[id] POST] request handling error', { productId: id, sellerId, message });
     if (err instanceof Error && err.stack) {
       console.error('[seller/products/[id] POST] stack trace', err.stack);
     }
-    return redirectToEditForm(id, 'Unable to save listing changes. Please try again.');
+    return respondWithError(id, 'Unable to save listing changes. Please try again.', acceptsJson, 500);
   }
 }
 
