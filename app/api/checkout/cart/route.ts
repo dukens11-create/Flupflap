@@ -30,6 +30,19 @@ type ShippingRateInfo = {
   };
 };
 
+/**
+ * Treat explicit CALCULATED mode or legacy zero-shipping products (without mode)
+ * as live-rate items that must be quoted via Shippo before checkout.
+ */
+function isCalculatedShippingProduct(product: { shippingMode?: string | null; shippingCents: number }) {
+  return product.shippingMode === 'CALCULATED' || (!product.shippingMode && product.shippingCents === 0);
+}
+
+/** Returns true only when the buyer address includes required street/city/state/zip fields. */
+function hasCompleteAddress(address?: ShippingRateInfo['buyerAddress']) {
+  return !!(address?.street1 && address?.city && address?.state && address?.zip);
+}
+
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions);
@@ -89,16 +102,65 @@ export async function POST(req: Request) {
     }
 
     const pickupSet = new Set(pickupItemIds);
+    const calculatedShippingProducts = products.filter(
+      (product) => !pickupSet.has(product.id) && isCalculatedShippingProduct(product),
+    );
+    const requiresLiveShippingSelection = calculatedShippingProducts.length > 0;
+    const calculatedSellerIds = new Set(calculatedShippingProducts.map(product => product.sellerId));
+    const selectedShipmentGroups = shippingRateInfo?.shipmentGroups ?? [];
+
+    let validatedShippingRateInfo: ShippingRateInfo | undefined;
+    if (requiresLiveShippingSelection) {
+      if (!selectedShipmentGroups.length) {
+        return NextResponse.json(
+          { error: 'Please calculate and select a shipping option before proceeding to checkout.' },
+          { status: 400 },
+        );
+      }
+      if (!hasCompleteAddress(shippingRateInfo?.buyerAddress)) {
+        return NextResponse.json(
+          { error: 'Please provide a complete shipping address before checkout.' },
+          { status: 400 },
+        );
+      }
+
+      const selectedBySeller = new Map(selectedShipmentGroups.map((group) => [group.sellerId, group]));
+      for (const sellerId of calculatedSellerIds) {
+        const selectedRate = selectedBySeller.get(sellerId);
+        if (!selectedRate || !selectedRate.shipmentId || !selectedRate.rateId || selectedRate.rateCents <= 0) {
+          return NextResponse.json(
+            { error: 'Please select a valid shipping method for every seller before checkout.' },
+            { status: 400 },
+          );
+        }
+      }
+
+      const selectedCalculatedGroups = selectedShipmentGroups.filter(group => calculatedSellerIds.has(group.sellerId));
+      const totalRateCents = selectedCalculatedGroups.reduce((sum, group) => sum + group.rateCents, 0);
+      if (totalRateCents <= 0) {
+        return NextResponse.json(
+          { error: 'Shipping rate unavailable. Please recalculate shipping rates.' },
+          { status: 400 },
+        );
+      }
+
+      validatedShippingRateInfo = {
+        shipmentGroups: selectedCalculatedGroups,
+        totalRateCents,
+        buyerAddress: shippingRateInfo?.buyerAddress,
+      };
+    }
 
     // When live shipping rates are provided, override shippingCents per item to 0.
     // The actual shipping cost is charged as a separate Stripe line item, so items
     // must have shippingCents=0 to avoid double-billing the buyer for shipping.
     const liveRatesByProductId = new Map<string, number>();
-    if (shippingRateInfo?.shipmentGroups?.length) {
+    if (validatedShippingRateInfo?.shipmentGroups?.length) {
       // Build a Map from sellerId → group for O(1) lookup per product
-      const groupBySellerIdMap = new Map(shippingRateInfo.shipmentGroups.map(g => [g.sellerId, g]));
+      const groupBySellerIdMap = new Map(validatedShippingRateInfo.shipmentGroups.map(g => [g.sellerId, g]));
       for (const product of products) {
         if (pickupSet.has(product.id)) continue;
+        if (!isCalculatedShippingProduct(product)) continue;
         if (groupBySellerIdMap.has(product.sellerId)) liveRatesByProductId.set(product.id, 0);
       }
     }
@@ -129,12 +191,12 @@ export async function POST(req: Request) {
     });
 
     // Add live shipping as a separate line item if selected
-    if (shippingRateInfo?.totalRateCents && shippingRateInfo.totalRateCents > 0) {
+    if (validatedShippingRateInfo?.totalRateCents && validatedShippingRateInfo.totalRateCents > 0) {
       lineItems.push({
         price_data: {
           currency: 'usd',
           product_data: { name: 'Shipping', images: [] },
-          unit_amount: shippingRateInfo.totalRateCents,
+          unit_amount: validatedShippingRateInfo.totalRateCents,
         },
         quantity: 1,
       });
@@ -143,7 +205,7 @@ export async function POST(req: Request) {
     // If ALL items are pickup, don't collect a shipping address from Stripe
     const allPickup = products.every(p => pickupSet.has(p.id));
     // If live shipping address was provided by buyer, skip Stripe address collection
-    const hasLiveShippingAddress = !!(shippingRateInfo?.buyerAddress?.street1);
+    const hasLiveShippingAddress = !!(validatedShippingRateInfo?.buyerAddress?.street1);
 
     // Wire funds to the seller's connected account only when the entire cart
     // belongs to a single, fully-onboarded seller. Multi-seller carts have no
@@ -195,6 +257,7 @@ export async function POST(req: Request) {
       mode: 'payment',
       payment_method_types: ['card'],
       line_items: lineItems,
+      automatic_tax: { enabled: true },
       success_url: `${appUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${appUrl}/checkout/cancel`,
       ...(allPickup || hasLiveShippingAddress
@@ -227,7 +290,7 @@ export async function POST(req: Request) {
         pickupItemIds,
         commissionItems,
         directToSellerId: sellerStripeId,
-        shippingRateInfo: shippingRateInfo ?? undefined,
+        shippingRateInfo: validatedShippingRateInfo ?? undefined,
       },
     });
 
