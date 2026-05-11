@@ -20,6 +20,7 @@ export default async function AdminCategoriesPage() {
       id: true,
       name: true,
       slug: true,
+      aliases: true,
       parentId: true,
       level: true,
       icon: true,

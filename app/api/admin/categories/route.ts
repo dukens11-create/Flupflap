@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
+import { normalizeCategoryAliases } from '@/lib/category-aliases';
 import { z } from 'zod';
 
 const createSchema = z.object({
@@ -11,6 +12,7 @@ const createSchema = z.object({
   icon: z.string().max(10).optional().nullable(),
   sortOrder: z.coerce.number().int().default(0),
   attributeSchema: z.string().optional().nullable(), // JSON string
+  aliases: z.union([z.array(z.string()), z.string()]).optional().nullable(),
 });
 
 export async function GET() {
@@ -58,6 +60,7 @@ export async function POST(req: Request) {
         icon: data.icon ?? null,
         sortOrder: data.sortOrder,
         attributeSchema: parsedAttributeSchema,
+        aliases: normalizeCategoryAliases(data.aliases),
       },
     });
     return NextResponse.json(category, { status: 201 });

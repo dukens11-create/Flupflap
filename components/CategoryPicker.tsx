@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { LEGACY_CATEGORY_ALIAS_FALLBACK } from '@/lib/category-aliases';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -14,6 +15,7 @@ export interface CategoryNode {
   id: string;
   name: string;
   slug: string;
+  aliases?: string[];
   parentId: string | null;
   level: number;
   icon: string | null;
@@ -25,6 +27,8 @@ export interface CategoryNode {
 interface PickerOption {
   id: string;
   name: string;
+  slug: string;
+  aliases: string[];
   icon?: string | null;
 }
 
@@ -32,6 +36,151 @@ interface Props {
   defaultCategoryId?: string | null;
   defaultSubcategoryId?: string | null;
   defaultAttributes?: Record<string, string> | null;
+}
+
+const SEARCH_DEBOUNCE_MS = 150;
+const CLOSEST_MATCH_LIMIT = 6;
+const MIN_SINGULARIZE_LENGTH = 4;
+const EXACT_MATCH_SCORE = 120;
+const PREFIX_MATCH_BASE_SCORE = 105;
+const CONTAINS_MATCH_BASE_SCORE = 92;
+const FUZZY_MATCH_BASE_SCORE = 78;
+const FUZZY_MATCH_PENALTY = 8;
+const WEAK_MATCH_BASE_SCORE = 10;
+const FUZZY_MATCH_TOLERANCE_RATIO = 0.35;
+const STRONG_FUZZY_MATCH_RATIO = 0.25;
+const STRONG_MATCH_SCORE_THRESHOLD = 65;
+
+function normalizeSearchTerm(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, '');
+}
+
+function singularize(value: string): string {
+  if (value.length < MIN_SINGULARIZE_LENGTH) return value;
+  if (value.endsWith('ies')) return `${value.slice(0, -3)}y`;
+  if (value.endsWith('oes')) return value.slice(0, -1);
+  if (/(xes|ches|shes|sses|zzes)$/.test(value)) return value.slice(0, -2);
+  if (value.endsWith('s') && !value.endsWith('ss')) return value.slice(0, -1);
+  return value;
+}
+
+function variantsForTerm(value: string): string[] {
+  const normalized = normalizeSearchTerm(value);
+  if (!normalized) return [];
+  const singular = singularize(normalized);
+  return singular === normalized ? [normalized] : [normalized, singular];
+}
+
+function levenshteinDistance(a: string, b: string): number {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+
+  const previous = Array.from({ length: b.length + 1 }, (_, i) => i);
+  const current = new Array<number>(b.length + 1);
+
+  for (let i = 1; i <= a.length; i += 1) {
+    current[0] = i;
+    for (let j = 1; j <= b.length; j += 1) {
+      const substitutionCost = a[i - 1] === b[j - 1] ? 0 : 1;
+      current[j] = Math.min(
+        previous[j] + 1,
+        current[j - 1] + 1,
+        previous[j - 1] + substitutionCost,
+      );
+    }
+    for (let j = 0; j <= b.length; j += 1) previous[j] = current[j];
+  }
+
+  return previous[b.length];
+}
+
+function scoreSearchTerm(query: string, term: string): { score: number; distance: number; strong: boolean } {
+  if (!query || !term) return { score: 0, distance: Number.MAX_SAFE_INTEGER, strong: false };
+
+  if (query === term) return { score: EXACT_MATCH_SCORE, distance: 0, strong: true };
+
+  if (term.startsWith(query)) {
+    return { score: PREFIX_MATCH_BASE_SCORE - Math.max(0, term.length - query.length), distance: Math.max(0, term.length - query.length), strong: true };
+  }
+
+  if (term.includes(query)) {
+    return { score: CONTAINS_MATCH_BASE_SCORE - Math.max(0, term.length - query.length), distance: Math.max(0, term.length - query.length), strong: true };
+  }
+
+  const distance = levenshteinDistance(query, term);
+  const tolerance = Math.max(1, Math.floor(query.length * FUZZY_MATCH_TOLERANCE_RATIO));
+  if (distance <= tolerance) {
+    return {
+      score: FUZZY_MATCH_BASE_SCORE - distance * FUZZY_MATCH_PENALTY,
+      distance,
+      strong: distance <= Math.max(1, Math.floor(query.length * STRONG_FUZZY_MATCH_RATIO)),
+    };
+  }
+
+  return { score: WEAK_MATCH_BASE_SCORE - distance, distance, strong: false };
+}
+
+function rankPickerOptions(options: PickerOption[], query: string) {
+  const normalizedQueryVariants = variantsForTerm(query.trim());
+  if (!normalizedQueryVariants.length) {
+    return options.map(option => ({ option, score: 0, distance: 0, strong: true }));
+  }
+
+  const ranked = options.map(option => {
+    const terms = new Set<string>();
+    for (const term of [option.name, option.slug, ...option.aliases]) {
+      for (const variant of variantsForTerm(term)) {
+        terms.add(variant);
+      }
+    }
+
+    let bestScore = Number.NEGATIVE_INFINITY;
+    let bestDistance = Number.MAX_SAFE_INTEGER;
+    let strong = false;
+
+    for (const q of normalizedQueryVariants) {
+      for (const term of terms) {
+        const result = scoreSearchTerm(q, term);
+        if (result.score > bestScore || (result.score === bestScore && result.distance < bestDistance)) {
+          bestScore = result.score;
+          bestDistance = result.distance;
+          strong = result.strong;
+        }
+      }
+    }
+
+    return {
+      option,
+      score: bestScore,
+      distance: bestDistance,
+      strong,
+    };
+  });
+
+  ranked.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    if (a.distance !== b.distance) return a.distance - b.distance;
+    return a.option.name.localeCompare(b.option.name);
+  });
+
+  const strongMatches = ranked.filter(item => item.strong || item.score >= STRONG_MATCH_SCORE_THRESHOLD);
+  if (strongMatches.length > 0) return strongMatches;
+
+  return ranked.slice(0, CLOSEST_MATCH_LIMIT);
+}
+
+function resolveOptionAliases(node: CategoryNode): string[] {
+  const normalizedSlug = node.slug.toLowerCase();
+  const explicitAliases = Array.isArray(node.aliases) ? node.aliases : [];
+  // Keep a migration-safe fallback so older rows without aliases[] remain searchable.
+  const legacyAliases = LEGACY_CATEGORY_ALIAS_FALLBACK[normalizedSlug] ?? [];
+  return [...new Set([...explicitAliases, ...legacyAliases])];
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -98,7 +247,8 @@ export default function CategoryPicker({ defaultCategoryId, defaultSubcategoryId
   const [childId, setChildId] = useState<string | null>(null);
   const [attrs, setAttrs] = useState<Record<string, string>>(defaultAttributes ?? {});
   const [activePicker, setActivePicker] = useState<'main' | 'sub' | 'child' | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchInputValue, setSearchInputValue] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [categoryError, setCategoryError] = useState('');
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const triggerRefs = useRef<{
@@ -171,16 +321,17 @@ export default function CategoryPicker({ defaultCategoryId, defaultSubcategoryId
   const subcategories = mainNode?.children ?? [];
   // Children of sub = child categories
   const childCategories = subNode?.children ?? [];
+
   const mainOptions = useMemo<PickerOption[]>(
-    () => categories.map(c => ({ id: c.id, name: c.name, icon: c.icon })),
+    () => categories.map(c => ({ id: c.id, name: c.name, slug: c.slug, aliases: resolveOptionAliases(c), icon: c.icon })),
     [categories],
   );
   const subOptions = useMemo<PickerOption[]>(
-    () => subcategories.map(c => ({ id: c.id, name: c.name, icon: null })),
+    () => subcategories.map(c => ({ id: c.id, name: c.name, slug: c.slug, aliases: resolveOptionAliases(c), icon: null })),
     [subcategories],
   );
   const childOptions = useMemo<PickerOption[]>(
-    () => childCategories.map(c => ({ id: c.id, name: c.name, icon: null })),
+    () => childCategories.map(c => ({ id: c.id, name: c.name, slug: c.slug, aliases: resolveOptionAliases(c), icon: null })),
     [childCategories],
   );
 
@@ -230,9 +381,17 @@ export default function CategoryPicker({ defaultCategoryId, defaultSubcategoryId
 
   useEffect(() => {
     if (!activePicker) {
-      setSearchQuery('');
+      setSearchInputValue('');
+      setDebouncedSearchQuery('');
     }
   }, [activePicker]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearchQuery(searchInputValue);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [searchInputValue]);
 
   useEffect(() => {
     if (!activePicker && lastTriggerRef.current) {
@@ -421,10 +580,9 @@ export default function CategoryPicker({ defaultCategoryId, defaultSubcategoryId
   }
 
   const pickerConfig = getPickerConfig();
-  const filteredOptions =
-    pickerConfig?.options.filter(option =>
-      option.name.toLowerCase().includes(searchQuery.trim().toLowerCase()),
-    ) ?? [];
+  const rankedOptions = pickerConfig ? rankPickerOptions(pickerConfig.options, debouncedSearchQuery) : [];
+  const filteredOptions = rankedOptions.map(item => item.option);
+  const showingClosestMatches = debouncedSearchQuery.trim().length > 0 && rankedOptions.length > 0 && !rankedOptions.some(item => item.strong);
 
   return (
     <div className="space-y-3" ref={wrapperRef}>
@@ -507,33 +665,38 @@ export default function CategoryPicker({ defaultCategoryId, defaultSubcategoryId
               <input
                 type="text"
                 ref={searchInputRef}
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
+                value={searchInputValue}
+                onChange={e => setSearchInputValue(e.target.value)}
                 placeholder={pickerConfig.placeholder}
                 className="input"
               />
             </div>
             <div className="max-h-[56vh] overflow-y-auto overscroll-contain">
               {filteredOptions.length > 0 ? (
-                <ul className="divide-y divide-slate-100">
-                  {filteredOptions.map(option => {
-                    const isSelected = pickerConfig.selectedId === option.id;
-                    return (
-                      <li key={option.id}>
-                        <button
-                          type="button"
-                          className={`w-full px-4 py-3 text-left transition-colors ${isSelected ? 'bg-slate-50 text-slate-900 font-medium' : 'text-slate-700 hover:bg-slate-50'}`}
-                          onClick={() => {
-                            pickerConfig.onSelect(option.id);
-                            setActivePicker(null);
-                          }}
-                        >
-                          {option.icon ? `${option.icon} ` : ''}{option.name}
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
+                <>
+                  {showingClosestMatches ? (
+                    <div className="px-4 pb-2 text-xs text-slate-500" aria-live="polite">Showing closest matches</div>
+                  ) : null}
+                  <ul className="divide-y divide-slate-100">
+                    {filteredOptions.map(option => {
+                      const isSelected = pickerConfig.selectedId === option.id;
+                      return (
+                        <li key={option.id}>
+                          <button
+                            type="button"
+                            className={`w-full px-4 py-3 text-left transition-colors ${isSelected ? 'bg-slate-50 text-slate-900 font-medium' : 'text-slate-700 hover:bg-slate-50'}`}
+                            onClick={() => {
+                              pickerConfig.onSelect(option.id);
+                              setActivePicker(null);
+                            }}
+                          >
+                            {option.icon ? `${option.icon} ` : ''}{option.name}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </>
               ) : (
                 <div className="px-4 py-6 text-sm text-slate-500">{pickerConfig.emptyLabel}</div>
               )}

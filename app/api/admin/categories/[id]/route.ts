@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
+import { normalizeCategoryAliases } from '@/lib/category-aliases';
 import { z } from 'zod';
 
 const updateSchema = z.object({
@@ -10,6 +11,7 @@ const updateSchema = z.object({
   icon: z.string().max(10).optional().nullable(),
   sortOrder: z.coerce.number().int().optional(),
   attributeSchema: z.string().optional().nullable(), // JSON string or null to clear
+  aliases: z.union([z.array(z.string()), z.string()]).optional().nullable(),
 });
 
 async function requireAdmin() {
@@ -47,6 +49,7 @@ export async function PATCH(
         ...(data.icon !== undefined && { icon: data.icon }),
         ...(data.sortOrder !== undefined && { sortOrder: data.sortOrder }),
         ...(parsedAttributeSchema !== undefined && { attributeSchema: parsedAttributeSchema as any }),
+        ...(data.aliases !== undefined && { aliases: normalizeCategoryAliases(data.aliases) }),
       },
     });
     return NextResponse.json(updated);
