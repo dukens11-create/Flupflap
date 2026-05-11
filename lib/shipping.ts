@@ -75,9 +75,6 @@ function normalizeCarrier(value: unknown): string {
   const raw = String(value ?? '').trim();
   if (!raw) return '';
   const normalized = raw.replace(/[^a-z0-9]/gi, '').toUpperCase();
-  if (normalized === 'FEDEX') return 'FEDEX';
-  if (normalized === 'USPS') return 'USPS';
-  if (normalized === 'UPS') return 'UPS';
   return normalized;
 }
 
@@ -175,9 +172,12 @@ export async function purchaseShipmentRate(params: {
   const labelUrl = parseOptionalString(payload?.label_url);
   const trackingUrl = parseOptionalString(payload?.tracking_url_provider)
     || buildTrackingUrl(carrier, trackingCode);
-  const responseShipmentId = parseOptionalString(payload?.rate?.shipment)
-    ?? parseOptionalString(payload?.shipment?.object_id)
-    ?? parseOptionalString(payload?.shipment)
+  const rateShipmentId = parseOptionalString(payload?.rate?.shipment);
+  const transactionShipmentObjectId = parseOptionalString(payload?.shipment?.object_id);
+  const transactionShipmentId = parseOptionalString(payload?.shipment);
+  const responseShipmentId = rateShipmentId
+    ?? transactionShipmentObjectId
+    ?? transactionShipmentId
     ?? params.shipmentId;
 
   return {

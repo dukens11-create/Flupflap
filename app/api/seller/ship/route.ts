@@ -116,7 +116,7 @@ export async function POST(req: Request) {
 
         if (!fromStreet1 || !fromCity || !fromState || !fromZip) {
           return NextResponse.json(
-            { error: 'Ship-from address is not configured. Please add it in your seller profile.' },
+            { error: 'Ship-from address is incomplete. Add street, city, state, and ZIP in your seller profile.' },
             { status: 503 },
           );
         }
