@@ -45,8 +45,7 @@ export const KYC_APPROVED_WHERE: Prisma.UserWhereInput = {
  */
 export const KYC_PENDING_REVIEW_WHERE: Prisma.UserWhereInput = {
   verifiedSeller: false,
-  kycStatus: { not: 'APPROVED' },
-  NOT: { verificationSubmission: { status: 'APPROVED' } },
+  NOT: { OR: [{ kycStatus: 'APPROVED' }, { verificationSubmission: { status: 'APPROVED' } }] },
   OR: [
     { kycStatus: 'PENDING_REVIEW' },
     { verificationSubmission: { status: 'PENDING' } },
@@ -61,8 +60,7 @@ export const KYC_PENDING_REVIEW_WHERE: Prisma.UserWhereInput = {
  */
 export const KYC_REJECTED_WHERE: Prisma.UserWhereInput = {
   verifiedSeller: false,
-  kycStatus: { not: 'APPROVED' },
-  NOT: { verificationSubmission: { status: 'APPROVED' } },
+  NOT: { OR: [{ kycStatus: 'APPROVED' }, { verificationSubmission: { status: 'APPROVED' } }] },
   OR: [
     { kycStatus: 'REJECTED' },
     { verificationSubmission: { status: 'REJECTED' } },
@@ -129,7 +127,7 @@ export async function getSellerKycCounts(): Promise<SellerKycCounts> {
 export function deriveEffectiveKycStatus(seller: {
   kycStatus?: string | null;
   verifiedSeller?: boolean | null;
-  verificationSubmission?: { status?: string | null } | null;
+  verificationSubmission?: { status: string } | null;
 }): 'APPROVED' | 'PENDING_REVIEW' | 'REJECTED' | 'NOT_SUBMITTED' {
   // verifiedSeller takes priority: it is the legacy approval flag set before
   // the kycStatus field existed.  When true the seller is always APPROVED
