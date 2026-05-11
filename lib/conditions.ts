@@ -21,8 +21,8 @@ export const GENERAL_CONDITIONS: string[] = [
   'For parts / not working',
 ];
 
-// Ordered from most specific (longest prefix) to least specific.
-// getConditionsForSlug picks the longest matching prefix for a given slug.
+// Category slug prefix → conditions for that category.
+// getConditionsForSlug picks the longest matching prefix, so array ordering does not matter.
 const CATEGORY_CONDITIONS: Array<{ prefix: string; conditions: string[] }> = [
   // ── Electronics ──────────────────────────────────────────────────────────────
   {

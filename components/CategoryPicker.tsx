@@ -132,12 +132,20 @@ export default function CategoryPicker({ defaultCategoryId, defaultSubcategoryId
   const leafSlug = resolveLeafSlug(categories, mainId, subId, childId);
 
   // Notify sibling components (e.g. ConditionPicker) about the resolved category slug.
+  // Only dispatch when the slug is non-empty (i.e. a real category is selected) to avoid
+  // resetting ConditionPicker to general conditions while the categories are still loading.
   const prevSlugRef = useRef<string>('');
   useEffect(() => {
-    if (leafSlug !== prevSlugRef.current) {
+    if (leafSlug && leafSlug !== prevSlugRef.current) {
       prevSlugRef.current = leafSlug;
       window.dispatchEvent(
         new CustomEvent('ff:category-change', { detail: { slug: leafSlug } }),
+      );
+    } else if (!leafSlug && prevSlugRef.current) {
+      // Category was cleared — reset to general conditions
+      prevSlugRef.current = '';
+      window.dispatchEvent(
+        new CustomEvent('ff:category-change', { detail: { slug: '' } }),
       );
     }
   }, [leafSlug]);

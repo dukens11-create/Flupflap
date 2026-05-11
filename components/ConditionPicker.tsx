@@ -23,13 +23,6 @@ export default function ConditionPicker({ defaultCondition, defaultSlug, require
   const [value, setValue] = useState(defaultCondition ?? '');
 
   useEffect(() => {
-    // Seed with the initial slug (used on the edit page where we know the category upfront).
-    if (defaultSlug) {
-      setConditions(getConditionsForSlug(defaultSlug));
-    }
-  }, [defaultSlug]);
-
-  useEffect(() => {
     function handleCategoryChange(e: Event) {
       const slug = (e as CustomEvent<{ slug: string }>).detail?.slug ?? '';
       const next = getConditionsForSlug(slug);
