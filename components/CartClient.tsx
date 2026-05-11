@@ -11,6 +11,7 @@ type Item = {
   imageUrl: string;
   shippingCents: number;
   quantity: number;
+  inventoryQty?: number;
 };
 
 export default function CartClient() {
@@ -68,7 +69,7 @@ export default function CartClient() {
             <button
               className="btn border w-8 h-8 p-0"
               onClick={() =>
-                save(items.map(x => x.id === i.id ? { ...x, quantity: x.quantity + 1 } : x))
+                save(items.map(x => x.id === i.id ? { ...x, quantity: Math.min(x.quantity + 1, x.inventoryQty ?? 9999) } : x))
               }
             >
               +
