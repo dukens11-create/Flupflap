@@ -104,7 +104,9 @@ function getSafePreviewUrl(url: string) {
   return '';
 }
 
+// Brightness is measured on a 0-255 luminance scale from sampled pixels.
 const DARK_IMAGE_BRIGHTNESS_THRESHOLD = 70;
+// Variance of sampled luminance values; lower variance often indicates blur/low detail.
 const BLURRY_IMAGE_VARIANCE_THRESHOLD = 500;
 
 async function detectImageEnhancementSuggestion(
@@ -120,6 +122,7 @@ async function detectImageEnhancementSuggestion(
       img.src = sourceUrl;
     });
 
+    // Keep analysis lightweight while preserving enough detail for quality hints.
     const maxDimension = 128;
     const canvas = document.createElement('canvas');
     const ratio = Math.min(maxDimension / image.width, maxDimension / image.height, 1);
@@ -138,6 +141,7 @@ async function detectImageEnhancementSuggestion(
       const r = data[index] ?? 0;
       const g = data[index + 1] ?? 0;
       const b = data[index + 2] ?? 0;
+      // Rec. 709 luma coefficients for perceived brightness.
       const value = 0.2126 * r + 0.7152 * g + 0.0722 * b;
       brightnessSum += value;
       luminance.push(value);
@@ -371,6 +375,13 @@ export default function MediaUpload({
       uploadedUrl: getOptimizedProductImageUrl(originalUploadedUrl, selectedEnhancement),
       thumbnailUrl: getProductImageThumbnailUrl(originalUploadedUrl, selectedEnhancement),
     };
+  }
+
+  function getBeforeThumbnailUrl(image: ImageUploadItem) {
+    if (image.originalUploadedUrl) {
+      return getProductImageThumbnailUrl(image.originalUploadedUrl, 'keep_original');
+    }
+    return image.safePreviewUrl;
   }
 
   function handleEnhancementChange(imageId: string, nextEnhancement: ProductImageEnhancementOption) {
@@ -731,7 +742,7 @@ export default function MediaUpload({
                   <div className="relative overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={image.originalUploadedUrl ? getProductImageThumbnailUrl(image.originalUploadedUrl, 'keep_original') : image.safePreviewUrl}
+                      src={getBeforeThumbnailUrl(image)}
                       alt={`Original product image ${i + 1}`}
                       className="h-36 w-full object-cover"
                     />

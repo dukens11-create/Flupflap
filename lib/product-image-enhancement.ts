@@ -45,9 +45,9 @@ function transformCloudinaryUploadUrl(url: string, transformation: string) {
       return url;
     }
 
-    const versionIndex = pathSegments.findIndex(
-      (segment, index) => index > uploadIndex && /^v\d+$/.test(segment)
-    );
+    const afterUpload = pathSegments.slice(uploadIndex + 1);
+    const versionOffset = afterUpload.findIndex((segment) => /^v\d+$/.test(segment));
+    const versionIndex = versionOffset >= 0 ? uploadIndex + 1 + versionOffset : -1;
     const assetSegments =
       versionIndex >= 0
         ? pathSegments.slice(versionIndex)

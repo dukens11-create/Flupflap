@@ -198,10 +198,7 @@ export async function POST(
         ...(data.shipping !== undefined && { shippingCents: cents(data.shipping || '0') }),
         ...(data.shippingMode && (SHIPPING_MODES as readonly string[]).includes(data.shippingMode) && { shippingMode: data.shippingMode }),
         // Keep both fields in sync for legacy consumers (`imageUrl`) and multi-media UI (`mainImage`).
-        imageUrl: mainImage,
-        images: resolvedImages,
-        mainImage,
-        videoUrl,
+        ...{ imageUrl: mainImage, mainImage, images: resolvedImages, videoUrl },
         pickupAvailable: data.pickupAvailable === 'true',
         pickupCity: data.pickupCity || null,
         pickupState: data.pickupState || null,
@@ -309,10 +306,7 @@ export async function PATCH(
         ...(data.category && { category: data.category }),
         ...(data.condition && { condition: data.condition }),
         // Keep both fields in sync for legacy consumers (`imageUrl`) and multi-media UI (`mainImage`).
-        imageUrl: mainImage,
-        images: resolvedImages,
-        mainImage,
-        videoUrl,
+        ...{ imageUrl: mainImage, mainImage, images: resolvedImages, videoUrl },
         ...(data.inventory && { inventory: Number(data.inventory) }),
         ...(data.pickupAvailable !== undefined && { pickupAvailable: data.pickupAvailable === 'true' }),
         ...(data.pickupCity !== undefined && { pickupCity: data.pickupCity || null }),
