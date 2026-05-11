@@ -67,7 +67,10 @@ export default function SellerStockEditor({ productId, currentInventory }: Props
           onChange={e => setInputValue(e.target.value)}
           className="input w-20 text-sm py-1 px-2"
           autoFocus
-          onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') cancel(); }}
+          onKeyDown={e => {
+            if (e.key === 'Enter') save();
+            if (e.key === 'Escape') cancel();
+          }}
         />
         <button
           onClick={save}

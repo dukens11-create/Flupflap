@@ -16,6 +16,7 @@ type Item = {
 
 export default function AddToCartButton({ item }: { item: Omit<Item, 'quantity'> }) {
   const [done, setDone] = useState(false);
+  const [capped, setCapped] = useState(false);
   const [qty, setQty] = useState(1);
   const maxQty = Math.min(item.inventoryQty, 99);
 
@@ -24,8 +25,12 @@ export default function AddToCartButton({ item }: { item: Omit<Item, 'quantity'>
     const cart: Item[] = raw ? JSON.parse(raw) : [];
     const existing = cart.find(i => i.id === item.id);
     if (existing) {
-      existing.quantity = Math.min(existing.quantity + qty, item.inventoryQty);
+      const newQty = existing.quantity + qty;
+      const clamped = Math.min(newQty, item.inventoryQty);
+      const wasCapped = clamped < newQty;
+      existing.quantity = clamped;
       existing.inventoryQty = item.inventoryQty;
+      if (wasCapped) setCapped(true);
     } else {
       cart.push({ ...item, quantity: qty });
     }
@@ -39,7 +44,7 @@ export default function AddToCartButton({ item }: { item: Omit<Item, 'quantity'>
     }).catch(() => null);
     setDone(true);
     // Reset button label after 2 seconds
-    setTimeout(() => setDone(false), 2000);
+    setTimeout(() => { setDone(false); setCapped(false); }, 2000);
   }
 
   return (
@@ -78,7 +83,7 @@ export default function AddToCartButton({ item }: { item: Omit<Item, 'quantity'>
         </div>
       </div>
       <button onClick={add} className="btn-dark w-full">
-        {done ? '✓ Added to cart' : 'Add to cart'}
+        {done ? (capped ? `✓ Added (capped at ${item.inventoryQty} available)` : '✓ Added to cart') : 'Add to cart'}
       </button>
     </div>
   );
