@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { getMarketplaceSettings } from '@/lib/commission';
+import { SellerStatus } from '@prisma/client';
 
 const schema = z.object({
   name: z.string().min(1),
@@ -45,7 +46,7 @@ export async function POST(req: Request) {
         phone: data.role === 'SELLER' ? (data.phone?.trim() ?? null) : null,
         ...(data.role === 'SELLER'
           ? {
-              sellerStatus: 'PENDING',
+          sellerStatus: SellerStatus.PENDING,
               hasFreePromotion: !!settings?.freePromotionEnabled,
               freePromotionStart: settings?.freePromotionEnabled ? now : null,
               freePromotionEnd,

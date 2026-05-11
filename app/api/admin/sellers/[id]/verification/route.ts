@@ -2,6 +2,8 @@ import {
   SellerAdminFallbackStatus,
   SellerVerificationStatus,
   NotificationType,
+  KycStatus,
+  SellerStatus,
 } from '@prisma/client';
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
@@ -149,13 +151,13 @@ export async function POST(
       data:
         data.status === SellerVerificationStatus.APPROVED
           ? {
-              kycStatus: 'APPROVED',
-              sellerStatus: 'ACTIVE',
+              kycStatus: KycStatus.APPROVED,
+              sellerStatus: SellerStatus.ACTIVE,
               verifiedSeller: true,
               approvedAt: now,
             }
           : {
-              kycStatus: 'REJECTED',
+              kycStatus: KycStatus.REJECTED,
             },
     });
 

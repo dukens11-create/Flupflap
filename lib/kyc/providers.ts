@@ -4,6 +4,8 @@ import {
   SellerPhoneVerificationStatus,
   SellerVerificationStatus,
   NotificationType,
+  KycStatus,
+  SellerStatus,
 } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { appUrl, getCurrentStripeMode, stripe } from '@/lib/stripe';
@@ -201,8 +203,8 @@ export async function applyAutomatedKycResult(input: {
       await prisma.user.update({
         where: { id: input.sellerId },
         data: {
-          kycStatus: 'APPROVED',
-          sellerStatus: 'ACTIVE',
+          kycStatus: KycStatus.APPROVED,
+          sellerStatus: SellerStatus.ACTIVE,
           verifiedSeller: true,
           approvedAt: now,
         },
@@ -210,12 +212,12 @@ export async function applyAutomatedKycResult(input: {
     } else if (status === SellerVerificationStatus.REJECTED) {
       await prisma.user.update({
         where: { id: input.sellerId },
-        data: { kycStatus: 'REJECTED' },
+        data: { kycStatus: KycStatus.REJECTED },
       });
     } else if (status === SellerVerificationStatus.PENDING) {
       await prisma.user.update({
         where: { id: input.sellerId },
-        data: { kycStatus: 'PENDING_REVIEW' },
+        data: { kycStatus: KycStatus.PENDING_REVIEW },
       });
     }
   }
