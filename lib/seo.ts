@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 
 const FALLBACK_SITE_URL = 'https://www.flupflap.com';
+export const BRAND_LOGO_PATH = '/flupflap_logo_brand.png';
 
 export const DEFAULT_SEO_DESCRIPTION =
   'Buy and sell everyday items on FlupFlap with verified sellers, low fees, and secure checkout.';
@@ -45,13 +46,13 @@ export function createPageMetadata({
       url: path,
       type: 'website',
       siteName: 'FlupFlap',
-      images: [{ url: '/flupflap_logo_brand.png' }],
+      images: [{ url: BRAND_LOGO_PATH }],
     },
     twitter: {
       card: 'summary_large_image',
       title,
       description,
-      images: ['/flupflap_logo_brand.png'],
+      images: [BRAND_LOGO_PATH],
     },
     robots: noIndex ? { index: false, follow: false } : { index: true, follow: true },
   };

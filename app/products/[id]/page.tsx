@@ -17,7 +17,7 @@ import type { Metadata } from 'next';
 import { expirePromotions } from '@/lib/promotions';
 import { getSellerResponseStats, SELLER_RESPONSE_WINDOW_HOURS } from '@/lib/messages';
 import { conditionBadgeClass } from '@/lib/condition-badge';
-import { absoluteUrl, DEFAULT_SEO_DESCRIPTION } from '@/lib/seo';
+import { absoluteUrl, BRAND_LOGO_PATH, DEFAULT_SEO_DESCRIPTION } from '@/lib/seo';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,11 +29,13 @@ function getSchemaItemCondition(condition: string): string {
 }
 
 function summarizeDescription(description: string): string {
+  const MAX_SUMMARY_LENGTH = 160;
+  const MIN_WORD_BOUNDARY_INDEX = 100;
   const trimmed = description.trim();
-  if (trimmed.length <= 160) return trimmed;
-  const snippet = trimmed.slice(0, 160);
+  if (trimmed.length <= MAX_SUMMARY_LENGTH) return trimmed;
+  const snippet = trimmed.slice(0, MAX_SUMMARY_LENGTH);
   const cutoff = snippet.lastIndexOf(' ');
-  if (cutoff >= 100) return `${snippet.slice(0, cutoff).trim()}…`;
+  if (cutoff >= MIN_WORD_BOUNDARY_INDEX) return `${snippet.slice(0, cutoff).trim()}…`;
   return `${snippet.trim()}…`;
 }
 
@@ -62,6 +64,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
   const canonicalPath = `/products/${product.id}`;
   const imageCandidates = (product.images?.length ? product.images : [product.imageUrl]).filter(Boolean);
+  const socialImages = imageCandidates.length ? imageCandidates : [BRAND_LOGO_PATH];
   const productDescription = summarizeDescription(product.description);
   const title = `${product.title} | ${product.category}`;
 
@@ -83,13 +86,13 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
       description: productDescription,
       url: canonicalPath,
       type: 'website',
-      images: imageCandidates.map((url) => ({ url })),
+      images: socialImages.map((url) => ({ url })),
     },
     twitter: {
       card: 'summary_large_image',
       title,
       description: productDescription,
-      images: imageCandidates,
+      images: socialImages,
     },
   };
 }

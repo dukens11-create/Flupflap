@@ -6,14 +6,14 @@ import Providers from '@/components/Providers';
 import Navbar from '@/components/Navbar';
 import { getServerTranslations } from '@/lib/i18n/server';
 import VisitorTracker from '@/components/VisitorTracker';
-import { absoluteUrl, DEFAULT_SEO_DESCRIPTION, getSiteUrl } from '@/lib/seo';
+import { absoluteUrl, BRAND_LOGO_PATH, DEFAULT_SEO_DESCRIPTION, getSiteUrl } from '@/lib/seo';
 
 export const metadata: Metadata = {
   metadataBase: getSiteUrl(),
   title: { default: 'FlupFlap Marketplace', template: '%s | FlupFlap' },
   description: DEFAULT_SEO_DESCRIPTION,
   alternates: {
-    canonical: './',
+    canonical: '/',
   },
   robots: {
     index: true,
@@ -32,13 +32,13 @@ export const metadata: Metadata = {
     url: '/',
     siteName: 'FlupFlap',
     type: 'website',
-    images: [{ url: '/flupflap_logo_brand.png' }],
+    images: [{ url: BRAND_LOGO_PATH }],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'FlupFlap Marketplace',
     description: DEFAULT_SEO_DESCRIPTION,
-    images: ['/flupflap_logo_brand.png'],
+    images: [BRAND_LOGO_PATH],
   },
 };
 
@@ -56,7 +56,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     '@type': 'Organization',
     name: 'FlupFlap',
     url: absoluteUrl('/'),
-    logo: absoluteUrl('/flupflap_logo_brand.png'),
+    logo: absoluteUrl(BRAND_LOGO_PATH),
   };
 
   return (
