@@ -69,8 +69,8 @@ export default function NewListingForm() {
     }
 
     const inventoryQty = Number(inventoryRaw);
-    if (!inventoryRaw || Number.isNaN(inventoryQty) || !Number.isInteger(inventoryQty) || inventoryQty < 1) {
-      nextErrors.inventoryQty = 'Please enter an inventory quantity of at least 1.';
+    if (!inventoryRaw || Number.isNaN(inventoryQty) || !Number.isInteger(inventoryQty) || inventoryQty < 1 || inventoryQty > 9999) {
+      nextErrors.inventoryQty = 'Please enter an inventory quantity between 1 and 9999.';
     }
 
     if (resolvedImages.length < 1) {
@@ -146,8 +146,8 @@ export default function NewListingForm() {
       />
       {errors.images && <p className="mt-1 text-xs text-red-600">{errors.images}</p>}
       <div>
-        <label className="label">Inventory (qty)</label>
-        <input name="inventoryQty" type="number" min="1" defaultValue="1" className={`input ${errors.inventoryQty ? 'border-red-500 ring-1 ring-red-100' : ''}`} />
+        <label className="label">Available quantity / Stock</label>
+        <input name="inventoryQty" type="number" min="1" max="9999" defaultValue="1" className={`input ${errors.inventoryQty ? 'border-red-500 ring-1 ring-red-100' : ''}`} />
         {errors.inventoryQty && <p className="mt-1 text-xs text-red-600">{errors.inventoryQty}</p>}
       </div>
 

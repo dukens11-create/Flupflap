@@ -248,6 +248,13 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             <p className="text-red-600 font-semibold">Out of stock</p>
           ) : (
             <div className="flex flex-col gap-2">
+              {product.inventory === 1 ? (
+                <p className="text-orange-600 text-sm font-medium">Only 1 left!</p>
+              ) : product.inventory <= 5 ? (
+                <p className="text-orange-600 text-sm font-medium">Only {product.inventory} left!</p>
+              ) : (
+                <p className="text-green-700 text-sm font-medium">In stock: {product.inventory} available</p>
+              )}
               <AddToCartButton item={{
                 id: product.id,
                 title: product.title,
@@ -257,15 +264,13 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
                 pickupAvailable: product.pickupAvailable,
                 pickupCity: product.pickupCity ?? undefined,
                 pickupState: product.pickupState ?? undefined,
+                inventoryQty: product.inventory,
               }} />
               <BuyNowButton productId={product.id} />
               {product.pickupAvailable && (
                 <BuyNowButton productId={product.id} isPickup />
               )}
             </div>
-          )}
-          {product.inventory > 0 && product.inventory <= 3 && (
-            <p className="text-orange-600 text-sm font-medium">Only {product.inventory} left!</p>
           )}
           {/* Contact seller — hidden for the seller's own listing */}
           {!isOwnListing && (

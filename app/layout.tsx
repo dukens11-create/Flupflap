@@ -6,12 +6,32 @@ import Providers from '@/components/Providers';
 import Navbar from '@/components/Navbar';
 import { getServerTranslations } from '@/lib/i18n/server';
 import VisitorTracker from '@/components/VisitorTracker';
+import PwaInstallPrompt from '@/components/PwaInstallPrompt';
+import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration';
 import { absoluteUrl, BRAND_LOGO_PATH, DEFAULT_SEO_DESCRIPTION, getSiteUrl } from '@/lib/seo';
 
 export const metadata: Metadata = {
   metadataBase: getSiteUrl(),
   title: { default: 'FlupFlap Marketplace', template: '%s | FlupFlap' },
   description: DEFAULT_SEO_DESCRIPTION,
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    title: 'FlupFlap',
+    statusBarStyle: 'default',
+  },
+  icons: {
+    apple: '/icons/icon-192x192.png',
+    icon: [
+      { url: '/icons/icon-192x192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icons/icon-512x512.png', sizes: '512x512', type: 'image/png' },
+    ],
+  },
+  other: {
+    'mobile-web-app-capable': 'yes',
+    'apple-mobile-web-app-capable': 'yes',
+    'apple-mobile-web-app-title': 'FlupFlap',
+  },
   alternates: {
     canonical: '/',
   },
@@ -70,6 +90,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body className="min-h-screen bg-slate-50 text-slate-900 antialiased">
         <Providers initialLocale={locale}>
           <VisitorTracker />
+          <ServiceWorkerRegistration />
+          <PwaInstallPrompt />
           <div className="flex min-h-screen flex-col">
             <Navbar />
             <div className="w-full flex-1">

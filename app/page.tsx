@@ -55,7 +55,7 @@ function getUniqueSellerIds(products: Array<{ sellerId: string }>) {
 }
 
 async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?: Record<string, string | number>) => string }) {
-  const where: any = { status: 'APPROVED' };
+  const where: any = { status: 'APPROVED', inventory: { gt: 0 } };
   if (sp.q) where.title = { contains: sp.q, mode: 'insensitive' };
 
   // Category filtering: prefer categoryId-based filter when a structured category is selected,
