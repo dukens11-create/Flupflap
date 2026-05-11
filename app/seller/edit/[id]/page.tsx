@@ -18,8 +18,10 @@ export const metadata: Metadata = { title: 'Edit Listing' };
 
 export default async function SellerEditPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ error?: string }>;
 }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect('/login');
@@ -42,6 +44,7 @@ export default async function SellerEditPage({
   }
 
   const { id } = await params;
+  const { error } = await searchParams;
   const product = await prisma.product.findUnique({
     where: { id },
     include: {
@@ -76,6 +79,11 @@ export default async function SellerEditPage({
       <p className="text-sm text-slate-500 mb-6">
         Changes will require re-approval by an admin before going live.
       </p>
+      {error && (
+        <p className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </p>
+      )}
       <form action={`/api/seller/products/${id}`} method="POST" className="card p-6 space-y-4">
         <div>
           <label className="label">Title</label>
@@ -248,7 +256,12 @@ export default async function SellerEditPage({
             </div>
             <div>
               <label className="label">Dimension unit</label>
-              <input value="in" className="input bg-slate-50 text-slate-500" readOnly />
+              <input
+                name="packageDimensionUnit"
+                value="in"
+                className="input bg-slate-50 text-slate-500"
+                readOnly
+              />
             </div>
           </div>
         </fieldset>
