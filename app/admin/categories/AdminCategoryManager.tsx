@@ -110,10 +110,17 @@ export default function AdminCategoryManager({ initialCategories }: Props) {
         return;
       }
 
-      setSuccess(editingId ? 'Category updated.' : 'Category created.');
+      const saved = await res.json();
+      if (editingId) {
+        // Update the existing category in state
+        setCategories(prev => prev.map(c => c.id === editingId ? { ...c, ...saved } : c));
+        setSuccess('Category updated.');
+      } else {
+        // Add the new category to state
+        setCategories(prev => [...prev, { ...saved, _count: { mainProducts: 0, subProducts: 0 } }]);
+        setSuccess('Category created.');
+      }
       setShowForm(false);
-      // Refresh page to get fresh data
-      window.location.reload();
     } catch {
       setError('Network error. Please try again.');
     } finally {

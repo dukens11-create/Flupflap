@@ -77,6 +77,11 @@ export default function CategoryPicker({ defaultCategoryId, defaultSubcategoryId
   const [childId, setChildId] = useState<string | null>(null);
   const [attrs, setAttrs] = useState<Record<string, string>>(defaultAttributes ?? {});
 
+  // Reset attribute state when defaultAttributes prop changes (e.g. editing different products)
+  useEffect(() => {
+    setAttrs(defaultAttributes ?? {});
+  }, [defaultAttributes]);
+
   useEffect(() => {
     fetch('/api/categories')
       .then(r => r.json())

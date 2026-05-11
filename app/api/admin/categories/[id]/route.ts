@@ -6,7 +6,7 @@ import { z } from 'zod';
 
 const updateSchema = z.object({
   name: z.string().min(1).max(100).optional(),
-  slug: z.string().min(1).max(120).regex(/^[a-z0-9-]+$/).optional(),
+  slug: z.string().min(1).max(120).regex(/^[a-z0-9]+(-[a-z0-9]+)*$/).optional(),
   icon: z.string().max(10).optional().nullable(),
   sortOrder: z.coerce.number().int().optional(),
   attributeSchema: z.string().optional().nullable(), // JSON string or null to clear

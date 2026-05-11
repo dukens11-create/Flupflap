@@ -6,7 +6,7 @@ import { z } from 'zod';
 
 const createSchema = z.object({
   name: z.string().min(1).max(100),
-  slug: z.string().min(1).max(120).regex(/^[a-z0-9-]+$/, 'Slug must be lowercase alphanumeric with hyphens'),
+  slug: z.string().min(1).max(120).regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, 'Slug must be lowercase alphanumeric words separated by hyphens'),
   parentId: z.string().optional().nullable(),
   icon: z.string().max(10).optional().nullable(),
   sortOrder: z.coerce.number().int().default(0),

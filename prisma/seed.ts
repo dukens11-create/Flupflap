@@ -271,13 +271,14 @@ async function main(){
       selfieImageFormat: 'jpg',
     },
   });
+  // Seed categories first so products can reference them
+  await seedCategories();
   const count = await prisma.product.count();
   if(count===0){ await prisma.product.createMany({ data:[
     {title:'Used iPhone 13',description:'Clean used phone, unlocked, good battery.',priceCents:32900,condition:'Used',category:'Phones',imageUrl:'https://images.unsplash.com/photo-1592750475338-74b7b21085ab',status:ProductStatus.APPROVED,sellerId:seller.id,shippingCents:1299,inventory:1},
     {title:'New Wireless Headphones',description:'Brand new Bluetooth headphones with case.',priceCents:4900,condition:'New',category:'Audio',imageUrl:'https://images.unsplash.com/photo-1505740420928-5e560c06d30e',status:ProductStatus.APPROVED,sellerId:seller.id,shippingCents:599,inventory:5},
     {title:'Used Office Chair',description:'Comfortable office chair in good condition.',priceCents:8500,condition:'Used',category:'Furniture',imageUrl:'https://images.unsplash.com/photo-1586023492125-27b2c045efd7',status:ProductStatus.APPROVED,sellerId:seller.id,shippingCents:2500,inventory:1}
   ]});}
-  await seedCategories();
   console.log({admin: admin.email, seller: seller.email, password:'password123'});
 }
 main().finally(()=>prisma.$disconnect());
