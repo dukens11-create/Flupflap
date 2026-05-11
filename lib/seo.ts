@@ -8,7 +8,10 @@ export const DEFAULT_SEO_DESCRIPTION =
   'Buy and sell everyday items on FlupFlap with verified sellers, low fees, and secure checkout.';
 
 export function getSiteUrl(): URL {
-  const configuredUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXTAUTH_URL ?? FALLBACK_SITE_URL;
+  const configuredUrl = process.env.NEXT_PUBLIC_SITE_URL
+    ?? process.env.NEXT_PUBLIC_APP_URL
+    ?? process.env.NEXTAUTH_URL
+    ?? FALLBACK_SITE_URL;
   const normalized = configuredUrl.startsWith('http://') || configuredUrl.startsWith('https://')
     ? configuredUrl
     : `https://${configuredUrl}`;

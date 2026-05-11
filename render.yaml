@@ -34,6 +34,10 @@ services:
         sync: false
       - key: NEXT_PUBLIC_APP_URL
         sync: false
+      - key: NEXT_PUBLIC_SITE_URL
+        sync: false
+      - key: NEXT_PUBLIC_API_URL
+        sync: false
       - key: SHIPPO_API_TOKEN
         sync: false
       - key: PLATFORM_FEE_PERCENT

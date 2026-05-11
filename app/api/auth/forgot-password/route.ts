@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import crypto from 'crypto';
 import { sendEmail } from '@/lib/email';
 import { passwordResetEmail } from '@/lib/email-templates';
+import { getSiteUrl } from '@/lib/seo';
 
 export async function POST(req: Request) {
   try {
@@ -35,10 +36,11 @@ export async function POST(req: Request) {
       },
     });
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
-    const resetUrl = `${appUrl}/reset-password?token=${token}&email=${encodeURIComponent(email)}`;
+    const resetUrl = new URL('/reset-password', getSiteUrl());
+    resetUrl.searchParams.set('token', token);
+    resetUrl.searchParams.set('email', email);
 
-    const { subject, html } = passwordResetEmail(resetUrl);
+    const { subject, html } = passwordResetEmail(resetUrl.toString());
     const sent = await sendEmail(email, subject, html);
     if (!sent) {
       console.warn('[forgot-password] Email delivery failed for', email);
