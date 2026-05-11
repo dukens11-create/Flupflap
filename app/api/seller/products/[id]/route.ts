@@ -19,6 +19,8 @@ const updateSchema = z.object({
   category: z.string().min(1).optional(),
   condition: z.string().min(1).optional(),
   imageUrl: z.string().url().optional(),
+  images: z.union([z.string().url(), z.array(z.string().url())]).optional(),
+  videoUrl: z.string().url().optional().or(z.literal('')),
   inventory: z.string().optional(),
   pickupAvailable: z.string().optional(), // "true" when checkbox is checked
   pickupCity: z.string().max(100).optional(),
@@ -32,15 +34,40 @@ const updateSchema = z.object({
 
 type ProductUpdateInput = z.infer<typeof updateSchema>;
 
+type ExistingProduct = NonNullable<Awaited<ReturnType<typeof getSellerProduct>>>;
+
 async function getSellerProduct(id: string, sellerId: string) {
   return prisma.product.findFirst({ where: { id, sellerId } });
 }
 
+/**
+ * Resolve the images array from form/JSON data, falling back to the existing
+ * product's images or imageUrl.
+ */
+function resolveImages(submitted: string[] | null, existing: ExistingProduct): string[] {
+  if (submitted && submitted.length > 0) return submitted;
+  if (existing.images?.length) return existing.images;
+  if (existing.imageUrl) return [existing.imageUrl];
+  return [];
+}
+
+/**
+ * Resolve the video URL: if the caller provides a value, use it (empty string → null).
+ * If the caller provides nothing (undefined), keep the existing value.
+ * Note: videoUrl is already validated as a URL by the Zod schema when non-empty.
+ */
+function resolveVideoUrl(submitted: string | undefined, existing: ExistingProduct): string | null {
+  if (submitted === undefined) return existing.videoUrl ?? null;
+  return submitted || null;
+}
+
 function buildListingRiskCandidate(
   sellerId: string,
-  existing: NonNullable<Awaited<ReturnType<typeof getSellerProduct>>>,
+  existing: ExistingProduct,
   data: ProductUpdateInput,
+  resolvedImgs: string[],
 ) {
+  const mainImage = resolvedImgs[0] ?? data.imageUrl ?? existing.imageUrl;
   return {
     sellerId,
     title: data.title ?? existing.title,
@@ -48,7 +75,7 @@ function buildListingRiskCandidate(
     priceCents: data.price ? cents(data.price) : existing.priceCents,
     category: data.category ?? existing.category,
     condition: data.condition ?? existing.condition,
-    imageUrl: data.imageUrl ?? existing.imageUrl,
+    imageUrl: mainImage,
   };
 }
 
@@ -98,10 +125,17 @@ export async function POST(
     }
 
     // Default: update
-    const raw = Object.fromEntries(form.entries());
-    const data = updateSchema.parse(raw);
+    const rawEntries = Object.fromEntries(form.entries());
+    const imagesRaw = form.getAll('images').map(String).filter(Boolean);
+    const data = updateSchema.parse({ ...rawEntries, images: imagesRaw.length ? imagesRaw : undefined });
+
+    const submittedImages = imagesRaw.length ? imagesRaw : data.imageUrl ? [data.imageUrl] : null;
+    const resolvedImages = resolveImages(submittedImages, existing);
+    const mainImage = resolvedImages[0] ?? existing.imageUrl;
+    const videoUrl = resolveVideoUrl(data.videoUrl, existing);
+
     const riskAssessment = await getListingRiskAssessmentForCandidate(
-      buildListingRiskCandidate(session.user.id, existing, data),
+      buildListingRiskCandidate(session.user.id, existing, data, resolvedImages),
       id,
     );
 
@@ -114,7 +148,10 @@ export async function POST(
         ...(data.shipping !== undefined && { shippingCents: cents(data.shipping || '0') }),
         ...(data.category && { category: data.category }),
         ...(data.condition && { condition: data.condition }),
-        ...(data.imageUrl && { imageUrl: data.imageUrl }),
+        imageUrl: mainImage,
+        images: resolvedImages,
+        mainImage,
+        videoUrl,
         ...(data.inventory && { inventory: Number(data.inventory) }),
         // Pickup fields — always written on form submit so we can clear them
         pickupAvailable: data.pickupAvailable === 'true',
@@ -177,8 +214,22 @@ export async function PATCH(
 
     const body: unknown = await req.json();
     const data = updateSchema.parse(body);
+
+    // Resolve images for PATCH (JSON body): prefer explicit images list, then legacy imageUrl
+    let imagesInput: string[] | null = null;
+    if (Array.isArray(data.images) && data.images.length > 0) {
+      imagesInput = data.images;
+    } else if (typeof data.images === 'string' && data.images) {
+      imagesInput = [data.images];
+    } else if (data.imageUrl) {
+      imagesInput = [data.imageUrl];
+    }
+    const resolvedImages = resolveImages(imagesInput, existing);
+    const mainImage = resolvedImages[0] ?? existing.imageUrl;
+    const videoUrl = resolveVideoUrl(data.videoUrl, existing);
+
     const riskAssessment = await getListingRiskAssessmentForCandidate(
-      buildListingRiskCandidate(session.user.id, existing, data),
+      buildListingRiskCandidate(session.user.id, existing, data, resolvedImages),
       id,
     );
 
@@ -191,7 +242,10 @@ export async function PATCH(
         ...(data.shipping !== undefined && { shippingCents: cents(data.shipping || '0') }),
         ...(data.category && { category: data.category }),
         ...(data.condition && { condition: data.condition }),
-        ...(data.imageUrl && { imageUrl: data.imageUrl }),
+        imageUrl: mainImage,
+        images: resolvedImages,
+        mainImage,
+        videoUrl,
         ...(data.inventory && { inventory: Number(data.inventory) }),
         ...(data.pickupAvailable !== undefined && { pickupAvailable: data.pickupAvailable === 'true' }),
         ...(data.pickupCity !== undefined && { pickupCity: data.pickupCity || null }),

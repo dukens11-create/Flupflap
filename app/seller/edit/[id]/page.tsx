@@ -2,8 +2,8 @@ import { redirect, notFound } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
-import ImageUpload from '@/components/ImageUpload';
 import CategoryPicker from '@/components/CategoryPicker';
+import MediaUpload from '@/components/MediaUpload';
 import type { Metadata } from 'next';
 import { isSellerVerificationApproved } from '@/lib/seller-verification';
 
@@ -43,6 +43,11 @@ export default async function SellerEditPage({
 
   const priceDollars = (product.priceCents / 100).toFixed(2);
   const shippingDollars = (product.shippingCents / 100).toFixed(2);
+  const defaultImages = product.images?.length
+    ? product.images
+    : product.imageUrl
+      ? [product.imageUrl]
+      : [];
 
   return (
     <main className="max-w-xl mx-auto">
@@ -114,7 +119,11 @@ export default async function SellerEditPage({
             </select>
           </div>
         </div>
-        <ImageUpload defaultValue={product.imageUrl} required />
+        <MediaUpload
+          defaultImages={defaultImages}
+          defaultVideoUrl={product.videoUrl ?? ''}
+          required
+        />
         <div>
           <label className="label">Inventory (qty)</label>
           <input
