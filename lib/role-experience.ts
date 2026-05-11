@@ -12,16 +12,23 @@ export function normalizeExperienceRole(role?: string | null): ExperienceRole {
 export function getRoleDefaultPath(role?: string | null): string {
   const experienceRole = normalizeExperienceRole(role);
   if (experienceRole === 'admin') return '/admin/dashboard';
-  if (experienceRole === 'seller') return '/seller/dashboard';
-  if (experienceRole === 'buyer') return '/account';
+  if (experienceRole === 'seller') return '/';
+  if (experienceRole === 'buyer') return '/';
   return '/';
 }
 
 export function resolveRoleLoginDestination(role: string | null | undefined, callbackUrl: string | null): string {
-  const defaultPath = getRoleDefaultPath(role);
+  const experienceRole = normalizeExperienceRole(role);
+  const defaultPath = experienceRole === 'admin' ? '/admin/dashboard' : '/';
   if (!callbackUrl) return defaultPath;
   if (!callbackUrl.startsWith('/') || callbackUrl.startsWith('//')) return defaultPath;
-  if (callbackUrl === '/') return defaultPath;
+  if (callbackUrl === '/login' || callbackUrl.startsWith('/login?')) return defaultPath;
+  if (callbackUrl === '/signup' || callbackUrl.startsWith('/signup?')) return defaultPath;
+  if (callbackUrl === '/forgot-password' || callbackUrl.startsWith('/forgot-password?')) return defaultPath;
+  if (callbackUrl === '/reset-password' || callbackUrl.startsWith('/reset-password?')) return defaultPath;
+  if (experienceRole !== 'admin' && (callbackUrl === '/admin' || callbackUrl.startsWith('/admin/'))) {
+    return defaultPath;
+  }
   return callbackUrl;
 }
 
