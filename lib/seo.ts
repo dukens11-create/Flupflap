@@ -12,7 +12,6 @@ export function getSiteUrl(): URL {
   const configuredUrl = process.env.NEXT_PUBLIC_SITE_URL
     ?? process.env.NEXT_PUBLIC_APP_URL
     ?? process.env.NEXTAUTH_URL
-    ?? process.env.NEXT_PUBLIC_API_URL
     ?? (process.env.NODE_ENV === 'production' ? FALLBACK_SITE_URL : FALLBACK_DEV_SITE_URL);
   const normalized = configuredUrl.startsWith('http://') || configuredUrl.startsWith('https://')
     ? configuredUrl
