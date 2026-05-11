@@ -18,13 +18,13 @@ type ShippingRateInfo = {
   shipmentGroups: ShipmentGroup[];
   totalRateCents: number;
   buyerAddress?: {
-    name?: string;
+    name: string;
     street1: string;
     street2?: string;
     city: string;
     state: string;
     zip: string;
-    country?: string;
+    country: string;
   };
 };
 

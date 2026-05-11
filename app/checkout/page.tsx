@@ -228,7 +228,8 @@ export default function CheckoutPage() {
   ]);
 
   useEffect(() => {
-    const requestVersion = ++rateRequestVersionRef.current;
+    const requestVersion = rateRequestVersionRef.current + 1;
+    rateRequestVersionRef.current = requestVersion;
     setFetchingRates(false);
     setRateError('');
     setRateGroups([]);
@@ -304,7 +305,8 @@ export default function CheckoutPage() {
   }, [allPickup, buyerAddress, buyerAddressComplete, calculatedShippingItems, hasCalculatedShipping]);
 
   useEffect(() => {
-    const requestVersion = ++taxRequestVersionRef.current;
+    const requestVersion = taxRequestVersionRef.current + 1;
+    taxRequestVersionRef.current = requestVersion;
 
     if (!hasCalculatedShipping || allPickup || !buyerAddressComplete || !hasCompleteShippingSelection || fetchingRates || !!rateError) {
       return undefined;
@@ -584,6 +586,7 @@ export default function CheckoutPage() {
                 onChange={e => setBuyerState(e.target.value)}
                 className="input"
                 placeholder="NY"
+                maxLength={2}
               />
             </div>
           </div>
