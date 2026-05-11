@@ -15,10 +15,13 @@ type Item = {
   inventoryQty?: number;
 };
 
+function isCalculatedShipping(item: Item): boolean {
+  return item.shippingMode === 'CALCULATED' || (!item.shippingMode && item.shippingCents === 0);
+}
+
 function shippingLabel(item: Item): string {
   if (item.shippingMode === 'FREE') return 'Free shipping';
-  if (item.shippingMode === 'CALCULATED') return 'Shipping calculated at checkout';
-  if (!item.shippingMode && item.shippingCents === 0) return 'Shipping calculated at checkout';
+  if (isCalculatedShipping(item)) return 'Shipping calculated at checkout';
   return `+ ${dollars(item.shippingCents)} shipping`;
 }
 
@@ -38,7 +41,7 @@ export default function CartClient() {
 
   const total = useMemo(
     () => items.reduce((s, i) => {
-      const flatShipping = (i.shippingMode === 'FREE' || i.shippingMode === 'CALCULATED' || (!i.shippingMode && i.shippingCents === 0))
+      const flatShipping = (i.shippingMode === 'FREE' || isCalculatedShipping(i))
         ? 0
         : i.shippingCents;
       return s + (i.priceCents + flatShipping) * i.quantity;
@@ -46,9 +49,7 @@ export default function CartClient() {
     [items]
   );
 
-  const hasCalculatedShipping = items.some(
-    i => i.shippingMode === 'CALCULATED' || (!i.shippingMode && i.shippingCents === 0)
-  );
+  const hasCalculatedShipping = items.some(isCalculatedShipping);
 
   if (!items.length) {
     return (

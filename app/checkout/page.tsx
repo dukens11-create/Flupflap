@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
@@ -44,6 +44,18 @@ type SelectedRate = {
 
 function dollars(cents: number) {
   return `$${(cents / 100).toFixed(2)}`;
+}
+
+function isCalculatedShipping(item: Pick<CartItem, 'shippingMode' | 'shippingCents'>): boolean {
+  return item.shippingMode === 'CALCULATED' || (!item.shippingMode && item.shippingCents === 0);
+}
+
+function itemShippingLabel(item: CartItem, isPickup: boolean): React.ReactNode {
+  if (isPickup) return <span className="text-green-700 font-medium"> · Free pickup</span>;
+  if (item.shippingMode === 'FREE') return <span className="text-green-700 font-medium"> · Free shipping</span>;
+  if (isCalculatedShipping(item)) return <span className="text-slate-400"> · Shipping calculated at checkout</span>;
+  if (item.shippingCents > 0) return <span> · {dollars(item.shippingCents)} shipping</span>;
+  return null;
 }
 
 export default function CheckoutPage() {
@@ -92,7 +104,7 @@ export default function CheckoutPage() {
 
   // Check if any non-pickup items need live shipping rates
   const hasCalculatedShipping = useMemo(
-    () => items.some(i => !isPickup(i.id) && (i.shippingMode === 'CALCULATED' || (!i.shippingMode && i.shippingCents === 0))),
+    () => items.some(i => !isPickup(i.id) && isCalculatedShipping(i)),
     [items, isPickup],
   );
 
@@ -117,7 +129,7 @@ export default function CheckoutPage() {
     () =>
       items.reduce((s, i) => {
         if (isPickup(i.id)) return s;
-        if (i.shippingMode === 'CALCULATED' || (!i.shippingMode && i.shippingCents === 0)) return s;
+        if (isCalculatedShipping(i)) return s;
         if (i.shippingMode === 'FREE') return s;
         return s + i.shippingCents * i.quantity;
       }, 0),
@@ -331,18 +343,7 @@ export default function CheckoutPage() {
                 <p className="font-medium truncate">{item.title}</p>
                 <p className="text-sm text-slate-500">
                   {dollars(item.priceCents)} × {item.quantity}
-                  {!isPickup(item.id) && (
-                    item.shippingMode === 'FREE'
-                      ? <span className="text-green-700 font-medium"> · Free shipping</span>
-                      : item.shippingMode === 'CALCULATED' || (!item.shippingMode && item.shippingCents === 0)
-                        ? <span className="text-slate-400"> · Shipping calculated at checkout</span>
-                        : item.shippingCents > 0
-                          ? <span> · {dollars(item.shippingCents)} shipping</span>
-                          : null
-                  )}
-                  {isPickup(item.id) && (
-                    <span className="text-green-700 font-medium"> · Free pickup</span>
-                  )}
+                  {itemShippingLabel(item, isPickup(item.id))}
                 </p>
               </div>
               <p className="font-semibold flex-shrink-0">
@@ -480,47 +481,52 @@ export default function CheckoutPage() {
           )}
 
           {/* Rate options per seller group */}
-          {rateGroups.map(group => (
-            <div key={group.sellerId} className="rounded-xl border border-slate-200 p-3 space-y-2">
-              {rateGroups.length > 1 && (
-                <p className="text-xs font-semibold text-slate-600">Seller: {group.sellerName}</p>
-              )}
-              {group.rates.length === 0 && (
-                <p className="text-xs text-red-600">No rates available for this seller.</p>
-              )}
-              {group.rates.map(rate => {
-                const selected = selectedRates.find(
-                  r => r.sellerId === group.sellerId && r.rateId === rate.id,
-                );
-                const isCheapest = rate.id === group.rates[0]?.id;
-                const isFastest = rate.deliveryDays !== null
-                  && rate.deliveryDays === Math.min(...group.rates.filter(r => r.deliveryDays !== null).map(r => r.deliveryDays!));
-                return (
-                  <label key={rate.id} className="flex items-center justify-between gap-3 text-sm cursor-pointer">
-                    <span className="flex items-center gap-2">
-                      <input
-                        type="radio"
-                        name={`rate-${group.sellerId}`}
-                        checked={!!selected}
-                        onChange={() => handleSelectRate(group.sellerId, group.shipmentId, rate)}
-                      />
-                      <span>
-                        <span className="font-medium">{rate.carrier}</span>
-                        {' · '}
-                        {rate.service}
-                        {isCheapest && <span className="ml-1 text-[10px] bg-green-100 text-green-700 rounded-full px-1.5 py-0.5 font-semibold">Best price</span>}
-                        {isFastest && !isCheapest && <span className="ml-1 text-[10px] bg-blue-100 text-blue-700 rounded-full px-1.5 py-0.5 font-semibold">Fastest</span>}
+          {rateGroups.map(group => {
+            const ratesWithDays = group.rates.filter(r => r.deliveryDays !== null);
+            const minDeliveryDays = ratesWithDays.length > 0
+              ? Math.min(...ratesWithDays.map(r => r.deliveryDays!))
+              : null;
+            return (
+              <div key={group.sellerId} className="rounded-xl border border-slate-200 p-3 space-y-2">
+                {rateGroups.length > 1 && (
+                  <p className="text-xs font-semibold text-slate-600">Seller: {group.sellerName}</p>
+                )}
+                {group.rates.length === 0 && (
+                  <p className="text-xs text-red-600">No rates available for this seller.</p>
+                )}
+                {group.rates.map(rate => {
+                  const selected = selectedRates.find(
+                    r => r.sellerId === group.sellerId && r.rateId === rate.id,
+                  );
+                  const isCheapest = rate.id === group.rates[0]?.id;
+                  const isFastest = rate.deliveryDays !== null && rate.deliveryDays === minDeliveryDays;
+                  return (
+                    <label key={rate.id} className="flex items-center justify-between gap-3 text-sm cursor-pointer">
+                      <span className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name={`rate-${group.sellerId}`}
+                          checked={!!selected}
+                          onChange={() => handleSelectRate(group.sellerId, group.shipmentId, rate)}
+                        />
+                        <span>
+                          <span className="font-medium">{rate.carrier}</span>
+                          {' · '}
+                          {rate.service}
+                          {isCheapest && <span className="ml-1 text-[10px] bg-green-100 text-green-700 rounded-full px-1.5 py-0.5 font-semibold">Best price</span>}
+                          {isFastest && !isCheapest && <span className="ml-1 text-[10px] bg-blue-100 text-blue-700 rounded-full px-1.5 py-0.5 font-semibold">Fastest</span>}
+                        </span>
                       </span>
-                    </span>
-                    <span className="text-slate-600 text-right flex-shrink-0">
-                      ${rate.rate}
-                      {rate.deliveryDays !== null ? <span className="text-slate-400 text-xs ml-1">({rate.deliveryDays}d)</span> : null}
-                    </span>
-                  </label>
-                );
-              })}
-            </div>
-          ))}
+                      <span className="text-slate-600 text-right flex-shrink-0">
+                        ${rate.rate}
+                        {rate.deliveryDays !== null ? <span className="text-slate-400 text-xs ml-1">({rate.deliveryDays}d)</span> : null}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            );
+          })}
         </div>
       )}
 

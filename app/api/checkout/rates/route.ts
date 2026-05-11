@@ -124,6 +124,9 @@ export async function POST(req: Request) {
     const groups: SellerShipGroup[] = [];
     const errors: string[] = [];
 
+    // Build a Map of productId → quantity to avoid O(n²) lookup in the loop below
+    const quantityByProductId = new Map(items.map(i => [i.productId, i.quantity]));
+
     for (const [sellerId, sellerProducts] of sellerGroups) {
       const seller = sellerProducts[0].seller;
       const fromAddress = resolveFromAddress(seller);
@@ -138,7 +141,7 @@ export async function POST(req: Request) {
 
       // Aggregate package dimensions across products (sum weights, use max dimensions)
       const totalWeightOz = sellerProducts.reduce((sum, p) => {
-        const qty = items.find(i => i.productId === p.id)?.quantity ?? 1;
+        const qty = quantityByProductId.get(p.id) ?? 1;
         return sum + (p.weightOz ?? 0) * qty;
       }, 0);
       const maxLength = Math.max(...sellerProducts.map(p => p.lengthIn ?? 0));

@@ -8,6 +8,17 @@ import { conditionBadgeClass } from '@/lib/condition-badge';
 
 const TRENDING_THRESHOLD = 5;
 
+function resolveShippingKey(
+  shippingMode: string | null | undefined,
+  shippingCents: number,
+): 'product.freeShipping' | 'product.shippingCalculated' | 'product.shipping' {
+  if (shippingMode === 'FREE') return 'product.freeShipping';
+  if (shippingMode === 'CALCULATED') return 'product.shippingCalculated';
+  if (shippingCents > 0) return 'product.shipping';
+  // Legacy: $0.00 without an explicit mode → calculated at checkout
+  return 'product.shippingCalculated';
+}
+
 function isApprovedSeller(verification?: {
   status?: string | null;
   eligibleToListAt?: string | Date | null;
@@ -57,15 +68,12 @@ export default function ProductCard({ p: product }:{p:any}){
           <h3 className="line-clamp-2 text-sm font-bold text-slate-900 sm:text-base">{product.title}</h3>
           <p className="text-lg font-black text-amber-600 sm:text-xl">{dollars(product.priceCents)}</p>
         </div>
-        <p className="text-xs text-slate-500">{
-          product.shippingMode === 'FREE'
-            ? t('product.freeShipping')
-            : product.shippingMode === 'CALCULATED'
-              ? t('product.shippingCalculated')
-              : product.shippingCents > 0
-                ? t('product.shipping', { amount: dollars(product.shippingCents) })
-                : t('product.shippingCalculated')
-        }</p>
+        <p className="text-xs text-slate-500">{(() => {
+          const key = resolveShippingKey(product.shippingMode, product.shippingCents);
+          return key === 'product.shipping'
+            ? t('product.shipping', { amount: dollars(product.shippingCents) })
+            : t(key);
+        })()}</p>
         {product.pickupAvailable&&product.pickupCity&&<p className="text-xs font-medium text-emerald-700">{t('product.pickupIn', { location: pickupLocation })}</p>}
         {typeof product.inventory === 'number' && product.inventory > 0 && product.inventory <= 5 && product.status === 'APPROVED' && (
           <p className="text-xs font-semibold text-orange-600">Only {product.inventory} left!</p>

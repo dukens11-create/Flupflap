@@ -90,15 +90,14 @@ export async function POST(req: Request) {
 
     const pickupSet = new Set(pickupItemIds);
 
-    // When live shipping rates are provided, override shippingCents per item to 0
-    // (shipping cost is charged separately as a Stripe line item)
+    // When live shipping rates are provided, override shippingCents per item to 0.
+    // The actual shipping cost is charged as a separate Stripe line item, so items
+    // must have shippingCents=0 to avoid double-billing the buyer for shipping.
     const liveRatesByProductId = new Map<string, number>();
     if (shippingRateInfo?.shipmentGroups?.length) {
-      // Distribute live shipping cost across non-pickup products proportionally by seller group
       for (const product of products) {
         if (pickupSet.has(product.id)) continue;
         const group = shippingRateInfo.shipmentGroups.find(g => g.sellerId === product.sellerId);
-        // Store 0 so commission items use 0 shipping (live rate handled separately)
         if (group) liveRatesByProductId.set(product.id, 0);
       }
     }
