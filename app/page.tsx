@@ -38,9 +38,16 @@ function isSchemaNotInitializedError(err: unknown): boolean {
 interface SearchParams {
   q?: string;
   category?: string;
+  subcategory?: string;
   condition?: string;
   minPrice?: string;
   maxPrice?: string;
+  brand?: string;
+  size?: string;
+  color?: string;
+  gender?: string;
+  shipping?: string;
+  pickup?: string;
 }
 
 function getUniqueSellerIds(products: Array<{ sellerId: string }>) {
@@ -50,12 +57,44 @@ function getUniqueSellerIds(products: Array<{ sellerId: string }>) {
 async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?: Record<string, string | number>) => string }) {
   const where: any = { status: 'APPROVED' };
   if (sp.q) where.title = { contains: sp.q, mode: 'insensitive' };
-  if (sp.category) where.category = sp.category;
+
+  // Category filtering: prefer categoryId-based filter when a structured category is selected,
+  // fall back to the legacy string-based category field for backward compatibility.
+  if (sp.subcategory) {
+    where.subcategoryId = sp.subcategory;
+  } else if (sp.category) {
+    // category param is a Category.id from the new system
+    where.categoryId = sp.category;
+  }
+
   if (sp.condition) where.condition = sp.condition;
   if (sp.minPrice || sp.maxPrice) {
     where.priceCents = {};
     if (sp.minPrice) where.priceCents.gte = Math.round(Number(sp.minPrice) * 100);
     if (sp.maxPrice) where.priceCents.lte = Math.round(Number(sp.maxPrice) * 100);
+  }
+  if (sp.shipping === 'free') where.shippingCents = 0;
+  if (sp.pickup === '1') where.pickupAvailable = true;
+
+  // Attribute filters (brand, size, color, gender) — JSON path query on productAttributes
+  const attrFilters: Record<string, string> = {};
+  if (sp.brand) attrFilters.brand = sp.brand;
+  if (sp.size) attrFilters.size = sp.size;
+  if (sp.color) attrFilters.color = sp.color;
+  if (sp.gender) attrFilters.gender = sp.gender;
+
+  // If attribute filters present, apply JSON path conditions
+  // (Prisma supports `path` filter on Json columns for PostgreSQL)
+  if (Object.keys(attrFilters).length > 0) {
+    where.AND = where.AND ?? [];
+    for (const [key, val] of Object.entries(attrFilters)) {
+      where.AND.push({
+        productAttributes: {
+          path: [key],
+          string_contains: val,
+        },
+      });
+    }
   }
 
   // If DATABASE_URL is not configured, show a clear fallback instead of crashing.

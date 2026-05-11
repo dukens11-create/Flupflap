@@ -23,6 +23,10 @@ const updateSchema = z.object({
   pickupCity: z.string().max(100).optional(),
   pickupState: z.string().max(2).optional(),
   pickupPostalCode: z.string().max(20).optional(),
+  // Category system
+  categoryId: z.string().optional(),
+  subcategoryId: z.string().optional(),
+  productAttributes: z.string().optional(), // JSON string
 });
 
 type ProductUpdateInput = z.infer<typeof updateSchema>;
@@ -116,6 +120,10 @@ export async function POST(
         pickupCity: data.pickupCity || null,
         pickupState: data.pickupState || null,
         pickupPostalCode: data.pickupPostalCode || null,
+        // Category system fields
+        categoryId: data.categoryId || null,
+        subcategoryId: data.subcategoryId || null,
+        productAttributes: data.productAttributes ? (() => { try { return JSON.parse(data.productAttributes!); } catch { return null; } })() : null,
         // Reset to PENDING on edit so admin can re-review
         status: 'PENDING',
       },
@@ -188,6 +196,10 @@ export async function PATCH(
         ...(data.pickupCity !== undefined && { pickupCity: data.pickupCity || null }),
         ...(data.pickupState !== undefined && { pickupState: data.pickupState || null }),
         ...(data.pickupPostalCode !== undefined && { pickupPostalCode: data.pickupPostalCode || null }),
+        // Category system fields
+        categoryId: data.categoryId || null,
+        subcategoryId: data.subcategoryId || null,
+        productAttributes: data.productAttributes ? (() => { try { return JSON.parse(data.productAttributes!); } catch { return null; } })() : null,
         status: 'PENDING',
       },
     });

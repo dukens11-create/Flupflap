@@ -3,12 +3,12 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import ImageUpload from '@/components/ImageUpload';
+import CategoryPicker from '@/components/CategoryPicker';
 import type { Metadata } from 'next';
 import { isSellerVerificationApproved } from '@/lib/seller-verification';
 
 export const metadata: Metadata = { title: 'Edit Listing' };
 
-const CATEGORIES = ['Electronics', 'Clothing', 'Furniture', 'Books', 'Toys', 'Sports', 'Collectibles', 'Other'];
 const CONDITIONS = ['New', 'Like New', 'Used', 'For Parts'];
 
 export default async function SellerEditPage({
@@ -98,13 +98,11 @@ export default async function SellerEditPage({
         </div>
         <div className="flex gap-3">
           <div className="flex-1">
-            <label className="label">Category</label>
-            <select name="category" className="input" defaultValue={product.category} required>
-              <option value="">Select…</option>
-              {CATEGORIES.map(c => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
+            <CategoryPicker
+              defaultCategoryId={product.categoryId}
+              defaultSubcategoryId={product.subcategoryId}
+              defaultAttributes={(product.productAttributes as Record<string, string> | null) ?? undefined}
+            />
           </div>
           <div className="flex-1">
             <label className="label">Condition</label>
