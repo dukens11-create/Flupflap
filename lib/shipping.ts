@@ -1,4 +1,4 @@
-const EASYPOST_API_BASE = 'https://api.easypost.com/v2';
+const SHIPPO_API_BASE = 'https://api.goshippo.com';
 const SUPPORTED_CARRIERS = new Set(['USPS', 'UPS', 'FEDEX']);
 
 type AddressInput = {
@@ -26,16 +26,17 @@ export type ShipmentPurchaseResult = {
   shipmentStatus: string | null;
   trackingNumber: string | null;
   carrier: string | null;
+  service: string | null;
   labelUrl: string | null;
   trackingUrl: string | null;
 };
 
-function getEasyPostApiKey() {
-  const key = (process.env.EASYPOST_API_KEY ?? '').trim();
-  if (!key) {
-    throw new Error('EASYPOST_API_KEY is not set.');
+function getShippoApiToken() {
+  const token = (process.env.SHIPPO_API_TOKEN ?? '').trim();
+  if (!token) {
+    throw new Error('SHIPPO_API_TOKEN is not set.');
   }
-  return key;
+  return token;
 }
 
 function serializeAddress(address: AddressInput) {
@@ -51,12 +52,11 @@ function serializeAddress(address: AddressInput) {
   };
 }
 
-async function easyPostRequest(path: string, method: 'GET' | 'POST', body?: unknown) {
-  const auth = Buffer.from(`${getEasyPostApiKey()}:`).toString('base64');
-  const res = await fetch(`${EASYPOST_API_BASE}${path}`, {
+async function shippoRequest(path: string, method: 'GET' | 'POST', body?: unknown) {
+  const res = await fetch(`${SHIPPO_API_BASE}${path}`, {
     method,
     headers: {
-      Authorization: `Basic ${auth}`,
+      Authorization: `ShippoToken ${getShippoApiToken()}`,
       'Content-Type': 'application/json',
     },
     body: body ? JSON.stringify(body) : undefined,
@@ -65,10 +65,24 @@ async function easyPostRequest(path: string, method: 'GET' | 'POST', body?: unkn
 
   const payload = await res.json().catch(() => null);
   if (!res.ok) {
-    const message = payload?.error?.message || payload?.message || 'EasyPost request failed.';
+    const message = payload?.detail || payload?.error?.message || payload?.message || 'Shippo request failed.';
     throw new Error(message);
   }
   return payload;
+}
+
+function normalizeCarrier(value: unknown): string {
+  const raw = String(value ?? '').trim().toUpperCase();
+  if (!raw) return '';
+  if (raw === 'USPS' || raw === 'UPS') return raw;
+  if (raw === 'FEDEX' || raw === 'FED_EX' || raw === 'FED-EX' || raw === 'FED EX') return 'FEDEX';
+  return raw;
+}
+
+function parseOptionalString(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed || null;
 }
 
 function parseDeliveryDays(value: unknown) {
@@ -88,39 +102,43 @@ export async function createShipmentRates(params: {
   widthIn: number;
   heightIn: number;
 }) {
-  const payload = await easyPostRequest('/shipments', 'POST', {
-    shipment: {
-      to_address: serializeAddress(params.toAddress),
-      from_address: serializeAddress(params.fromAddress),
-      parcel: {
-        weight: params.weightOz,
-        length: params.lengthIn,
-        width: params.widthIn,
-        height: params.heightIn,
+  const payload = await shippoRequest('/shipments/', 'POST', {
+    address_to: serializeAddress(params.toAddress),
+    address_from: serializeAddress(params.fromAddress),
+    parcels: [
+      {
+        length: String(params.lengthIn),
+        width: String(params.widthIn),
+        height: String(params.heightIn),
+        distance_unit: 'in',
+        weight: String(params.weightOz),
+        mass_unit: 'oz',
       },
-    },
+    ],
+    async: false,
   });
 
-  const shipmentId = typeof payload?.id === 'string' ? payload.id : null;
+  const shipmentId = typeof payload?.object_id === 'string' ? payload.object_id : null;
   if (!shipmentId) {
-    throw new Error('EasyPost did not return a shipment id.');
+    throw new Error('Shippo did not return a shipment id.');
   }
 
   const rates: ShipmentRateQuote[] = Array.isArray(payload?.rates)
     ? payload.rates
-      .filter((rate: any) => SUPPORTED_CARRIERS.has(String(rate?.carrier ?? '').toUpperCase()))
       .map((rate: any) => {
-        const carrier = String(rate?.carrier ?? '').toUpperCase();
+        const carrier = normalizeCarrier(rate?.provider);
         const currency = String(rate?.currency ?? '').toUpperCase();
         return {
-          id: String(rate?.id ?? ''),
+          id: String(rate?.object_id ?? ''),
           carrier,
-          service: String(rate?.service ?? ''),
-          rate: String(rate?.rate ?? ''),
+          service: parseOptionalString(rate?.servicelevel?.name)
+            ?? parseOptionalString(rate?.servicelevel?.token),
+          rate: String(rate?.amount ?? ''),
           currency,
-          deliveryDays: parseDeliveryDays(rate?.delivery_days),
+          deliveryDays: parseDeliveryDays(rate?.estimated_days),
         };
       })
+      .filter((rate: ShipmentRateQuote) => SUPPORTED_CARRIERS.has(rate.carrier))
       .filter((rate: ShipmentRateQuote) => (
         !!rate.id
         && !!rate.carrier
@@ -128,6 +146,10 @@ export async function createShipmentRates(params: {
         && !!rate.rate
         && !!rate.currency
       ))
+      .map((rate: any) => ({
+        ...rate,
+        service: rate.service as string,
+      }))
       .filter((rate: ShipmentRateQuote) => Number.isFinite(Number(rate.rate)))
       .map((rate: ShipmentRateQuote) => ({
         ...rate,
@@ -143,31 +165,38 @@ export async function purchaseShipmentRate(params: {
   shipmentId: string;
   rateId: string;
 }): Promise<ShipmentPurchaseResult> {
-  const payload = await easyPostRequest(`/shipments/${params.shipmentId}/buy`, 'POST', {
-    rate: { id: params.rateId },
+  const payload = await shippoRequest('/transactions/', 'POST', {
+    rate: params.rateId,
+    label_file_type: 'PDF',
+    async: false,
   });
 
-  const trackingCode = typeof payload?.tracking_code === 'string' ? payload.tracking_code : null;
-  const selectedCarrier = typeof payload?.selected_rate?.carrier === 'string'
-    ? payload.selected_rate.carrier.toUpperCase()
-    : null;
-  const carrier = selectedCarrier || (
-    typeof payload?.tracker?.carrier === 'string'
-      ? payload.tracker.carrier.toUpperCase()
-      : null
-  );
-  const labelUrl = typeof payload?.postage_label?.label_pdf_url === 'string'
-    ? payload.postage_label.label_pdf_url
-    : null;
-  const trackingUrl = typeof payload?.tracker?.public_url === 'string'
-    ? payload.tracker.public_url
-    : buildTrackingUrl(carrier, trackingCode);
+  const trackingCode = parseOptionalString(payload?.tracking_number);
+  const carrier = normalizeCarrier(payload?.rate?.provider || payload?.provider) || null;
+  const service = parseOptionalString(payload?.rate?.servicelevel?.name)
+    ?? parseOptionalString(payload?.rate?.servicelevel?.token);
+  const labelUrl = parseOptionalString(payload?.label_url);
+  const trackingUrl = parseOptionalString(payload?.tracking_url_provider)
+    || buildTrackingUrl(carrier, trackingCode);
+  const rateShipmentId = parseOptionalString(payload?.rate?.shipment);
+  const transactionShipmentObjectId = parseOptionalString(payload?.shipment?.object_id);
+  const transactionShipmentId = parseOptionalString(payload?.shipment);
+  const responseShipmentId = rateShipmentId
+    ?? transactionShipmentObjectId
+    ?? transactionShipmentId;
+  if (responseShipmentId && responseShipmentId !== params.shipmentId) {
+    console.warn('[shipping] Shippo transaction returned mismatched shipment id', {
+      expected: params.shipmentId,
+      received: responseShipmentId,
+    });
+  }
 
   return {
-    shipmentId: typeof payload?.id === 'string' ? payload.id : params.shipmentId,
+    shipmentId: responseShipmentId ?? params.shipmentId,
     shipmentStatus: typeof payload?.status === 'string' ? payload.status : null,
     trackingNumber: trackingCode,
     carrier,
+    service,
     labelUrl,
     trackingUrl,
   };

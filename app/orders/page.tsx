@@ -57,7 +57,7 @@ export default async function OrdersPage() {
       ) : (
         <div className="space-y-4">
           {orders.map(order => {
-            const trackingUrl = buildTrackingUrl(order.carrier ?? order.shippingCarrier, order.trackingNumber);
+            const trackingUrl = order.trackingUrl ?? buildTrackingUrl(order.carrier ?? order.shippingCarrier, order.trackingNumber);
             return (
               <div key={order.id} className="card p-5">
                 <div className="flex items-center justify-between mb-3">
@@ -83,7 +83,10 @@ export default async function OrdersPage() {
                   <span className="text-sm font-bold">Total: {dollars(order.totalCents)}</span>
                   {order.trackingNumber && (
                     <div className="text-right">
-                      <p className="text-xs text-slate-500">📦 {order.carrier ?? order.shippingCarrier}: {order.trackingNumber}</p>
+                      <p className="text-xs text-slate-500">
+                        📦 {order.carrier ?? order.shippingCarrier}: {order.trackingNumber}
+                        {order.shippingService ? ` · ${order.shippingService}` : ''}
+                      </p>
                       {trackingUrl && (
                         <a
                           className="text-xs text-blue-600 hover:underline"

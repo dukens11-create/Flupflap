@@ -5,7 +5,7 @@ import { prisma } from '@/lib/db';
 import { NotificationType } from '@prisma/client';
 import { createNotifications } from '@/lib/notifications';
 import { isSellerVerificationApproved } from '@/lib/seller-verification';
-import { createShipmentRates, purchaseShipmentRate } from '@/lib/shipping';
+import { buildTrackingUrl, createShipmentRates, purchaseShipmentRate } from '@/lib/shipping';
 
 function parsePositiveNumber(value: unknown) {
   const parsed = typeof value === 'number' ? value : Number(value);
@@ -71,7 +71,9 @@ export async function POST(req: Request) {
           status: true,
           trackingNumber: true,
           shippingCarrier: true,
+          shippingService: true,
           carrier: true,
+          trackingUrl: true,
           labelUrl: true,
           shipmentId: true,
           shippingName: true,
@@ -104,19 +106,23 @@ export async function POST(req: Request) {
           return NextResponse.json({ error: 'Order is missing shipping address details.' }, { status: 400 });
         }
 
-        // Use seller's stored ship-from address first, fall back to env vars
-        const fromStreet1 = (dbUser?.shipFromStreet ?? process.env.SHIP_FROM_STREET1 ?? '').trim();
-        const fromCity = (dbUser?.shipFromCity ?? process.env.SHIP_FROM_CITY ?? '').trim();
-        const fromState = (dbUser?.shipFromState ?? process.env.SHIP_FROM_STATE ?? '').trim();
-        const fromZip = (dbUser?.shipFromZip ?? process.env.SHIP_FROM_ZIP ?? '').trim();
-        const fromName = (dbUser?.shipFromName ?? dbUser?.shopName ?? process.env.SHIP_FROM_NAME ?? 'Seller Fulfillment').trim();
-        const fromCountry = (dbUser?.shipFromCountry ?? process.env.SHIP_FROM_COUNTRY ?? 'US').trim();
-        const fromPhone = (dbUser?.shipFromPhone ?? process.env.SHIP_FROM_PHONE ?? '').trim() || undefined;
+        const fromStreet1 = (dbUser?.shipFromStreet ?? '').trim();
+        const fromCity = (dbUser?.shipFromCity ?? '').trim();
+        const fromState = (dbUser?.shipFromState ?? '').trim();
+        const fromZip = (dbUser?.shipFromZip ?? '').trim();
+        const fromName = (dbUser?.shipFromName ?? dbUser?.shopName ?? 'Seller Fulfillment').trim();
+        const fromCountry = (dbUser?.shipFromCountry ?? 'US').trim();
+        const fromPhone = (dbUser?.shipFromPhone ?? '').trim() || undefined;
 
         if (!fromStreet1 || !fromCity || !fromState || !fromZip) {
+          const missing: string[] = [];
+          if (!fromStreet1) missing.push('street');
+          if (!fromCity) missing.push('city');
+          if (!fromState) missing.push('state');
+          if (!fromZip) missing.push('ZIP');
           return NextResponse.json(
-            { error: 'Ship-from address is not configured. Please add it in your seller profile or set SHIP_FROM_* env vars.' },
-            { status: 503 },
+            { error: `Ship-from address is incomplete. Missing: ${missing.join(', ')}.` },
+            { status: 422 },
           );
         }
 
@@ -165,6 +171,7 @@ export async function POST(req: Request) {
 
         const purchased = await purchaseShipmentRate({ shipmentId, rateId });
         const carrier = purchased.carrier;
+        const trackingUrl = purchased.trackingUrl ?? buildTrackingUrl(carrier, purchased.trackingNumber);
 
         await prisma.order.update({
           where: { id: order.id },
@@ -175,9 +182,11 @@ export async function POST(req: Request) {
             // Keep legacy field in sync for existing consumers while `carrier`
             // becomes the canonical shipment carrier field.
             shippingCarrier: carrier || order.shippingCarrier || null,
+            shippingService: purchased.service ?? null,
             shipmentId: purchased.shipmentId || shipmentId,
             shipmentStatus: purchased.shipmentStatus || 'LABEL_PURCHASED',
             labelUrl: purchased.labelUrl || null,
+            trackingUrl: trackingUrl ?? null,
           },
         });
 
@@ -208,8 +217,9 @@ export async function POST(req: Request) {
           shipmentStatus: purchased.shipmentStatus || 'LABEL_PURCHASED',
           trackingNumber: purchased.trackingNumber || order.trackingNumber,
           carrier,
+          service: purchased.service,
           labelUrl: purchased.labelUrl,
-          trackingUrl: purchased.trackingUrl,
+          trackingUrl,
         });
       }
 

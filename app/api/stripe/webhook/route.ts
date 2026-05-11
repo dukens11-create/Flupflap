@@ -714,7 +714,12 @@ export async function POST(req: Request) {
             labelUrl: primary.result.labelUrl ?? undefined,
             trackingNumber: primary.result.trackingNumber ?? undefined,
             carrier: primary.result.carrier ?? undefined,
+            // Keep legacy field mirrored for backwards-compatible consumers.
+            shippingCarrier: primary.result.carrier ?? undefined,
+            shippingService: primary.result.service ?? primary.group.service ?? undefined,
+            trackingUrl: primary.result.trackingUrl ?? buildTrackingUrl(primary.result.carrier, primary.result.trackingNumber),
             shipmentId: primary.result.shipmentId ?? undefined,
+            shipmentStatus: primary.result.shipmentStatus ?? 'LABEL_PURCHASED',
             status: 'SHIPPED',
           },
         });
