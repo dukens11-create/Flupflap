@@ -9,9 +9,13 @@ import {
   sellerPhoneVerificationLabel,
 } from '@/lib/seller-verification';
 import { SellerStatus, KycStatus } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 import {
   getSellerKycCounts,
   KYC_APPROVED_WHERE,
+  KYC_PENDING_REVIEW_WHERE,
+  KYC_REJECTED_WHERE,
+  KYC_NOT_SUBMITTED_WHERE,
   deriveEffectiveKycStatus,
 } from '@/lib/seller-kyc-stats';
 
@@ -98,18 +102,22 @@ export default async function AdminSellersPage({
     : null;
   const sellerStatusFilter = parsedStatus ? { sellerStatus: parsedStatus } : {};
 
-  // Build the KYC status filter using the canonical kycStatus field on User.
-  // When filtering for APPROVED, also include legacy sellers with verifiedSeller=true.
+  // Build the KYC status filter using the shared WHERE helpers.
+  // All KYC statuses use the same defensive conditions as getSellerKycCounts()
+  // so the seller list and count badges always stay in sync.
   const validKycStatuses = Object.values(KycStatus);
   const parsedKyc = validKycStatuses.includes(kycFilter as KycStatus)
     ? (kycFilter as KycStatus)
     : null;
-  const kycStatusFilter: Record<string, unknown> =
-    parsedKyc === 'APPROVED'
-      ? KYC_APPROVED_WHERE
-      : parsedKyc
-        ? { kycStatus: parsedKyc }
-        : {};
+  const KYC_WHERE_MAP: Partial<Record<KycStatus, Prisma.UserWhereInput>> = {
+    APPROVED: KYC_APPROVED_WHERE,
+    PENDING_REVIEW: KYC_PENDING_REVIEW_WHERE,
+    REJECTED: KYC_REJECTED_WHERE,
+    NOT_SUBMITTED: KYC_NOT_SUBMITTED_WHERE,
+  };
+  const kycStatusFilter: Prisma.UserWhereInput = parsedKyc
+    ? (KYC_WHERE_MAP[parsedKyc] ?? { kycStatus: parsedKyc })
+    : {};
 
   const sellers = await prisma.user.findMany({
     where: { role: 'SELLER', ...sellerStatusFilter, ...kycStatusFilter },
