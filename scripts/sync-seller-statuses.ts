@@ -21,7 +21,15 @@
  *   npx ts-node -P tsconfig.json scripts/sync-seller-statuses.ts --confirm
  */
 
+import { KycStatus, SellerStatus } from '@prisma/client';
 import { prisma } from '../lib/db';
+
+type SellerUpdate = {
+  kycStatus?: KycStatus;
+  sellerStatus?: SellerStatus;
+  verifiedSeller?: boolean;
+  approvedAt?: Date;
+};
 
 async function run() {
   const isDryRun = !process.argv.includes('--confirm');
@@ -59,22 +67,22 @@ async function run() {
 
   for (const seller of sellers) {
     const kv = seller.verificationSubmission;
-    const changes: Record<string, unknown> = {};
+    const changes: SellerUpdate = {};
 
     if (kv?.status === 'APPROVED') {
       // KYC was approved — ensure all canonical fields are set.
       const approvedAt = kv.verifiedAt ?? kv.eligibleToListAt ?? new Date();
-      if (seller.kycStatus !== 'APPROVED') changes.kycStatus = 'APPROVED';
-      if (seller.sellerStatus !== 'ACTIVE') changes.sellerStatus = 'ACTIVE';
+      if (seller.kycStatus !== 'APPROVED') changes.kycStatus = KycStatus.APPROVED;
+      if (seller.sellerStatus !== 'ACTIVE') changes.sellerStatus = SellerStatus.ACTIVE;
       if (!seller.verifiedSeller) changes.verifiedSeller = true;
       if (!seller.approvedAt) changes.approvedAt = approvedAt;
     } else if (kv?.status === 'REJECTED') {
-      if (seller.kycStatus !== 'REJECTED') changes.kycStatus = 'REJECTED';
+      if (seller.kycStatus !== 'REJECTED') changes.kycStatus = KycStatus.REJECTED;
     } else if (kv?.status === 'PENDING') {
-      if (seller.kycStatus !== 'PENDING_REVIEW') changes.kycStatus = 'PENDING_REVIEW';
+      if (seller.kycStatus !== 'PENDING_REVIEW') changes.kycStatus = KycStatus.PENDING_REVIEW;
     } else {
       // No verification record at all.
-      if (seller.kycStatus !== 'NOT_SUBMITTED') changes.kycStatus = 'NOT_SUBMITTED';
+      if (seller.kycStatus !== 'NOT_SUBMITTED') changes.kycStatus = KycStatus.NOT_SUBMITTED;
     }
 
     if (Object.keys(changes).length === 0) {
@@ -87,7 +95,7 @@ async function run() {
     if (!isDryRun) {
       await prisma.user.update({
         where: { id: seller.id },
-        data: changes as Parameters<typeof prisma.user.update>[0]['data'],
+        data: changes,
       });
     }
   }

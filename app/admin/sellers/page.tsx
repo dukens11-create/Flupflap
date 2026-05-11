@@ -8,6 +8,7 @@ import {
   sellerKycProviderLabel,
   sellerPhoneVerificationLabel,
 } from '@/lib/seller-verification';
+import { SellerStatus, KycStatus } from '@prisma/client';
 
 export const dynamic = 'force-dynamic';
 
@@ -86,14 +87,18 @@ export default async function AdminSellersPage({
   const statusFilter = sp.status ?? '';
 
   // Build the seller status filter for the DB query.
-  const sellerStatusFilter = statusFilter
-    ? { sellerStatus: statusFilter as any }
-    : {};
+  const validSellerStatuses = Object.values(SellerStatus);
+  const parsedStatus = validSellerStatuses.includes(statusFilter as SellerStatus)
+    ? (statusFilter as SellerStatus)
+    : null;
+  const sellerStatusFilter = parsedStatus ? { sellerStatus: parsedStatus } : {};
 
   // Build the KYC status filter using the canonical kycStatus field on User.
-  const kycStatusFilter = kycFilter
-    ? { kycStatus: kycFilter as any }
-    : {};
+  const validKycStatuses = Object.values(KycStatus);
+  const parsedKyc = validKycStatuses.includes(kycFilter as KycStatus)
+    ? (kycFilter as KycStatus)
+    : null;
+  const kycStatusFilter = parsedKyc ? { kycStatus: parsedKyc } : {};
 
   const sellers = await prisma.user.findMany({
     where: { role: 'SELLER', ...sellerStatusFilter, ...kycStatusFilter },
@@ -178,7 +183,7 @@ export default async function AdminSellersPage({
         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Filter by Seller Account Status</p>
         <div className="flex flex-wrap gap-2">
           {SELLER_STATUS_FILTER_OPTIONS.map(({ value, label }) => {
-            const isActive = statusFilter === value && !kycFilter;
+            const isActive = statusFilter === value;
             const count = sellerStatusCounts[value] ?? 0;
             const href = value ? `/admin/sellers?status=${value}` : '/admin/sellers';
             return (
@@ -208,7 +213,7 @@ export default async function AdminSellersPage({
         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Filter by KYC Status</p>
         <div className="flex flex-wrap gap-2">
           {KYC_FILTER_OPTIONS.map(({ value, label }) => {
-            const isActive = kycFilter === value && !statusFilter;
+            const isActive = kycFilter === value;
             const count = kycCounts[value] ?? 0;
             const href = value ? `/admin/sellers?kyc=${value}` : '/admin/sellers';
             return (
