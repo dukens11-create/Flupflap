@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import CategoryPicker from '@/components/CategoryPicker';
 import ConditionPicker from '@/components/ConditionPicker';
@@ -28,6 +28,19 @@ export default function NewListingForm() {
     canSubmit: false,
     message: 'Please upload at least one image.',
   });
+
+  const handleMediaStateChange = useCallback((nextState: MediaUploadState) => {
+    setMediaState(nextState);
+    setErrors((current) => {
+      if (!current.images) return current;
+      if (nextState.isUploading || nextState.hasErrors || !nextState.canSubmit) {
+        return { ...current, images: nextState.message || current.images };
+      }
+      const nextErrors = { ...current };
+      delete nextErrors.images;
+      return nextErrors;
+    });
+  }, []);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -129,19 +142,7 @@ export default function NewListingForm() {
       </div>
       <MediaUpload
         required
-        onStateChange={(nextState) => {
-          setMediaState(nextState);
-          setErrors((current) => {
-            if (!current.images) return current;
-            if (nextState.isUploading || nextState.hasErrors || !nextState.canSubmit) {
-              return { ...current, images: nextState.message || current.images };
-            }
-
-            const nextErrors = { ...current };
-            delete nextErrors.images;
-            return nextErrors;
-          });
-        }}
+        onStateChange={handleMediaStateChange}
       />
       {errors.images && <p className="mt-1 text-xs text-red-600">{errors.images}</p>}
       <div>
