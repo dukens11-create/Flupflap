@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -6,10 +6,34 @@ import Providers from '@/components/Providers';
 import Navbar from '@/components/Navbar';
 import { getServerTranslations } from '@/lib/i18n/server';
 import VisitorTracker from '@/components/VisitorTracker';
+import PwaInstallPrompt from '@/components/PwaInstallPrompt';
+import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration';
 
 export const metadata: Metadata = {
   title: { default: 'FlupFlap Marketplace', template: '%s | FlupFlap' },
   description: 'A safer marketplace with low fees, verified sellers, and a simpler way to buy and sell everyday items.',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    title: 'FlupFlap',
+    statusBarStyle: 'default',
+  },
+  icons: {
+    apple: '/icons/icon-192x192.png',
+    icon: [
+      { url: '/icons/icon-192x192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icons/icon-512x512.png', sizes: '512x512', type: 'image/png' },
+    ],
+  },
+  other: {
+    'mobile-web-app-capable': 'yes',
+    'apple-mobile-web-app-capable': 'yes',
+    'apple-mobile-web-app-title': 'FlupFlap',
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: '#0B2341',
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -19,6 +43,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body className="min-h-screen bg-slate-50 text-slate-900 antialiased">
         <Providers initialLocale={locale}>
           <VisitorTracker />
+          <ServiceWorkerRegistration />
+          <PwaInstallPrompt />
           <div className="flex min-h-screen flex-col">
             <Navbar />
             <div className="w-full flex-1">
