@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import {
   MAX_PRODUCT_IMAGES,
   MAX_PRODUCT_IMAGE_BYTES,
@@ -595,10 +595,11 @@ export default function MediaUpload({
         {images
           .filter((image) => image.uploadedUrl)
           .map((image) => (
-            <div key={image.id}>
+            <Fragment key={image.id}>
+              {/* Keep both names for backward-compatible seller submit payloads. */}
               <input type="hidden" name="images" value={image.uploadedUrl} />
               <input type="hidden" name="imageUrls" value={image.uploadedUrl} />
-            </div>
+            </Fragment>
           ))}
         <input
           type="url"

@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { cents } from '@/lib/money';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import { isSubscriptionActive } from '@/lib/subscription';
 import { syncSellerSubscriptionFromStripe } from '@/lib/subscription-sync';
 import { isSellerVerificationApproved } from '@/lib/seller-verification';
@@ -194,16 +195,18 @@ export async function POST(req: Request) {
         : {};
     if (data.brand) normalizedAttributes.brand = data.brand;
     if (data.sizeMl) {
-      normalizedAttributes.sizeMl = data.sizeMl;
       normalizedAttributes.size_ml = data.sizeMl;
     }
     if (data.fragranceType) {
-      normalizedAttributes.fragranceType = data.fragranceType;
       normalizedAttributes.fragrance_type = data.fragranceType;
     }
     if (data.gender) normalizedAttributes.gender = data.gender;
-    const productAttributesValue =
-      Object.keys(normalizedAttributes).length > 0 ? normalizedAttributes : attributes ?? undefined;
+    const productAttributesValue: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput | undefined =
+      Object.keys(normalizedAttributes).length > 0
+        ? (normalizedAttributes as Prisma.InputJsonValue)
+        : attributes === null || attributes === undefined
+          ? undefined
+          : (attributes as Prisma.InputJsonValue);
 
     let category = data.category ?? data.refineCategory ?? data.subcategory ?? '';
     if (!category && data.categoryId) {
@@ -240,7 +243,7 @@ export async function POST(req: Request) {
     const subcategoryName = subcategoryRef?.name ?? data.subcategory ?? null;
     const refineCategoryName = data.refineCategory ?? null;
 
-    const validatedPayload = {
+    const loggingPayload = {
       title,
       description: data.description || '',
       price,
@@ -250,21 +253,15 @@ export async function POST(req: Request) {
       refineCategory: refineCategoryName,
       condition: data.condition,
       brand: (normalizedAttributes.brand as string | undefined) ?? null,
-      sizeMl:
-        (normalizedAttributes.sizeMl as string | undefined) ??
-        (normalizedAttributes.size_ml as string | undefined) ??
-        null,
-      fragranceType:
-        (normalizedAttributes.fragranceType as string | undefined) ??
-        (normalizedAttributes.fragrance_type as string | undefined) ??
-        null,
+      sizeMl: (normalizedAttributes.size_ml as string | undefined) ?? null,
+      fragranceType: (normalizedAttributes.fragrance_type as string | undefined) ?? null,
       gender: (normalizedAttributes.gender as string | undefined) ?? null,
       inventoryQty,
       imageUrls: resolvedImages,
       videoUrl,
-      sellerId: session.user.id,
+      sellerId: session.user.id ? `${session.user.id.slice(0, 6)}…` : null,
     };
-    console.info('[seller/products POST] validated payload', validatedPayload);
+    console.info('[seller/products POST] validated payload', loggingPayload);
 
     const riskAssessment = await getListingRiskAssessmentForCandidate({
       sellerId: session.user.id,
@@ -299,7 +296,7 @@ export async function POST(req: Request) {
           pickupPostalCode,
           categoryId: safeCategoryId,
           subcategoryId: safeSubcategoryId,
-          productAttributes: productAttributesValue as any,
+          productAttributes: productAttributesValue,
         },
       });
     } catch (dbError) {
