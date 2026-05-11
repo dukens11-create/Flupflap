@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { DEFAULT_CATEGORY_TREE } from '@/lib/default-categories';
+import { normalizePerfumeAttributeSchema } from '@/lib/category-attribute-schema';
 import { isDatabaseConfigured, prisma } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
@@ -53,7 +54,12 @@ export async function GET() {
     if (cats.length === 0) {
       return NextResponse.json(DEFAULT_CATEGORY_TREE);
     }
-    const tree = buildTree(cats);
+    const tree = buildTree(
+      cats.map((category) => ({
+        ...category,
+        attributeSchema: normalizePerfumeAttributeSchema(category.attributeSchema),
+      })),
+    );
     return NextResponse.json(tree);
   } catch {
     return NextResponse.json(DEFAULT_CATEGORY_TREE);
