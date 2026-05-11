@@ -229,9 +229,22 @@ export async function POST(req: Request) {
         && item.price_data.unit_amount === shippingAmount
       ));
       const expectedSubtotalCents = productSubtotalCents + shippingAmount;
-      if (!hasShippingLine || shippingAmount <= 0 || checkoutSubtotalCents !== expectedSubtotalCents) {
+      if (!hasShippingLine) {
+        console.error('[checkout/cart] shipping validation failed: missing shipping line');
+        return NextResponse.json(
+          { error: 'Unable to process checkout. Please refresh and try again.' },
+          { status: 400 },
+        );
+      }
+      if (shippingAmount <= 0) {
+        console.error('[checkout/cart] shipping validation failed: invalid shipping amount', { shippingAmount });
+        return NextResponse.json(
+          { error: 'Unable to process checkout. Please refresh and try again.' },
+          { status: 400 },
+        );
+      }
+      if (checkoutSubtotalCents !== expectedSubtotalCents) {
         console.error('[checkout/cart] shipping validation failed', {
-          hasShippingLine,
           shippingAmount,
           checkoutSubtotalCents,
           expectedSubtotalCents,

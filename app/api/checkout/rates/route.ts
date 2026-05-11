@@ -232,8 +232,9 @@ export async function POST(req: Request) {
     }
 
     if (!groups.length && errors.length > 0) {
+      console.error('[checkout/rates] unavailable details', errors);
       return NextResponse.json(
-        { error: 'Shipping rate unavailable. Please check address or package details.', details: errors },
+        { error: 'Shipping rate unavailable. Please check address or package details.' },
         { status: 503 },
       );
     }
@@ -249,7 +250,9 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       groups,
-      warnings: [...errors, ...uncoveredWarnings].length ? [...errors, ...uncoveredWarnings] : undefined,
+      warnings: [...(errors.length ? ['Shipping rate unavailable. Please check address or package details.'] : []), ...uncoveredWarnings].length
+        ? [...(errors.length ? ['Shipping rate unavailable. Please check address or package details.'] : []), ...uncoveredWarnings]
+        : undefined,
     });
   } catch (err: any) {
     console.error('[checkout/rates]', err);

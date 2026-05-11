@@ -24,6 +24,7 @@ interface Props {
 
 function requiresLiveShipping(item?: Omit<BuyNowCartItem, 'quantity'>, isPickup?: boolean) {
   if (!item || isPickup) return false;
+  // Legacy products may have shippingMode unset with shippingCents=0; treat those as calculated shipping.
   return item.shippingMode === 'CALCULATED' || (!item.shippingMode && item.shippingCents === 0);
 }
 
