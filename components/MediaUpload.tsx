@@ -63,9 +63,9 @@ function createItemId() {
 
 function getFileNameFromUrl(url: string) {
   try {
-    return decodeURIComponent(new URL(url).pathname.split('/').pop() || 'Uploaded file');
+    return decodeURIComponent(new URL(url).pathname.split('/').pop() || 'Unknown filename');
   } catch {
-    return decodeURIComponent(url.split('/').pop()?.split('?')[0] || 'Uploaded file');
+    return decodeURIComponent(url.split('/').pop()?.split('?')[0] || 'Unknown filename');
   }
 }
 
@@ -165,9 +165,11 @@ export default function MediaUpload({
   const videoPreviewRef = useRef<HTMLVideoElement>(null);
   const objectUrlsRef = useRef<Set<string>>(new Set());
 
-  useEffect(() => () => {
-    objectUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
-    objectUrlsRef.current.clear();
+  useEffect(() => {
+    return () => {
+      objectUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+      objectUrlsRef.current.clear();
+    };
   }, []);
 
   useEffect(() => {
@@ -280,7 +282,7 @@ export default function MediaUpload({
       return;
     }
     setUploadError('');
-    if (video?.status && objectUrlsRef.current.has(video.previewUrl)) {
+    if (video?.previewKind === 'object-url' && objectUrlsRef.current.has(video.previewUrl)) {
       objectUrlsRef.current.delete(video.previewUrl);
       URL.revokeObjectURL(video.previewUrl);
     }

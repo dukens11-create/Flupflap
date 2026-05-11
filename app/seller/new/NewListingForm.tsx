@@ -137,7 +137,8 @@ export default function NewListingForm() {
               return { ...current, images: nextState.message || current.images };
             }
 
-            const { images: _images, ...rest } = current;
+            const { images: omittedImages, ...rest } = current;
+            void omittedImages;
             return rest;
           });
         }}
