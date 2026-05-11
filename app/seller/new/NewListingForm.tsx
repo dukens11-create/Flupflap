@@ -20,6 +20,7 @@ export default function NewListingForm() {
   const router = useRouter();
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitting, setSubmitting] = useState(false);
+  const [shippingMode, setShippingMode] = useState<'CALCULATED' | 'FREE' | 'FLAT'>('CALCULATED');
   const [mediaState, setMediaState] = useState<MediaUploadState>({
     imageCount: 0,
     uploadedImageCount: 0,
@@ -126,9 +127,24 @@ export default function NewListingForm() {
           {errors.price && <p className="mt-1 text-xs text-red-600">{errors.price}</p>}
         </div>
         <div className="flex-1">
-          <label className="label">Shipping ($)</label>
-          <input name="shipping" type="number" step="0.01" min="0" className="input" placeholder="0.00" />
+          <label className="label">Shipping</label>
+          <select
+            name="shippingMode"
+            value={shippingMode}
+            onChange={(e) => setShippingMode(e.target.value as 'CALCULATED' | 'FREE' | 'FLAT')}
+            className="input"
+          >
+            <option value="CALCULATED">Calculated at checkout</option>
+            <option value="FREE">Free shipping</option>
+            <option value="FLAT">Flat rate</option>
+          </select>
         </div>
+        {shippingMode === 'FLAT' && (
+          <div className="flex-1">
+            <label className="label">Flat shipping ($)</label>
+            <input name="shipping" type="number" step="0.01" min="0" className="input" placeholder="0.00" />
+          </div>
+        )}
       </div>
       <div className="flex gap-3">
         <div className="flex-1">
@@ -150,6 +166,44 @@ export default function NewListingForm() {
         <input name="inventoryQty" type="number" min="1" max="9999" defaultValue="1" className={`input ${errors.inventoryQty ? 'border-red-500 ring-1 ring-red-100' : ''}`} />
         {errors.inventoryQty && <p className="mt-1 text-xs text-red-600">{errors.inventoryQty}</p>}
       </div>
+
+      {/* Package Info for shipping calculation */}
+      <fieldset className="border border-slate-200 rounded-xl p-4 space-y-3">
+        <legend className="text-sm font-semibold text-slate-700 px-1">📦 Package Info (for shipping rates)</legend>
+        <p className="text-xs text-slate-500">
+          Required for automatic shipping rate calculation. Buyers will see live carrier rates at checkout.
+        </p>
+        <div>
+          <label className="label">Package type</label>
+          <select name="packageType" className="input">
+            <option value="PACKAGE">Package / Parcel</option>
+            <option value="LETTER">Letter</option>
+            <option value="FLAT_RATE_ENVELOPE">Flat Rate Envelope</option>
+            <option value="FLAT_RATE_BOX">Flat Rate Box</option>
+            <option value="SMALL_FLAT_RATE_BOX">Small Flat Rate Box</option>
+            <option value="MEDIUM_FLAT_RATE_BOX">Medium Flat Rate Box</option>
+            <option value="LARGE_FLAT_RATE_BOX">Large Flat Rate Box</option>
+          </select>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label className="label">Weight (oz)</label>
+            <input name="weightOz" type="number" step="0.1" min="0.1" className="input" placeholder="e.g. 16" />
+          </div>
+          <div>
+            <label className="label">Length (in)</label>
+            <input name="lengthIn" type="number" step="0.1" min="0.1" className="input" placeholder="e.g. 10" />
+          </div>
+          <div>
+            <label className="label">Width (in)</label>
+            <input name="widthIn" type="number" step="0.1" min="0.1" className="input" placeholder="e.g. 8" />
+          </div>
+          <div>
+            <label className="label">Height (in)</label>
+            <input name="heightIn" type="number" step="0.1" min="0.1" className="input" placeholder="e.g. 4" />
+          </div>
+        </div>
+      </fieldset>
 
       <fieldset className="border border-slate-200 rounded-xl p-4 space-y-3">
         <legend className="text-sm font-semibold text-slate-700 px-1">Local Pickup (optional)</legend>

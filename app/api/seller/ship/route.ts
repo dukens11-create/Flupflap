@@ -100,13 +100,18 @@ export async function POST(req: Request) {
           return NextResponse.json({ error: 'Order is missing shipping address details.' }, { status: 400 });
         }
 
-        const fromStreet1 = (process.env.SHIP_FROM_STREET1 ?? '').trim();
-        const fromCity = (process.env.SHIP_FROM_CITY ?? '').trim();
-        const fromState = (process.env.SHIP_FROM_STATE ?? '').trim();
-        const fromZip = (process.env.SHIP_FROM_ZIP ?? '').trim();
+        // Use seller's stored ship-from address first, fall back to env vars
+        const fromStreet1 = (dbUser?.shipFromStreet ?? process.env.SHIP_FROM_STREET1 ?? '').trim();
+        const fromCity = (dbUser?.shipFromCity ?? process.env.SHIP_FROM_CITY ?? '').trim();
+        const fromState = (dbUser?.shipFromState ?? process.env.SHIP_FROM_STATE ?? '').trim();
+        const fromZip = (dbUser?.shipFromZip ?? process.env.SHIP_FROM_ZIP ?? '').trim();
+        const fromName = (dbUser?.shipFromName ?? dbUser?.shopName ?? process.env.SHIP_FROM_NAME ?? 'Seller Fulfillment').trim();
+        const fromCountry = (dbUser?.shipFromCountry ?? process.env.SHIP_FROM_COUNTRY ?? 'US').trim();
+        const fromPhone = (dbUser?.shipFromPhone ?? process.env.SHIP_FROM_PHONE ?? '').trim() || undefined;
+
         if (!fromStreet1 || !fromCity || !fromState || !fromZip) {
           return NextResponse.json(
-            { error: 'Shipping origin is not configured. Set SHIP_FROM_STREET1, SHIP_FROM_CITY, SHIP_FROM_STATE, SHIP_FROM_ZIP.' },
+            { error: 'Ship-from address is not configured. Please add it in your seller profile or set SHIP_FROM_* env vars.' },
             { status: 503 },
           );
         }
@@ -122,13 +127,13 @@ export async function POST(req: Request) {
             country: order.shippingCountry ?? 'US',
           },
           fromAddress: {
-            name: (process.env.SHIP_FROM_NAME ?? 'Seller Fulfillment').trim(),
+            name: fromName,
             street1: fromStreet1,
             city: fromCity,
             state: fromState,
             zip: fromZip,
-            country: (process.env.SHIP_FROM_COUNTRY ?? 'US').trim(),
-            phone: (process.env.SHIP_FROM_PHONE ?? '').trim() || undefined,
+            country: fromCountry,
+            phone: fromPhone,
           },
           weightOz,
           lengthIn,

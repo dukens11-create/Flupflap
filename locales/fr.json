@@ -110,6 +110,8 @@
   "product": {
     "sponsored": "Promu",
     "shipping": "Livraison {amount}",
+    "shippingCalculated": "Livraison calculée au paiement",
+    "freeShipping": "Livraison gratuite",
     "pickupIn": "🏠 Retrait à {location}",
     "viewItem": "Voir l'article",
     "verifiedSeller": "Vendeur vérifié",

@@ -110,6 +110,8 @@
   "product": {
     "sponsored": "Promoted",
     "shipping": "Shipping {amount}",
+    "shippingCalculated": "Shipping calculated at checkout",
+    "freeShipping": "Free shipping",
     "pickupIn": "🏠 Pickup in {location}",
     "viewItem": "View item",
     "verifiedSeller": "Verified seller",
