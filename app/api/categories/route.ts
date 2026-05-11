@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
+import { DEFAULT_CATEGORY_TREE } from '@/lib/default-categories';
+import { isDatabaseConfigured, prisma } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,14 +41,21 @@ function buildTree(categories: Omit<CategoryNode, 'children'>[]): CategoryNode[]
 }
 
 export async function GET() {
+  if (!isDatabaseConfigured()) {
+    return NextResponse.json(DEFAULT_CATEGORY_TREE);
+  }
+
   try {
     const cats = await prisma.category.findMany({
       orderBy: [{ level: 'asc' }, { sortOrder: 'asc' }],
       select: { id: true, name: true, slug: true, aliases: true, parentId: true, level: true, icon: true, sortOrder: true, attributeSchema: true },
     });
+    if (cats.length === 0) {
+      return NextResponse.json(DEFAULT_CATEGORY_TREE);
+    }
     const tree = buildTree(cats);
     return NextResponse.json(tree);
   } catch {
-    return NextResponse.json({ error: 'Failed to load categories' }, { status: 500 });
+    return NextResponse.json(DEFAULT_CATEGORY_TREE);
   }
 }
