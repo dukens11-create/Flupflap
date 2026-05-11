@@ -132,8 +132,8 @@ export default function CategoryPicker({ defaultCategoryId, defaultSubcategoryId
   const leafSlug = resolveLeafSlug(categories, mainId, subId, childId);
 
   // Notify sibling components (e.g. ConditionPicker) about the resolved category slug.
-  // Only dispatch when the slug is non-empty (i.e. a real category is selected) to avoid
-  // resetting ConditionPicker to general conditions while the categories are still loading.
+  // Dispatches on meaningful transitions: when a category is selected (non-empty slug) or
+  // when the category is cleared after a previous selection (empty slug after non-empty).
   const prevSlugRef = useRef<string>('');
   useEffect(() => {
     if (leafSlug && leafSlug !== prevSlugRef.current) {

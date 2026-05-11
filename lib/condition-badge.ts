@@ -1,5 +1,5 @@
 /**
- * Returns a Tailwind CSS class string for a coloured condition badge.
+ * Returns a Tailwind CSS class string for a colored condition badge.
  *
  * "New with box" and "New without box" are intentionally styled differently
  * so buyers can distinguish them at a glance.
