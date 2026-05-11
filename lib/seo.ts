@@ -7,15 +7,11 @@ export const MARKETPLACE_CURRENCY = process.env.NEXT_PUBLIC_MARKETPLACE_CURRENCY
 export const DEFAULT_SEO_DESCRIPTION =
   'Buy and sell everyday items on FlupFlap with verified sellers, low fees, and secure checkout.';
 
-function getDefaultSiteUrl() {
-  return FALLBACK_SITE_URL;
-}
-
 export function getSiteUrl(): URL {
   const configuredUrl = process.env.NEXT_PUBLIC_SITE_URL
     ?? process.env.NEXT_PUBLIC_APP_URL
     ?? process.env.NEXTAUTH_URL
-    ?? getDefaultSiteUrl();
+    ?? FALLBACK_SITE_URL;
   const normalized = configuredUrl.startsWith('http://') || configuredUrl.startsWith('https://')
     ? configuredUrl
     : `https://${configuredUrl}`;
@@ -23,7 +19,7 @@ export function getSiteUrl(): URL {
   try {
     return new URL(normalized);
   } catch {
-    return new URL(getDefaultSiteUrl());
+    return new URL(FALLBACK_SITE_URL);
   }
 }
 
