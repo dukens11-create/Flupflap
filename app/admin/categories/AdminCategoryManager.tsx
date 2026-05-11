@@ -5,6 +5,7 @@ interface CategoryRow {
   id: string;
   name: string;
   slug: string;
+  aliases: string[];
   parentId: string | null;
   level: number;
   icon: string | null;
@@ -38,6 +39,7 @@ export default function AdminCategoryManager({ initialCategories }: Props) {
   const [formParentId, setFormParentId] = useState('');
   const [formIcon, setFormIcon] = useState('');
   const [formSortOrder, setFormSortOrder] = useState('0');
+  const [formAliases, setFormAliases] = useState('');
   const [formAttributeSchema, setFormAttributeSchema] = useState('');
 
   function autoSlug(name: string) {
@@ -51,6 +53,7 @@ export default function AdminCategoryManager({ initialCategories }: Props) {
     setFormParentId('');
     setFormIcon('');
     setFormSortOrder('0');
+    setFormAliases('');
     setFormAttributeSchema('');
     setError(null);
     setSuccess(null);
@@ -64,6 +67,7 @@ export default function AdminCategoryManager({ initialCategories }: Props) {
     setFormParentId(cat.parentId ?? '');
     setFormIcon(cat.icon ?? '');
     setFormSortOrder(String(cat.sortOrder));
+    setFormAliases((cat.aliases ?? []).join(', '));
     setFormAttributeSchema(cat.attributeSchema ? JSON.stringify(cat.attributeSchema, null, 2) : '');
     setError(null);
     setSuccess(null);
@@ -86,6 +90,7 @@ export default function AdminCategoryManager({ initialCategories }: Props) {
         parentId: formParentId || null,
         icon: formIcon || null,
         sortOrder: Number(formSortOrder) || 0,
+        aliases: formAliases,
         attributeSchema: formAttributeSchema || null,
       };
 
@@ -210,6 +215,16 @@ export default function AdminCategoryManager({ initialCategories }: Props) {
             <div>
               <label className="label">Sort order</label>
               <input className="input" type="number" value={formSortOrder} onChange={e => setFormSortOrder(e.target.value)} />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="label">Aliases</label>
+              <input
+                className="input"
+                value={formAliases}
+                onChange={e => setFormAliases(e.target.value)}
+                placeholder="e.g. perfume, fragrance, cologne"
+              />
+              <p className="text-xs text-slate-400 mt-1">Comma-separated searchable keywords.</p>
             </div>
           </div>
 

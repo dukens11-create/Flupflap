@@ -10,7 +10,17 @@ const updateSchema = z.object({
   icon: z.string().max(10).optional().nullable(),
   sortOrder: z.coerce.number().int().optional(),
   attributeSchema: z.string().optional().nullable(), // JSON string or null to clear
+  aliases: z.union([z.array(z.string()), z.string()]).optional().nullable(),
 });
+
+function normalizeAliases(aliases?: string[] | string | null): string[] {
+  const values = Array.isArray(aliases)
+    ? aliases
+    : typeof aliases === 'string'
+      ? aliases.split(',')
+      : [];
+  return [...new Set(values.map(value => value.trim()).filter(Boolean))];
+}
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
@@ -47,6 +57,7 @@ export async function PATCH(
         ...(data.icon !== undefined && { icon: data.icon }),
         ...(data.sortOrder !== undefined && { sortOrder: data.sortOrder }),
         ...(parsedAttributeSchema !== undefined && { attributeSchema: parsedAttributeSchema as any }),
+        ...(data.aliases !== undefined && { aliases: normalizeAliases(data.aliases) }),
       },
     });
     return NextResponse.json(updated);

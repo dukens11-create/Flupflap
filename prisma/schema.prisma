@@ -176,6 +176,7 @@ model Category {
   id              String     @id @default(cuid())
   name            String
   slug            String     @unique
+  aliases         String[]   @default([])
   parentId        String?
   parent          Category?  @relation("CategoryChildren", fields: [parentId], references: [id])
   children        Category[] @relation("CategoryChildren")

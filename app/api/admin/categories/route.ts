@@ -11,7 +11,18 @@ const createSchema = z.object({
   icon: z.string().max(10).optional().nullable(),
   sortOrder: z.coerce.number().int().default(0),
   attributeSchema: z.string().optional().nullable(), // JSON string
+  aliases: z.union([z.array(z.string()), z.string()]).optional().nullable(),
 });
+
+function normalizeAliases(aliases?: string[] | string | null): string[] {
+  const values = Array.isArray(aliases)
+    ? aliases
+    : typeof aliases === 'string'
+      ? aliases.split(',')
+      : [];
+
+  return [...new Set(values.map(value => value.trim()).filter(Boolean))];
+}
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -58,6 +69,7 @@ export async function POST(req: Request) {
         icon: data.icon ?? null,
         sortOrder: data.sortOrder,
         attributeSchema: parsedAttributeSchema,
+        aliases: normalizeAliases(data.aliases),
       },
     });
     return NextResponse.json(category, { status: 201 });

@@ -7,6 +7,7 @@ export interface CategoryNode {
   id: string;
   name: string;
   slug: string;
+  aliases: string[];
   parentId: string | null;
   level: number;
   icon: string | null;
@@ -42,7 +43,7 @@ export async function GET() {
   try {
     const cats = await prisma.category.findMany({
       orderBy: [{ level: 'asc' }, { sortOrder: 'asc' }],
-      select: { id: true, name: true, slug: true, parentId: true, level: true, icon: true, sortOrder: true, attributeSchema: true },
+      select: { id: true, name: true, slug: true, aliases: true, parentId: true, level: true, icon: true, sortOrder: true, attributeSchema: true },
     });
     const tree = buildTree(cats);
     return NextResponse.json(tree);

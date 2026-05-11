@@ -70,7 +70,15 @@ async function seedCategories() {
 
   // Main categories
   const electronics = await prisma.category.create({
-    data: { name: 'Electronics', slug: 'electronics', level: 0, icon: '💻', sortOrder: 1, attributeSchema: ELECTRONICS_FIELDS },
+    data: {
+      name: 'Electronics',
+      slug: 'electronics',
+      aliases: ['electronics', 'electronic', 'electr', 'tech', 'gadgets'],
+      level: 0,
+      icon: '💻',
+      sortOrder: 1,
+      attributeSchema: ELECTRONICS_FIELDS,
+    },
   });
   const fashion = await prisma.category.create({
     data: { name: 'Fashion', slug: 'fashion', level: 0, icon: '👗', sortOrder: 2 },
@@ -152,14 +160,30 @@ async function seedCategories() {
   await prisma.category.createMany({ data: [
     { name: 'Dresses', slug: 'fashion-women-dresses', parentId: women.id, level: 2, sortOrder: 1, attributeSchema: CLOTHING_FIELDS },
     { name: 'Handbags', slug: 'fashion-women-handbags', parentId: women.id, level: 2, sortOrder: 2, attributeSchema: CLOTHING_FIELDS },
-    { name: 'Perfume', slug: 'fashion-women-perfume', parentId: women.id, level: 2, sortOrder: 3, attributeSchema: PERFUME_FIELDS },
+    {
+      name: 'Perfume & Fragrance',
+      slug: 'fashion-women-perfume',
+      aliases: ['perfume', 'perfum', 'fragrance', 'cologne', 'body mist', 'scent'],
+      parentId: women.id,
+      level: 2,
+      sortOrder: 3,
+      attributeSchema: PERFUME_FIELDS,
+    },
     { name: 'Shoes', slug: 'fashion-women-shoes', parentId: women.id, level: 2, sortOrder: 4, attributeSchema: SHOE_FIELDS },
     { name: 'Jewelry', slug: 'fashion-women-jewelry', parentId: women.id, level: 2, sortOrder: 5, attributeSchema: CLOTHING_FIELDS },
   ]});
 
   // Fashion → Kids children
   await prisma.category.createMany({ data: [
-    { name: 'Clothing', slug: 'fashion-kids-clothing', parentId: kids.id, level: 2, sortOrder: 1, attributeSchema: CLOTHING_FIELDS },
+    {
+      name: 'Clothing',
+      slug: 'fashion-kids-clothing',
+      aliases: ['clothing', 'cloth', 'clothes', 'apparel'],
+      parentId: kids.id,
+      level: 2,
+      sortOrder: 1,
+      attributeSchema: CLOTHING_FIELDS,
+    },
     { name: 'Shoes', slug: 'fashion-kids-shoes', parentId: kids.id, level: 2, sortOrder: 2, attributeSchema: SHOE_FIELDS },
   ]});
 
@@ -181,7 +205,15 @@ async function seedCategories() {
   // Sports subcategories
   await prisma.category.createMany({ data: [
     { name: 'Equipment', slug: 'sports-equipment', parentId: sports.id, level: 1, sortOrder: 1 },
-    { name: 'Clothing', slug: 'sports-clothing', parentId: sports.id, level: 1, sortOrder: 2, attributeSchema: CLOTHING_FIELDS },
+    {
+      name: 'Clothing',
+      slug: 'sports-clothing',
+      aliases: ['clothing', 'cloth', 'clothes', 'apparel'],
+      parentId: sports.id,
+      level: 1,
+      sortOrder: 2,
+      attributeSchema: CLOTHING_FIELDS,
+    },
     { name: 'Footwear', slug: 'sports-footwear', parentId: sports.id, level: 1, sortOrder: 3, attributeSchema: SHOE_FIELDS },
     { name: 'Bikes', slug: 'sports-bikes', parentId: sports.id, level: 1, sortOrder: 4 },
   ]});
