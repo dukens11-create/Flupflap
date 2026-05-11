@@ -4,7 +4,7 @@ import { useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import CategoryPicker from '@/components/CategoryPicker';
 import ConditionPicker from '@/components/ConditionPicker';
-import MediaUpload from '@/components/MediaUpload';
+import MediaUpload, { type MediaUploadState } from '@/components/MediaUpload';
 
 type FormErrors = {
   title?: string;
@@ -20,31 +20,26 @@ export default function NewListingForm() {
   const router = useRouter();
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitting, setSubmitting] = useState(false);
-  const [mediaState, setMediaState] = useState({
+  const [mediaState, setMediaState] = useState<MediaUploadState>({
     imageCount: 0,
-    uploading: false,
-    progress: 0,
-    error: '',
+    uploadedImageCount: 0,
+    isUploading: false,
+    hasErrors: false,
+    canSubmit: false,
+    message: 'Please upload at least one image.',
   });
-  const handleMediaStateChange = useCallback((nextState: {
-    imageCount: number;
-    hasVideo: boolean;
-    uploading: boolean;
-    progress: number;
-    error: string;
-  }) => {
-    setMediaState({
-      imageCount: nextState.imageCount,
-      uploading: nextState.uploading,
-      progress: nextState.progress,
-      error: nextState.error,
+
+  const handleMediaStateChange = useCallback((nextState: MediaUploadState) => {
+    setMediaState(nextState);
+    setErrors((current) => {
+      if (!current.images) return current;
+      if (nextState.isUploading || nextState.hasErrors || !nextState.canSubmit) {
+        return { ...current, images: nextState.message || current.images };
+      }
+      const nextErrors = { ...current };
+      delete nextErrors.images;
+      return nextErrors;
     });
-    if (nextState.imageCount > 0) {
-      setErrors((current) => {
-        if (!current.images) return current;
-        return { ...current, images: undefined };
-      });
-    }
   }, []);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -82,9 +77,8 @@ export default function NewListingForm() {
       nextErrors.images = 'Please upload at least 1 product image.';
     } else if (resolvedImages.length > 6) {
       nextErrors.images = 'You can upload up to 6 product images.';
-    }
-    if (mediaState.uploading) {
-      nextErrors.images = 'Please wait for media uploads to finish before submitting.';
+    } else if (!mediaState.canSubmit) {
+      nextErrors.images = mediaState.message || 'Please wait for media uploads to finish before submitting.';
     }
 
     if (Object.keys(nextErrors).length > 0) {
@@ -151,12 +145,6 @@ export default function NewListingForm() {
         onStateChange={handleMediaStateChange}
       />
       {errors.images && <p className="mt-1 text-xs text-red-600">{errors.images}</p>}
-      {!errors.images && mediaState.imageCount < 1 && (
-        <p className="mt-1 text-xs text-slate-500">Upload at least 1 image to enable submission.</p>
-      )}
-      {mediaState.uploading && (
-        <p className="mt-1 text-xs text-slate-500">Uploading media… {mediaState.progress}%</p>
-      )}
       <div>
         <label className="label">Inventory (qty)</label>
         <input name="inventoryQty" type="number" min="1" defaultValue="1" className={`input ${errors.inventoryQty ? 'border-red-500 ring-1 ring-red-100' : ''}`} />
@@ -195,7 +183,7 @@ export default function NewListingForm() {
       <button
         className="btn-primary w-full disabled:opacity-60 disabled:cursor-not-allowed"
         type="submit"
-        disabled={submitting || mediaState.uploading || mediaState.imageCount < 1}
+        disabled={submitting || mediaState.isUploading}
       >
         {submitting ? 'Submitting…' : 'Submit for review'}
       </button>

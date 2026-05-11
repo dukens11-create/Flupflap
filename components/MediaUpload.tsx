@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   MAX_PRODUCT_IMAGES,
   MAX_PRODUCT_IMAGE_BYTES,
@@ -9,8 +9,6 @@ import {
   PRODUCT_VIDEO_TYPES,
 } from '@/lib/product-media';
 
-const HUMAN_READABLE_INDEX_OFFSET = 1;
-
 interface MediaUploadProps {
   /** Existing image URLs for edit forms. */
   defaultImages?: string[];
@@ -18,14 +16,103 @@ interface MediaUploadProps {
   defaultVideoUrl?: string;
   /** Whether at least one image is required. */
   required?: boolean;
-  /** Reports upload state back to the parent form. */
-  onStateChange?: (state: {
-    imageCount: number;
-    hasVideo: boolean;
-    uploading: boolean;
-    progress: number;
-    error: string;
-  }) => void;
+  /** Optional callback for parent forms that need media readiness state. */
+  onStateChange?: (state: MediaUploadState) => void;
+}
+
+type UploadStatus = 'uploading' | 'uploaded' | 'error';
+
+type ImageUploadItem = {
+  id: string;
+  previewUrl: string;
+  safePreviewUrl: string;
+  uploadedUrl: string;
+  fileName: string;
+  fileSize: number | null;
+  status: UploadStatus;
+  error?: string;
+};
+
+type VideoUploadItem = {
+  id: string;
+  previewUrl: string;
+  safePreviewUrl: string;
+  uploadedUrl: string;
+  fileName: string;
+  fileSize: number | null;
+  previewKind: 'object-url' | 'remote-url';
+  status: UploadStatus;
+  error?: string;
+};
+
+export type MediaUploadState = {
+  imageCount: number;
+  uploadedImageCount: number;
+  isUploading: boolean;
+  hasErrors: boolean;
+  canSubmit: boolean;
+  message: string;
+};
+
+function getFileNameFromUrl(url: string) {
+  try {
+    return decodeURIComponent(new URL(url).pathname.split('/').pop() || 'Unknown filename');
+  } catch {
+    return decodeURIComponent(url.split('/').pop()?.split('?')[0] || 'Unknown filename');
+  }
+}
+
+function getFileSizeDisplay(bytes: number | null) {
+  if (bytes === null) return 'Uploaded';
+  if (bytes < 1024) return `${bytes} B`;
+
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${kb.toFixed(kb >= 100 ? 0 : 1)} KB`;
+
+  const mb = kb / 1024;
+  return `${mb.toFixed(mb >= 100 ? 0 : 1)} MB`;
+}
+
+function getSafePreviewUrl(url: string) {
+  if (!url) return '';
+
+  if (url.startsWith('blob:')) {
+    return url;
+  }
+
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      return parsed.toString();
+    }
+  } catch {
+    return '';
+  }
+
+  return '';
+}
+
+function getMediaStatusMessage(
+  required: boolean | undefined,
+  imageCount: number,
+  imageUploadCount: number,
+  videoUploading: boolean,
+  hasMediaErrors: boolean,
+  firstItemError: string
+) {
+  if (imageUploadCount > 0 || videoUploading) {
+    return 'Please wait for your selected media to finish uploading.';
+  }
+
+  if (hasMediaErrors) {
+    return firstItemError || 'Please fix the media upload error before submitting.';
+  }
+
+  if (required && imageCount === 0) {
+    return 'Please upload at least one image.';
+  }
+
+  return '';
 }
 
 /**
@@ -41,24 +128,68 @@ export default function MediaUpload({
   required,
   onStateChange,
 }: MediaUploadProps) {
-  const [images, setImages] = useState<string[]>(defaultImages);
-  const [videoUrl, setVideoUrl] = useState<string>(defaultVideoUrl);
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploadLabel, setUploadLabel] = useState('');
+  const fallbackIdCounterRef = useRef(0);
+  const createItemId = useCallback(() => {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+
+    // Fallback for environments without crypto.randomUUID (very old browsers).
+    // IDs are used only as React list keys, not for security-sensitive purposes.
+    fallbackIdCounterRef.current += 1;
+    return `${Date.now()}-${fallbackIdCounterRef.current}-${Math.random().toString(36).slice(2, 10)}`;
+  }, []);
+  const [images, setImages] = useState<ImageUploadItem[]>(() =>
+    defaultImages.map((url) => ({
+      id: createItemId(),
+      previewUrl: url,
+      safePreviewUrl: getSafePreviewUrl(url),
+      uploadedUrl: url,
+      fileName: getFileNameFromUrl(url),
+      fileSize: null,
+      status: 'uploaded' as const,
+    }))
+  );
+  const [video, setVideo] = useState<VideoUploadItem | null>(() =>
+    defaultVideoUrl
+      ? {
+          id: createItemId(),
+          previewUrl: defaultVideoUrl,
+          safePreviewUrl: getSafePreviewUrl(defaultVideoUrl),
+          uploadedUrl: defaultVideoUrl,
+          fileName: getFileNameFromUrl(defaultVideoUrl),
+          fileSize: null,
+          previewKind: 'remote-url',
+          status: 'uploaded' as const,
+        }
+      : null
+  );
   const [uploadError, setUploadError] = useState('');
+  const [draggedImageId, setDraggedImageId] = useState<string | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
+  const videoPreviewRef = useRef<HTMLVideoElement>(null);
+  const objectUrlsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    onStateChange?.({
-      imageCount: images.length,
-      hasVideo: Boolean(videoUrl),
-      uploading,
-      progress: uploadProgress,
-      error: uploadError,
-    });
-  }, [images.length, onStateChange, uploadError, uploadProgress, uploading, videoUrl]);
+    return () => {
+      objectUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+      objectUrlsRef.current.clear();
+    };
+  }, []);
+
+  useEffect(() => {
+    const element = videoPreviewRef.current;
+    if (!element) return;
+
+    if (video?.previewKind === 'object-url' && video.previewUrl) {
+      element.src = video.previewUrl;
+    } else {
+      element.removeAttribute('src');
+    }
+
+    element.load();
+  }, [video]);
 
   function isValidUploadConfig(value: unknown): value is {
     apiKey: string;
@@ -86,12 +217,10 @@ export default function MediaUpload({
     if (!response || typeof response !== 'object' || !('error' in response)) {
       return undefined;
     }
-
     const error = (response as { error?: unknown }).error;
     if (!error || typeof error !== 'object' || !('message' in error)) {
       return undefined;
     }
-
     return typeof (error as { message?: unknown }).message === 'string'
       ? (error as { message: string }).message
       : undefined;
@@ -100,14 +229,8 @@ export default function MediaUpload({
   async function getUploadConfig(file: File) {
     const res = await fetch('/api/upload/product-media', {
       method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        contentType: file.type,
-        fileSize: file.size,
-      }),
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contentType: file.type, fileSize: file.size }),
     });
     const json = await res.json();
     if (!res.ok || !json?.success) {
@@ -119,7 +242,7 @@ export default function MediaUpload({
     return json;
   }
 
-  async function uploadFile(file: File, onProgress: (progress: number) => void): Promise<string> {
+  async function uploadFile(file: File): Promise<string> {
     const uploadConfig = await getUploadConfig(file);
     const fd = new FormData();
     fd.append('file', file);
@@ -132,19 +255,14 @@ export default function MediaUpload({
       const xhr = new XMLHttpRequest();
       xhr.open('POST', uploadConfig.uploadUrl);
       xhr.responseType = 'json';
-      xhr.upload.onprogress = (event) => {
-        if (!event.lengthComputable) return;
-        onProgress(Math.round((event.loaded / event.total) * 100));
-      };
-      xhr.onerror = () => reject(new Error('Upload failed. Please check your connection and try again.'));
+      xhr.onerror = () =>
+        reject(new Error('Upload failed. Please check your connection and try again.'));
       xhr.onload = () => {
         const response = xhr.response;
         if (xhr.status >= 200 && xhr.status < 300 && response?.secure_url) {
-          onProgress(100);
           resolve(response.secure_url as string);
           return;
         }
-
         reject(new Error(getCloudinaryErrorMessage(response) ?? 'Upload failed.'));
       };
       xhr.send(fd);
@@ -172,6 +290,7 @@ export default function MediaUpload({
     const remaining = MAX_PRODUCT_IMAGES - images.length;
     if (remaining <= 0) {
       setUploadError(`Maximum ${MAX_PRODUCT_IMAGES} images allowed.`);
+      if (imageInputRef.current) imageInputRef.current.value = '';
       return;
     }
 
@@ -182,32 +301,47 @@ export default function MediaUpload({
       setUploadError('');
     }
 
-    setUploading(true);
-    setUploadProgress(0);
-    try {
-      const uploadedUrls: string[] = [];
+    const nextItems = toUpload.map((file) => {
+      const previewUrl = URL.createObjectURL(file);
+      objectUrlsRef.current.add(previewUrl);
 
-      for (const [index, file] of toUpload.entries()) {
-        setUploadLabel(`Uploading image ${index + HUMAN_READABLE_INDEX_OFFSET} of ${toUpload.length}`);
-        const url = await uploadFile(file, (progress) => {
-          const overallProgress = Math.round(((index + progress / 100) / toUpload.length) * 100);
-          setUploadProgress(overallProgress);
+      return {
+        id: createItemId(),
+        previewUrl,
+        safePreviewUrl: previewUrl,
+        uploadedUrl: '',
+        fileName: file.name,
+        fileSize: file.size,
+        status: 'uploading' as const,
+      };
+    });
+
+    setImages((prev) => [...prev, ...nextItems]);
+    if (imageInputRef.current) imageInputRef.current.value = '';
+
+    nextItems.forEach((item, index) => {
+      uploadFile(toUpload[index])
+        .then((url) => {
+          setImages((prev) =>
+            prev.map((image) =>
+              image.id === item.id
+                ? { ...image, uploadedUrl: url, status: 'uploaded', error: undefined }
+                : image
+            )
+          );
+        })
+        .catch((err: unknown) => {
+          const msg = err instanceof Error ? err.message : 'Upload failed.';
+          setImages((prev) =>
+            prev.map((image) =>
+              image.id === item.id
+                ? { ...image, status: 'error', error: msg }
+                : image
+            )
+          );
+          setUploadError((current) => current || msg);
         });
-        uploadedUrls.push(url);
-      }
-
-      setImages(prev => [...prev, ...uploadedUrls]);
-      setUploadLabel('');
-      setUploadProgress(100);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Upload failed.';
-      setUploadError(msg);
-    } finally {
-      setUploading(false);
-      setUploadProgress(0);
-      setUploadLabel('');
-      if (imageInputRef.current) imageInputRef.current.value = '';
-    }
+    });
   }
 
   async function handleVideoFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -223,31 +357,60 @@ export default function MediaUpload({
       if (videoInputRef.current) videoInputRef.current.value = '';
       return;
     }
-    setUploading(true);
-    setUploadProgress(0);
-    setUploadLabel('Uploading video');
     setUploadError('');
+    if (video?.previewKind === 'object-url' && objectUrlsRef.current.has(video.previewUrl)) {
+      objectUrlsRef.current.delete(video.previewUrl);
+      URL.revokeObjectURL(video.previewUrl);
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+    objectUrlsRef.current.add(previewUrl);
+    const nextVideo: VideoUploadItem = {
+      id: createItemId(),
+      previewUrl,
+      safePreviewUrl: previewUrl,
+      uploadedUrl: '',
+      fileName: file.name,
+      fileSize: file.size,
+      previewKind: 'object-url',
+      status: 'uploading',
+    };
+
+    setVideo(nextVideo);
+    if (videoInputRef.current) videoInputRef.current.value = '';
+
     try {
-      const url = await uploadFile(file, setUploadProgress);
-      setVideoUrl(url);
+      const url = await uploadFile(file);
+      setVideo((current) =>
+        current?.id === nextVideo.id
+          ? { ...current, uploadedUrl: url, status: 'uploaded', error: undefined }
+          : current
+      );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Upload failed.';
-      setUploadError(msg);
-    } finally {
-      setUploading(false);
-      setUploadProgress(0);
-      setUploadLabel('');
-      if (videoInputRef.current) videoInputRef.current.value = '';
+      setVideo((current) =>
+        current?.id === nextVideo.id
+          ? { ...current, status: 'error', error: msg }
+          : current
+      );
+      setUploadError((current) => current || msg);
     }
   }
 
   function removeImage(index: number) {
-    setImages(prev => prev.filter((_, i) => i !== index));
+    setImages((prev) => {
+      const image = prev[index];
+      if (image && objectUrlsRef.current.has(image.previewUrl)) {
+        objectUrlsRef.current.delete(image.previewUrl);
+        URL.revokeObjectURL(image.previewUrl);
+      }
+      return prev.filter((_, i) => i !== index);
+    });
   }
 
   function moveImage(from: number, to: number) {
     if (to < 0 || to >= images.length) return;
-    setImages(prev => {
+    setImages((prev) => {
       const next = [...prev];
       const [item] = next.splice(from, 1);
       next.splice(to, 0, item);
@@ -255,102 +418,200 @@ export default function MediaUpload({
     });
   }
 
-  const mainImage = images[0] ?? '';
+  function removeVideo() {
+    setVideo((current) => {
+      if (current && objectUrlsRef.current.has(current.previewUrl)) {
+        objectUrlsRef.current.delete(current.previewUrl);
+        URL.revokeObjectURL(current.previewUrl);
+      }
+      return null;
+    });
+    if (videoInputRef.current) videoInputRef.current.value = '';
+  }
+
+  function handleImageKeyDown(index: number, event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      moveImage(index, index - 1);
+    }
+
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+      event.preventDefault();
+      moveImage(index, index + 1);
+    }
+  }
+
+  const uploadedImageUrls = images.map((image) => image.uploadedUrl).filter(Boolean);
+  const imageUploadCount = images.filter((image) => image.status === 'uploading').length;
+  const videoUploading = video?.status === 'uploading';
+  const hasMediaErrors = images.some((image) => image.status === 'error') || video?.status === 'error';
+  const firstItemError =
+    images.find((image) => image.status === 'error')?.error ?? video?.error ?? uploadError;
+  const mediaMessage = getMediaStatusMessage(
+    required,
+    images.length,
+    imageUploadCount,
+    videoUploading,
+    hasMediaErrors,
+    firstItemError || ''
+  );
+  const mediaReady =
+    uploadedImageUrls.length === images.length &&
+    !imageUploadCount &&
+    !videoUploading &&
+    !hasMediaErrors &&
+    (!video || !!video.uploadedUrl) &&
+    (!required || images.length > 0);
+  const mainImage = uploadedImageUrls[0] ?? '';
+  const safeUploadedVideoUrl = video ? getSafePreviewUrl(video.uploadedUrl) : '';
+
+  useEffect(() => {
+    onStateChange?.({
+      imageCount: images.length,
+      uploadedImageCount: uploadedImageUrls.length,
+      isUploading: imageUploadCount > 0 || videoUploading,
+      hasErrors: hasMediaErrors,
+      canSubmit: mediaReady,
+      message: mediaMessage,
+    });
+  }, [
+    hasMediaErrors,
+    imageUploadCount,
+    images.length,
+    mediaMessage,
+    mediaReady,
+    onStateChange,
+    uploadedImageUrls.length,
+    videoUploading,
+  ]);
 
   return (
     <div className="space-y-4">
       {/* ── Images ─────────────────────────────────────────────────── */}
       <div>
-        <label className="label">
-          Product Images <span className="text-slate-400 font-normal">(1–6, first = thumbnail)</span>
-        </label>
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <label className="label">
+            Product Images <span className="text-slate-400 font-normal">(1–6, first = thumbnail)</span>
+          </label>
+          <p className="text-sm text-slate-500">{images.length}/{MAX_PRODUCT_IMAGES} images</p>
+        </div>
 
-        {/* Grid of previews */}
         {images.length > 0 && (
-          <div className="flex flex-wrap gap-3 mb-3">
-            {images.map((url, i) => (
-              <div key={url} className="relative group">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={url}
-                  alt={`Product image ${i + 1}`}
-                  className="h-24 w-24 rounded-lg object-cover border border-slate-200"
-                />
-                {/* Thumbnail badge */}
-                {i === 0 && (
-                  <span className="absolute top-1 left-1 bg-blue-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">
-                    Main
-                  </span>
-                )}
-                {/* Remove button */}
-                <button
-                  type="button"
-                  onClick={() => removeImage(i)}
-                  className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs leading-none opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
-                  aria-label={`Remove image ${i + 1}`}
-                >
-                  ×
-                </button>
-                {/* Reorder buttons */}
-                <div className="absolute bottom-1 left-1 flex gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-                  {i > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => moveImage(i, i - 1)}
-                      className="bg-white/80 border border-slate-300 rounded text-xs px-1"
-                      aria-label="Move image left"
-                    >
-                      ←
-                    </button>
+          <div className="mb-3 grid gap-3 sm:grid-cols-2">
+            {images.map((image, i) => (
+              <div
+                key={image.id}
+                draggable
+                tabIndex={0}
+                onDragStart={() => setDraggedImageId(image.id)}
+                onDragEnd={() => setDraggedImageId(null)}
+                onDragOver={(event) => event.preventDefault()}
+                onKeyDown={(event) => handleImageKeyDown(i, event)}
+                onDrop={() => {
+                  if (!draggedImageId || draggedImageId === image.id) return;
+                  const from = images.findIndex((item) => item.id === draggedImageId);
+                  if (from >= 0) moveImage(from, i);
+                  setDraggedImageId(null);
+                }}
+                aria-label={`Product image ${i + 1}. Drag to reorder or use arrow keys and move buttons.`}
+                className={`rounded-xl border bg-white p-3 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-200 ${draggedImageId === image.id ? 'border-blue-400' : 'border-slate-200'}`}
+              >
+                <div className="relative overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={image.safePreviewUrl}
+                    alt={`Product image ${i + 1}`}
+                    className="h-40 w-full object-cover"
+                  />
+                  {i === 0 && (
+                    <span className="absolute left-2 top-2 rounded bg-blue-600 px-2 py-1 text-[11px] font-semibold text-white">
+                      Thumbnail
+                    </span>
                   )}
-                  {i < images.length - 1 && (
-                    <button
-                      type="button"
-                      onClick={() => moveImage(i, i + 1)}
-                      className="bg-white/80 border border-slate-300 rounded text-xs px-1"
-                      aria-label="Move image right"
-                    >
-                      →
-                    </button>
+                </div>
+                <div className="mt-3 space-y-1">
+                  <p className="truncate text-sm font-medium text-slate-900">{image.fileName}</p>
+                  <p className="text-xs text-slate-500">{getFileSizeDisplay(image.fileSize)}</p>
+                  {image.status === 'uploading' && (
+                    <p className="text-xs font-medium text-blue-600">Uploading image…</p>
                   )}
+                  {image.status === 'uploaded' && (
+                    <p className="text-xs font-medium text-emerald-600">Ready to submit</p>
+                  )}
+                  {image.status === 'error' && (
+                    <p className="text-xs font-medium text-red-600">{image.error}</p>
+                  )}
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => moveImage(i, i - 1)}
+                    disabled={i === 0}
+                    className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Move earlier
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => moveImage(i, i + 1)}
+                    disabled={i === images.length - 1}
+                    className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Move later
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeImage(i)}
+                    className="rounded-md border border-red-200 px-2.5 py-1 text-xs font-medium text-red-600"
+                  >
+                    Remove
+                  </button>
                 </div>
               </div>
             ))}
           </div>
         )}
 
-        {/* Add images button */}
         {images.length < MAX_PRODUCT_IMAGES && (
           <div>
             <label className="inline-flex items-center gap-2 cursor-pointer btn-outline text-sm">
-              {uploading ? 'Uploading…' : images.length === 0 ? 'Choose images' : 'Add more images'}
+              {images.length === 0 ? 'Choose images' : 'Add more images'}
               <input
                 ref={imageInputRef}
                 type="file"
-                accept={PRODUCT_IMAGE_TYPES.join(',')}
+                accept={PRODUCT_IMAGE_TYPES.join(",")}
                 multiple
                 onChange={handleImageFilesChange}
-                disabled={uploading}
                 className="hidden"
               />
             </label>
-            <p className="text-xs text-slate-400 mt-1">{images.length}/{MAX_PRODUCT_IMAGES} images • JPEG, PNG, WebP, GIF • max 10 MB each</p>
+            <p className="mt-1 text-xs text-slate-400">
+              JPEG, PNG, WebP, GIF • max 10 MB each
+              {images.length > 1 && ' • Drag to reorder on desktop or use the move buttons'}
+            </p>
           </div>
         )}
 
-        {/* Hidden inputs for form submission */}
-        {images.map((url) => (
-          <input key={url} type="hidden" name="images" value={url} />
-        ))}
-        {/* Legacy single-image field — keeps existing API handlers working.
-            When required, use a visually-hidden URL input so the browser
-            enforces presence before the form can be submitted. */}
+        {images
+          .filter((image) => image.uploadedUrl)
+          .map((image) => (
+            <input key={image.id} type="hidden" name="images" value={image.uploadedUrl} />
+          ))}
         <input
           type="url"
           name="imageUrl"
           value={mainImage}
           readOnly
           required={required}
+          tabIndex={-1}
+          aria-hidden="true"
+          style={{ position: 'absolute', width: 0, height: 0, overflow: 'hidden', opacity: 0 }}
+        />
+        <input
+          type="text"
+          value={mediaReady ? 'ready' : ''}
+          readOnly
+          required={!mediaReady}
           tabIndex={-1}
           aria-hidden="true"
           style={{ position: 'absolute', width: 0, height: 0, overflow: 'hidden', opacity: 0 }}
@@ -367,32 +628,74 @@ export default function MediaUpload({
           Product Video <span className="text-slate-400 font-normal">(optional, max 1)</span>
         </label>
 
-        {videoUrl ? (
-          <div className="space-y-2">
-            <video
-              src={videoUrl}
-              controls
-              preload="metadata"
-              className="rounded-lg border border-slate-200 max-h-48 w-full object-cover"
-            />
-            <button
-              type="button"
-              onClick={() => setVideoUrl('')}
-              className="text-sm text-red-600 hover:underline"
-            >
-              Remove video
-            </button>
+        {video ? (
+          <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            {video.previewKind === 'object-url' ? (
+              <video
+                ref={videoPreviewRef}
+                controls
+                preload="metadata"
+                className="rounded-lg border border-slate-200 max-h-48 w-full object-cover"
+              />
+            ) : (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                Current uploaded video is attached.
+                {safeUploadedVideoUrl && (
+                  <div className="mt-3">
+                    <a
+                      href={safeUploadedVideoUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-2 rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700"
+                    >
+                      Open current video
+                    </a>
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="space-y-1">
+              <p className="truncate text-sm font-medium text-slate-900">{video.fileName}</p>
+              <p className="text-xs text-slate-500">{getFileSizeDisplay(video.fileSize)}</p>
+              {video.status === 'uploading' && (
+                <p className="text-xs font-medium text-blue-600">Uploading video…</p>
+              )}
+              {video.status === 'uploaded' && (
+                <p className="text-xs font-medium text-emerald-600">Ready to submit</p>
+              )}
+              {video.status === 'error' && (
+                <p className="text-xs font-medium text-red-600">{video.error}</p>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700">
+                Replace video
+                <input
+                  ref={videoInputRef}
+                  type="file"
+                  accept={PRODUCT_VIDEO_TYPES.join(",")}
+                  onChange={handleVideoFileChange}
+                  className="hidden"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={removeVideo}
+                className="rounded-md border border-red-200 px-3 py-1.5 text-sm font-medium text-red-600"
+              >
+                Remove video
+              </button>
+            </div>
           </div>
         ) : (
           <div>
             <label className="inline-flex items-center gap-2 cursor-pointer btn-outline text-sm">
-              {uploading ? 'Uploading…' : 'Choose video'}
+              Choose video
               <input
                 ref={videoInputRef}
                 type="file"
-                accept={PRODUCT_VIDEO_TYPES.join(',')}
+                accept={PRODUCT_VIDEO_TYPES.join(",")}
                 onChange={handleVideoFileChange}
-                disabled={uploading}
                 className="hidden"
               />
             </label>
@@ -400,26 +703,19 @@ export default function MediaUpload({
           </div>
         )}
 
-        {/* Hidden input for video URL */}
-        <input type="hidden" name="videoUrl" value={videoUrl} />
+        <input type="hidden" name="videoUrl" value={video?.uploadedUrl ?? ''} />
       </div>
 
-      {/* ── Errors ─────────────────────────────────────────────────── */}
-      {uploading && (
-        <div className="space-y-2">
-          <p className="text-sm text-slate-500">
-            {uploadLabel || 'Uploading…'}
-            {uploadProgress > 0 ? ` (${uploadProgress}%)` : ''}
-          </p>
-          <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
-            <div
-              className="h-full bg-blue-600 transition-[width] duration-150"
-              style={{ width: `${uploadProgress}%` }}
-            />
-          </div>
-        </div>
+      {(imageUploadCount > 0 || videoUploading) && (
+        <p className="text-sm text-slate-500" aria-live="polite">
+          Uploading media…
+        </p>
       )}
-      {uploadError && <p className="text-sm text-red-600">{uploadError}</p>}
+      {uploadError && (
+        <p className="text-sm text-red-600" aria-live="polite">
+          {uploadError}
+        </p>
+      )}
     </div>
   );
 }
