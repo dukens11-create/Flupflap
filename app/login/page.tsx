@@ -26,7 +26,6 @@ function LoginForm() {
 
   async function redirectByRole() {
     setRedirecting(true);
-    setLoading(true);
     let role: string | null = null;
     try {
       const sessionRes = await fetch('/api/auth/session');
@@ -37,7 +36,6 @@ function LoginForm() {
     } catch {
       // ignore and fallback to callback/default route
     }
-    await new Promise((resolve) => setTimeout(resolve, 180));
     router.push(resolveRoleLoginDestination(role, callbackUrl));
     router.refresh();
   }

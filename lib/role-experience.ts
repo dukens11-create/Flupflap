@@ -19,7 +19,7 @@ export function getRoleDefaultPath(role?: string | null): string {
 
 export function resolveRoleLoginDestination(role: string | null | undefined, callbackUrl: string | null): string {
   const experienceRole = normalizeExperienceRole(role);
-  const defaultPath = getRoleDefaultPath(role);
+  const defaultPath = experienceRole === 'admin' ? '/admin/dashboard' : '/';
   if (!callbackUrl) return defaultPath;
   if (!callbackUrl.startsWith('/') || callbackUrl.startsWith('//')) return defaultPath;
   if (callbackUrl === '/login' || callbackUrl.startsWith('/login?')) return defaultPath;

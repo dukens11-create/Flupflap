@@ -110,9 +110,9 @@ export default function Navbar() {
   const { t } = useI18n();
   const navLinkClass = 'rounded-full px-3 py-2 transition-colors hover:bg-slate-100 link-hover-navy';
   const actionLinkClass = 'relative flex items-center gap-1 rounded-full px-3 py-2 transition-colors hover:bg-slate-100 link-hover-navy';
-  const callbackPath = pathname && pathname !== '/' ? pathname : null;
-  const loginHref = callbackPath ? `/login?callbackUrl=${encodeURIComponent(callbackPath)}` : '/login';
-  const signupHref = callbackPath ? `/signup?callbackUrl=${encodeURIComponent(callbackPath)}` : '/signup';
+  const callbackPathname = pathname && pathname !== '/' ? pathname : null;
+  const loginHref = callbackPathname ? `/login?callbackUrl=${encodeURIComponent(callbackPathname)}` : '/login';
+  const signupHref = callbackPathname ? `/signup?callbackUrl=${encodeURIComponent(callbackPathname)}` : '/signup';
 
   return (
     <header className="sticky top-0 z-30 border-b border-slate-200 bg-white">

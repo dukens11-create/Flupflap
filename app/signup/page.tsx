@@ -22,7 +22,13 @@ export default function SignupPage() {
     setError('');
     setLoading(true);
     const form = new FormData(e.currentTarget);
-    const payload = Object.fromEntries(form.entries());
+    const payload = {
+      name: String(form.get('name') ?? ''),
+      email: String(form.get('email') ?? ''),
+      password: String(form.get('password') ?? ''),
+      role: String(form.get('role') ?? 'CUSTOMER'),
+      phone: form.get('phone') ? String(form.get('phone')) : undefined,
+    };
 
     const res = await fetch('/api/auth/signup', {
       method: 'POST',
@@ -49,9 +55,7 @@ export default function SignupPage() {
     }
 
     setRedirecting(true);
-    await new Promise((resolve) => setTimeout(resolve, 180));
-    const signedUpRole = typeof payload.role === 'string' ? payload.role : null;
-    router.push(resolveRoleLoginDestination(signedUpRole, callbackUrl));
+    router.push(resolveRoleLoginDestination(payload.role, callbackUrl));
     router.refresh();
   }
 
