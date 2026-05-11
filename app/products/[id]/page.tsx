@@ -12,6 +12,7 @@ import ContactSellerButton from '@/components/ContactSellerButton';
 import MakeOfferButton from '@/components/MakeOfferButton';
 import ReportItemButton from '@/components/ReportItemButton';
 import ReportSellerButton from '@/components/ReportSellerButton';
+import ProductGallery from '@/components/ProductGallery';
 import type { Metadata } from 'next';
 import { expirePromotions } from '@/lib/promotions';
 import { getSellerResponseStats, SELLER_RESPONSE_WINDOW_HOURS } from '@/lib/messages';
@@ -59,8 +60,18 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
     <main className="max-w-4xl mx-auto">
       <Link href="/" className="text-sm text-blue-600 hover:underline mb-4 inline-block">← Back to browse</Link>
       <div className="card overflow-hidden flex flex-col md:flex-row gap-0">
-        <div className="relative w-full md:w-96 h-72 md:h-auto flex-shrink-0 bg-slate-100">
-          <Image src={product.imageUrl} alt={product.title} fill className="object-cover" />
+        <div className="w-full md:w-96 flex-shrink-0 bg-slate-100 p-0">
+          {product.images?.length ? (
+            <ProductGallery
+              images={product.images}
+              title={product.title}
+              videoUrl={product.videoUrl}
+            />
+          ) : (
+            <div className="relative w-full h-72 md:h-full">
+              <Image src={product.imageUrl} alt={product.title} fill className="object-cover" />
+            </div>
+          )}
         </div>
         <div className="p-6 flex flex-col gap-4 flex-1">
           <div>
