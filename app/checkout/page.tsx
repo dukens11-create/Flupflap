@@ -1,5 +1,5 @@
 "use client";
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
@@ -70,6 +70,8 @@ function itemShippingLabel(item: CartItem, isPickup: boolean): React.ReactNode {
 export default function CheckoutPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const rateRequestVersionRef = useRef(0);
+  const taxRequestVersionRef = useRef(0);
   const [items, setItems] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
@@ -90,6 +92,11 @@ export default function CheckoutPage() {
   const [fetchingRates, setFetchingRates] = useState(false);
   const [rateError, setRateError] = useState('');
   const [ratesFetched, setRatesFetched] = useState(false);
+  const [taxCents, setTaxCents] = useState(0);
+  const [taxCalculating, setTaxCalculating] = useState(false);
+  const [taxCalculated, setTaxCalculated] = useState(false);
+  const [taxError, setTaxError] = useState('');
+  const [finalTotalCents, setFinalTotalCents] = useState(0);
 
   useEffect(() => {
     try {
@@ -99,6 +106,12 @@ export default function CheckoutPage() {
     }
     setLoading(false);
   }, []);
+
+  useEffect(() => {
+    if (!buyerName.trim() && session?.user?.name) {
+      setBuyerName(session.user.name);
+    }
+  }, [buyerName, session?.user?.name]);
 
   // Items that support pickup
   const pickupEligibleIds = useMemo(
@@ -173,88 +186,194 @@ export default function CheckoutPage() {
     [items, isPickup],
   );
   const allPickup = pickupItemIds.length > 0 && pickupItemIds.length === items.length;
-  const canProceedToCheckout = !hasCalculatedShipping || allPickup || (hasCompleteShippingSelection && !rateError);
 
-  const buyerAddressComplete = buyerStreet1.trim() && buyerCity.trim() && buyerState.trim() && buyerZip.trim();
+  const buyerAddressComplete = useMemo(() => !!(
+    buyerName.trim()
+    && buyerStreet1.trim()
+    && buyerCity.trim()
+    && buyerState.trim()
+    && buyerZip.trim()
+    && buyerCountry.trim()
+  ), [buyerCity, buyerCountry, buyerName, buyerState, buyerStreet1, buyerZip]);
 
-  async function handleFetchRates() {
-    if (!buyerAddressComplete) return;
-    setFetchingRates(true);
+  const buyerAddress = useMemo(() => ({
+    name: buyerName.trim() || session?.user?.name || 'Buyer',
+    street1: buyerStreet1.trim(),
+    street2: buyerStreet2.trim() || undefined,
+    city: buyerCity.trim(),
+    state: buyerState.trim(),
+    zip: buyerZip.trim(),
+    country: buyerCountry.trim() || 'US',
+  }), [buyerCity, buyerCountry, buyerName, buyerState, buyerStreet1, buyerStreet2, buyerZip, session?.user?.name]);
+
+  const shippingReady = hasCompleteShippingSelection && !fetchingRates && !rateError;
+  const taxReady = taxCalculated && !taxCalculating && !taxError;
+  const taxNotReady = hasCalculatedShipping && (!shippingReady || !taxReady);
+  const canProceedToCheckout = !hasCalculatedShipping || allPickup || (shippingReady && taxReady);
+
+  useEffect(() => {
+    taxRequestVersionRef.current += 1;
+    setTaxCents(0);
+    setTaxCalculated(false);
+    setTaxCalculating(false);
+    setTaxError('');
+    setFinalTotalCents(0);
+  }, [
+    buyerAddress,
+    fetchingRates,
+    hasCalculatedShipping,
+    hasCompleteShippingSelection,
+    rateError,
+    selectedRates,
+  ]);
+
+  useEffect(() => {
+    const requestVersion = rateRequestVersionRef.current + 1;
+    rateRequestVersionRef.current = requestVersion;
+    setFetchingRates(false);
     setRateError('');
     setRateGroups([]);
     setSelectedRates([]);
     setRatesFetched(false);
-    try {
-      const res = await fetch('/api/checkout/rates', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          items: calculatedShippingItems.map(i => ({ productId: i.id, quantity: i.quantity })),
-          buyerAddress: {
-            name: buyerName.trim() || session?.user?.name || 'Buyer',
-            street1: buyerStreet1.trim(),
-            street2: buyerStreet2.trim() || undefined,
-            city: buyerCity.trim(),
-            state: buyerState.trim(),
-            zip: buyerZip.trim(),
-            country: buyerCountry.trim() || 'US',
-          },
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setRateError(data.error ?? 'Shipping rate unavailable. Please check address or package details.');
-        setRatesFetched(true);
-        return;
-      }
-      const rawGroups: Omit<ShipGroup, 'minDeliveryDays'>[] = data.groups ?? [];
-      // Precompute minDeliveryDays per group to avoid recalculating on every render
-      const groups: ShipGroup[] = rawGroups.map(g => {
-        const ratesWithDays = g.rates.filter(r => r.deliveryDays !== null);
-        return {
-          ...g,
-          minDeliveryDays: ratesWithDays.length > 0
-            ? ratesWithDays.reduce((m, r) => Math.min(m, r.deliveryDays!), Infinity)
-            : null,
-        };
-      });
-      setRateGroups(groups);
-      if (!groups.length) {
-        setRateError('Shipping rate unavailable. Please check address or package details.');
-        setRatesFetched(true);
-        return;
-      }
-      if (groups.some(group => group.rates.length === 0)) {
-        setRateError('Shipping rate unavailable. Please check address or package details.');
-        setRatesFetched(true);
-        return;
-      }
-      // Auto-select cheapest rate per group
-      const autoSelected: SelectedRate[] = groups.map((group) => {
-        const cheapest = group.rates[0]; // already sorted by rate asc
-        return {
-          sellerId: group.sellerId,
-          shipmentId: group.shipmentId,
-          rateId: cheapest.id,
-          rateCents: convertRateToCents(cheapest.rate),
-          carrier: cheapest.carrier,
-          service: cheapest.service,
-          deliveryDays: cheapest.deliveryDays,
-        };
-      });
-      setSelectedRates(autoSelected);
-      setRatesFetched(true);
-      const rateMessages = [...(data.errors ?? []), ...(data.warnings ?? [])];
-      if (rateMessages.length) {
-        setRateError(rateMessages.join(' '));
-      }
-    } catch {
-      setRateError('Shipping rate unavailable. Please check address or package details.');
-      setRatesFetched(true);
-    } finally {
-      setFetchingRates(false);
+
+    if (!hasCalculatedShipping || allPickup || !buyerAddressComplete) {
+      return undefined;
     }
-  }
+
+    async function fetchRatesAfterDebounce() {
+      if (requestVersion !== rateRequestVersionRef.current) return;
+
+      setFetchingRates(true);
+      try {
+        const res = await fetch('/api/checkout/rates', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            items: calculatedShippingItems.map(i => ({ productId: i.id, quantity: i.quantity })),
+            buyerAddress,
+          }),
+        });
+        const data = await res.json();
+        if (requestVersion !== rateRequestVersionRef.current) return;
+
+        if (!res.ok) {
+          setRateError(data.error ?? 'Shipping rate unavailable. Please check address or package details.');
+          setRatesFetched(true);
+          return;
+        }
+
+        const rawGroups: Omit<ShipGroup, 'minDeliveryDays'>[] = data.groups ?? [];
+        const groups: ShipGroup[] = rawGroups.map(g => {
+          const ratesWithDays = g.rates.filter(r => r.deliveryDays !== null);
+          return {
+            ...g,
+            minDeliveryDays: ratesWithDays.length > 0
+              ? ratesWithDays.reduce((m, r) => Math.min(m, r.deliveryDays!), Infinity)
+              : null,
+          };
+        });
+
+        setRateGroups(groups);
+        setRatesFetched(true);
+
+        if (!groups.length || groups.some(group => group.rates.length === 0)) {
+          setRateError('Shipping rate unavailable. Please check address or package details.');
+          return;
+        }
+
+        const rateMessages = [...(data.errors ?? []), ...(data.warnings ?? [])];
+        if (rateMessages.length) {
+          setRateError(rateMessages.join(' '));
+        }
+      } catch {
+        if (requestVersion !== rateRequestVersionRef.current) return;
+        setRateError('Shipping rate unavailable. Please check address or package details.');
+        setRatesFetched(true);
+      } finally {
+        if (requestVersion === rateRequestVersionRef.current) {
+          setFetchingRates(false);
+        }
+      }
+    }
+
+    const timer = window.setTimeout(() => {
+      fetchRatesAfterDebounce().catch(() => undefined);
+    }, 800);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [allPickup, buyerAddress, buyerAddressComplete, calculatedShippingItems, hasCalculatedShipping]);
+
+  useEffect(() => {
+    const requestVersion = taxRequestVersionRef.current + 1;
+    taxRequestVersionRef.current = requestVersion;
+
+    if (!hasCalculatedShipping || allPickup || !buyerAddressComplete || !hasCompleteShippingSelection || fetchingRates || !!rateError) {
+      return undefined;
+    }
+
+    async function fetchCheckoutSummary() {
+      setTaxCalculating(true);
+      try {
+        const res = await fetch('/api/checkout/summary', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            items: items.map(i => ({ productId: i.id, quantity: i.quantity })),
+            pickupItemIds,
+            shippingRateInfo: {
+              shipmentGroups: selectedRates.map((rate) => ({
+                sellerId: rate.sellerId,
+                shipmentId: rate.shipmentId,
+                rateId: rate.rateId,
+                rateCents: rate.rateCents,
+                carrier: rate.carrier,
+                service: rate.service,
+              })),
+              totalRateCents: liveShippingCents,
+              buyerAddress,
+            },
+          }),
+        });
+        const data = await res.json();
+        if (requestVersion !== taxRequestVersionRef.current) return;
+
+        if (!res.ok) {
+          setTaxError(data.error || 'Unable to calculate the final total.');
+          return;
+        }
+
+        setTaxCents(data.taxCents ?? 0);
+        setFinalTotalCents(data.totalCents ?? (total + (data.taxCents ?? 0)));
+        setTaxCalculated(true);
+      } catch {
+        if (requestVersion !== taxRequestVersionRef.current) return;
+        setTaxError('Unable to calculate the final total.');
+      } finally {
+        if (requestVersion === taxRequestVersionRef.current) {
+          setTaxCalculating(false);
+        }
+      }
+    }
+
+    fetchCheckoutSummary().catch(() => undefined);
+
+    return undefined;
+  }, [
+    allPickup,
+    buyerAddress,
+    buyerAddressComplete,
+    fetchingRates,
+    hasCalculatedShipping,
+    hasCompleteShippingSelection,
+    items,
+    liveShippingCents,
+    pickupItemIds,
+    rateError,
+    selectedRates,
+    total,
+  ]);
 
   function handleSelectRate(sellerId: string, shipmentId: string, rate: RateQuote) {
     setSelectedRates(prev => {
@@ -268,7 +387,6 @@ export default function CheckoutPage() {
         service: rate.service,
         deliveryDays: rate.deliveryDays,
       };
-      console.log("Selected shipping:", shippingRate);
       next.push(shippingRate);
       return next;
     });
@@ -282,15 +400,14 @@ export default function CheckoutPage() {
 
     // If live shipping is needed, validate rates selected
     if (hasCalculatedShipping && !canProceedToCheckout) {
-      setError(rateError || 'Please select a valid shipping option before proceeding.');
+      setError(rateError || taxError || 'Please select a valid shipping option before proceeding.');
       return;
     }
 
     setChecking(true);
     setError('');
     try {
-      console.log("Final checkout total:", total);
-      const shippingRateInfo = hasCalculatedShipping && hasCompleteShippingSelection
+      const shippingRateInfo = hasCalculatedShipping && hasCompleteShippingSelection && taxCalculated && !taxError
         ? {
             shipmentGroups: selectedRates.map(r => ({
               sellerId: r.sellerId,
@@ -301,15 +418,7 @@ export default function CheckoutPage() {
               service: r.service,
             })),
             totalRateCents: liveShippingCents,
-            buyerAddress: {
-              name: buyerName.trim() || session.user?.name || 'Buyer',
-              street1: buyerStreet1.trim(),
-              street2: buyerStreet2.trim() || undefined,
-              city: buyerCity.trim(),
-              state: buyerState.trim(),
-              zip: buyerZip.trim(),
-              country: buyerCountry.trim() || 'US',
-            },
+            buyerAddress,
           }
         : undefined;
 
@@ -320,19 +429,7 @@ export default function CheckoutPage() {
           items: items.map(i => ({ productId: i.id, quantity: i.quantity })),
           pickupItemIds,
           shippingRateInfo,
-          ...(hasCalculatedShipping && buyerAddressComplete
-            ? {
-                buyerAddress: {
-                  name: buyerName.trim() || session.user?.name || 'Buyer',
-                  street1: buyerStreet1.trim(),
-                  street2: buyerStreet2.trim() || undefined,
-                  city: buyerCity.trim(),
-                  state: buyerState.trim(),
-                  zip: buyerZip.trim(),
-                  country: buyerCountry.trim() || 'US',
-                },
-              }
-            : {}),
+          ...(hasCalculatedShipping && buyerAddressComplete ? { buyerAddress } : {}),
         }),
       });
       const data = await res.json();
@@ -439,7 +536,7 @@ export default function CheckoutPage() {
       {!allPickup && hasCalculatedShipping && (
         <div className="card p-5 mb-4 space-y-3">
           <p className="font-semibold text-slate-900">📦 Shipping address</p>
-          <p className="text-xs text-slate-500">Enter your address to calculate live shipping rates.</p>
+          <p className="text-xs text-slate-500">Enter your full shipping address to calculate live shipping rates automatically.</p>
 
           <div>
             <label className="label text-xs">Full name</label>
@@ -520,14 +617,9 @@ export default function CheckoutPage() {
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={handleFetchRates}
-            disabled={!buyerAddressComplete || fetchingRates}
-            className="btn-outline text-sm disabled:opacity-50"
-          >
-            {fetchingRates ? 'Calculating rates…' : 'Calculate shipping rates'}
-          </button>
+          {fetchingRates && (
+            <p className="text-sm text-slate-600 font-medium">Calculating shipping…</p>
+          )}
 
           {rateError && (
             <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
@@ -595,29 +687,44 @@ export default function CheckoutPage() {
 
       <div className="card p-5 mb-4 space-y-2 text-sm">
         <div className="flex justify-between">
-          <span className="text-slate-500">Subtotal</span>
+          <span className="text-slate-500">Product price</span>
           <span>{dollars(subtotal)}</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-slate-500">Shipping</span>
+          <span className="text-slate-500">Shipping fee</span>
           <span>
             {allPickup
               ? 'Free (pickup)'
-              : hasCalculatedShipping && !ratesFetched
-                ? 'Calculated after address entry'
-                : hasCalculatedShipping && ratesFetched && rateError
+              : hasCalculatedShipping && fetchingRates
+                ? 'Calculating shipping…'
+                : hasCalculatedShipping && rateError
                   ? 'Shipping unavailable'
-                  : hasCalculatedShipping && ratesFetched && !hasCompleteShippingSelection
+                  : hasCalculatedShipping && !hasCompleteShippingSelection
                     ? 'Shipping not selected'
                     : totalShipping === 0
                       ? 'Free'
                       : dollars(totalShipping)}
           </span>
         </div>
+        <div className="flex justify-between">
+          <span className="text-slate-500">Tax fee</span>
+          <span>
+            {taxNotReady
+              ? 'TBD'
+              : dollars(taxCents)}
+          </span>
+        </div>
         <div className="flex justify-between font-bold text-base border-t pt-2 mt-1">
           <span>Total</span>
-          <span>{hasCalculatedShipping && (!ratesFetched || !hasCompleteShippingSelection) ? 'TBD' : dollars(total)}</span>
+          <span>
+            {taxNotReady
+              ? 'TBD'
+              : dollars(hasCalculatedShipping ? finalTotalCents : total + taxCents)}
+          </span>
         </div>
+        {taxError && (
+          <p className="text-xs text-amber-700">{taxError}</p>
+        )}
       </div>
 
       {allPickup ? (
