@@ -141,6 +141,7 @@ export default async function AdminPage({
           <a href="/admin/promotions" className="btn-outline text-sm whitespace-nowrap min-w-[120px]">
             Promotions {activePromotionsCount > 0 ? `(${activePromotionsCount})` : '→'}
           </a>
+          <a href="/admin/categories" className="btn-outline text-sm whitespace-nowrap min-w-[120px]">Categories →</a>
           <a href="/admin/sellers#kyc-verification" className="btn-outline text-sm whitespace-nowrap min-w-[120px]">KYC →</a>
           <a href="/admin#site-settings" className="btn-outline text-sm whitespace-nowrap min-w-[120px]">Settings →</a>
         </div>

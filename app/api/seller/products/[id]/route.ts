@@ -9,6 +9,7 @@ import {
   getListingRiskAssessmentForCandidate,
   shouldRecommendFraudReview,
 } from '@/lib/fraud-detection';
+import { parseJsonOrNull } from '@/lib/parse-json';
 
 const updateSchema = z.object({
   title: z.string().min(3).optional(),
@@ -25,6 +26,10 @@ const updateSchema = z.object({
   pickupCity: z.string().max(100).optional(),
   pickupState: z.string().max(2).optional(),
   pickupPostalCode: z.string().max(20).optional(),
+  // Category system
+  categoryId: z.string().optional(),
+  subcategoryId: z.string().optional(),
+  productAttributes: z.string().optional(), // JSON string
 });
 
 type ProductUpdateInput = z.infer<typeof updateSchema>;
@@ -153,6 +158,10 @@ export async function POST(
         pickupCity: data.pickupCity || null,
         pickupState: data.pickupState || null,
         pickupPostalCode: data.pickupPostalCode || null,
+        // Category system fields
+        categoryId: data.categoryId || null,
+        subcategoryId: data.subcategoryId || null,
+        productAttributes: parseJsonOrNull(data.productAttributes),
         // Reset to PENDING on edit so admin can re-review
         status: 'PENDING',
       },
@@ -242,6 +251,10 @@ export async function PATCH(
         ...(data.pickupCity !== undefined && { pickupCity: data.pickupCity || null }),
         ...(data.pickupState !== undefined && { pickupState: data.pickupState || null }),
         ...(data.pickupPostalCode !== undefined && { pickupPostalCode: data.pickupPostalCode || null }),
+        // Category system fields
+        categoryId: data.categoryId || null,
+        subcategoryId: data.subcategoryId || null,
+        productAttributes: parseJsonOrNull(data.productAttributes),
         status: 'PENDING',
       },
     });

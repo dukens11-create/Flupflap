@@ -170,42 +170,76 @@ model SellerOtp {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+// ── Categories ────────────────────────────────────────────────────────────────
+
+model Category {
+  id              String     @id @default(cuid())
+  name            String
+  slug            String     @unique
+  parentId        String?
+  parent          Category?  @relation("CategoryChildren", fields: [parentId], references: [id])
+  children        Category[] @relation("CategoryChildren")
+  level           Int        @default(0) // 0=main, 1=subcategory, 2=child
+  icon            String?
+  sortOrder       Int        @default(0)
+  /// JSON array of field definitions: [{name,label,type,options?}]
+  attributeSchema Json?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  // Products using this category
+  mainProducts    Product[]  @relation("ProductMainCategory")
+  subProducts     Product[]  @relation("ProductSubCategory")
+
+  @@index([parentId])
+  @@index([level])
+}
+
 model Product {
-  id               String          @id @default(cuid())
-  title            String
-  description      String
-  priceCents       Int
-  condition        String
-  category         String
-  imageUrl         String
-  inventory        Int             @default(1)
-  shippingCents    Int             @default(0)
-  status           ProductStatus   @default(PENDING)
-  sellerId         String
-  seller           User            @relation(fields: [sellerId], references: [id])
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
-  isPromoted       Boolean         @default(false)
-  promotionStart   DateTime?
-  promotionEnd     DateTime?
-  orderItems       OrderItem[]
-  conversations    Conversation[]
-  reports          ProductReport[]
-  promotions       Promotion[]
-  cartInterest     ProductCartInterest?
-  offers           Offer[]
+  id                 String          @id @default(cuid())
+  title              String
+  description        String
+  priceCents         Int
+  condition          String
+  category           String
+  imageUrl           String
+  inventory          Int             @default(1)
+  shippingCents      Int             @default(0)
+  status             ProductStatus   @default(PENDING)
+  sellerId           String
+  seller             User            @relation(fields: [sellerId], references: [id])
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  isPromoted         Boolean         @default(false)
+  promotionStart     DateTime?
+  promotionEnd       DateTime?
+  orderItems         OrderItem[]
+  conversations      Conversation[]
+  reports            ProductReport[]
+  promotions         Promotion[]
+  cartInterest       ProductCartInterest?
+  offers             Offer[]
   // Pickup fields
-  pickupAvailable  Boolean         @default(false)
-  pickupCity       String?
-  pickupState      String?
-  pickupPostalCode String?
+  pickupAvailable    Boolean         @default(false)
+  pickupCity         String?
+  pickupState        String?
+  pickupPostalCode   String?
+  // Hierarchical category references (optional, for new-style listings)
+  categoryId         String?
+  categoryRef        Category?       @relation("ProductMainCategory", fields: [categoryId], references: [id])
+  subcategoryId      String?
+  subcategoryRef     Category?       @relation("ProductSubCategory", fields: [subcategoryId], references: [id])
+  /// Flexible category-specific attributes stored as JSON
+  productAttributes  Json?
   // Media fields (multi-image + video)
-  images           String[]
-  mainImage        String          @default("")
-  videoUrl         String?
+  images            String[]
+  mainImage         String          @default("")
+  videoUrl          String?
 
   @@index([status, category, condition])
   @@index([title])
+  @@index([categoryId])
+  @@index([subcategoryId])
 }
 
 model Address {

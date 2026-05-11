@@ -11,6 +11,7 @@ import {
   getListingRiskAssessmentForCandidate,
   shouldRecommendFraudReview,
 } from '@/lib/fraud-detection';
+import { parseJsonOrNull } from '@/lib/parse-json';
 
 const schema = z.object({
   title: z.string().min(3),
@@ -27,6 +28,10 @@ const schema = z.object({
   pickupCity: z.string().max(100).optional(),
   pickupState: z.string().max(2).optional(),
   pickupPostalCode: z.string().max(20).optional(),
+  // Category system
+  categoryId: z.string().optional(),
+  subcategoryId: z.string().optional(),
+  productAttributes: z.string().optional(), // JSON string
 });
 
 export async function GET(req: Request) {
@@ -138,6 +143,9 @@ export async function POST(req: Request) {
         pickupCity: data.pickupCity || null,
         pickupState: data.pickupState || null,
         pickupPostalCode: data.pickupPostalCode || null,
+        categoryId: data.categoryId || null,
+        subcategoryId: data.subcategoryId || null,
+        productAttributes: parseJsonOrNull(data.productAttributes),
       },
     });
 
