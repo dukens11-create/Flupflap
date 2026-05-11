@@ -19,7 +19,7 @@ export default async function SellerEditPage({
   if (!session?.user) redirect('/login');
   if (session.user.role !== 'SELLER') redirect('/');
   const sellerId = session.user.id;
-  if (!sellerId) forbidden();
+  if (!sellerId) redirect('/login');
 
   // Block restricted sellers from editing listings
   const dbUser = await prisma.user.findUnique({ where: { id: sellerId } });

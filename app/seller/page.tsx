@@ -1,4 +1,4 @@
-import { forbidden, redirect } from 'next/navigation';
+import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
@@ -112,7 +112,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   if (!session?.user) redirect('/login');
   if (session.user.role !== 'SELLER') redirect('/');
   const sellerId = session.user.id;
-  if (!sellerId) forbidden();
+  if (!sellerId) redirect('/login');
   const sp = await searchParams;
   const subscribedFromCheckout = sp.subscribed === '1';
 
