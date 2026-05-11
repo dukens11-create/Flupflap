@@ -595,7 +595,10 @@ export default function MediaUpload({
         {images
           .filter((image) => image.uploadedUrl)
           .map((image) => (
-            <input key={image.id} type="hidden" name="images" value={image.uploadedUrl} />
+            <div key={image.id}>
+              <input type="hidden" name="images" value={image.uploadedUrl} />
+              <input type="hidden" name="imageUrls" value={image.uploadedUrl} />
+            </div>
           ))}
         <input
           type="url"
