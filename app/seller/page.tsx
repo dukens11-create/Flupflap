@@ -961,7 +961,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                       existingLabelUrl={o.labelUrl}
                       existingTrackingNumber={o.trackingNumber}
                       existingCarrier={orderCarrier}
-                      existingTrackingUrl={buildTrackingUrl(orderCarrier, o.trackingNumber)}
+                      existingTrackingUrl={o.trackingUrl ?? buildTrackingUrl(orderCarrier, o.trackingNumber)}
                     />
                   )}
                   {/* Pickup verification for pickup orders */}
@@ -975,7 +975,12 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                     <p className="text-xs text-green-700 mt-2 font-medium">✅ Pickup confirmed</p>
                   )}
                   {o.trackingNumber && (
-                    <p className="text-xs text-slate-500 mt-2">📦 {orderCarrier}: {o.trackingNumber}</p>
+                    <p className="text-xs text-slate-500 mt-2">
+                      📦 {orderCarrier}: {o.trackingNumber}{o.shippingService ? ` · ${o.shippingService}` : ''}
+                    </p>
+                  )}
+                  {o.shipmentStatus && (
+                    <p className="text-xs text-slate-500 mt-1">Shipment status: {o.shipmentStatus}</p>
                   )}
                 </div>
               );

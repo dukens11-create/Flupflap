@@ -18,7 +18,7 @@ FlupFlap is a marketplace starter app like a small eBay: FlupFlap can sell items
 - Stripe Connect Express onboarding route for seller payouts
 - Configurable seller commission with Stripe Connect fee splitting
 - Stripe webhook route to mark orders paid and products sold
-- EasyPost shipping labels (live rates, label PDFs, auto tracking, buyer tracking links)
+- Shippo shipping labels (live rates, label PDFs, auto tracking, buyer tracking links)
 - Order dashboard
 - Prisma PostgreSQL schema with users, products, orders, order items, addresses, auth sessions
 - Starter legal pages: Terms, Privacy, Seller Agreement, Refund Policy
@@ -94,9 +94,7 @@ Set these in **Environment → Environment Variables** in the Render dashboard:
 | `STRIPE_SECRET_KEY` | Stripe secret key |
 | `STRIPE_PUBLISHABLE_KEY` | Stripe publishable key |
 | `STRIPE_WEBHOOK_SECRET` | Secret from your Stripe webhook endpoint |
-| `EASYPOST_API_KEY` | EasyPost API key for shipping rates + label purchase |
-| `SHIP_FROM_STREET1`, `SHIP_FROM_CITY`, `SHIP_FROM_STATE`, `SHIP_FROM_ZIP` | Seller shipping origin used when creating labels |
-| `SHIP_FROM_NAME`, `SHIP_FROM_COUNTRY`, `SHIP_FROM_PHONE` | Optional EasyPost shipping origin fields |
+| `SHIPPO_API_TOKEN` | Shippo API token for shipping rates + label purchase |
 | `PLATFORM_FEE_PERCENT` | Legacy bootstrap env var (the app normalizes commission snapshots to `7`) |
 
 ### Why the build succeeds but deployment fails

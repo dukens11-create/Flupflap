@@ -311,8 +311,10 @@ model Order {
   trackingNumber        String?
   // Canonical carrier value for new shipping-label flows.
   carrier               String?
+  shippingService       String?
   // Legacy field kept for backwards-compatible API/mobile payloads.
   shippingCarrier       String?
+  trackingUrl           String?
   labelUrl              String?
   shipmentStatus        String?
   shipmentId            String?
@@ -332,7 +334,7 @@ model Order {
   pickupCodeAttempts    Int         @default(0)
   pickupConfirmedAt     DateTime?
   pickupConfirmedById   String?
-  // Stored EasyPost IDs for auto-label creation after payment
+  // Stored shipment + selected-rate IDs for auto-label creation after payment
   selectedShipmentId    String?
   selectedRateId        String?
   createdAt             DateTime    @default(now())

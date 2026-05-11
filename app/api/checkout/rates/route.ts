@@ -33,7 +33,6 @@ type SellerShipGroup = {
   }[];
 };
 
-/** Fallback to env-var ship-from address when seller profile is incomplete. */
 function resolveFromAddress(seller: {
   shipFromName?: string | null;
   shipFromStreet?: string | null;
@@ -44,13 +43,13 @@ function resolveFromAddress(seller: {
   shipFromPhone?: string | null;
   shopName?: string | null;
 }) {
-  const name = seller.shipFromName?.trim() || seller.shopName?.trim() || (process.env.SHIP_FROM_NAME ?? 'Seller Fulfillment').trim();
-  const street1 = seller.shipFromStreet?.trim() || (process.env.SHIP_FROM_STREET1 ?? '').trim();
-  const city = seller.shipFromCity?.trim() || (process.env.SHIP_FROM_CITY ?? '').trim();
-  const state = seller.shipFromState?.trim() || (process.env.SHIP_FROM_STATE ?? '').trim();
-  const zip = seller.shipFromZip?.trim() || (process.env.SHIP_FROM_ZIP ?? '').trim();
-  const country = seller.shipFromCountry?.trim() || (process.env.SHIP_FROM_COUNTRY ?? 'US').trim();
-  const phone = seller.shipFromPhone?.trim() || (process.env.SHIP_FROM_PHONE ?? '').trim() || undefined;
+  const name = seller.shipFromName?.trim() || seller.shopName?.trim() || 'Seller Fulfillment';
+  const street1 = seller.shipFromStreet?.trim() || '';
+  const city = seller.shipFromCity?.trim() || '';
+  const state = seller.shipFromState?.trim() || '';
+  const zip = seller.shipFromZip?.trim() || '';
+  const country = seller.shipFromCountry?.trim() || 'US';
+  const phone = seller.shipFromPhone?.trim() || undefined;
 
   return { name, street1, city, state, zip, country, phone };
 }
@@ -182,7 +181,7 @@ export async function POST(req: Request) {
           rates: result.rates,
         });
       } catch (err: any) {
-        console.error(`[checkout/rates] EasyPost error for seller ${sellerId}:`, err?.message ?? err);
+        console.error(`[checkout/rates] Shippo error for seller ${sellerId}:`, err?.message ?? err);
         errors.push(
           `Shipping rate unavailable for "${seller.shopName || 'a seller'}". Please try again.`,
         );

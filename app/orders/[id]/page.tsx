@@ -68,7 +68,7 @@ export default async function OrderDetailPage({
   });
 
   if (!order) notFound();
-  const trackingUrl = buildTrackingUrl(order.carrier ?? order.shippingCarrier, order.trackingNumber);
+  const trackingUrl = order.trackingUrl ?? buildTrackingUrl(order.carrier ?? order.shippingCarrier, order.trackingNumber);
 
   return (
     <main className="max-w-2xl mx-auto">
@@ -199,6 +199,7 @@ export default async function OrderDetailPage({
           <p className="text-sm text-slate-600">
             📦 {(order.carrier ?? order.shippingCarrier) && <strong>{order.carrier ?? order.shippingCarrier}: </strong>}
             {order.trackingNumber}
+            {order.shippingService ? ` · ${order.shippingService}` : ''}
           </p>
           {trackingUrl && (
             <a
