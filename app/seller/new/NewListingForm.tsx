@@ -64,7 +64,7 @@ export default function NewListingForm() {
       nextErrors.images = 'Please upload at least 1 product image.';
     } else if (resolvedImages.length > 6) {
       nextErrors.images = 'You can upload up to 6 product images.';
-    } else if (mediaState.isUploading || mediaState.hasErrors || !mediaState.canSubmit) {
+    } else if (!mediaState.canSubmit) {
       nextErrors.images = mediaState.message || 'Please wait for media uploads to finish before submitting.';
     }
 
@@ -137,9 +137,9 @@ export default function NewListingForm() {
               return { ...current, images: nextState.message || current.images };
             }
 
-            const { images: omittedImages, ...rest } = current;
-            void omittedImages;
-            return rest;
+            const nextErrors = { ...current };
+            delete nextErrors.images;
+            return nextErrors;
           });
         }}
       />

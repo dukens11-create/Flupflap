@@ -9,6 +9,7 @@ const ACCEPTED_IMAGE_TYPES_LIST = ['image/jpeg', 'image/png', 'image/webp', 'ima
 const ACCEPTED_VIDEO_TYPES_LIST = ['video/mp4', 'video/quicktime', 'video/webm'];
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MB
 const MAX_VIDEO_BYTES = 200 * 1024 * 1024; // 200 MB
+let fallbackIdCounter = 0;
 
 interface MediaUploadProps {
   /** Existing image URLs for edit forms. */
@@ -26,6 +27,7 @@ type UploadStatus = 'uploading' | 'uploaded' | 'error';
 type ImageUploadItem = {
   id: string;
   previewUrl: string;
+  safePreviewUrl: string;
   uploadedUrl: string;
   fileName: string;
   fileSize: number | null;
@@ -36,6 +38,7 @@ type ImageUploadItem = {
 type VideoUploadItem = {
   id: string;
   previewUrl: string;
+  safePreviewUrl: string;
   uploadedUrl: string;
   fileName: string;
   fileSize: number | null;
@@ -58,7 +61,8 @@ function createItemId() {
     return crypto.randomUUID();
   }
 
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  fallbackIdCounter += 1;
+  return `${Date.now()}-${fallbackIdCounter}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 function getFileNameFromUrl(url: string) {
@@ -70,7 +74,7 @@ function getFileNameFromUrl(url: string) {
 }
 
 function formatFileSize(bytes: number | null) {
-  if (bytes == null) return 'Uploaded';
+  if (bytes === null || bytes === undefined) return 'Uploaded';
   if (bytes < 1024) return `${bytes} B`;
 
   const kb = bytes / 1024;
@@ -139,6 +143,7 @@ export default function MediaUpload({
     defaultImages.map((url) => ({
       id: createItemId(),
       previewUrl: url,
+      safePreviewUrl: getSafePreviewUrl(url),
       uploadedUrl: url,
       fileName: getFileNameFromUrl(url),
       fileSize: null,
@@ -150,6 +155,7 @@ export default function MediaUpload({
       ? {
           id: createItemId(),
           previewUrl: defaultVideoUrl,
+          safePreviewUrl: getSafePreviewUrl(defaultVideoUrl),
           uploadedUrl: defaultVideoUrl,
           fileName: getFileNameFromUrl(defaultVideoUrl),
           fileSize: null,
@@ -233,6 +239,7 @@ export default function MediaUpload({
       return {
         id: createItemId(),
         previewUrl,
+        safePreviewUrl: previewUrl,
         uploadedUrl: '',
         fileName: file.name,
         fileSize: file.size,
@@ -292,6 +299,7 @@ export default function MediaUpload({
     const nextVideo: VideoUploadItem = {
       id: createItemId(),
       previewUrl,
+      safePreviewUrl: previewUrl,
       uploadedUrl: '',
       fileName: file.name,
       fileSize: file.size,
@@ -350,6 +358,18 @@ export default function MediaUpload({
       return null;
     });
     if (videoInputRef.current) videoInputRef.current.value = '';
+  }
+
+  function handleImageKeyDown(index: number, event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      moveImage(index, index - 1);
+    }
+
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+      event.preventDefault();
+      moveImage(index, index + 1);
+    }
   }
 
   const uploadedImageUrls = images.map((image) => image.uploadedUrl).filter(Boolean);
@@ -413,21 +433,24 @@ export default function MediaUpload({
               <div
                 key={image.id}
                 draggable
+                tabIndex={0}
                 onDragStart={() => setDraggedImageId(image.id)}
                 onDragEnd={() => setDraggedImageId(null)}
                 onDragOver={(event) => event.preventDefault()}
+                onKeyDown={(event) => handleImageKeyDown(i, event)}
                 onDrop={() => {
                   if (!draggedImageId || draggedImageId === image.id) return;
                   const from = images.findIndex((item) => item.id === draggedImageId);
                   if (from >= 0) moveImage(from, i);
                   setDraggedImageId(null);
                 }}
-                className={`rounded-xl border bg-white p-3 shadow-sm ${draggedImageId === image.id ? 'border-blue-400' : 'border-slate-200'}`}
+                aria-label={`Product image ${i + 1}. Drag to reorder or use arrow keys and move buttons.`}
+                className={`rounded-xl border bg-white p-3 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-200 ${draggedImageId === image.id ? 'border-blue-400' : 'border-slate-200'}`}
               >
                 <div className="relative overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={getSafePreviewUrl(image.previewUrl)}
+                    src={image.safePreviewUrl}
                     alt={`Product image ${i + 1}`}
                     className="h-40 w-full object-cover"
                   />
