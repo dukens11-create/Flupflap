@@ -115,7 +115,7 @@ export interface SellerKycCounts {
  * Private documents (government IDs, selfie images, etc.) are never logged.
  */
 export async function getSellerKycCounts(): Promise<SellerKycCounts> {
-  const debugEnabled = process.env.DEBUG_KYC_STATS === 'true';
+  const debugEnabled = process.env.DEBUG_KYC_STATS === 'true' && process.env.NODE_ENV !== 'production';
 
   const [kycApprovedCount, kycPendingCount, kycRejectedCount, kycNotSubmittedCount, sellersForLog] =
     await Promise.all([
