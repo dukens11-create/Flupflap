@@ -120,21 +120,71 @@ function productMatchesSearch(product: SearchableProduct, query?: string) {
 async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?: Record<string, string | number>) => string }) {
   const where: any = { status: 'APPROVED', inventory: { gt: 0 } };
 
-  // Category filtering: prefer categoryId-based filter when a structured category is selected,
-  // fall back to the legacy string-based category field for backward compatibility.
+  // Category filtering: prefer structured category IDs and keep legacy string fallback
+  // so older listings (without categoryId/subcategoryId) are still discoverable.
   if (sp.category) {
-    where.categoryId = sp.category;
+    where.AND = where.AND ?? [];
+    const categoryOrConditions: any[] = [{ categoryId: sp.category }];
+    try {
+      const categoryRecord = await prisma.category.findUnique({
+        where: { id: sp.category },
+        select: { name: true, aliases: true },
+      });
+      const fallbackTerms = [categoryRecord?.name, ...(categoryRecord?.aliases ?? [])]
+        .filter((value): value is string => typeof value === 'string' && value.length > 0);
+      for (const term of fallbackTerms) {
+        categoryOrConditions.push({ category: { contains: term, mode: 'insensitive' } });
+      }
+    } catch (err) {
+      console.error('[ProductGrid] category lookup failed:', err);
+    }
+    where.AND.push({ OR: categoryOrConditions });
   }
   if (sp.refineCategory) {
-    where.subcategoryId = sp.refineCategory;
+    where.AND = where.AND ?? [];
+    const refineCategoryOrConditions: any[] = [{ subcategoryId: sp.refineCategory }];
+    try {
+      const refineCategoryRecord = await prisma.category.findUnique({
+        where: { id: sp.refineCategory },
+        select: { name: true, aliases: true },
+      });
+      const fallbackTerms = [refineCategoryRecord?.name, ...(refineCategoryRecord?.aliases ?? [])]
+        .filter((value): value is string => typeof value === 'string' && value.length > 0);
+      for (const term of fallbackTerms) {
+        refineCategoryOrConditions.push({ category: { contains: term, mode: 'insensitive' } });
+      }
+    } catch (err) {
+      console.error('[ProductGrid] refine category lookup failed:', err);
+    }
+    where.AND.push({ OR: refineCategoryOrConditions });
   } else if (sp.subcategory) {
     where.AND = where.AND ?? [];
-    where.AND.push({
-      OR: [
-        { subcategoryId: sp.subcategory },
-        { subcategoryRef: { is: { parentId: sp.subcategory } } },
-      ],
-    });
+    const subcategoryOrConditions: any[] = [
+      { subcategoryId: sp.subcategory },
+      { subcategoryRef: { is: { parentId: sp.subcategory } } },
+    ];
+    try {
+      const subcategoryRecord = await prisma.category.findUnique({
+        where: { id: sp.subcategory },
+        select: {
+          name: true,
+          aliases: true,
+          children: { select: { name: true, aliases: true } },
+        },
+      });
+      const fallbackTerms = [
+        subcategoryRecord?.name,
+        ...(subcategoryRecord?.aliases ?? []),
+        ...(subcategoryRecord?.children.map((child) => child.name) ?? []),
+        ...(subcategoryRecord?.children.flatMap((child) => child.aliases ?? []) ?? []),
+      ].filter((value): value is string => typeof value === 'string' && value.length > 0);
+      for (const term of fallbackTerms) {
+        subcategoryOrConditions.push({ category: { contains: term, mode: 'insensitive' } });
+      }
+    } catch (err) {
+      console.error('[ProductGrid] subcategory lookup failed:', err);
+    }
+    where.AND.push({ OR: subcategoryOrConditions });
   }
 
   if (sp.condition) where.condition = sp.condition;
