@@ -17,6 +17,7 @@
  */
 
 import { prisma } from '@/lib/db';
+import type { Prisma } from '@prisma/client';
 
 // ─── Prisma WHERE fragments ────────────────────────────────────────────────────
 
@@ -25,16 +26,16 @@ import { prisma } from '@/lib/db';
  * Reads both the canonical `kycStatus` and the legacy `verifiedSeller` flag so
  * that previously-approved sellers are never silently miscounted.
  */
-export const KYC_APPROVED_WHERE = {
+export const KYC_APPROVED_WHERE: Prisma.UserWhereInput = {
   OR: [{ kycStatus: 'APPROVED' }, { verifiedSeller: true }],
-} as const;
+};
 
 /**
  * Matches sellers whose KYC is pending review.
  * Excludes sellers already considered approved via the legacy flag.
  */
-export const KYC_PENDING_REVIEW_WHERE = {
-  kycStatus: 'PENDING_REVIEW' as const,
+export const KYC_PENDING_REVIEW_WHERE: Prisma.UserWhereInput = {
+  kycStatus: 'PENDING_REVIEW',
   verifiedSeller: false,
 };
 
@@ -42,8 +43,8 @@ export const KYC_PENDING_REVIEW_WHERE = {
  * Matches sellers whose KYC was rejected.
  * Excludes sellers already considered approved via the legacy flag.
  */
-export const KYC_REJECTED_WHERE = {
-  kycStatus: 'REJECTED' as const,
+export const KYC_REJECTED_WHERE: Prisma.UserWhereInput = {
+  kycStatus: 'REJECTED',
   verifiedSeller: false,
 };
 
@@ -52,8 +53,8 @@ export const KYC_REJECTED_WHERE = {
  * Excludes any seller where `verifiedSeller = true` so legacy-approved sellers
  * are never counted as "Not Submitted".
  */
-export const KYC_NOT_SUBMITTED_WHERE = {
-  kycStatus: 'NOT_SUBMITTED' as const,
+export const KYC_NOT_SUBMITTED_WHERE: Prisma.UserWhereInput = {
+  kycStatus: 'NOT_SUBMITTED',
   verifiedSeller: false,
 };
 
