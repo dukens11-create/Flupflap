@@ -20,6 +20,13 @@ import {
   SHIPPING_PACKAGE_DETAILS_REQUIRED_MESSAGE,
 } from '@/lib/product-package';
 
+const optionalInputString = z.preprocess((value) => {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value === 'string') return value.trim();
+  if (typeof value === 'number') return String(value);
+  return undefined;
+}, z.string().optional());
+
 const updateSchema = z.object({
   title: z.string().min(3).optional(),
   description: z.string().min(10).optional(),
@@ -40,17 +47,23 @@ const updateSchema = z.object({
   pickupState: z.string().max(2).optional(),
   pickupPostalCode: z.string().max(20).optional(),
   // Package dimensions
-  weight: z.string().optional(),
-  weightOz: z.string().optional(),
-  weightUnit: z.string().optional(),
-  length: z.string().optional(),
-  lengthIn: z.string().optional(),
-  width: z.string().optional(),
-  widthIn: z.string().optional(),
-  height: z.string().optional(),
-  heightIn: z.string().optional(),
-  packageType: z.string().optional(),
-  shippingClass: z.string().optional(),
+  weight: optionalInputString,
+  packageWeight: optionalInputString,
+  weightOz: optionalInputString,
+  weightUnit: optionalInputString,
+  packageWeightUnit: optionalInputString,
+  length: optionalInputString,
+  packageLength: optionalInputString,
+  lengthIn: optionalInputString,
+  width: optionalInputString,
+  packageWidth: optionalInputString,
+  widthIn: optionalInputString,
+  height: optionalInputString,
+  packageHeight: optionalInputString,
+  heightIn: optionalInputString,
+  packageDimensionUnit: optionalInputString,
+  packageType: optionalInputString,
+  shippingClass: optionalInputString,
   // Category system
   categoryId: z.string().optional(),
   subcategoryId: z.string().optional(),
@@ -98,6 +111,10 @@ function toUrlArray(
   return fallback;
 }
 
+function getFirstNonEmptyString(...values: Array<string | undefined>) {
+  return values.find((value) => typeof value === 'string' && value.trim().length > 0);
+}
+
 function parsePositiveNumber(value?: string | null) {
   const trimmed = value?.trim() ?? '';
   if (!trimmed) return null;
@@ -105,13 +122,27 @@ function parsePositiveNumber(value?: string | null) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
+function getErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return 'Unknown error.';
+}
+
+function redirectToEditForm(req: Request, id: string, message: string) {
+  const url = new URL(`/seller/edit/${id}`, req.url);
+  url.searchParams.set('error', message);
+  return NextResponse.redirect(url, 303);
+}
+
 function resolveSubmittedPackageDetails(data: ProductUpdateInput) {
-  const hasLegacyWeightInput = !data.weight?.trim() && !!data.weightOz?.trim();
-  const weightUnit = hasLegacyWeightInput ? 'oz' : normalizeWeightUnit(data.weightUnit);
-  const weight = parsePositiveNumber(hasLegacyWeightInput ? data.weightOz : (data.weight ?? data.weightOz));
-  const lengthIn = parsePositiveNumber(data.length ?? data.lengthIn);
-  const widthIn = parsePositiveNumber(data.width ?? data.widthIn);
-  const heightIn = parsePositiveNumber(data.height ?? data.heightIn);
+  const weightValue = getFirstNonEmptyString(data.weight, data.packageWeight, data.weightOz);
+  const hasLegacyWeightInput = !getFirstNonEmptyString(data.weight, data.packageWeight) && !!data.weightOz?.trim();
+  const weightUnit = hasLegacyWeightInput
+    ? 'oz'
+    : normalizeWeightUnit(getFirstNonEmptyString(data.weightUnit, data.packageWeightUnit));
+  const weight = parsePositiveNumber(weightValue);
+  const lengthIn = parsePositiveNumber(getFirstNonEmptyString(data.length, data.packageLength, data.lengthIn));
+  const widthIn = parsePositiveNumber(getFirstNonEmptyString(data.width, data.packageWidth, data.widthIn));
+  const heightIn = parsePositiveNumber(getFirstNonEmptyString(data.height, data.packageHeight, data.heightIn));
 
   if (!weight || !lengthIn || !widthIn || !heightIn) {
     return null;
@@ -126,6 +157,14 @@ function resolveSubmittedPackageDetails(data: ProductUpdateInput) {
     packageType: data.packageType?.trim() || null,
     shippingClass: data.shippingClass?.trim() || null,
   };
+}
+
+function getPackageDetailsErrorMessage(data: ProductUpdateInput) {
+  const distanceUnit = data.packageDimensionUnit?.trim().toLowerCase();
+  if (distanceUnit && distanceUnit !== 'in') {
+    return 'Only inches (in) are supported for package dimensions.';
+  }
+  return SHIPPING_PACKAGE_DETAILS_REQUIRED_MESSAGE;
 }
 
 function resolveOriginalImagesForProduct(
@@ -174,20 +213,23 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  let id = '';
+  let sellerId: string | undefined;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user || session.user.role !== 'SELLER') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      return NextResponse.redirect(new URL('/login', req.url), 303);
     }
-    const sellerId = session.user.id;
+    sellerId = session.user.id;
     if (!sellerId) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      return NextResponse.redirect(new URL('/login', req.url), 303);
     }
+    ({ id } = await params);
 
     // Block restricted sellers from editing or deleting listings
     const dbUser = await prisma.user.findUnique({ where: { id: sellerId } });
     if (dbUser?.sellerStatus === 'SUSPENDED' || dbUser?.sellerStatus === 'BANNED' || dbUser?.sellerStatus === 'RESTRICTED') {
-      return NextResponse.json({ error: 'Your seller account is currently restricted.' }, { status: 403 });
+      return redirectToEditForm(req, id, 'Your seller account is currently restricted.');
     }
 
     const verification = await prisma.sellerVerification.findUnique({
@@ -195,13 +237,13 @@ export async function POST(
       select: { status: true },
     });
     if (!isSellerVerificationApproved(verification?.status)) {
-      return NextResponse.json(
-        { error: 'Submit and pass seller verification before listing products.' },
-        { status: 403 },
+      return redirectToEditForm(
+        req,
+        id,
+        'Submit and pass seller verification before listing products.',
       );
     }
 
-    const { id } = await params;
     const { product: existing, forbidden } = await getOwnedSellerProduct(id, sellerId);
     if (forbidden) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -236,7 +278,7 @@ export async function POST(
     });
     const packageDetails = resolveSubmittedPackageDetails(data);
     if (!packageDetails) {
-      return NextResponse.json({ error: SHIPPING_PACKAGE_DETAILS_REQUIRED_MESSAGE }, { status: 400 });
+      return redirectToEditForm(req, id, getPackageDetailsErrorMessage(data));
     }
 
     const submittedImages = imagesRaw.length ? imagesRaw : data.imageUrl ? [data.imageUrl] : null;
@@ -268,50 +310,67 @@ export async function POST(
         ? Prisma.JsonNull
         : (nextProductAttributes as Prisma.InputJsonValue);
 
-    const updated = await prisma.product.update({
-      where: { id },
-      data: {
-        ...(data.title && { title: data.title }),
-        ...(data.description && { description: data.description }),
-        ...(data.price && { priceCents: cents(data.price) }),
-        ...(data.shipping !== undefined && { shippingCents: cents(data.shipping || '0') }),
-        ...(data.shippingMode && (SHIPPING_MODES as readonly string[]).includes(data.shippingMode) && { shippingMode: data.shippingMode }),
-        pickupAvailable: data.pickupAvailable === 'true',
-        pickupCity: data.pickupCity || null,
-        pickupState: data.pickupState || null,
-        pickupPostalCode: data.pickupPostalCode || null,
-        // Package dimensions
-        weightOz: packageDetails.weightOz,
-        weightUnit: packageDetails.weightUnit,
-        lengthIn: packageDetails.lengthIn,
-        widthIn: packageDetails.widthIn,
-        heightIn: packageDetails.heightIn,
-        packageType: packageDetails.packageType,
-        // Category system fields
-        categoryId: data.categoryId || null,
-        subcategoryId: data.subcategoryId || null,
-        productAttributes: nextProductAttributesValue,
-        imageUrl: mainImage,
-        images: resolvedImages,
-        mainImage,
-        videoUrl,
-        originalImages: resolvedOriginalImages,
-        enhancedImages: resolvedEnhancedImages,
-        imageThumbnails: resolvedImageThumbnails,
-        // Reset to PENDING on edit so admin can re-review
-        status: 'PENDING',
-      },
-    });
+    let updated;
+    try {
+      updated = await prisma.product.update({
+        where: { id },
+        data: {
+          ...(data.title && { title: data.title }),
+          ...(data.description && { description: data.description }),
+          ...(data.price && { priceCents: cents(data.price) }),
+          ...(data.shipping !== undefined && { shippingCents: cents(data.shipping || '0') }),
+          ...(data.shippingMode && (SHIPPING_MODES as readonly string[]).includes(data.shippingMode) && { shippingMode: data.shippingMode }),
+          ...(data.category && { category: data.category }),
+          ...(data.condition && { condition: data.condition }),
+          ...(data.inventory && { inventory: Number(data.inventory) }),
+          pickupAvailable: data.pickupAvailable === 'true',
+          pickupCity: data.pickupCity || null,
+          pickupState: data.pickupState || null,
+          pickupPostalCode: data.pickupPostalCode || null,
+          // Package dimensions
+          weightOz: packageDetails.weightOz,
+          weightUnit: packageDetails.weightUnit,
+          lengthIn: packageDetails.lengthIn,
+          widthIn: packageDetails.widthIn,
+          heightIn: packageDetails.heightIn,
+          packageType: packageDetails.packageType,
+          // Category system fields
+          categoryId: data.categoryId || null,
+          subcategoryId: data.subcategoryId || null,
+          productAttributes: nextProductAttributesValue,
+          imageUrl: mainImage,
+          images: resolvedImages,
+          mainImage,
+          videoUrl,
+          originalImages: resolvedOriginalImages,
+          enhancedImages: resolvedEnhancedImages,
+          imageThumbnails: resolvedImageThumbnails,
+          // Reset to PENDING on edit so admin can re-review
+          status: 'PENDING',
+        },
+      });
+    } catch (dbError) {
+      const message = getErrorMessage(dbError);
+      console.error('[seller/products/[id] POST] database update error', { productId: id, sellerId, message });
+      if (dbError instanceof Error && dbError.stack) {
+        console.error('[seller/products/[id] POST] stack trace', dbError.stack);
+      }
+      return redirectToEditForm(req, id, 'Unable to save listing changes. Please review the form and try again.');
+    }
 
     const fraudQuery = shouldRecommendFraudReview(riskAssessment) ? '&fraud=review' : '';
 
     return NextResponse.redirect(new URL(`/seller?updated=${updated.id}${fraudQuery}`, req.url));
   } catch (err: any) {
     if (err?.name === 'ZodError') {
-      return NextResponse.json({ error: 'Invalid input.' }, { status: 400 });
+      return redirectToEditForm(req, id, 'Please review the listing details and try again.');
     }
-    console.error('[seller/products/[id] POST]', err);
-    return NextResponse.json({ error: 'Failed to update listing.' }, { status: 500 });
+    const message = getErrorMessage(err);
+    console.error('[seller/products/[id] POST] request handling error', { productId: id, sellerId, message });
+    if (err instanceof Error && err.stack) {
+      console.error('[seller/products/[id] POST] stack trace', err.stack);
+    }
+    return redirectToEditForm(req, id, 'Unable to save listing changes. Please try again.');
   }
 }
 
@@ -359,7 +418,7 @@ export async function PATCH(
     const data = updateSchema.parse(body);
     const packageDetails = resolveSubmittedPackageDetails(data);
     if (!packageDetails) {
-      return NextResponse.json({ error: SHIPPING_PACKAGE_DETAILS_REQUIRED_MESSAGE }, { status: 400 });
+      return NextResponse.json({ error: getPackageDetailsErrorMessage(data) }, { status: 400 });
     }
 
     // Resolve images for PATCH (JSON body): prefer explicit images list, then legacy imageUrl
@@ -401,42 +460,52 @@ export async function PATCH(
         ? Prisma.JsonNull
         : (nextProductAttributes as Prisma.InputJsonValue);
 
-    const updated = await prisma.product.update({
-      where: { id },
-      data: {
-        ...(data.title && { title: data.title }),
-        ...(data.description && { description: data.description }),
-        ...(data.price && { priceCents: cents(data.price) }),
-        ...(data.shipping !== undefined && { shippingCents: cents(data.shipping || '0') }),
-        ...(data.shippingMode && (SHIPPING_MODES as readonly string[]).includes(data.shippingMode) && { shippingMode: data.shippingMode }),
-        ...(data.category && { category: data.category }),
-        ...(data.condition && { condition: data.condition }),
-        imageUrl: mainImage,
-        images: resolvedImages,
-        mainImage,
-        videoUrl,
-        originalImages: resolvedOriginalImages,
-        enhancedImages: resolvedEnhancedImages,
-        imageThumbnails: resolvedImageThumbnails,
-        ...(data.inventory && { inventory: Number(data.inventory) }),
-        ...(data.pickupAvailable !== undefined && { pickupAvailable: data.pickupAvailable === 'true' }),
-        ...(data.pickupCity !== undefined && { pickupCity: data.pickupCity || null }),
-        ...(data.pickupState !== undefined && { pickupState: data.pickupState || null }),
-        ...(data.pickupPostalCode !== undefined && { pickupPostalCode: data.pickupPostalCode || null }),
-        // Package dimensions
-        weightOz: packageDetails.weightOz,
-        weightUnit: packageDetails.weightUnit,
-        lengthIn: packageDetails.lengthIn,
-        widthIn: packageDetails.widthIn,
-        heightIn: packageDetails.heightIn,
-        packageType: packageDetails.packageType,
-        // Category system fields
-        categoryId: data.categoryId || null,
-        subcategoryId: data.subcategoryId || null,
-        productAttributes: nextProductAttributesValue,
-        status: 'PENDING',
-      },
-    });
+    let updated;
+    try {
+      updated = await prisma.product.update({
+        where: { id },
+        data: {
+          ...(data.title && { title: data.title }),
+          ...(data.description && { description: data.description }),
+          ...(data.price && { priceCents: cents(data.price) }),
+          ...(data.shipping !== undefined && { shippingCents: cents(data.shipping || '0') }),
+          ...(data.shippingMode && (SHIPPING_MODES as readonly string[]).includes(data.shippingMode) && { shippingMode: data.shippingMode }),
+          ...(data.category && { category: data.category }),
+          ...(data.condition && { condition: data.condition }),
+          imageUrl: mainImage,
+          images: resolvedImages,
+          mainImage,
+          videoUrl,
+          originalImages: resolvedOriginalImages,
+          enhancedImages: resolvedEnhancedImages,
+          imageThumbnails: resolvedImageThumbnails,
+          ...(data.inventory && { inventory: Number(data.inventory) }),
+          ...(data.pickupAvailable !== undefined && { pickupAvailable: data.pickupAvailable === 'true' }),
+          ...(data.pickupCity !== undefined && { pickupCity: data.pickupCity || null }),
+          ...(data.pickupState !== undefined && { pickupState: data.pickupState || null }),
+          ...(data.pickupPostalCode !== undefined && { pickupPostalCode: data.pickupPostalCode || null }),
+          // Package dimensions
+          weightOz: packageDetails.weightOz,
+          weightUnit: packageDetails.weightUnit,
+          lengthIn: packageDetails.lengthIn,
+          widthIn: packageDetails.widthIn,
+          heightIn: packageDetails.heightIn,
+          packageType: packageDetails.packageType,
+          // Category system fields
+          categoryId: data.categoryId || null,
+          subcategoryId: data.subcategoryId || null,
+          productAttributes: nextProductAttributesValue,
+          status: 'PENDING',
+        },
+      });
+    } catch (dbError) {
+      const message = getErrorMessage(dbError);
+      console.error('[seller/products/[id] PATCH] database update error', { productId: id, sellerId, message });
+      if (dbError instanceof Error && dbError.stack) {
+        console.error('[seller/products/[id] PATCH] stack trace', dbError.stack);
+      }
+      return NextResponse.json({ error: 'Failed to update listing.' }, { status: 500 });
+    }
 
     return NextResponse.json({
       ...updated,
@@ -446,7 +515,11 @@ export async function PATCH(
     if (err?.name === 'ZodError') {
       return NextResponse.json({ error: 'Invalid input.' }, { status: 400 });
     }
-    console.error('[seller/products/[id] PATCH]', err);
+    const message = getErrorMessage(err);
+    console.error('[seller/products/[id] PATCH] request handling error', { message });
+    if (err instanceof Error && err.stack) {
+      console.error('[seller/products/[id] PATCH] stack trace', err.stack);
+    }
     return NextResponse.json({ error: 'Failed to update listing.' }, { status: 500 });
   }
 }
