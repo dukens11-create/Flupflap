@@ -6,12 +6,16 @@ type CloudinaryEnvConfig = {
   apiSecret: string;
 };
 
+function hasCloudinaryEnvValue(value: string | undefined): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
 function readCloudinaryEnvConfig(): CloudinaryEnvConfig | null {
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME?.trim();
   const apiKey = process.env.CLOUDINARY_API_KEY?.trim();
   const apiSecret = process.env.CLOUDINARY_API_SECRET?.trim();
 
-  if (!cloudName || !apiKey || !apiSecret) {
+  if (!hasCloudinaryEnvValue(cloudName) || !hasCloudinaryEnvValue(apiKey) || !hasCloudinaryEnvValue(apiSecret)) {
     return null;
   }
 
@@ -47,11 +51,12 @@ export function getCloudinaryEnvConfig() {
   return readCloudinaryEnvConfig();
 }
 
-export function logCloudinaryConfigExists() {
+/** Safe diagnostic log for deployment troubleshooting (never logs raw secret values). */
+export function logCloudinaryConfigStatus() {
   console.log('Cloudinary config exists', {
-    cloudName: !!process.env.CLOUDINARY_CLOUD_NAME,
-    apiKey: !!process.env.CLOUDINARY_API_KEY,
-    apiSecret: !!process.env.CLOUDINARY_API_SECRET,
+    cloudName: hasCloudinaryEnvValue(process.env.CLOUDINARY_CLOUD_NAME),
+    apiKey: hasCloudinaryEnvValue(process.env.CLOUDINARY_API_KEY),
+    apiSecret: hasCloudinaryEnvValue(process.env.CLOUDINARY_API_SECRET),
   });
 }
 

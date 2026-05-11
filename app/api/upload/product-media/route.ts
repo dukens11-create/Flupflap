@@ -5,7 +5,7 @@ import {
   getCloudinary,
   getCloudinaryEnvConfig,
   isCloudinaryConfigured,
-  logCloudinaryConfigExists,
+  logCloudinaryConfigStatus,
 } from '@/lib/cloudinary';
 import {
   getProductMediaKind,
@@ -20,7 +20,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: false, message: 'Forbidden.' }, { status: 403 });
   }
 
-  logCloudinaryConfigExists();
+  logCloudinaryConfigStatus();
 
   if (!isCloudinaryConfigured()) {
     return NextResponse.json(
@@ -92,24 +92,24 @@ export async function POST(req: Request) {
     timestamp,
   };
 
-  let signature: string;
   try {
     const cloudinary = getCloudinary();
-    signature = cloudinary.utils.api_sign_request(paramsToSign, cloudinaryEnv.apiSecret);
+    const signature = cloudinary.utils.api_sign_request(paramsToSign, cloudinaryEnv.apiSecret);
+
+    return NextResponse.json({
+      success: true,
+      apiKey: cloudinaryEnv.apiKey,
+      folder,
+      timestamp,
+      signature,
+      uploadUrl: `https://api.cloudinary.com/v1_1/${cloudinaryEnv.cloudName}/${mediaKind}/upload`,
+    });
   } catch (error) {
-    console.error('[api/upload/product-media] cloudinary init failed', error);
+    const message = error instanceof Error ? error.message : 'unknown error';
+    console.error('[api/upload/product-media] cloudinary init failed:', message);
     return NextResponse.json(
       { success: false, message: 'Upload configuration error. Please try again shortly.' },
       { status: 500 },
     );
   }
-
-  return NextResponse.json({
-    success: true,
-    apiKey: cloudinaryEnv.apiKey,
-    folder,
-    timestamp,
-    signature,
-    uploadUrl: `https://api.cloudinary.com/v1_1/${cloudinaryEnv.cloudName}/${mediaKind}/upload`,
-  });
 }
