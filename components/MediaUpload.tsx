@@ -9,7 +9,6 @@ const ACCEPTED_IMAGE_TYPES_LIST = ['image/jpeg', 'image/png', 'image/webp', 'ima
 const ACCEPTED_VIDEO_TYPES_LIST = ['video/mp4', 'video/quicktime', 'video/webm'];
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MB
 const MAX_VIDEO_BYTES = 200 * 1024 * 1024; // 200 MB
-let fallbackIdCounter = 0;
 
 interface MediaUploadProps {
   /** Existing image URLs for edit forms. */
@@ -56,15 +55,6 @@ export type MediaUploadState = {
   message: string;
 };
 
-function createItemId() {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
-
-  fallbackIdCounter += 1;
-  return `${Date.now()}-${fallbackIdCounter}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
 function getFileNameFromUrl(url: string) {
   try {
     return decodeURIComponent(new URL(url).pathname.split('/').pop() || 'Unknown filename');
@@ -74,7 +64,7 @@ function getFileNameFromUrl(url: string) {
 }
 
 function formatFileSize(bytes: number | null) {
-  if (bytes === null || bytes === undefined) return 'Uploaded';
+  if (bytes === null) return 'Uploaded';
   if (bytes < 1024) return `${bytes} B`;
 
   const kb = bytes / 1024;
@@ -139,6 +129,15 @@ export default function MediaUpload({
   required,
   onStateChange,
 }: MediaUploadProps) {
+  const fallbackIdCounterRef = useRef(0);
+  const createItemId = () => {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+
+    fallbackIdCounterRef.current += 1;
+    return `${Date.now()}-${fallbackIdCounterRef.current}-${Math.random().toString(36).slice(2, 10)}`;
+  };
   const [images, setImages] = useState<ImageUploadItem[]>(() =>
     defaultImages.map((url) => ({
       id: createItemId(),

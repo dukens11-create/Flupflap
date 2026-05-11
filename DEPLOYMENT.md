@@ -124,20 +124,19 @@ Redeploy once to pick up the new values.
 
 ### How it works
 
-When a seller picks a file on the **List Item** or **Edit Listing** page, the
+When a seller picks media on the **List Item** or **Edit Listing** page, the
 browser posts it to `/api/upload`. That route verifies the seller session,
-uploads the file to Cloudinary, and returns the hosted URL. The URL is placed
-in the form's `imageUrl` field before the form is submitted, so the rest of the
-product create/update flow is unchanged.
+uploads the file to Cloudinary, and returns the hosted URL. The listing form
+stores the returned `images[]`, `imageUrl`, and optional `videoUrl` values
+before the product create/update request is submitted.
 
-- Accepted formats: JPEG, PNG, WebP, GIF (up to 10 MB)
-- Images are stored under the `flupflap/products/` folder in your Cloudinary
-  account
-- Sellers can also paste a direct image URL if they prefer not to upload
+- Accepted image formats: JPEG, PNG, WebP, GIF (up to 10 MB each)
+- Accepted video formats: MP4, MOV, WebM (up to 200 MB)
+- Product media is stored under the Cloudinary folder set by
+  `CLOUDINARY_UPLOAD_FOLDER` (defaults to `flupflap/products`)
 
-> **Without Cloudinary configured** the file-picker upload returns a 503 error
-> and sellers can still paste a URL directly — backward compatibility is
-> preserved.
+> **Without Cloudinary configured** seller media upload returns a 503 error
+> until the Cloudinary variables are added to the environment.
 
 ---
 
