@@ -74,6 +74,8 @@ async function shippoRequest(path: string, method: 'GET' | 'POST', body?: unknow
 function normalizeCarrier(value: unknown): string {
   const raw = String(value ?? '').trim();
   if (!raw) return '';
+  // Shippo provider names may include spaces/punctuation; normalize to token form
+  // so we can compare against the supported carrier whitelist consistently.
   const normalized = raw.replace(/[^a-z0-9]/gi, '').toUpperCase();
   return normalized;
 }
@@ -172,6 +174,8 @@ export async function purchaseShipmentRate(params: {
   const labelUrl = parseOptionalString(payload?.label_url);
   const trackingUrl = parseOptionalString(payload?.tracking_url_provider)
     || buildTrackingUrl(carrier, trackingCode);
+  // Shippo transaction payloads are not fully consistent across rate types, so
+  // resolve the shipment id from the most specific to least specific source.
   const rateShipmentId = parseOptionalString(payload?.rate?.shipment);
   const transactionShipmentObjectId = parseOptionalString(payload?.shipment?.object_id);
   const transactionShipmentId = parseOptionalString(payload?.shipment);
