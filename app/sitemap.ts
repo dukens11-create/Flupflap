@@ -1,8 +1,7 @@
-import { MetadataRoute } from 'next';
-import { prisma, isDatabaseConfigured } from '@/lib/db';
+import type { MetadataRoute } from 'next';
+import { isDatabaseConfigured, prisma } from '@/lib/db';
+import { absoluteUrl } from '@/lib/seo';
 import { DEFAULT_CATEGORY_TREE, DefaultCategoryNode } from '@/lib/default-categories';
-
-const BASE_URL = 'https://www.flupflap.com';
 
 /** Flatten a category tree into a list of category ids. */
 function flattenCategoryIds(nodes: DefaultCategoryNode[]): string[] {
@@ -21,15 +20,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   // ── Static routes ──────────────────────────────────────────────────────────
   const staticRoutes: MetadataRoute.Sitemap = [
-    { url: BASE_URL, lastModified: now, changeFrequency: 'daily', priority: 1.0 },
-    { url: `${BASE_URL}/signup`, lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
-    { url: `${BASE_URL}/login`, lastModified: now, changeFrequency: 'monthly', priority: 0.3 },
+    { url: absoluteUrl('/'), lastModified: now, changeFrequency: 'daily', priority: 1.0 },
+    { url: absoluteUrl('/signup'), lastModified: now, changeFrequency: 'monthly', priority: 0.6 },
+    { url: absoluteUrl('/login'), lastModified: now, changeFrequency: 'monthly', priority: 0.3 },
+    { url: absoluteUrl('/legal/terms'), lastModified: now, changeFrequency: 'yearly', priority: 0.2 },
+    { url: absoluteUrl('/legal/privacy'), lastModified: now, changeFrequency: 'yearly', priority: 0.2 },
+    { url: absoluteUrl('/legal/seller-agreement'), lastModified: now, changeFrequency: 'yearly', priority: 0.2 },
+    { url: absoluteUrl('/legal/refund'), lastModified: now, changeFrequency: 'yearly', priority: 0.2 },
   ];
 
   // ── Category pages (homepage query-param URLs) ─────────────────────────────
   const categoryIds = flattenCategoryIds(DEFAULT_CATEGORY_TREE);
   const categoryRoutes: MetadataRoute.Sitemap = categoryIds.map((id) => ({
-    url: `${BASE_URL}/?category=${id}`,
+    url: absoluteUrl(`/?category=${id}`),
     lastModified: now,
     changeFrequency: 'daily' as const,
     priority: 0.8,
@@ -39,7 +42,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     return [...staticRoutes, ...categoryRoutes];
   }
 
-  // ── Dynamic product pages ──────────────────────────────────────────────────
+  // ── Dynamic product and seller pages ──────────────────────────────────────
   let productRoutes: MetadataRoute.Sitemap = [];
   let sellerRoutes: MetadataRoute.Sitemap = [];
 
@@ -65,14 +68,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ]);
 
     productRoutes = products.map((p) => ({
-      url: `${BASE_URL}/products/${p.id}`,
+      url: absoluteUrl(`/products/${p.id}`),
       lastModified: p.updatedAt,
       changeFrequency: 'weekly' as const,
       priority: 0.9,
     }));
 
     sellerRoutes = sellers.map((s) => ({
-      url: `${BASE_URL}/store/${s.id}`,
+      url: absoluteUrl(`/store/${s.id}`),
       lastModified: now,
       changeFrequency: 'weekly' as const,
       priority: 0.7,

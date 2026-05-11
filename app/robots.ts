@@ -1,6 +1,5 @@
-import { MetadataRoute } from 'next';
-
-const BASE_URL = 'https://www.flupflap.com';
+import type { MetadataRoute } from 'next';
+import { absoluteUrl } from '@/lib/seo';
 
 export default function robots(): MetadataRoute.Robots {
   return {
@@ -25,6 +24,6 @@ export default function robots(): MetadataRoute.Robots {
         ],
       },
     ],
-    sitemap: `${BASE_URL}/sitemap.xml`,
+    sitemap: absoluteUrl('/sitemap.xml'),
   };
 }

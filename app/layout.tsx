@@ -8,10 +8,12 @@ import { getServerTranslations } from '@/lib/i18n/server';
 import VisitorTracker from '@/components/VisitorTracker';
 import PwaInstallPrompt from '@/components/PwaInstallPrompt';
 import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration';
+import { absoluteUrl, BRAND_LOGO_PATH, DEFAULT_SEO_DESCRIPTION, getSiteUrl } from '@/lib/seo';
 
 export const metadata: Metadata = {
+  metadataBase: getSiteUrl(),
   title: { default: 'FlupFlap Marketplace', template: '%s | FlupFlap' },
-  description: 'A safer marketplace with low fees, verified sellers, and a simpler way to buy and sell everyday items.',
+  description: DEFAULT_SEO_DESCRIPTION,
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
@@ -30,16 +32,61 @@ export const metadata: Metadata = {
     'apple-mobile-web-app-capable': 'yes',
     'apple-mobile-web-app-title': 'FlupFlap',
   },
+  alternates: {
+    canonical: '/',
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-image-preview': 'large',
+      'max-video-preview': -1,
+      'max-snippet': -1,
+    },
+  },
+  openGraph: {
+    title: 'FlupFlap Marketplace',
+    description: DEFAULT_SEO_DESCRIPTION,
+    url: '/',
+    siteName: 'FlupFlap',
+    type: 'website',
+    images: [{ url: BRAND_LOGO_PATH }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'FlupFlap Marketplace',
+    description: DEFAULT_SEO_DESCRIPTION,
+    images: [BRAND_LOGO_PATH],
+  },
 };
 
 export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
   themeColor: '#0B2341',
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const { locale, t } = await getServerTranslations();
+  const organizationJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    name: 'FlupFlap',
+    url: absoluteUrl('/'),
+    logo: absoluteUrl(BRAND_LOGO_PATH),
+  };
+
   return (
     <html lang={locale}>
+      <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
+        />
+      </head>
       <body className="min-h-screen bg-slate-50 text-slate-900 antialiased">
         <Providers initialLocale={locale}>
           <VisitorTracker />
