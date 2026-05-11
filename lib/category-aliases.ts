@@ -1,6 +1,6 @@
 export const LEGACY_CATEGORY_ALIAS_FALLBACK: Record<string, string[]> = {
   'fashion-women-perfume': ['perfume', 'perfum', 'fragrance', 'cologne', 'body mist', 'scent'],
-  electronics: ['electronic', 'electr', 'tech', 'gadget'],
+  electronics: ['electronic', 'electr', 'tech', 'gadgets'],
   'fashion-kids-clothing': ['clothing', 'cloth', 'clothes', 'apparel'],
   'sports-clothing': ['clothing', 'cloth', 'clothes', 'apparel'],
 };
