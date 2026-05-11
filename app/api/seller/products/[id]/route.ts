@@ -100,15 +100,19 @@ export async function POST(
     if (!session?.user || session.user.role !== 'SELLER') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+    const sellerId = session.user.id;
+    if (!sellerId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     // Block restricted sellers from editing or deleting listings
-    const dbUser = await prisma.user.findUnique({ where: { id: session.user.id } });
+    const dbUser = await prisma.user.findUnique({ where: { id: sellerId } });
     if (dbUser?.sellerStatus === 'SUSPENDED' || dbUser?.sellerStatus === 'BANNED' || dbUser?.sellerStatus === 'RESTRICTED') {
       return NextResponse.json({ error: 'Your seller account is currently restricted.' }, { status: 403 });
     }
 
     const verification = await prisma.sellerVerification.findUnique({
-      where: { sellerId: session.user.id },
+      where: { sellerId },
       select: { status: true },
     });
     if (!isSellerVerificationApproved(verification?.status)) {
@@ -119,7 +123,7 @@ export async function POST(
     }
 
     const { id } = await params;
-    const { product: existing, forbidden } = await getOwnedSellerProduct(id, session.user.id);
+    const { product: existing, forbidden } = await getOwnedSellerProduct(id, sellerId);
     if (forbidden) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -149,7 +153,7 @@ export async function POST(
     const videoUrl = resolveVideoUrl(data.videoUrl, existing);
 
     const riskAssessment = await getListingRiskAssessmentForCandidate(
-      buildListingRiskCandidate(session.user.id, existing, data, resolvedImages),
+      buildListingRiskCandidate(sellerId, existing, data, resolvedImages),
       id,
     );
 
@@ -201,15 +205,19 @@ export async function PATCH(
     if (!session?.user || session.user.role !== 'SELLER') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+    const sellerId = session.user.id;
+    if (!sellerId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     // Block restricted sellers from editing or deleting listings
-    const dbUser = await prisma.user.findUnique({ where: { id: session.user.id } });
+    const dbUser = await prisma.user.findUnique({ where: { id: sellerId } });
     if (dbUser?.sellerStatus === 'SUSPENDED' || dbUser?.sellerStatus === 'BANNED' || dbUser?.sellerStatus === 'RESTRICTED') {
       return NextResponse.json({ error: 'Your seller account is currently restricted.' }, { status: 403 });
     }
 
     const verification = await prisma.sellerVerification.findUnique({
-      where: { sellerId: session.user.id },
+      where: { sellerId },
       select: { status: true },
     });
     if (!isSellerVerificationApproved(verification?.status)) {
@@ -220,7 +228,7 @@ export async function PATCH(
     }
 
     const { id } = await params;
-    const { product: existing, forbidden } = await getOwnedSellerProduct(id, session.user.id);
+    const { product: existing, forbidden } = await getOwnedSellerProduct(id, sellerId);
     if (forbidden) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -245,7 +253,7 @@ export async function PATCH(
     const videoUrl = resolveVideoUrl(data.videoUrl, existing);
 
     const riskAssessment = await getListingRiskAssessmentForCandidate(
-      buildListingRiskCandidate(session.user.id, existing, data, resolvedImages),
+      buildListingRiskCandidate(sellerId, existing, data, resolvedImages),
       id,
     );
 
@@ -304,9 +312,13 @@ export async function DELETE(
     if (!session?.user || session.user.role !== 'SELLER') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+    const sellerId = session.user.id;
+    if (!sellerId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     const { id } = await params;
-    const { product: existing, forbidden } = await getOwnedSellerProduct(id, session.user.id);
+    const { product: existing, forbidden } = await getOwnedSellerProduct(id, sellerId);
     if (forbidden) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }

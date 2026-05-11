@@ -18,14 +18,18 @@ export async function PATCH(
     if (!session?.user || session.user.role !== 'SELLER') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+    const sellerId = session.user.id;
+    if (!sellerId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
-    const dbUser = await prisma.user.findUnique({ where: { id: session.user.id } });
+    const dbUser = await prisma.user.findUnique({ where: { id: sellerId } });
     if (dbUser?.sellerStatus === 'SUSPENDED' || dbUser?.sellerStatus === 'BANNED' || dbUser?.sellerStatus === 'RESTRICTED') {
       return NextResponse.json({ error: 'Your seller account is currently restricted.' }, { status: 403 });
     }
 
     const verification = await prisma.sellerVerification.findUnique({
-      where: { sellerId: session.user.id },
+      where: { sellerId },
       select: { status: true },
     });
     if (!isSellerVerificationApproved(verification?.status)) {
@@ -37,7 +41,7 @@ export async function PATCH(
 
     const { id } = await params;
     const existing = await prisma.product.findUnique({ where: { id } });
-    if (existing && existing.sellerId !== session.user.id) {
+    if (existing && existing.sellerId !== sellerId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     if (!existing) {

@@ -13,10 +13,14 @@ export async function POST(req: Request) {
     if (!session?.user || session.user.role !== 'SELLER') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+    const sellerId = session.user.id;
+    if (!sellerId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     // Block restricted sellers
     const dbUser = await prisma.user.findUnique({
-      where: { id: session.user.id },
+      where: { id: sellerId },
       select: {
         id: true,
         sellerStatus: true,
@@ -45,7 +49,7 @@ export async function POST(req: Request) {
 
     // Verify the product exists, is owned by this seller, and is APPROVED
     const product = await prisma.product.findUnique({ where: { id: productId } });
-    if (!product || product.sellerId !== session.user.id) {
+    if (!product || product.sellerId !== sellerId) {
       return NextResponse.json({ error: 'Product not found.' }, { status: 404 });
     }
     if (product.status !== 'APPROVED') {
@@ -70,7 +74,7 @@ export async function POST(req: Request) {
     const promotion = await prisma.promotion.create({
       data: {
         productId,
-        sellerId: session.user.id,
+        sellerId,
         status: 'PENDING_PAYMENT',
         durationDays,
         priceCents,
@@ -91,7 +95,7 @@ export async function POST(req: Request) {
         });
         if (hasCreditPromotion) {
           await tx.user.update({
-            where: { id: session.user.id },
+            where: { id: sellerId },
             data: { promotionCredits: { decrement: 1 } },
           });
         }
@@ -121,7 +125,7 @@ export async function POST(req: Request) {
       metadata: {
         type: 'promotion',
         promotionId: promotion.id,
-        sellerId: session.user.id,
+        sellerId,
         productId,
         durationDays: String(durationDays),
       },

@@ -88,9 +88,13 @@ export async function GET(req: Request) {
   if (!session?.user || session.user.role !== 'SELLER') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
+  const sellerId = session.user.id;
+  if (!sellerId) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
 
   const products = await prisma.product.findMany({
-    where: { sellerId: session.user.id },
+    where: { sellerId },
     orderBy: { createdAt: 'desc' },
   });
 
@@ -103,15 +107,19 @@ export async function POST(req: Request) {
     if (!session?.user || session.user.role !== 'SELLER') {
       return jsonError('Forbidden', 403);
     }
+    const sellerId = session.user.id;
+    if (!sellerId) {
+      return jsonError('Forbidden', 403);
+    }
 
     // Block restricted sellers from creating new listings
-    const dbUser = await prisma.user.findUnique({ where: { id: session.user.id } });
+    const dbUser = await prisma.user.findUnique({ where: { id: sellerId } });
     if (dbUser?.sellerStatus === 'SUSPENDED' || dbUser?.sellerStatus === 'BANNED' || dbUser?.sellerStatus === 'RESTRICTED') {
       return jsonError('Your seller account is currently restricted.', 403);
     }
 
     const verification = await prisma.sellerVerification.findUnique({
-      where: { sellerId: session.user.id },
+      where: { sellerId },
       select: { status: true },
     });
     if (!isSellerVerificationApproved(verification?.status)) {
@@ -286,12 +294,12 @@ export async function POST(req: Request) {
       inventoryQty,
       imageUrls: resolvedImages,
       videoUrl,
-      sellerId: session.user.id ? `${session.user.id.slice(0, 6)}…` : null,
+      sellerId: `${sellerId.slice(0, 6)}…`,
     };
     console.info('[seller/products POST] validated payload', loggingPayload);
 
     const riskAssessment = await getListingRiskAssessmentForCandidate({
-      sellerId: session.user.id,
+      sellerId,
       title,
       description: data.description || '',
       priceCents: cents(price),
@@ -313,7 +321,7 @@ export async function POST(req: Request) {
           images: resolvedImages,
           mainImage,
           videoUrl,
-          sellerId: session.user.id,
+          sellerId,
           shippingCents: resolvedShippingMode === 'FREE' ? 0 : cents(shippingRaw),
           shippingMode: resolvedShippingMode,
           inventory: inventoryQty,

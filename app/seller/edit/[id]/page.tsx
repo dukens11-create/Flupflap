@@ -18,15 +18,17 @@ export default async function SellerEditPage({
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect('/login');
   if (session.user.role !== 'SELLER') redirect('/');
+  const sellerId = session.user.id;
+  if (!sellerId) redirect('/login');
 
   // Block restricted sellers from editing listings
-  const dbUser = await prisma.user.findUnique({ where: { id: session.user.id } });
+  const dbUser = await prisma.user.findUnique({ where: { id: sellerId } });
   if (dbUser?.sellerStatus === 'SUSPENDED' || dbUser?.sellerStatus === 'BANNED' || dbUser?.sellerStatus === 'RESTRICTED') {
     redirect('/seller');
   }
 
   const verification = await prisma.sellerVerification.findUnique({
-    where: { sellerId: session.user.id },
+    where: { sellerId },
     select: { status: true },
   });
   if (!isSellerVerificationApproved(verification?.status)) {
@@ -43,7 +45,7 @@ export default async function SellerEditPage({
   });
 
   if (!product) notFound();
-  if (product.sellerId !== session.user.id) forbidden();
+  if (product.sellerId !== sellerId) forbidden();
 
   const priceDollars = (product.priceCents / 100).toFixed(2);
   const shippingDollars = (product.shippingCents / 100).toFixed(2);

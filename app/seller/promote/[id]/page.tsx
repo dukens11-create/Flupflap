@@ -20,10 +20,12 @@ export default async function SellerPromotePage({
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect('/login');
   if (session.user.role !== 'SELLER') redirect('/');
+  const sellerId = session.user.id;
+  if (!sellerId) redirect('/login');
 
   // Block restricted sellers
   const dbUser = await prisma.user.findUnique({
-    where: { id: session.user.id },
+    where: { id: sellerId },
     select: {
       sellerStatus: true,
       hasFreePromotion: true,
@@ -44,7 +46,7 @@ export default async function SellerPromotePage({
   const hasPromotionCredits = !freePromotionEligible && (dbUser?.promotionCredits ?? 0) > 0;
   const product = await prisma.product.findUnique({ where: { id } });
 
-  if (!product || product.sellerId !== session.user.id) {
+  if (!product || product.sellerId !== sellerId) {
     redirect('/seller');
   }
 
