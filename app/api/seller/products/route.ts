@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { cents } from '@/lib/money';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import { isSubscriptionActive } from '@/lib/subscription';
 import { syncSellerSubscriptionFromStripe } from '@/lib/subscription-sync';
 import { isSellerVerificationApproved } from '@/lib/seller-verification';
@@ -18,14 +19,23 @@ const schema = z.object({
   description: z.string().trim().optional(),
   price: z.string().trim().optional(),
   shipping: z.string().trim().optional(),
+  shippingPrice: z.string().trim().optional(),
   category: z.string().trim().optional(),
+  subcategory: z.string().trim().optional(),
+  refineCategory: z.string().trim().optional(),
   condition: z.string().trim().optional(),
   imageUrl: z.string().url().optional(),
   images: z.array(z.string().url()).optional(),
+  imageUrls: z.array(z.string().url()).optional(),
   video: z.string().url().optional().or(z.literal('')),
   videoUrl: z.string().url().optional().or(z.literal('')),
   inventory: z.string().trim().optional(),
   inventoryQty: z.string().trim().optional(),
+  brand: z.string().trim().optional(),
+  sizeMl: z.string().trim().optional(),
+  fragranceType: z.string().trim().optional(),
+  gender: z.string().trim().optional(),
+  sellerId: z.string().trim().optional(),
   pickupAvailable: z.string().optional(), // "true" when checkbox is checked
   pickupCity: z.string().trim().max(100).optional(),
   pickupState: z.string().trim().max(2).optional(),
@@ -42,6 +52,25 @@ const schema = z.object({
 
 function jsonError(message: string, status: number) {
   return NextResponse.json({ success: false, message }, { status });
+}
+
+function getErrorMessage(err: unknown): string {
+  if (err instanceof Error && err.message) {
+    return err.message;
+  }
+  return 'Unknown error.';
+}
+
+function toLogSafeObject(entries: IterableIterator<[string, FormDataEntryValue]>) {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of entries) {
+    if (value instanceof File) {
+      out[key] = { fileName: value.name, size: value.size, type: value.type };
+      continue;
+    }
+    out[key] = value;
+  }
+  return out;
 }
 
 export async function GET(req: Request) {
@@ -102,18 +131,27 @@ export async function POST(req: Request) {
     }
 
     const form = await req.formData();
+    const incomingBody = toLogSafeObject(form.entries());
+    console.info('[seller/products POST] incoming request body', incomingBody);
     const rawEntries = Object.fromEntries(form.entries());
     // Collect multiple "images" values from form (MediaUpload uses multiple hidden inputs)
     const imagesRaw = form.getAll('images').map(String).filter(Boolean);
-    const parsed = schema.safeParse({ ...rawEntries, images: imagesRaw.length ? imagesRaw : undefined });
+    const imageUrlsRaw = form.getAll('imageUrls').map(String).filter(Boolean);
+    const parsed = schema.safeParse({
+      ...rawEntries,
+      images: imagesRaw.length ? imagesRaw : undefined,
+      imageUrls: imageUrlsRaw.length ? imageUrlsRaw : undefined,
+    });
     if (!parsed.success) {
       return jsonError(parsed.error.issues[0]?.message ?? 'Invalid input.', 400);
     }
     const data = parsed.data;
 
-    // Resolve images array: prefer multi-images, fall back to legacy imageUrl
+    // Resolve images array: prefer multi-images/imageUrls, fall back to legacy imageUrl
     const resolvedImages: string[] = imagesRaw.length
       ? imagesRaw
+      : imageUrlsRaw.length
+        ? imageUrlsRaw
       : data.imageUrl
         ? [data.imageUrl]
         : [];
@@ -144,7 +182,33 @@ export async function POST(req: Request) {
       return jsonError('Please select a condition.', 400);
     }
 
-    let category = data.category ?? '';
+    const shippingRaw = data.shippingPrice || data.shipping || '0';
+    const shippingValue = Number(shippingRaw);
+    if (Number.isNaN(shippingValue) || shippingValue < 0) {
+      return jsonError('Please enter a valid shipping price.', 400);
+    }
+
+    const attributes = parseJsonOrNull(data.productAttributes);
+    const normalizedAttributes: Record<string, unknown> =
+      attributes && typeof attributes === 'object' && !Array.isArray(attributes)
+        ? { ...(attributes as Record<string, unknown>) }
+        : {};
+    if (data.brand) normalizedAttributes.brand = data.brand;
+    if (data.sizeMl) {
+      normalizedAttributes.size_ml = data.sizeMl;
+    }
+    if (data.fragranceType) {
+      normalizedAttributes.fragrance_type = data.fragranceType;
+    }
+    if (data.gender) normalizedAttributes.gender = data.gender;
+    const productAttributesValue: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput | undefined =
+      Object.keys(normalizedAttributes).length > 0
+        ? (normalizedAttributes as Prisma.InputJsonValue)
+        : attributes === null || attributes === undefined
+          ? undefined
+          : (attributes as Prisma.InputJsonValue);
+
+    let category = data.category ?? data.refineCategory ?? data.subcategory ?? '';
     if (!category && data.categoryId) {
       const categoryRecord = await prisma.category.findUnique({
         where: { id: data.categoryId },
@@ -162,6 +226,42 @@ export async function POST(req: Request) {
     const pickupCity = data.pickupCity || data.localPickupCity || null;
     const pickupState = data.pickupState || data.localPickupState || null;
     const pickupPostalCode = data.pickupPostalCode || data.localPickupPostalCode || null;
+    const categoryRef = data.categoryId
+      ? await prisma.category.findUnique({ where: { id: data.categoryId }, select: { id: true, name: true } })
+      : null;
+    const subcategoryRef = data.subcategoryId
+      ? await prisma.category.findUnique({
+          where: { id: data.subcategoryId },
+          select: { id: true, name: true, parentId: true },
+        })
+      : null;
+    const safeCategoryId = categoryRef?.id ?? null;
+    const safeSubcategoryId =
+      subcategoryRef?.id && (!safeCategoryId || subcategoryRef.parentId === safeCategoryId)
+        ? subcategoryRef.id
+        : null;
+    const subcategoryName = subcategoryRef?.name ?? data.subcategory ?? null;
+    const refineCategoryName = data.refineCategory ?? null;
+
+    const loggingPayload = {
+      title,
+      description: data.description || '',
+      price,
+      shippingPrice: shippingRaw,
+      category,
+      subcategory: subcategoryName,
+      refineCategory: refineCategoryName,
+      condition: data.condition,
+      brand: (normalizedAttributes.brand as string | undefined) ?? null,
+      sizeMl: (normalizedAttributes.size_ml as string | undefined) ?? null,
+      fragranceType: (normalizedAttributes.fragrance_type as string | undefined) ?? null,
+      gender: (normalizedAttributes.gender as string | undefined) ?? null,
+      inventoryQty,
+      imageUrls: resolvedImages,
+      videoUrl,
+      sellerId: session.user.id ? `${session.user.id.slice(0, 6)}…` : null,
+    };
+    console.info('[seller/products POST] validated payload', loggingPayload);
 
     const riskAssessment = await getListingRiskAssessmentForCandidate({
       sellerId: session.user.id,
@@ -173,30 +273,40 @@ export async function POST(req: Request) {
       imageUrl: mainImage,
     });
 
-    const product = await prisma.product.create({
-      data: {
-        title,
-        description: data.description || '',
-        priceCents: cents(price),
-        condition: data.condition,
-        category,
-        imageUrl: mainImage,
-        images: resolvedImages,
-        mainImage,
-        videoUrl,
-        sellerId: session.user.id,
-        shippingCents: cents(data.shipping || '0'),
-        inventory: inventoryQty,
-        status: 'PENDING',
-        pickupAvailable,
-        pickupCity,
-        pickupState,
-        pickupPostalCode,
-        categoryId: data.categoryId || null,
-        subcategoryId: data.subcategoryId || null,
-        productAttributes: parseJsonOrNull(data.productAttributes),
-      },
-    });
+    let product;
+    try {
+      product = await prisma.product.create({
+        data: {
+          title,
+          description: data.description || '',
+          priceCents: cents(price),
+          condition: data.condition,
+          category,
+          imageUrl: mainImage,
+          images: resolvedImages,
+          mainImage,
+          videoUrl,
+          sellerId: session.user.id,
+          shippingCents: cents(shippingRaw),
+          inventory: inventoryQty,
+          status: 'PENDING',
+          pickupAvailable,
+          pickupCity,
+          pickupState,
+          pickupPostalCode,
+          categoryId: safeCategoryId,
+          subcategoryId: safeSubcategoryId,
+          productAttributes: productAttributesValue,
+        },
+      });
+    } catch (dbError) {
+      const dbMessage = getErrorMessage(dbError);
+      console.error('[seller/products POST] database create error', dbMessage);
+      if (dbError instanceof Error && dbError.stack) {
+        console.error('[seller/products POST] stack trace', dbError.stack);
+      }
+      return jsonError(`Database validation failed: ${dbMessage}`, 500);
+    }
 
     const fraudQuery = shouldRecommendFraudReview(riskAssessment) ? '&fraud=review' : '';
     return NextResponse.json({
@@ -205,7 +315,11 @@ export async function POST(req: Request) {
       redirectTo: `/seller/dashboard?created=${product.id}${fraudQuery}`,
     });
   } catch (err) {
-    console.error('[seller/products POST]', err);
-    return jsonError('Failed to create listing.', 500);
+    const message = getErrorMessage(err);
+    console.error('[seller/products POST] request handling error', message);
+    if (err instanceof Error && err.stack) {
+      console.error('[seller/products POST] stack trace', err.stack);
+    }
+    return jsonError(message, 500);
   }
 }
