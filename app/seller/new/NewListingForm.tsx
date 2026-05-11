@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import CategoryPicker from '@/components/CategoryPicker';
 import ConditionPicker from '@/components/ConditionPicker';
-import MediaUpload from '@/components/MediaUpload';
+import MediaUpload, { type MediaUploadState } from '@/components/MediaUpload';
 
 type FormErrors = {
   title?: string;
@@ -20,6 +20,14 @@ export default function NewListingForm() {
   const router = useRouter();
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitting, setSubmitting] = useState(false);
+  const [mediaState, setMediaState] = useState<MediaUploadState>({
+    imageCount: 0,
+    uploadedImageCount: 0,
+    isUploading: false,
+    hasErrors: false,
+    canSubmit: false,
+    message: 'Please upload at least one image.',
+  });
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -56,6 +64,8 @@ export default function NewListingForm() {
       nextErrors.images = 'Please upload at least 1 product image.';
     } else if (resolvedImages.length > 6) {
       nextErrors.images = 'You can upload up to 6 product images.';
+    } else if (mediaState.isUploading || mediaState.hasErrors || !mediaState.canSubmit) {
+      nextErrors.images = mediaState.message || 'Please wait for media uploads to finish before submitting.';
     }
 
     if (Object.keys(nextErrors).length > 0) {
@@ -117,7 +127,21 @@ export default function NewListingForm() {
           {errors.condition && <p className="mt-1 text-xs text-red-600">{errors.condition}</p>}
         </div>
       </div>
-      <MediaUpload required />
+      <MediaUpload
+        required
+        onStateChange={(nextState) => {
+          setMediaState(nextState);
+          setErrors((current) => {
+            if (!current.images) return current;
+            if (nextState.isUploading || nextState.hasErrors || (nextState.imageCount === 0 && !nextState.canSubmit)) {
+              return { ...current, images: nextState.message || current.images };
+            }
+
+            const { images: _images, ...rest } = current;
+            return rest;
+          });
+        }}
+      />
       {errors.images && <p className="mt-1 text-xs text-red-600">{errors.images}</p>}
       <div>
         <label className="label">Inventory (qty)</label>
@@ -154,7 +178,11 @@ export default function NewListingForm() {
         <div className="card p-3 bg-red-50 border-red-200 text-red-700 text-sm">{errors.submit}</div>
       )}
 
-      <button className="btn-primary w-full disabled:opacity-60 disabled:cursor-not-allowed" type="submit" disabled={submitting}>
+      <button
+        className="btn-primary w-full disabled:opacity-60 disabled:cursor-not-allowed"
+        type="submit"
+        disabled={submitting || mediaState.isUploading}
+      >
         {submitting ? 'Submitting…' : 'Submit for review'}
       </button>
       <p className="text-xs text-slate-500 text-center">Your listing will be reviewed by an admin before it goes live.</p>
