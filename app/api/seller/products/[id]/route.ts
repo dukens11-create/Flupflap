@@ -11,6 +11,13 @@ import {
 } from '@/lib/fraud-detection';
 import { parseJsonOrNull } from '@/lib/parse-json';
 import { SHIPPING_MODES } from '@/app/api/seller/products/route';
+import {
+  convertWeightToOunces,
+  getShippingClass,
+  normalizeWeightUnit,
+  setShippingClass,
+  SHIPPING_PACKAGE_DETAILS_REQUIRED_MESSAGE,
+} from '@/lib/product-package';
 
 const updateSchema = z.object({
   title: z.string().min(3).optional(),
@@ -32,11 +39,17 @@ const updateSchema = z.object({
   pickupState: z.string().max(2).optional(),
   pickupPostalCode: z.string().max(20).optional(),
   // Package dimensions
+  weight: z.string().optional(),
   weightOz: z.string().optional(),
+  weightUnit: z.string().optional(),
+  length: z.string().optional(),
   lengthIn: z.string().optional(),
+  width: z.string().optional(),
   widthIn: z.string().optional(),
+  height: z.string().optional(),
   heightIn: z.string().optional(),
   packageType: z.string().optional(),
+  shippingClass: z.string().optional(),
   // Category system
   categoryId: z.string().optional(),
   subcategoryId: z.string().optional(),
@@ -82,6 +95,36 @@ function toUrlArray(
   if (Array.isArray(value)) return value.filter(Boolean);
   if (typeof value === 'string' && value) return [value];
   return fallback;
+}
+
+function parsePositiveNumber(value?: string | null) {
+  const trimmed = value?.trim() ?? '';
+  if (!trimmed) return null;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function resolveSubmittedPackageDetails(data: ProductUpdateInput) {
+  const hasLegacyWeightInput = !data.weight?.trim() && !!data.weightOz?.trim();
+  const weightUnit = hasLegacyWeightInput ? 'oz' : normalizeWeightUnit(data.weightUnit);
+  const weight = parsePositiveNumber(hasLegacyWeightInput ? data.weightOz : (data.weight ?? data.weightOz));
+  const lengthIn = parsePositiveNumber(data.length ?? data.lengthIn);
+  const widthIn = parsePositiveNumber(data.width ?? data.widthIn);
+  const heightIn = parsePositiveNumber(data.height ?? data.heightIn);
+
+  if (!weight || !lengthIn || !widthIn || !heightIn) {
+    return null;
+  }
+
+  return {
+    weightUnit,
+    weightOz: convertWeightToOunces(weight, weightUnit),
+    lengthIn,
+    widthIn,
+    heightIn,
+    packageType: data.packageType?.trim() || null,
+    shippingClass: data.shippingClass?.trim() || null,
+  };
 }
 
 function resolveOriginalImagesForProduct(
@@ -190,6 +233,10 @@ export async function POST(
       enhancedImages: enhancedImagesRaw.length ? enhancedImagesRaw : undefined,
       imageThumbnails: imageThumbnailsRaw.length ? imageThumbnailsRaw : undefined,
     });
+    const packageDetails = resolveSubmittedPackageDetails(data);
+    if (!packageDetails) {
+      return NextResponse.json({ error: SHIPPING_PACKAGE_DETAILS_REQUIRED_MESSAGE }, { status: 400 });
+    }
 
     const submittedImages = imagesRaw.length ? imagesRaw : data.imageUrl ? [data.imageUrl] : null;
     const resolvedImages = resolveImages(submittedImages, existing);
@@ -211,6 +258,9 @@ export async function POST(
       buildListingRiskCandidate(sellerId, existing, data, resolvedImages),
       id,
     );
+    const nextProductAttributes =
+      setShippingClass(parseJsonOrNull(data.productAttributes), packageDetails.shippingClass)
+      ?? setShippingClass(existing.productAttributes, packageDetails.shippingClass);
 
     const updated = await prisma.product.update({
       where: { id },
@@ -225,15 +275,16 @@ export async function POST(
         pickupState: data.pickupState || null,
         pickupPostalCode: data.pickupPostalCode || null,
         // Package dimensions
-        ...(data.weightOz !== undefined && { weightOz: data.weightOz ? Number(data.weightOz) : null }),
-        ...(data.lengthIn !== undefined && { lengthIn: data.lengthIn ? Number(data.lengthIn) : null }),
-        ...(data.widthIn !== undefined && { widthIn: data.widthIn ? Number(data.widthIn) : null }),
-        ...(data.heightIn !== undefined && { heightIn: data.heightIn ? Number(data.heightIn) : null }),
-        ...(data.packageType !== undefined && { packageType: data.packageType || null }),
+        weightOz: packageDetails.weightOz,
+        weightUnit: packageDetails.weightUnit,
+        lengthIn: packageDetails.lengthIn,
+        widthIn: packageDetails.widthIn,
+        heightIn: packageDetails.heightIn,
+        packageType: packageDetails.packageType,
         // Category system fields
         categoryId: data.categoryId || null,
         subcategoryId: data.subcategoryId || null,
-        productAttributes: parseJsonOrNull(data.productAttributes),
+        productAttributes: nextProductAttributes as any,
         imageUrl: mainImage,
         images: resolvedImages,
         mainImage,
@@ -300,6 +351,10 @@ export async function PATCH(
 
     const body: unknown = await req.json();
     const data = updateSchema.parse(body);
+    const packageDetails = resolveSubmittedPackageDetails(data);
+    if (!packageDetails) {
+      return NextResponse.json({ error: SHIPPING_PACKAGE_DETAILS_REQUIRED_MESSAGE }, { status: 400 });
+    }
 
     // Resolve images for PATCH (JSON body): prefer explicit images list, then legacy imageUrl
     let imagesInput: string[] | null = null;
@@ -328,6 +383,13 @@ export async function PATCH(
       buildListingRiskCandidate(sellerId, existing, data, resolvedImages),
       id,
     );
+    const parsedAttributes = data.productAttributes === undefined
+      ? existing.productAttributes
+      : parseJsonOrNull(data.productAttributes);
+    const nextProductAttributes = setShippingClass(
+      parsedAttributes,
+      data.shippingClass !== undefined ? packageDetails.shippingClass : getShippingClass(parsedAttributes),
+    );
 
     const updated = await prisma.product.update({
       where: { id },
@@ -352,15 +414,16 @@ export async function PATCH(
         ...(data.pickupState !== undefined && { pickupState: data.pickupState || null }),
         ...(data.pickupPostalCode !== undefined && { pickupPostalCode: data.pickupPostalCode || null }),
         // Package dimensions
-        ...(data.weightOz !== undefined && { weightOz: data.weightOz ? Number(data.weightOz) : null }),
-        ...(data.lengthIn !== undefined && { lengthIn: data.lengthIn ? Number(data.lengthIn) : null }),
-        ...(data.widthIn !== undefined && { widthIn: data.widthIn ? Number(data.widthIn) : null }),
-        ...(data.heightIn !== undefined && { heightIn: data.heightIn ? Number(data.heightIn) : null }),
-        ...(data.packageType !== undefined && { packageType: data.packageType || null }),
+        weightOz: packageDetails.weightOz,
+        weightUnit: packageDetails.weightUnit,
+        lengthIn: packageDetails.lengthIn,
+        widthIn: packageDetails.widthIn,
+        heightIn: packageDetails.heightIn,
+        packageType: packageDetails.packageType,
         // Category system fields
         categoryId: data.categoryId || null,
         subcategoryId: data.subcategoryId || null,
-        productAttributes: parseJsonOrNull(data.productAttributes),
+        productAttributes: nextProductAttributes as any,
         status: 'PENDING',
       },
     });

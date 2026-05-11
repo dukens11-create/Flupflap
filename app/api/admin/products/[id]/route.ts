@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
+import {
+  hasStoredPackageDetails,
+  SHIPPING_PACKAGE_DETAILS_REQUIRED_MESSAGE,
+} from '@/lib/product-package';
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
@@ -25,6 +29,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const product = await prisma.product.findUnique({ where: { id } });
   if (!product) return NextResponse.json({ error: 'Not found.' }, { status: 404 });
+  if (action === 'approve' && !hasStoredPackageDetails(product)) {
+    return NextResponse.json({ error: SHIPPING_PACKAGE_DETAILS_REQUIRED_MESSAGE }, { status: 400 });
+  }
 
   await prisma.product.update({
     where: { id },
@@ -44,6 +51,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const { status } = await req.json() as { status: 'APPROVED' | 'REJECTED' | 'HIDDEN' };
   if (!['APPROVED', 'REJECTED', 'HIDDEN'].includes(status)) {
     return NextResponse.json({ error: 'Invalid status.' }, { status: 400 });
+  }
+
+  const existing = await prisma.product.findUnique({ where: { id } });
+  if (!existing) return NextResponse.json({ error: 'Not found.' }, { status: 404 });
+  if (status === 'APPROVED' && !hasStoredPackageDetails(existing)) {
+    return NextResponse.json({ error: SHIPPING_PACKAGE_DETAILS_REQUIRED_MESSAGE }, { status: 400 });
   }
 
   const product = await prisma.product.update({

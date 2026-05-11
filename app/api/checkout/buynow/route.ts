@@ -6,6 +6,7 @@ import { appUrl, classifyStripeError, getCurrentStripeMode, stripe } from '@/lib
 import { buildCheckoutCommissionItems, getMarketplaceSettings } from '@/lib/commission';
 import { checkoutErrorResponse } from '@/lib/checkout-errors';
 import { isSellerVerificationApproved } from '@/lib/seller-verification';
+import { hasStoredPackageDetails } from '@/lib/product-package';
 
 function isCalculatedShippingProduct(product: { shippingMode?: string | null; shippingCents: number }) {
   return product.shippingMode === 'CALCULATED' || (!product.shippingMode && product.shippingCents === 0);
@@ -51,6 +52,12 @@ export async function POST(req: Request) {
     // Validate pickup is actually available if requested
     const actualPickup = isPickup && product.pickupAvailable;
     if (!actualPickup && isCalculatedShippingProduct(product)) {
+      if (!hasStoredPackageDetails(product)) {
+        return NextResponse.json(
+          { error: `Shipping unavailable. The seller must add shipping package details for "${product.title}".` },
+          { status: 400 },
+        );
+      }
       return NextResponse.json(
         { error: 'Shipping rate unavailable. Please check address or package details.' },
         { status: 400 },

@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { createShipmentRates } from '@/lib/shipping';
+import { getMissingPackageProductTitles } from '@/lib/product-package';
 
 type BuyerAddress = {
   name?: string;
@@ -94,6 +95,7 @@ export async function POST(req: Request) {
         id: true,
         title: true,
         weightOz: true,
+        weightUnit: true,
         lengthIn: true,
         widthIn: true,
         heightIn: true,
@@ -152,12 +154,10 @@ export async function POST(req: Request) {
         continue;
       }
 
-      const missingPackageField = sellerProducts.some((p) => (
-        !p.weightOz || !p.lengthIn || !p.widthIn || !p.heightIn
-      ));
-      if (missingPackageField) {
+      const missingPackageTitles = getMissingPackageProductTitles(sellerProducts);
+      if (missingPackageTitles.length > 0) {
         errors.push(
-          `Shipping rate unavailable. Please check address or package details. Some products from "${seller.shopName || 'this seller'}" are missing package weight or dimensions.`,
+          `Shipping unavailable. Seller "${seller.shopName || 'this seller'}" must add shipping package details for: ${missingPackageTitles.join(', ')}.`,
         );
         continue;
       }
@@ -201,6 +201,7 @@ export async function POST(req: Request) {
           },
           fromAddress,
           weightOz: totalWeightOz,
+          weightUnit: totalWeightOz >= 16 ? 'lb' : 'oz',
           lengthIn: maxLength,
           widthIn: maxWidth,
           heightIn: maxHeight,
@@ -255,7 +256,7 @@ export async function POST(req: Request) {
     );
 
     const warnings = [
-      ...(errors.length ? ['Shipping rate unavailable. Please check address or package details.'] : []),
+      ...errors,
       ...uncoveredWarnings,
     ];
 

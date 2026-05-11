@@ -270,6 +270,7 @@ model Product {
   videoUrl          String?
   // Package dimensions for live shipping rate calculation
   weightOz          Float?
+  weightUnit        String?         @default("lb")
   lengthIn          Float?
   widthIn           Float?
   heightIn          Float?

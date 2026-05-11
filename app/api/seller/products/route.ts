@@ -13,6 +13,12 @@ import {
   shouldRecommendFraudReview,
 } from '@/lib/fraud-detection';
 import { parseJsonOrNull } from '@/lib/parse-json';
+import {
+  convertWeightToOunces,
+  normalizeWeightUnit,
+  setShippingClass,
+  SHIPPING_PACKAGE_DETAILS_REQUIRED_MESSAGE,
+} from '@/lib/product-package';
 
 export const SHIPPING_MODES = ['FLAT', 'FREE', 'CALCULATED'] as const;
 type ShippingMode = typeof SHIPPING_MODES[number];
@@ -52,11 +58,17 @@ const schema = z.object({
   localPickupState: z.string().trim().max(2).optional(),
   localPickupPostalCode: z.string().trim().max(20).optional(),
   // Package dimensions for live shipping rate calculation
+  weight: z.string().trim().optional(),
   weightOz: z.string().trim().optional(),
+  weightUnit: z.string().trim().optional(),
+  length: z.string().trim().optional(),
   lengthIn: z.string().trim().optional(),
+  width: z.string().trim().optional(),
   widthIn: z.string().trim().optional(),
+  height: z.string().trim().optional(),
   heightIn: z.string().trim().optional(),
   packageType: z.string().trim().optional(),
+  shippingClass: z.string().trim().optional(),
   // Category system
   categoryId: z.string().trim().optional(),
   subcategoryId: z.string().trim().optional(),
@@ -73,6 +85,36 @@ function getErrorMessage(err: unknown): string {
     return err.message;
   }
   return 'Unknown error.';
+}
+
+function parsePositiveNumber(value?: string | null) {
+  const trimmed = value?.trim() ?? '';
+  if (!trimmed) return null;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function resolveSubmittedPackageDetails(data: z.infer<typeof schema>) {
+  const hasLegacyWeightInput = !data.weight?.trim() && !!data.weightOz?.trim();
+  const weightUnit = hasLegacyWeightInput ? 'oz' : normalizeWeightUnit(data.weightUnit);
+  const weight = parsePositiveNumber(hasLegacyWeightInput ? data.weightOz : (data.weight ?? data.weightOz));
+  const lengthIn = parsePositiveNumber(data.length ?? data.lengthIn);
+  const widthIn = parsePositiveNumber(data.width ?? data.widthIn);
+  const heightIn = parsePositiveNumber(data.height ?? data.heightIn);
+
+  if (!weight || !lengthIn || !widthIn || !heightIn) {
+    return null;
+  }
+
+  return {
+    weightUnit,
+    weightOz: convertWeightToOunces(weight, weightUnit),
+    lengthIn,
+    widthIn,
+    heightIn,
+    packageType: data.packageType?.trim() || null,
+    shippingClass: data.shippingClass?.trim() || null,
+  };
 }
 
 function toLogSafeObject(entries: IterableIterator<[string, FormDataEntryValue]>) {
@@ -226,19 +268,14 @@ export async function POST(req: Request) {
       return 'CALCULATED';
     })();
 
-    // Parse package dimensions (optional; not required to create a listing)
-    const weightOz = data.weightOz ? Number(data.weightOz) : null;
-    const lengthIn = data.lengthIn ? Number(data.lengthIn) : null;
-    const widthIn = data.widthIn ? Number(data.widthIn) : null;
-    const heightIn = data.heightIn ? Number(data.heightIn) : null;
-    const packageType = data.packageType?.trim() || null;
+    const packageDetails = resolveSubmittedPackageDetails(data);
+    if (!packageDetails) {
+      return jsonError(SHIPPING_PACKAGE_DETAILS_REQUIRED_MESSAGE, 400);
+    }
 
     const attributes = parseJsonOrNull(data.productAttributes);
     const mediaEnhancements = parseJsonOrNull(data.mediaEnhancements);
-    const normalizedAttributes: Record<string, unknown> =
-      attributes && typeof attributes === 'object' && !Array.isArray(attributes)
-        ? { ...(attributes as Record<string, unknown>) }
-        : {};
+    const normalizedAttributes: Record<string, unknown> = setShippingClass(attributes, packageDetails.shippingClass) ?? {};
     if (data.brand) normalizedAttributes.brand = data.brand;
     if (data.sizeMl) {
       normalizedAttributes.size_ml = data.sizeMl;
@@ -313,6 +350,7 @@ export async function POST(req: Request) {
       enhancedImages: resolvedEnhancedImages,
       imageThumbnails: resolvedImageThumbnails,
       videoUrl,
+      shippingPackage: packageDetails,
       sellerId: `${sellerId.slice(0, 6)}…`,
     };
     console.info('[seller/products POST] validated payload', loggingPayload);
@@ -355,11 +393,12 @@ export async function POST(req: Request) {
           categoryId: safeCategoryId,
           subcategoryId: safeSubcategoryId,
           productAttributes: productAttributesValue,
-          weightOz: weightOz && Number.isFinite(weightOz) && weightOz > 0 ? weightOz : null,
-          lengthIn: lengthIn && Number.isFinite(lengthIn) && lengthIn > 0 ? lengthIn : null,
-          widthIn: widthIn && Number.isFinite(widthIn) && widthIn > 0 ? widthIn : null,
-          heightIn: heightIn && Number.isFinite(heightIn) && heightIn > 0 ? heightIn : null,
-          packageType,
+          weightOz: packageDetails.weightOz,
+          weightUnit: packageDetails.weightUnit,
+          lengthIn: packageDetails.lengthIn,
+          widthIn: packageDetails.widthIn,
+          heightIn: packageDetails.heightIn,
+          packageType: packageDetails.packageType,
         },
       });
     } catch (dbError) {

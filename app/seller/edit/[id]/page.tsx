@@ -7,6 +7,12 @@ import ConditionPicker from '@/components/ConditionPicker';
 import MediaUpload from '@/components/MediaUpload';
 import type { Metadata } from 'next';
 import { isSellerVerificationApproved } from '@/lib/seller-verification';
+import {
+  formatPackageNumber,
+  getEffectivePackageDetails,
+  getShippingClass,
+  hasStoredPackageDetails,
+} from '@/lib/product-package';
 
 export const metadata: Metadata = { title: 'Edit Listing' };
 
@@ -60,6 +66,9 @@ export default async function SellerEditPage({
   // Use the most specific category slug for the condition picker seed value.
   const defaultCategorySlug =
     product.subcategoryRef?.slug ?? product.categoryRef?.slug ?? undefined;
+  const packageDetails = getEffectivePackageDetails(product);
+  const shippingClass = getShippingClass(product.productAttributes) ?? '';
+  const shippingSetupIncomplete = !hasStoredPackageDetails(product);
 
   return (
     <main className="max-w-xl mx-auto">
@@ -148,6 +157,101 @@ export default async function SellerEditPage({
             defaultValue={product.inventory}
           />
         </div>
+
+        <fieldset className={`border rounded-xl p-4 space-y-3 ${shippingSetupIncomplete ? 'border-yellow-300 bg-yellow-50/60' : 'border-slate-200'}`}>
+          <legend className="text-sm font-semibold text-slate-700 px-1">Shipping &amp; Package Details</legend>
+          <p className="text-xs text-slate-500">
+            Required for reliable Shippo rate calculation and publishing this product.
+          </p>
+          {shippingSetupIncomplete && (
+            <p className="text-xs text-yellow-800 bg-yellow-100 border border-yellow-200 rounded-lg px-3 py-2">
+              Shipping setup incomplete. Suggested defaults have been filled in so you can update and save this listing.
+            </p>
+          )}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="label">Weight</label>
+              <div className="grid grid-cols-[minmax(0,1fr)_120px] gap-3">
+                <input
+                  name="weight"
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  className="input"
+                  defaultValue={packageDetails ? formatPackageNumber(packageDetails.weight) : ''}
+                  required
+                />
+                <select name="weightUnit" className="input" defaultValue={packageDetails?.weightUnit ?? 'lb'}>
+                  <option value="lb">lb</option>
+                  <option value="oz">oz</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="label">Package type</label>
+              <select name="packageType" className="input" defaultValue={packageDetails?.packageType ?? 'PACKAGE'}>
+                <option value="PACKAGE">Package / Parcel</option>
+                <option value="LETTER">Letter</option>
+                <option value="FLAT_RATE_ENVELOPE">Flat Rate Envelope</option>
+                <option value="FLAT_RATE_BOX">Flat Rate Box</option>
+                <option value="SMALL_FLAT_RATE_BOX">Small Flat Rate Box</option>
+                <option value="MEDIUM_FLAT_RATE_BOX">Medium Flat Rate Box</option>
+                <option value="LARGE_FLAT_RATE_BOX">Large Flat Rate Box</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="label">Shipping class (optional)</label>
+            <input
+              name="shippingClass"
+              className="input"
+              placeholder="e.g. Standard parcel"
+              defaultValue={shippingClass}
+            />
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div>
+              <label className="label">Length (in)</label>
+              <input
+                name="length"
+                type="number"
+                step="0.01"
+                min="0.01"
+                className="input"
+                defaultValue={packageDetails ? formatPackageNumber(packageDetails.lengthIn) : ''}
+                required
+              />
+            </div>
+            <div>
+              <label className="label">Width (in)</label>
+              <input
+                name="width"
+                type="number"
+                step="0.01"
+                min="0.01"
+                className="input"
+                defaultValue={packageDetails ? formatPackageNumber(packageDetails.widthIn) : ''}
+                required
+              />
+            </div>
+            <div>
+              <label className="label">Height (in)</label>
+              <input
+                name="height"
+                type="number"
+                step="0.01"
+                min="0.01"
+                className="input"
+                defaultValue={packageDetails ? formatPackageNumber(packageDetails.heightIn) : ''}
+                required
+              />
+            </div>
+            <div>
+              <label className="label">Dimension unit</label>
+              <input value="in" className="input bg-slate-50 text-slate-500" readOnly aria-readonly="true" />
+            </div>
+          </div>
+        </fieldset>
 
         {/* Pickup section */}
         <fieldset className="border border-slate-200 rounded-xl p-4 space-y-3">
