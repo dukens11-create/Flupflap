@@ -6,15 +6,41 @@ const SHELL_ASSETS = [
   '/icons/icon-512x512.png',
   '/icons/icon-maskable-512x512.png',
 ];
+const OFFLINE_HTML = `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Offline | FlupFlap</title>
+    <style>
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center; font-family: system-ui, -apple-system, sans-serif; background: #f8fafc; color: #0b2341; }
+      main { text-align: center; padding: 24px; }
+      h1 { margin: 0 0 8px; }
+      p { margin: 0; color: #334155; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Offline</h1>
+      <p>FlupFlap is unavailable while offline.</p>
+    </main>
+  </body>
+</html>`;
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL_ASSETS)).then(() => self.skipWaiting()));
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    await cache.addAll(SHELL_ASSETS);
+    await self.skipWaiting();
+  })());
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)))).then(() => self.clients.claim()),
-  );
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)));
+    await self.clients.claim();
+  })());
 });
 
 self.addEventListener('fetch', (event) => {
@@ -37,7 +63,7 @@ self.addEventListener('fetch', (event) => {
           if (cachedPage) return cachedPage;
           const cachedHome = await caches.match('/');
           if (cachedHome) return cachedHome;
-          return new Response('<h1>Offline</h1><p>FlupFlap is unavailable while offline.</p>', {
+          return new Response(OFFLINE_HTML, {
             headers: { 'Content-Type': 'text/html; charset=utf-8' },
           });
         }),
@@ -58,7 +84,7 @@ self.addEventListener('fetch', (event) => {
           }
           return response;
         })
-        .catch(() => cached);
+        .catch(() => cached ?? new Response('', { status: 503, statusText: 'Network Unavailable' }));
 
       return cached || fetchPromise;
     }),

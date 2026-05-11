@@ -6,6 +6,8 @@ type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
 };
+const INSTALL_PROMPT_TIMEOUT_MS = 10000;
+const FOCUS_VISIBLE_OUTLINE_CLASSES = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ff-hover-navy)]';
 
 function isStandaloneMode() {
   if (typeof window === 'undefined') return false;
@@ -60,8 +62,12 @@ export default function PwaInstallPrompt() {
   const handleInstall = async () => {
     if (!deferredPrompt) return;
     await deferredPrompt.prompt();
-    const choice = await deferredPrompt.userChoice;
-    if (choice.outcome !== 'accepted') setDismissed(true);
+    const choice = await Promise.race([
+      deferredPrompt.userChoice,
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), INSTALL_PROMPT_TIMEOUT_MS)),
+    ]);
+    if (!choice) return;
+    if (choice.outcome === 'dismissed') setDismissed(true);
     setDeferredPrompt(null);
   };
 
@@ -73,11 +79,11 @@ export default function PwaInstallPrompt() {
       {isIosSafari ? (
         <p className="mt-2 text-xs text-slate-600">Tap Share → Add to Home Screen.</p>
       ) : (
-        <button type="button" onClick={() => void handleInstall()} className="btn-brand mt-3 w-full">
+        <button type="button" onClick={() => void handleInstall()} className={`btn-brand mt-3 w-full ${FOCUS_VISIBLE_OUTLINE_CLASSES}`}>
           Install FlupFlap App
         </button>
       )}
-      <button type="button" onClick={() => setDismissed(true)} className="mt-3 w-full text-xs font-semibold text-slate-500">
+      <button type="button" onClick={() => setDismissed(true)} className={`mt-3 w-full text-xs font-semibold text-slate-500 ${FOCUS_VISIBLE_OUTLINE_CLASSES}`}>
         Not now
       </button>
     </div>

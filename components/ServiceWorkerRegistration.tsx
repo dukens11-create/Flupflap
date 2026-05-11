@@ -14,14 +14,20 @@ export default function ServiceWorkerRegistration() {
       }
     };
 
+    const onWindowLoad = () => {
+      void registerServiceWorker();
+    };
+
     if (document.readyState === 'complete') {
       void registerServiceWorker();
       return;
     }
 
-    window.addEventListener('load', () => {
-      void registerServiceWorker();
-    }, { once: true });
+    window.addEventListener('load', onWindowLoad, { once: true });
+
+    return () => {
+      window.removeEventListener('load', onWindowLoad);
+    };
   }, []);
 
   return null;
