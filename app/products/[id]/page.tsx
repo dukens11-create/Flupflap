@@ -16,6 +16,7 @@ import ProductGallery from '@/components/ProductGallery';
 import type { Metadata } from 'next';
 import { expirePromotions } from '@/lib/promotions';
 import { getSellerResponseStats, SELLER_RESPONSE_WINDOW_HOURS } from '@/lib/messages';
+import { conditionBadgeClass } from '@/lib/condition-badge';
 
 export const dynamic = 'force-dynamic';
 
@@ -75,12 +76,17 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
         </div>
         <div className="p-6 flex flex-col gap-4 flex-1">
           <div>
-            <p className="text-xs uppercase text-slate-500 font-medium">
-              {product.condition} · {product.category}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${conditionBadgeClass(product.condition)}`}>
+                {product.condition}
+              </span>
+              {activePromotion && (
+                <span className="badge bg-yellow-400 text-yellow-900 text-xs font-bold inline-flex">Boosted</span>
+              )}
+            </div>
+            <p className="text-xs text-slate-400 font-medium uppercase tracking-wide mt-1">
+              {product.category}
             </p>
-            {activePromotion && (
-              <span className="badge bg-yellow-400 text-yellow-900 text-xs font-bold mt-2 inline-flex">Boosted</span>
-            )}
             <h1 className="text-2xl font-black mt-1">{product.title}</h1>
             <p className="text-3xl font-black text-blue-700 mt-2">{dollars(product.priceCents)}</p>
             {product.pickupAvailable ? (

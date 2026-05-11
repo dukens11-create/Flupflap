@@ -2,6 +2,7 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useTransition, useState } from 'react';
 import { useI18n } from '@/components/I18nProvider';
+import { ALL_CONDITIONS } from '@/lib/conditions';
 
 interface CategoryNode {
   id: string;
@@ -14,7 +15,7 @@ interface CategoryNode {
   children: CategoryNode[];
 }
 
-const CONDITIONS = ['New', 'Like New', 'Used', 'For Parts'];
+const CONDITIONS = ALL_CONDITIONS;
 
 export default function BrowseFilters() {
   const { t } = useI18n();
@@ -127,7 +128,7 @@ export default function BrowseFilters() {
             onChange={e => updateSearchParam('condition', e.target.value)}
           >
             <option value="">{t('filters.anyCondition')}</option>
-            {CONDITIONS.map(c => <option key={c} value={c}>{t(`filters.conditions.${c}`)}</option>)}
+            {CONDITIONS.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
         )}
         <input
@@ -159,7 +160,7 @@ export default function BrowseFilters() {
               onChange={e => updateSearchParam('condition', e.target.value)}
             >
               <option value="">{t('filters.anyCondition')}</option>
-              {CONDITIONS.map(c => <option key={c} value={c}>{t(`filters.conditions.${c}`)}</option>)}
+              {CONDITIONS.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           )}
           {/* Brand */}

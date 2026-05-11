@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -51,6 +51,19 @@ function resolveSchema(
   const node = findNodeById(categories, targetId);
   if (!node) return null;
   return Array.isArray(node.attributeSchema) ? node.attributeSchema : null;
+}
+
+/** Returns the slug of the most specific selected category. */
+function resolveLeafSlug(
+  categories: CategoryNode[],
+  mainId: string | null,
+  subId: string | null,
+  childId: string | null,
+): string {
+  const targetId = childId ?? subId ?? mainId;
+  if (!targetId) return '';
+  const node = findNodeById(categories, targetId);
+  return node?.slug ?? '';
 }
 
 /** Returns the name of the most specific selected category. */
@@ -116,6 +129,18 @@ export default function CategoryPicker({ defaultCategoryId, defaultSubcategoryId
 
   const schema = resolveSchema(categories, mainId, subId, childId);
   const leafName = resolveLeafName(categories, mainId, subId, childId);
+  const leafSlug = resolveLeafSlug(categories, mainId, subId, childId);
+
+  // Notify sibling components (e.g. ConditionPicker) about the resolved category slug.
+  const prevSlugRef = useRef<string>('');
+  useEffect(() => {
+    if (leafSlug !== prevSlugRef.current) {
+      prevSlugRef.current = leafSlug;
+      window.dispatchEvent(
+        new CustomEvent('ff:category-change', { detail: { slug: leafSlug } }),
+      );
+    }
+  }, [leafSlug]);
 
   // Hidden field values for form submission
   const effectiveSubId = childId ?? subId;

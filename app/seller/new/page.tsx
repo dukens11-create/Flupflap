@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import CategoryPicker from '@/components/CategoryPicker';
+import ConditionPicker from '@/components/ConditionPicker';
 import MediaUpload from '@/components/MediaUpload';
 import type { Metadata } from 'next';
 import { isSubscriptionActive } from '@/lib/subscription';
@@ -12,8 +13,6 @@ import { isSellerVerificationApproved } from '@/lib/seller-verification';
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = { title: 'List a New Item' };
-
-const CONDITIONS = ['New', 'Like New', 'Used', 'For Parts'];
 
 export default async function SellerNewPage() {
   const session = await getServerSession(authOptions);
@@ -85,11 +84,7 @@ export default async function SellerNewPage() {
             <CategoryPicker />
           </div>
           <div className="flex-1">
-            <label className="label">Condition</label>
-            <select name="condition" className="input" required>
-              <option value="">Select…</option>
-              {CONDITIONS.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
+            <ConditionPicker required />
           </div>
         </div>
         <MediaUpload required />
