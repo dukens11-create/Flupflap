@@ -294,9 +294,38 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
                 pickupState: product.pickupState ?? undefined,
                 inventoryQty: product.inventory,
               }} />
-              <BuyNowButton productId={product.id} />
+              <BuyNowButton
+                productId={product.id}
+                checkoutItem={{
+                  id: product.id,
+                  title: product.title,
+                  priceCents: product.priceCents,
+                  imageUrl: product.imageUrl,
+                  shippingCents: product.shippingCents,
+                  shippingMode: product.shippingMode ?? undefined,
+                  inventoryQty: product.inventory,
+                  pickupAvailable: product.pickupAvailable,
+                  pickupCity: product.pickupCity ?? undefined,
+                  pickupState: product.pickupState ?? undefined,
+                }}
+              />
               {product.pickupAvailable && (
-                <BuyNowButton productId={product.id} isPickup />
+                <BuyNowButton
+                  productId={product.id}
+                  isPickup
+                  checkoutItem={{
+                    id: product.id,
+                    title: product.title,
+                    priceCents: product.priceCents,
+                    imageUrl: product.imageUrl,
+                    shippingCents: product.shippingCents,
+                    shippingMode: product.shippingMode ?? undefined,
+                    inventoryQty: product.inventory,
+                    pickupAvailable: product.pickupAvailable,
+                    pickupCity: product.pickupCity ?? undefined,
+                    pickupState: product.pickupState ?? undefined,
+                  }}
+                />
               )}
             </div>
           )}

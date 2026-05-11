@@ -7,6 +7,8 @@ import { buildCheckoutCommissionItems, getMarketplaceSettings } from '@/lib/comm
 import { checkoutErrorResponse } from '@/lib/checkout-errors';
 import { isSellerVerificationApproved } from '@/lib/seller-verification';
 
+const SHIPPING_LINE_ITEM_NAME = 'Shipping';
+
 type ShipmentGroup = {
   sellerId: string;
   shipmentId: string;
@@ -139,7 +141,7 @@ export async function POST(req: Request) {
       const totalRateCents = selectedCalculatedGroups.reduce((sum, group) => sum + group.rateCents, 0);
       if (totalRateCents <= 0) {
         return NextResponse.json(
-          { error: 'Shipping rate unavailable. Please recalculate shipping rates.' },
+          { error: 'Shipping rate unavailable. Please check address or package details.' },
           { status: 400 },
         );
       }
@@ -189,17 +191,69 @@ export async function POST(req: Request) {
         quantity: qty,
       };
     });
+    const productSubtotalCents = lineItems.reduce(
+      (sum, item) => sum + ((item.price_data.unit_amount ?? 0) * (item.quantity ?? 1)),
+      0,
+    );
 
     // Add live shipping as a separate line item if selected
+    const shippingAmount = validatedShippingRateInfo?.totalRateCents ?? 0;
+    for (const selectedRate of validatedShippingRateInfo?.shipmentGroups ?? []) {
+      console.log("Selected shipping rate:", {
+        sellerId: selectedRate.sellerId,
+        shipmentId: selectedRate.shipmentId,
+        rateId: selectedRate.rateId,
+        carrier: selectedRate.carrier,
+        service: selectedRate.service,
+        rateCents: selectedRate.rateCents,
+      });
+    }
+    console.log("Stripe shipping amount:", shippingAmount);
     if (validatedShippingRateInfo?.totalRateCents && validatedShippingRateInfo.totalRateCents > 0) {
       lineItems.push({
         price_data: {
           currency: 'usd',
-          product_data: { name: 'Shipping', images: [] },
+          product_data: { name: SHIPPING_LINE_ITEM_NAME, images: [] },
           unit_amount: validatedShippingRateInfo.totalRateCents,
         },
         quantity: 1,
       });
+    }
+    const checkoutSubtotalCents = lineItems.reduce(
+      (sum, item) => sum + ((item.price_data.unit_amount ?? 0) * (item.quantity ?? 1)),
+      0,
+    );
+    if (requiresLiveShippingSelection) {
+      const hasShippingLine = lineItems.some(item => (
+        item.price_data.product_data.name === SHIPPING_LINE_ITEM_NAME
+        && item.price_data.unit_amount === shippingAmount
+      ));
+      const expectedSubtotalCents = productSubtotalCents + shippingAmount;
+      if (!hasShippingLine) {
+        console.error('[checkout/cart] shipping validation failed: missing shipping line');
+        return NextResponse.json(
+          { error: 'Unable to process checkout. Please refresh and try again.' },
+          { status: 400 },
+        );
+      }
+      if (shippingAmount <= 0) {
+        console.error('[checkout/cart] shipping validation failed: invalid shipping amount', { shippingAmount });
+        return NextResponse.json(
+          { error: 'Unable to process checkout. Please refresh and try again.' },
+          { status: 400 },
+        );
+      }
+      if (checkoutSubtotalCents !== expectedSubtotalCents) {
+        console.error('[checkout/cart] shipping validation failed', {
+          shippingAmount,
+          checkoutSubtotalCents,
+          expectedSubtotalCents,
+        });
+        return NextResponse.json(
+          { error: 'Unable to process checkout. Please refresh and try again.' },
+          { status: 400 },
+        );
+      }
     }
 
     // If ALL items are pickup, don't collect a shipping address from Stripe

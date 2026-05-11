@@ -74,6 +74,14 @@ export async function POST(req: Request) {
     if (!buyerAddress?.street1 || !buyerAddress?.city || !buyerAddress?.state || !buyerAddress?.zip) {
       return NextResponse.json({ error: 'Please provide a complete shipping address.' }, { status: 400 });
     }
+    console.log("Shippo token exists:", !!process.env.SHIPPO_API_TOKEN);
+    const buyerAddressForLog = {
+      ...buyerAddress,
+      street1: '[redacted]',
+      street2: buyerAddress.street2 ? '[redacted]' : '[not provided]',
+      zip: '[redacted]',
+    };
+    console.log("Ship-to address:", buyerAddressForLog);
 
     // Load products with their seller shipping profile and dimensions
     const products = await prisma.product.findMany({
@@ -129,11 +137,27 @@ export async function POST(req: Request) {
     for (const [sellerId, sellerProducts] of sellerGroups) {
       const seller = sellerProducts[0].seller;
       const fromAddress = resolveFromAddress(seller);
+      const sellerAddress = {
+        ...fromAddress,
+        street1: '[redacted]',
+        zip: '[redacted]',
+      };
+      console.log("Ship-from address:", sellerAddress);
 
       // Validate that we have a ship-from address
       if (!fromAddress.street1 || !fromAddress.city || !fromAddress.state || !fromAddress.zip) {
         errors.push(
-          `Seller "${seller.shopName || 'Unknown'}" has not configured a ship-from address.`,
+          `Shipping rate unavailable. Please check address or package details. Seller "${seller.shopName || 'Unknown'}" has not configured a ship-from address.`,
+        );
+        continue;
+      }
+
+      const missingPackageField = sellerProducts.some((p) => (
+        !p.weightOz || !p.lengthIn || !p.widthIn || !p.heightIn
+      ));
+      if (missingPackageField) {
+        errors.push(
+          `Shipping rate unavailable. Please check address or package details. Some products from "${seller.shopName || 'this seller'}" are missing package weight or dimensions.`,
         );
         continue;
       }
@@ -148,10 +172,18 @@ export async function POST(req: Request) {
       const maxWidth = sellerProducts.reduce((m, p) => Math.max(m, p.widthIn ?? 0), 0);
       const maxHeight = sellerProducts.reduce((m, p) => Math.max(m, p.heightIn ?? 0), 0);
 
+      const parcel = {
+        weightOz: totalWeightOz,
+        lengthIn: maxLength,
+        widthIn: maxWidth,
+        heightIn: maxHeight,
+      };
+      console.log("Package:", parcel);
+
       // Skip if no package dimensions available
       if (!totalWeightOz || !maxLength || !maxWidth || !maxHeight) {
         errors.push(
-          `Some products from "${seller.shopName || 'this seller'}" are missing package dimensions.`,
+          `Shipping rate unavailable. Please check address or package details. Some products from "${seller.shopName || 'this seller'}" are missing package dimensions.`,
         );
         continue;
       }
@@ -173,7 +205,15 @@ export async function POST(req: Request) {
           widthIn: maxWidth,
           heightIn: maxHeight,
         });
-        if (!result.rates.length) {
+        const rates = result.rates.map((rate) => ({
+          id: rate.id,
+          carrier: rate.carrier,
+          service: rate.service,
+          rate: rate.rate,
+          deliveryDays: rate.deliveryDays,
+        }));
+        console.log("Shippo rates:", rates);
+        if (!rates.length) {
           throw new Error('No supported shipping rates returned.');
         }
 
@@ -186,14 +226,15 @@ export async function POST(req: Request) {
       } catch (err: any) {
         console.error(`[checkout/rates] Shippo error for seller ${sellerId}:`, err?.message ?? err);
         errors.push(
-          `Shipping rate unavailable for "${seller.shopName || 'a seller'}". Please try again.`,
+          `Shipping rate unavailable. Please check address or package details. Seller "${seller.shopName || 'a seller'}" could not be quoted.`,
         );
       }
     }
 
     if (!groups.length && errors.length > 0) {
+      console.error('[checkout/rates] unavailable details', errors);
       return NextResponse.json(
-        { error: 'Shipping rate unavailable. Please try again.', details: errors },
+        { error: 'Shipping rate unavailable. Please check address or package details.' },
         { status: 503 },
       );
     }
@@ -207,14 +248,19 @@ export async function POST(req: Request) {
       p => `Product "${p.title}" has no shipping rates available.`,
     );
 
+    const warnings = [
+      ...(errors.length ? ['Shipping rate unavailable. Please check address or package details.'] : []),
+      ...uncoveredWarnings,
+    ];
+
     return NextResponse.json({
       groups,
-      warnings: [...errors, ...uncoveredWarnings].length ? [...errors, ...uncoveredWarnings] : undefined,
+      warnings: warnings.length ? warnings : undefined,
     });
   } catch (err: any) {
     console.error('[checkout/rates]', err);
     return NextResponse.json(
-      { error: 'Shipping rate unavailable. Please try again.' },
+      { error: 'Shipping rate unavailable. Please check address or package details.' },
       { status: 500 },
     );
   }

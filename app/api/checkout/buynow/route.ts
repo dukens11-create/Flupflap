@@ -7,6 +7,10 @@ import { buildCheckoutCommissionItems, getMarketplaceSettings } from '@/lib/comm
 import { checkoutErrorResponse } from '@/lib/checkout-errors';
 import { isSellerVerificationApproved } from '@/lib/seller-verification';
 
+function isCalculatedShippingProduct(product: { shippingMode?: string | null; shippingCents: number }) {
+  return product.shippingMode === 'CALCULATED' || (!product.shippingMode && product.shippingCents === 0);
+}
+
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions);
@@ -46,6 +50,13 @@ export async function POST(req: Request) {
 
     // Validate pickup is actually available if requested
     const actualPickup = isPickup && product.pickupAvailable;
+    if (!actualPickup && isCalculatedShippingProduct(product)) {
+      return NextResponse.json(
+        { error: 'Shipping rate unavailable. Please check address or package details.' },
+        { status: 400 },
+      );
+    }
+
     const { commissionItems, platformFeeCents, totalCents } = buildCheckoutCommissionItems(
       [product],
       [{ productId: product.id, quantity: 1 }],
