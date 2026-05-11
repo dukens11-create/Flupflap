@@ -8,6 +8,7 @@ import { OrderStatus } from '@prisma/client';
 import type { Metadata } from 'next';
 import { getVisitorMetrics } from '@/lib/traffic';
 import AdminListingsTable from '@/components/AdminListingsTable';
+import { getSellerKycCounts } from '@/lib/seller-kyc-stats';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,7 +34,7 @@ export default async function AdminPage({
 
   const suspiciousLoginSince = new Date(Date.now() - 1000 * 60 * 60 * 24 * 30);
 
-  const [settings, pending, all, recentOrders, restrictedSellersCount, buyerCount, sellerCount, totalUsersCount, totalOrdersCount, pendingSellerApprovalsCount, pendingKycReviewsCount, kycApprovedCount, kycRejectedCount, kycNotSubmittedCount, paidRevenueAgg, platformCommissionAgg, openReportsCount, openSellerReportsCount, suspiciousLoginCount, activePromotionsCount, productsThisWeek, productsThisMonth, activeListingsCount, soldItemsAgg, revenueThisWeekAgg, revenueThisMonthAgg, visitorMetrics] = await Promise.all([
+  const [settings, pending, all, recentOrders, restrictedSellersCount, buyerCount, sellerCount, totalUsersCount, totalOrdersCount, pendingSellerApprovalsCount, pendingKycReviewsCount, paidRevenueAgg, platformCommissionAgg, openReportsCount, openSellerReportsCount, suspiciousLoginCount, activePromotionsCount, productsThisWeek, productsThisMonth, activeListingsCount, soldItemsAgg, revenueThisWeekAgg, revenueThisMonthAgg, visitorMetrics, kycCounts] = await Promise.all([
     getMarketplaceSettings(),
     prisma.product.findMany({
       where: { status: 'PENDING' },
@@ -74,21 +75,9 @@ export default async function AdminPage({
     prisma.user.count({
       where: { role: 'SELLER', sellerStatus: 'PENDING' },
     }),
-    // Pending KYC Reviews: sellers who have submitted KYC docs awaiting review
+    // Pending KYC Reviews: uses canonical kycStatus field only (no legacy ambiguity here)
     prisma.user.count({
-      where: { role: 'SELLER', kycStatus: 'PENDING_REVIEW' },
-    }),
-    // KYC Approved
-    prisma.user.count({
-      where: { role: 'SELLER', kycStatus: 'APPROVED' },
-    }),
-    // KYC Rejected
-    prisma.user.count({
-      where: { role: 'SELLER', kycStatus: 'REJECTED' },
-    }),
-    // KYC Not Submitted
-    prisma.user.count({
-      where: { role: 'SELLER', kycStatus: 'NOT_SUBMITTED' },
+      where: { role: 'SELLER', kycStatus: 'PENDING_REVIEW', verifiedSeller: false },
     }),
     prisma.order.aggregate({
       _sum: { totalCents: true },
@@ -126,7 +115,12 @@ export default async function AdminPage({
       where: { status: { in: PAID_ORDER_STATUSES }, createdAt: { gte: monthStart } },
     }),
     getVisitorMetrics(now),
+    // KYC counts use shared helpers that read both kycStatus and the legacy
+    // verifiedSeller flag so previously-approved sellers are never miscounted.
+    getSellerKycCounts(),
   ]);
+
+  const { kycApprovedCount, kycRejectedCount, kycNotSubmittedCount } = kycCounts;
 
   const revenueThisWeekCents = revenueThisWeekAgg._sum.totalCents ?? 0;
   const revenueThisMonthCents = revenueThisMonthAgg._sum.totalCents ?? 0;
