@@ -31,6 +31,8 @@ type ShipGroup = {
   sellerName: string;
   shipmentId: string;
   rates: RateQuote[];
+  /** Precomputed minimum delivery days across rates (null if no rates have delivery days). */
+  minDeliveryDays: number | null;
 };
 
 type SelectedRate = {
@@ -44,6 +46,12 @@ type SelectedRate = {
 
 function dollars(cents: number) {
   return `$${(cents / 100).toFixed(2)}`;
+}
+
+/** Safely converts a rate string (e.g. "8.50") to integer cents. Returns 0 for non-numeric inputs. */
+function convertRateToCents(rate: string | number): number {
+  const n = Number(rate);
+  return Number.isFinite(n) ? Math.round(n * 100) : 0;
 }
 
 function isCalculatedShipping(item: Pick<CartItem, 'shippingMode' | 'shippingCents'>): boolean {
@@ -176,7 +184,17 @@ export default function CheckoutPage() {
         setRatesFetched(true);
         return;
       }
-      const groups: ShipGroup[] = data.groups ?? [];
+      const rawGroups: Omit<ShipGroup, 'minDeliveryDays'>[] = data.groups ?? [];
+      // Precompute minDeliveryDays per group to avoid recalculating on every render
+      const groups: ShipGroup[] = rawGroups.map(g => {
+        const ratesWithDays = g.rates.filter(r => r.deliveryDays !== null);
+        return {
+          ...g,
+          minDeliveryDays: ratesWithDays.length > 0
+            ? ratesWithDays.reduce((m, r) => Math.min(m, r.deliveryDays!), Infinity)
+            : null,
+        };
+      });
       setRateGroups(groups);
       // Auto-select cheapest rate per group
       const autoSelected: SelectedRate[] = groups.map((group) => {
@@ -185,7 +203,7 @@ export default function CheckoutPage() {
           sellerId: group.sellerId,
           shipmentId: group.shipmentId,
           rateId: cheapest?.id ?? '',
-          rateCents: cheapest && Number.isFinite(Number(cheapest.rate)) ? Math.round(Number(cheapest.rate) * 100) : 0,
+          rateCents: cheapest ? convertRateToCents(cheapest.rate) : 0,
           carrier: cheapest?.carrier ?? '',
           service: cheapest?.service ?? '',
         };
@@ -206,12 +224,11 @@ export default function CheckoutPage() {
   function handleSelectRate(sellerId: string, shipmentId: string, rate: RateQuote) {
     setSelectedRates(prev => {
       const next = prev.filter(r => r.sellerId !== sellerId);
-      const rateValue = Number(rate.rate);
       next.push({
         sellerId,
         shipmentId,
         rateId: rate.id,
-        rateCents: Number.isFinite(rateValue) ? Math.round(rateValue * 100) : 0,
+        rateCents: convertRateToCents(rate.rate),
         carrier: rate.carrier,
         service: rate.service,
       });
@@ -482,52 +499,46 @@ export default function CheckoutPage() {
           )}
 
           {/* Rate options per seller group */}
-          {rateGroups.map(group => {
-            const ratesWithDays = group.rates.filter(r => r.deliveryDays !== null);
-            const minDeliveryDays = ratesWithDays.length > 0
-              ? Math.min(...ratesWithDays.map(r => r.deliveryDays!))
-              : null;
-            return (
-              <div key={group.sellerId} className="rounded-xl border border-slate-200 p-3 space-y-2">
-                {rateGroups.length > 1 && (
-                  <p className="text-xs font-semibold text-slate-600">Seller: {group.sellerName}</p>
-                )}
-                {group.rates.length === 0 && (
-                  <p className="text-xs text-red-600">No rates available for this seller.</p>
-                )}
-                {group.rates.map(rate => {
-                  const selected = selectedRates.find(
-                    r => r.sellerId === group.sellerId && r.rateId === rate.id,
-                  );
-                  const isCheapest = rate.id === group.rates[0]?.id;
-                  const isFastest = rate.deliveryDays !== null && rate.deliveryDays === minDeliveryDays;
-                  return (
-                    <label key={rate.id} className="flex items-center justify-between gap-3 text-sm cursor-pointer">
-                      <span className="flex items-center gap-2">
-                        <input
-                          type="radio"
-                          name={`rate-${group.sellerId}`}
-                          checked={!!selected}
-                          onChange={() => handleSelectRate(group.sellerId, group.shipmentId, rate)}
-                        />
-                        <span>
-                          <span className="font-medium">{rate.carrier}</span>
-                          {' · '}
-                          {rate.service}
-                          {isCheapest && <span className="ml-1 text-[10px] bg-green-100 text-green-700 rounded-full px-1.5 py-0.5 font-semibold">Best price</span>}
-                          {isFastest && !isCheapest && <span className="ml-1 text-[10px] bg-blue-100 text-blue-700 rounded-full px-1.5 py-0.5 font-semibold">Fastest</span>}
-                        </span>
+          {rateGroups.map(group => (
+            <div key={group.sellerId} className="rounded-xl border border-slate-200 p-3 space-y-2">
+              {rateGroups.length > 1 && (
+                <p className="text-xs font-semibold text-slate-600">Seller: {group.sellerName}</p>
+              )}
+              {group.rates.length === 0 && (
+                <p className="text-xs text-red-600">No rates available for this seller.</p>
+              )}
+              {group.rates.map(rate => {
+                const selected = selectedRates.find(
+                  r => r.sellerId === group.sellerId && r.rateId === rate.id,
+                );
+                const isCheapest = rate.id === group.rates[0]?.id;
+                const isFastest = rate.deliveryDays !== null && rate.deliveryDays === group.minDeliveryDays;
+                return (
+                  <label key={rate.id} className="flex items-center justify-between gap-3 text-sm cursor-pointer">
+                    <span className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name={`rate-${group.sellerId}`}
+                        checked={!!selected}
+                        onChange={() => handleSelectRate(group.sellerId, group.shipmentId, rate)}
+                      />
+                      <span>
+                        <span className="font-medium">{rate.carrier}</span>
+                        {' · '}
+                        {rate.service}
+                        {isCheapest && <span className="ml-1 text-[10px] bg-green-100 text-green-700 rounded-full px-1.5 py-0.5 font-semibold">Best price</span>}
+                        {isFastest && !isCheapest && <span className="ml-1 text-[10px] bg-blue-100 text-blue-700 rounded-full px-1.5 py-0.5 font-semibold">Fastest</span>}
                       </span>
-                      <span className="text-slate-600 text-right flex-shrink-0">
-                        ${rate.rate}
-                        {rate.deliveryDays !== null ? <span className="text-slate-400 text-xs ml-1">({rate.deliveryDays}d)</span> : null}
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-            );
-          })}
+                    </span>
+                    <span className="text-slate-600 text-right flex-shrink-0">
+                      ${rate.rate}
+                      {rate.deliveryDays !== null ? <span className="text-slate-400 text-xs ml-1">({rate.deliveryDays}d)</span> : null}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          ))}
         </div>
       )}
 

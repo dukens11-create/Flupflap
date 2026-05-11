@@ -78,8 +78,6 @@ export default function SellerShopProfileForm({
     }
   }
 
-  
-
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>

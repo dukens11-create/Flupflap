@@ -145,7 +145,7 @@ export default function NewListingForm() {
             <input name="shipping" type="number" step="0.01" min="0" className="input" placeholder="0.00" />
           </div>
         )}
-        {/* Ensure shipping is 0 when not using flat rate to prevent stale value submission */}
+        {/* When mode is not FLAT, send shipping=0 so the API never receives a stale flat-rate value */}
         {shippingMode !== 'FLAT' && <input type="hidden" name="shipping" value="0" />}
       </div>
       <div className="flex gap-3">
