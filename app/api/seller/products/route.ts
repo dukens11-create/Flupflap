@@ -107,7 +107,7 @@ export async function POST(req: Request) {
     const imagesRaw = form.getAll('images').map(String).filter(Boolean);
     const parsed = schema.safeParse({ ...rawEntries, images: imagesRaw.length ? imagesRaw : undefined });
     if (!parsed.success) {
-      return jsonError('Invalid input.', 400);
+      return jsonError(parsed.error.issues[0]?.message ?? 'Invalid input.', 400);
     }
     const data = parsed.data;
 
@@ -136,7 +136,7 @@ export async function POST(req: Request) {
 
     const inventoryRaw = data.inventoryQty || data.inventory || '';
     const inventoryQty = Number(inventoryRaw);
-    if (!inventoryRaw || !Number.isInteger(inventoryQty) || inventoryQty < 1) {
+    if (!inventoryRaw || Number.isNaN(inventoryQty) || !Number.isInteger(inventoryQty) || inventoryQty < 1) {
       return jsonError('Please enter an inventory quantity of at least 1.', 400);
     }
 

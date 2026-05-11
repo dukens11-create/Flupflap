@@ -33,7 +33,7 @@ export default function NewListingForm() {
     const categoryId = String(formData.get('categoryId') ?? '').trim();
     const condition = String(formData.get('condition') ?? '').trim();
     const priceRaw = String(formData.get('price') ?? '').trim();
-    const inventoryRaw = String(formData.get('inventoryQty') ?? formData.get('inventory') ?? '').trim();
+    const inventoryRaw = String(formData.get('inventoryQty') ?? '').trim();
     const images = formData.getAll('images').map(String).filter(Boolean);
     const fallbackImage = String(formData.get('imageUrl') ?? '').trim();
     const resolvedImages = images.length > 0 ? images : (fallbackImage ? [fallbackImage] : []);
@@ -48,7 +48,7 @@ export default function NewListingForm() {
     }
 
     const inventoryQty = Number(inventoryRaw);
-    if (!inventoryRaw || !Number.isInteger(inventoryQty) || inventoryQty < 1) {
+    if (!inventoryRaw || Number.isNaN(inventoryQty) || !Number.isInteger(inventoryQty) || inventoryQty < 1) {
       nextErrors.inventoryQty = 'Please enter an inventory quantity of at least 1.';
     }
 
