@@ -245,7 +245,7 @@ export async function POST(
         // Category system fields
         categoryId: data.categoryId || null,
         subcategoryId: data.subcategoryId || null,
-        productAttributes: baseAttributes,
+        productAttributes: baseAttributes as any,
         // Reset to PENDING on edit so admin can re-review
         status: 'PENDING',
       },
@@ -373,7 +373,7 @@ export async function PATCH(
         // Category system fields
         categoryId: data.categoryId || null,
         subcategoryId: data.subcategoryId || null,
-        productAttributes: baseAttributes,
+        productAttributes: baseAttributes as any,
         status: 'PENDING',
       },
     });
