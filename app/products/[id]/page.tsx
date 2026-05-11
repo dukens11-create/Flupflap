@@ -17,13 +17,65 @@ import type { Metadata } from 'next';
 import { expirePromotions } from '@/lib/promotions';
 import { getSellerResponseStats, SELLER_RESPONSE_WINDOW_HOURS } from '@/lib/messages';
 import { conditionBadgeClass } from '@/lib/condition-badge';
+import { absoluteUrl, DEFAULT_SEO_DESCRIPTION } from '@/lib/seo';
 
 export const dynamic = 'force-dynamic';
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
-  const p = await prisma.product.findUnique({ where: { id } });
-  return { title: p?.title ?? 'Product not found' };
+  const product = await prisma.product.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      imageUrl: true,
+      images: true,
+      status: true,
+      category: true,
+    },
+  });
+
+  if (!product || product.status !== 'APPROVED') {
+    return {
+      title: 'Product not found',
+      description: DEFAULT_SEO_DESCRIPTION,
+      robots: { index: false, follow: false },
+    };
+  }
+
+  const canonicalPath = `/products/${product.id}`;
+  const imageCandidates = (product.images?.length ? product.images : [product.imageUrl]).filter(Boolean);
+  const productDescription = product.description.slice(0, 160);
+  const title = `${product.title} | ${product.category}`;
+
+  return {
+    title,
+    description: productDescription,
+    alternates: { canonical: canonicalPath },
+    robots: {
+      index: true,
+      follow: true,
+      googleBot: {
+        index: true,
+        follow: true,
+        'max-image-preview': 'large',
+      },
+    },
+    openGraph: {
+      title,
+      description: productDescription,
+      url: canonicalPath,
+      type: 'website',
+      images: imageCandidates.map((url) => ({ url })),
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description: productDescription,
+      images: imageCandidates,
+    },
+  };
 }
 
 export default async function ProductPage({ params }: { params: Promise<{ id: string }> }) {
@@ -56,9 +108,40 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
     });
   }
   const sellerResponseStats = await getSellerResponseStats(product.seller.id);
+  const canonicalUrl = absoluteUrl(`/products/${product.id}`);
+  const imageCandidates = (product.images?.length ? product.images : [product.imageUrl]).filter(Boolean);
+  const productJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: product.title,
+    description: product.description,
+    image: imageCandidates,
+    sku: product.id,
+    category: product.category,
+    brand: {
+      '@type': 'Brand',
+      name: 'FlupFlap',
+    },
+    offers: {
+      '@type': 'Offer',
+      url: canonicalUrl,
+      priceCurrency: 'USD',
+      price: (product.priceCents / 100).toFixed(2),
+      availability: product.inventory > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+      itemCondition: 'https://schema.org/UsedCondition',
+    },
+    seller: {
+      '@type': 'Person',
+      name: product.seller.name,
+    },
+  };
 
   return (
     <main className="max-w-4xl mx-auto">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }}
+      />
       <Link href="/" className="text-sm text-blue-600 hover:underline mb-4 inline-block">← Back to browse</Link>
       <div className="card overflow-hidden flex flex-col md:flex-row gap-0">
         <div className="w-full md:w-96 flex-shrink-0 bg-slate-100 p-0">
