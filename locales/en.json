@@ -88,9 +88,23 @@
     },
     "conditions": {
       "New": "New",
-      "Like New": "Like New",
+      "New with box": "New with box",
+      "New without box": "New without box",
+      "Open box": "Open box",
+      "Like new": "Like new",
+      "Excellent": "Excellent",
+      "Very good": "Very good",
+      "Good": "Good",
+      "Fair": "Fair",
       "Used": "Used",
-      "For Parts": "For Parts"
+      "For parts / not working": "For parts / not working",
+      "Refurbished": "Refurbished",
+      "For parts": "For parts",
+      "New sealed": "New sealed",
+      "Used (partially used)": "Used (partially used)",
+      "New with tags": "New with tags",
+      "New without tags": "New without tags",
+      "Pre-owned": "Pre-owned"
     }
   },
   "product": {

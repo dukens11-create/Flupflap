@@ -4,6 +4,7 @@ import Image from 'next/image';
 import { ShieldCheck, Star, Store } from 'lucide-react';
 import { dollars } from '@/lib/money';
 import { useI18n } from '@/components/I18nProvider';
+import { conditionBadgeClass } from '@/lib/condition-badge';
 
 const TRENDING_THRESHOLD = 5;
 
@@ -47,10 +48,11 @@ export default function ProductCard({ p: product }:{p:any}){
       </div>
       <div className="flex flex-1 flex-col gap-3 p-3 sm:p-4">
         <div className="space-y-2">
-          <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-            <span>{product.condition}</span>
-            <span className="h-1 w-1 rounded-full bg-slate-300" />
-            <span>{product.category}</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${conditionBadgeClass(product.condition)}`}>
+              {product.condition}
+            </span>
+            <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wide">{product.category}</span>
           </div>
           <h3 className="line-clamp-2 text-sm font-bold text-slate-900 sm:text-base">{product.title}</h3>
           <p className="text-lg font-black text-amber-600 sm:text-xl">{dollars(product.priceCents)}</p>

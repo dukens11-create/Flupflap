@@ -3,13 +3,12 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import CategoryPicker from '@/components/CategoryPicker';
+import ConditionPicker from '@/components/ConditionPicker';
 import MediaUpload from '@/components/MediaUpload';
 import type { Metadata } from 'next';
 import { isSellerVerificationApproved } from '@/lib/seller-verification';
 
 export const metadata: Metadata = { title: 'Edit Listing' };
-
-const CONDITIONS = ['New', 'Like New', 'Used', 'For Parts'];
 
 export default async function SellerEditPage({
   params,
@@ -37,6 +36,10 @@ export default async function SellerEditPage({
   const { id } = await params;
   const product = await prisma.product.findFirst({
     where: { id, sellerId: session.user.id },
+    include: {
+      subcategoryRef: { select: { slug: true } },
+      categoryRef: { select: { slug: true } },
+    },
   });
 
   if (!product) notFound();
@@ -48,6 +51,9 @@ export default async function SellerEditPage({
     : product.imageUrl
       ? [product.imageUrl]
       : [];
+  // Use the most specific category slug for the condition picker seed value.
+  const defaultCategorySlug =
+    product.subcategoryRef?.slug ?? product.categoryRef?.slug ?? undefined;
 
   return (
     <main className="max-w-xl mx-auto">
@@ -110,13 +116,11 @@ export default async function SellerEditPage({
             />
           </div>
           <div className="flex-1">
-            <label className="label">Condition</label>
-            <select name="condition" className="input" defaultValue={product.condition} required>
-              <option value="">Select…</option>
-              {CONDITIONS.map(c => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
+            <ConditionPicker
+              defaultCondition={product.condition}
+              defaultSlug={defaultCategorySlug}
+              required
+            />
           </div>
         </div>
         <MediaUpload

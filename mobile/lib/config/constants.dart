@@ -22,9 +22,16 @@ class AppConstants {
   // Product conditions — must stay in sync with the web app.
   static const List<String> conditions = [
     'New',
-    'Like New',
+    'New with box',
+    'New without box',
+    'Open box',
+    'Like new',
+    'Excellent',
+    'Very good',
+    'Good',
+    'Fair',
     'Used',
-    'For Parts',
+    'For parts / not working',
   ];
 
   // Seller subscription price (informational display only — truth lives in Stripe).

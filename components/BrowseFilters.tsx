@@ -2,6 +2,7 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useTransition, useState } from 'react';
 import { useI18n } from '@/components/I18nProvider';
+import { ALL_CONDITIONS } from '@/lib/conditions';
 
 interface CategoryNode {
   id: string;
@@ -14,7 +15,7 @@ interface CategoryNode {
   children: CategoryNode[];
 }
 
-const CONDITIONS = ['New', 'Like New', 'Used', 'For Parts'];
+const CONDITIONS = ALL_CONDITIONS;
 
 export default function BrowseFilters() {
   const { t } = useI18n();
