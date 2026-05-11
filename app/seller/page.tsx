@@ -241,6 +241,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   const productsAddedThisWeek = products.filter(p => p.createdAt >= weekStart).length;
   const productsAddedThisMonth = products.filter(p => p.createdAt >= monthStart).length;
   const activeListingsCount = products.filter(p => p.status === 'APPROVED').length;
+  const pendingListingsCount = products.filter(p => p.status === 'PENDING').length;
   const totalCartAdds = products.reduce((sum, product) => sum + (product.cartInterest?.totalAdds ?? 0), 0);
   const totalViewCount = products.reduce((sum, p) => sum + (p.viewCount ?? 0), 0);
   const totalSoldQty = products.reduce((sum, p) => sum + (p.soldQty ?? 0), 0);
@@ -687,6 +688,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
           <StatCard label="Listed This Week" value={String(productsAddedThisWeek)} sub="new products since Monday" />
           <StatCard label="Listed This Month" value={String(productsAddedThisMonth)} sub="new products this month" />
           <StatCard label="Active Listings" value={String(activeListingsCount)} sub="currently approved & live" />
+          <StatCard label="Pending Listings" value={String(pendingListingsCount)} sub="awaiting admin review" />
           <StatCard label="Cart Adds" value={String(totalCartAdds)} sub="buyers adding your items to cart" />
           <StatCard label="Total Views" value={totalViewCount.toLocaleString()} sub="product page visits (excl. seller/admin)" />
           <StatCard label="Total Sold" value={totalSoldQty.toLocaleString()} sub="units sold across all listings" />

@@ -1,4 +1,4 @@
-import { redirect, notFound } from 'next/navigation';
+import { redirect, notFound, forbidden } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
@@ -34,8 +34,8 @@ export default async function SellerEditPage({
   }
 
   const { id } = await params;
-  const product = await prisma.product.findFirst({
-    where: { id, sellerId: session.user.id },
+  const product = await prisma.product.findUnique({
+    where: { id },
     include: {
       subcategoryRef: { select: { slug: true } },
       categoryRef: { select: { slug: true } },
@@ -43,6 +43,7 @@ export default async function SellerEditPage({
   });
 
   if (!product) notFound();
+  if (product.sellerId !== session.user.id) forbidden();
 
   const priceDollars = (product.priceCents / 100).toFixed(2);
   const shippingDollars = (product.shippingCents / 100).toFixed(2);

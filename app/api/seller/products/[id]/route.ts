@@ -42,10 +42,13 @@ const updateSchema = z.object({
 
 type ProductUpdateInput = z.infer<typeof updateSchema>;
 
-type ExistingProduct = NonNullable<Awaited<ReturnType<typeof getSellerProduct>>>;
+type ExistingProduct = NonNullable<Awaited<ReturnType<typeof getOwnedSellerProduct>>['product']>;
 
-async function getSellerProduct(id: string, sellerId: string) {
-  return prisma.product.findFirst({ where: { id, sellerId } });
+async function getOwnedSellerProduct(id: string, sellerId: string) {
+  const product = await prisma.product.findUnique({ where: { id } });
+  if (!product) return { product: null, forbidden: false };
+  if (product.sellerId !== sellerId) return { product: null, forbidden: true };
+  return { product, forbidden: false };
 }
 
 /**
@@ -116,7 +119,10 @@ export async function POST(
     }
 
     const { id } = await params;
-    const existing = await getSellerProduct(id, session.user.id);
+    const { product: existing, forbidden } = await getOwnedSellerProduct(id, session.user.id);
+    if (forbidden) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
     if (!existing) {
       return NextResponse.json({ error: 'Product not found.' }, { status: 404 });
     }
@@ -214,7 +220,10 @@ export async function PATCH(
     }
 
     const { id } = await params;
-    const existing = await getSellerProduct(id, session.user.id);
+    const { product: existing, forbidden } = await getOwnedSellerProduct(id, session.user.id);
+    if (forbidden) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
     if (!existing) {
       return NextResponse.json({ error: 'Product not found.' }, { status: 404 });
     }
@@ -297,7 +306,10 @@ export async function DELETE(
     }
 
     const { id } = await params;
-    const existing = await getSellerProduct(id, session.user.id);
+    const { product: existing, forbidden } = await getOwnedSellerProduct(id, session.user.id);
+    if (forbidden) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
     if (!existing) {
       return NextResponse.json({ error: 'Product not found.' }, { status: 404 });
     }

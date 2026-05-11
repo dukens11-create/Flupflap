@@ -36,7 +36,10 @@ export async function PATCH(
     }
 
     const { id } = await params;
-    const existing = await prisma.product.findFirst({ where: { id, sellerId: session.user.id } });
+    const existing = await prisma.product.findUnique({ where: { id } });
+    if (existing && existing.sellerId !== session.user.id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
     if (!existing) {
       return NextResponse.json({ error: 'Product not found.' }, { status: 404 });
     }
