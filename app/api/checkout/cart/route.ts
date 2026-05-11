@@ -139,7 +139,7 @@ export async function POST(req: Request) {
       const totalRateCents = selectedCalculatedGroups.reduce((sum, group) => sum + group.rateCents, 0);
       if (totalRateCents <= 0) {
         return NextResponse.json(
-          { error: 'Shipping rate unavailable. Please recalculate shipping rates.' },
+          { error: 'Shipping rate unavailable. Please check address or package details.' },
           { status: 400 },
         );
       }
@@ -189,8 +189,17 @@ export async function POST(req: Request) {
         quantity: qty,
       };
     });
+    const productSubtotalCents = lineItems.reduce(
+      (sum, item) => sum + ((item.price_data.unit_amount ?? 0) * (item.quantity ?? 1)),
+      0,
+    );
 
     // Add live shipping as a separate line item if selected
+    const shippingAmount = validatedShippingRateInfo?.totalRateCents ?? 0;
+    for (const selectedRate of validatedShippingRateInfo?.shipmentGroups ?? []) {
+      console.log("Selected shipping rate:", selectedRate);
+    }
+    console.log("Stripe shipping amount:", shippingAmount);
     if (validatedShippingRateInfo?.totalRateCents && validatedShippingRateInfo.totalRateCents > 0) {
       lineItems.push({
         price_data: {
@@ -200,6 +209,23 @@ export async function POST(req: Request) {
         },
         quantity: 1,
       });
+    }
+    const checkoutSubtotalCents = lineItems.reduce(
+      (sum, item) => sum + ((item.price_data.unit_amount ?? 0) * (item.quantity ?? 1)),
+      0,
+    );
+    if (requiresLiveShippingSelection) {
+      const hasShippingLine = lineItems.some(item => (
+        item.price_data.product_data.name === 'Shipping'
+        && item.price_data.unit_amount === shippingAmount
+      ));
+      const expectedSubtotalCents = productSubtotalCents + shippingAmount;
+      if (!hasShippingLine || shippingAmount <= 0 || checkoutSubtotalCents !== expectedSubtotalCents) {
+        return NextResponse.json(
+          { error: 'Shipping rate unavailable. Please check address or package details.' },
+          { status: 400 },
+        );
+      }
     }
 
     // If ALL items are pickup, don't collect a shipping address from Stripe

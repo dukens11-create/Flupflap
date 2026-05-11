@@ -203,7 +203,7 @@ export default function CheckoutPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setRateError(data.error ?? 'Shipping rate unavailable. Please try again.');
+        setRateError(data.error ?? 'Shipping rate unavailable. Please check address or package details.');
         setRatesFetched(true);
         return;
       }
@@ -220,12 +220,12 @@ export default function CheckoutPage() {
       });
       setRateGroups(groups);
       if (!groups.length) {
-        setRateError('Shipping rate unavailable. Please try again.');
+        setRateError('Shipping rate unavailable. Please check address or package details.');
         setRatesFetched(true);
         return;
       }
       if (groups.some(group => group.rates.length === 0)) {
-        setRateError('One or more shipping methods are unavailable. Please try again.');
+        setRateError('Shipping rate unavailable. Please check address or package details.');
         setRatesFetched(true);
         return;
       }
@@ -248,7 +248,7 @@ export default function CheckoutPage() {
         setRateError(data.warnings.join(' '));
       }
     } catch {
-      setRateError('Shipping rate unavailable. Please try again.');
+      setRateError('Shipping rate unavailable. Please check address or package details.');
       setRatesFetched(true);
     } finally {
       setFetchingRates(false);
