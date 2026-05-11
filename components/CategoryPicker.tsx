@@ -534,7 +534,7 @@ export default function CategoryPicker({ defaultCategoryId, defaultSubcategoryId
   }
 
   function applyOptionSelection(option: PickerOption) {
-    setMainId(option.selection.mainId || null);
+    setMainId(option.selection.mainId ?? null);
     setSubId(option.selection.subId);
     setChildId(option.selection.childId);
     setAttrs({});
