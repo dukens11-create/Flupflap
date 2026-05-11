@@ -78,7 +78,7 @@ function normalizeCarrier(value: unknown): string {
   if (normalized === 'FEDEX') return 'FEDEX';
   if (normalized === 'USPS') return 'USPS';
   if (normalized === 'UPS') return 'UPS';
-  return raw.toUpperCase();
+  return normalized;
 }
 
 function parseOptionalString(value: unknown): string | null {

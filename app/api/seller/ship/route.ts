@@ -166,7 +166,7 @@ export async function POST(req: Request) {
 
         const purchased = await purchaseShipmentRate({ shipmentId, rateId });
         const carrier = purchased.carrier;
-        const trackingUrl = purchased.trackingUrl || buildTrackingUrl(carrier, purchased.trackingNumber);
+        const trackingUrl = purchased.trackingUrl ?? buildTrackingUrl(carrier, purchased.trackingNumber);
 
         await prisma.order.update({
           where: { id: order.id },
