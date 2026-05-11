@@ -100,6 +100,9 @@ export function deriveEffectiveKycStatus(seller: {
   kycStatus?: string | null;
   verifiedSeller?: boolean | null;
 }): 'APPROVED' | 'PENDING_REVIEW' | 'REJECTED' | 'NOT_SUBMITTED' {
+  // verifiedSeller takes priority: it is the legacy approval flag set before
+  // the kycStatus field existed.  When true the seller is always APPROVED
+  // regardless of the kycStatus value, which may not yet have been back-filled.
   if (seller.verifiedSeller) return 'APPROVED';
   switch (seller.kycStatus) {
     case 'APPROVED':

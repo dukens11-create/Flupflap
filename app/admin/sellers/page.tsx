@@ -280,14 +280,9 @@ export default async function AdminSellersPage({
                     </p>
                   )}
                   <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-                    {(() => {
-                      const effectiveKyc = deriveEffectiveKycStatus(seller);
-                      return (
-                        <span className={`badge ${kycStatusBadge(effectiveKyc)}`}>
-                          {kycStatusLabel(effectiveKyc)}
-                        </span>
-                      );
-                    })()}
+                    <span className={`badge ${kycStatusBadge(deriveEffectiveKycStatus(seller))}`}>
+                      {kycStatusLabel(deriveEffectiveKycStatus(seller))}
+                    </span>
                     {seller.verificationSubmission?.provider && (
                       <span className="text-slate-500">
                         Provider: {sellerKycProviderLabel(seller.verificationSubmission.provider)}
