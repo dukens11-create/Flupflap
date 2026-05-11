@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { LEGACY_CATEGORY_ALIAS_FALLBACK } from '@/lib/category-aliases';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -37,7 +38,7 @@ interface Props {
   defaultAttributes?: Record<string, string> | null;
 }
 
-const SEARCH_DEBOUNCE_MS = 140;
+const SEARCH_DEBOUNCE_MS = 150;
 const CLOSEST_MATCH_LIMIT = 6;
 const MIN_SINGULARIZE_LENGTH = 4;
 const EXACT_MATCH_SCORE = 120;
@@ -49,14 +50,6 @@ const WEAK_MATCH_BASE_SCORE = 10;
 const FUZZY_MATCH_TOLERANCE_RATIO = 0.35;
 const STRONG_FUZZY_MATCH_RATIO = 0.25;
 const STRONG_MATCH_SCORE_THRESHOLD = 65;
-
-// Fallback aliases for older category rows that predate aliases[] migration.
-const STATIC_CATEGORY_ALIASES: Record<string, string[]> = {
-  'fashion-women-perfume': ['perfume', 'perfum', 'fragrance', 'cologne', 'body mist', 'scent'],
-  electronics: ['electronic', 'electr', 'tech', 'gadget'],
-  'fashion-kids-clothing': ['clothing', 'cloth', 'clothes', 'apparel'],
-  'sports-clothing': ['clothing', 'cloth', 'clothes', 'apparel'],
-};
 
 function normalizeSearchTerm(value: string): string {
   return value
@@ -179,6 +172,13 @@ function rankPickerOptions(options: PickerOption[], query: string) {
   if (strongMatches.length > 0) return strongMatches;
 
   return ranked.slice(0, CLOSEST_MATCH_LIMIT);
+}
+
+function resolveOptionAliases(node: CategoryNode): string[] {
+  const normalizedSlug = node.slug.toLowerCase();
+  const explicitAliases = Array.isArray(node.aliases) ? node.aliases : [];
+  const legacyAliases = LEGACY_CATEGORY_ALIAS_FALLBACK[normalizedSlug] ?? [];
+  return [...new Set([...explicitAliases, ...legacyAliases])];
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -320,23 +320,16 @@ export default function CategoryPicker({ defaultCategoryId, defaultSubcategoryId
   // Children of sub = child categories
   const childCategories = subNode?.children ?? [];
 
-  function resolveAliases(node: CategoryNode): string[] {
-    const normalizedSlug = node.slug.toLowerCase();
-    const explicitAliases = Array.isArray(node.aliases) ? node.aliases : [];
-    const staticAliases = STATIC_CATEGORY_ALIASES[normalizedSlug] ?? [];
-    return [...new Set([...explicitAliases, ...staticAliases])];
-  }
-
   const mainOptions = useMemo<PickerOption[]>(
-    () => categories.map(c => ({ id: c.id, name: c.name, slug: c.slug, aliases: resolveAliases(c), icon: c.icon })),
+    () => categories.map(c => ({ id: c.id, name: c.name, slug: c.slug, aliases: resolveOptionAliases(c), icon: c.icon })),
     [categories],
   );
   const subOptions = useMemo<PickerOption[]>(
-    () => subcategories.map(c => ({ id: c.id, name: c.name, slug: c.slug, aliases: resolveAliases(c), icon: null })),
+    () => subcategories.map(c => ({ id: c.id, name: c.name, slug: c.slug, aliases: resolveOptionAliases(c), icon: null })),
     [subcategories],
   );
   const childOptions = useMemo<PickerOption[]>(
-    () => childCategories.map(c => ({ id: c.id, name: c.name, slug: c.slug, aliases: resolveAliases(c), icon: null })),
+    () => childCategories.map(c => ({ id: c.id, name: c.name, slug: c.slug, aliases: resolveOptionAliases(c), icon: null })),
     [childCategories],
   );
 

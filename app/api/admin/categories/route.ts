@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
+import { normalizeCategoryAliases } from '@/lib/category-aliases';
 import { z } from 'zod';
 
 const createSchema = z.object({
@@ -13,16 +14,6 @@ const createSchema = z.object({
   attributeSchema: z.string().optional().nullable(), // JSON string
   aliases: z.union([z.array(z.string()), z.string()]).optional().nullable(),
 });
-
-function normalizeAliases(aliases?: string[] | string | null): string[] {
-  const values = Array.isArray(aliases)
-    ? aliases
-    : typeof aliases === 'string'
-      ? aliases.split(',')
-      : [];
-
-  return [...new Set(values.map(value => value.trim()).filter(Boolean))];
-}
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -69,7 +60,7 @@ export async function POST(req: Request) {
         icon: data.icon ?? null,
         sortOrder: data.sortOrder,
         attributeSchema: parsedAttributeSchema,
-        aliases: normalizeAliases(data.aliases),
+        aliases: normalizeCategoryAliases(data.aliases),
       },
     });
     return NextResponse.json(category, { status: 201 });

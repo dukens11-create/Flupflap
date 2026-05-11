@@ -162,6 +162,7 @@ async function seedCategories() {
     { name: 'Handbags', slug: 'fashion-women-handbags', parentId: women.id, level: 2, sortOrder: 2, attributeSchema: CLOTHING_FIELDS },
     {
       name: 'Perfume & Fragrance',
+      // Keep legacy slug to avoid breaking condition mappings tied to this category slug.
       slug: 'fashion-women-perfume',
       aliases: ['perfume', 'perfum', 'fragrance', 'cologne', 'body mist', 'scent'],
       parentId: women.id,
