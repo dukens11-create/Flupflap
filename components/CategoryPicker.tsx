@@ -63,8 +63,9 @@ function normalizeSearchTerm(value: string): string {
 function singularize(value: string): string {
   if (value.length < MIN_SINGULARIZE_LENGTH) return value;
   if (value.endsWith('ies')) return `${value.slice(0, -3)}y`;
-  if (value.endsWith('es')) return value.slice(0, -2);
-  if (value.endsWith('s')) return value.slice(0, -1);
+  if (value.endsWith('oes')) return value.slice(0, -1);
+  if (/(xes|ches|shes|sses|zzes)$/.test(value)) return value.slice(0, -2);
+  if (value.endsWith('s') && !value.endsWith('ss')) return value.slice(0, -1);
   return value;
 }
 
@@ -177,6 +178,7 @@ function rankPickerOptions(options: PickerOption[], query: string) {
 function resolveOptionAliases(node: CategoryNode): string[] {
   const normalizedSlug = node.slug.toLowerCase();
   const explicitAliases = Array.isArray(node.aliases) ? node.aliases : [];
+  // Keep a migration-safe fallback so older rows without aliases[] remain searchable.
   const legacyAliases = LEGACY_CATEGORY_ALIAS_FALLBACK[normalizedSlug] ?? [];
   return [...new Set([...explicitAliases, ...legacyAliases])];
 }
