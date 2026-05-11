@@ -21,10 +21,10 @@ export const metadata: Metadata = {
     statusBarStyle: 'default',
   },
   icons: {
-    apple: '/icons/icon-192x192.png',
+    apple: '/icons/flupflap_pwa_icon_logo.png',
     icon: [
+      { url: '/icons/flupflap_pwa_icon_logo.png', sizes: '512x512', type: 'image/png' },
       { url: '/icons/icon-192x192.png', sizes: '192x192', type: 'image/png' },
-      { url: '/icons/icon-512x512.png', sizes: '512x512', type: 'image/png' },
     ],
   },
   other: {

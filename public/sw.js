@@ -1,7 +1,8 @@
-const CACHE_NAME = 'flupflap-pwa-v1';
+const CACHE_NAME = 'flupflap-pwa-v2';
 const SHELL_ASSETS = [
   '/',
   '/manifest.json',
+  '/icons/flupflap_pwa_icon_logo.png',
   '/icons/icon-192x192.png',
   '/icons/icon-512x512.png',
   '/icons/icon-maskable-512x512.png',

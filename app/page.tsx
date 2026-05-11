@@ -39,6 +39,7 @@ interface SearchParams {
   q?: string;
   category?: string;
   subcategory?: string;
+  refineCategory?: string;
   condition?: string;
   minPrice?: string;
   maxPrice?: string;
@@ -54,60 +55,136 @@ function getUniqueSellerIds(products: Array<{ sellerId: string }>) {
   return Array.from(new Set(products.map((product) => product.sellerId)));
 }
 
+function collectStringValues(value: unknown, strings: string[]) {
+  if (typeof value === 'string') {
+    strings.push(value);
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectStringValues(item, strings);
+    return;
+  }
+  if (value && typeof value === 'object') {
+    for (const nestedValue of Object.values(value as Record<string, unknown>)) {
+      collectStringValues(nestedValue, strings);
+    }
+  }
+}
+
+type SearchableProduct = {
+  title: string;
+  description: string;
+  category: string;
+  productAttributes: unknown;
+  categoryRef?: {
+    name?: string | null;
+    aliases?: string[] | null;
+  } | null;
+  subcategoryRef?: {
+    name?: string | null;
+    aliases?: string[] | null;
+    parent?: {
+      name?: string | null;
+      aliases?: string[] | null;
+      parent?: {
+        name?: string | null;
+        aliases?: string[] | null;
+      } | null;
+    } | null;
+  } | null;
+};
+
+function productMatchesSearch(product: SearchableProduct, query?: string) {
+  const normalizedQuery = query?.trim().toLocaleLowerCase();
+  if (!normalizedQuery) return true;
+
+  const searchableValues: string[] = [
+    product.title,
+    product.description,
+    product.category,
+    product.categoryRef?.name,
+    ...(product.categoryRef?.aliases ?? []),
+    product.subcategoryRef?.name,
+    ...(product.subcategoryRef?.aliases ?? []),
+    product.subcategoryRef?.parent?.name,
+    ...(product.subcategoryRef?.parent?.aliases ?? []),
+    product.subcategoryRef?.parent?.parent?.name,
+    ...(product.subcategoryRef?.parent?.parent?.aliases ?? []),
+  ].filter((value): value is string => typeof value === 'string' && value.length > 0);
+
+  collectStringValues(product.productAttributes, searchableValues);
+
+  return searchableValues.some((value) => value.toLocaleLowerCase().includes(normalizedQuery));
+}
+
 async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?: Record<string, string | number>) => string }) {
   const where: any = { status: 'APPROVED', inventory: { gt: 0 } };
 
-  // Search across multiple fields: title, description, category string, and JSON attribute fields.
-  // Uses OR so any matching field returns the product. Case-insensitive for string columns;
-  // string_contains for JSON columns (substring match).
-  if (sp.q) {
+  // Category filtering: prefer structured category IDs and keep legacy string fallback
+  // so older listings (without categoryId/subcategoryId) are still discoverable.
+  if (sp.category) {
     where.AND = where.AND ?? [];
-    where.AND.push({
-      OR: [
-        { title: { contains: sp.q, mode: 'insensitive' } },
-        { description: { contains: sp.q, mode: 'insensitive' } },
-        { category: { contains: sp.q, mode: 'insensitive' } },
-        { productAttributes: { path: ['brand'], string_contains: sp.q } },
-        { productAttributes: { path: ['fragrance_type'], string_contains: sp.q } },
-        { productAttributes: { path: ['gender'], string_contains: sp.q } },
-      ],
-    });
-  }
-
-  // Category filtering: prefer categoryId/subcategoryId from new system, and also match the
-  // legacy string-based `category` field for backward compatibility with older listings.
-  if (sp.subcategory) {
-    where.AND = where.AND ?? [];
-    const catOrConditions: any[] = [{ subcategoryId: sp.subcategory }];
+    const categoryOrConditions: any[] = [{ categoryId: sp.category }];
     try {
-      const subcatRecord = await prisma.category.findUnique({
-        where: { id: sp.subcategory },
-        select: { name: true },
-      });
-      if (subcatRecord?.name) {
-        catOrConditions.push({ category: { contains: subcatRecord.name, mode: 'insensitive' } });
-      }
-    } catch (err) {
-      console.error('[ProductGrid] subcategory name lookup failed:', err);
-      // ID-based filter still applies even without the legacy fallback
-    }
-    where.AND.push({ OR: catOrConditions });
-  } else if (sp.category) {
-    where.AND = where.AND ?? [];
-    const catOrConditions: any[] = [{ categoryId: sp.category }];
-    try {
-      const catRecord = await prisma.category.findUnique({
+      const categoryRecord = await prisma.category.findUnique({
         where: { id: sp.category },
-        select: { name: true },
+        select: { name: true, aliases: true },
       });
-      if (catRecord?.name) {
-        catOrConditions.push({ category: { contains: catRecord.name, mode: 'insensitive' } });
+      const fallbackTerms = [categoryRecord?.name, ...(categoryRecord?.aliases ?? [])]
+        .filter((value): value is string => typeof value === 'string' && value.length > 0);
+      for (const term of fallbackTerms) {
+        categoryOrConditions.push({ category: { contains: term, mode: 'insensitive' } });
       }
     } catch (err) {
-      console.error('[ProductGrid] category name lookup failed:', err);
-      // ID-based filter still applies even without the legacy fallback
+      console.error('[ProductGrid] category lookup failed:', err);
     }
-    where.AND.push({ OR: catOrConditions });
+    where.AND.push({ OR: categoryOrConditions });
+  }
+  if (sp.refineCategory) {
+    where.AND = where.AND ?? [];
+    const refineCategoryOrConditions: any[] = [{ subcategoryId: sp.refineCategory }];
+    try {
+      const refineCategoryRecord = await prisma.category.findUnique({
+        where: { id: sp.refineCategory },
+        select: { name: true, aliases: true },
+      });
+      const fallbackTerms = [refineCategoryRecord?.name, ...(refineCategoryRecord?.aliases ?? [])]
+        .filter((value): value is string => typeof value === 'string' && value.length > 0);
+      for (const term of fallbackTerms) {
+        refineCategoryOrConditions.push({ category: { contains: term, mode: 'insensitive' } });
+      }
+    } catch (err) {
+      console.error('[ProductGrid] refine category lookup failed:', err);
+    }
+    where.AND.push({ OR: refineCategoryOrConditions });
+  } else if (sp.subcategory) {
+    where.AND = where.AND ?? [];
+    const subcategoryOrConditions: any[] = [
+      { subcategoryId: sp.subcategory },
+      { subcategoryRef: { is: { parentId: sp.subcategory } } },
+    ];
+    try {
+      const subcategoryRecord = await prisma.category.findUnique({
+        where: { id: sp.subcategory },
+        select: {
+          name: true,
+          aliases: true,
+          children: { select: { name: true, aliases: true } },
+        },
+      });
+      const fallbackTerms = [
+        subcategoryRecord?.name,
+        ...(subcategoryRecord?.aliases ?? []),
+        ...(subcategoryRecord?.children.map((child) => child.name) ?? []),
+        ...(subcategoryRecord?.children.flatMap((child) => child.aliases ?? []) ?? []),
+      ].filter((value): value is string => typeof value === 'string' && value.length > 0);
+      for (const term of fallbackTerms) {
+        subcategoryOrConditions.push({ category: { contains: term, mode: 'insensitive' } });
+      }
+    } catch (err) {
+      console.error('[ProductGrid] subcategory lookup failed:', err);
+    }
+    where.AND.push({ OR: subcategoryOrConditions });
   }
 
   if (sp.condition) where.condition = sp.condition;
@@ -162,7 +239,7 @@ async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?
     products = await prisma.product.findMany({
       where,
       orderBy: { createdAt: 'desc' },
-      take: 60,
+      take: sp.q ? undefined : 60,
       include: {
         seller: {
           select: {
@@ -178,6 +255,34 @@ async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?
             },
           },
         },
+        categoryRef: {
+          select: {
+            id: true,
+            name: true,
+            aliases: true,
+          },
+        },
+        subcategoryRef: {
+          select: {
+            id: true,
+            name: true,
+            aliases: true,
+            parent: {
+              select: {
+                id: true,
+                name: true,
+                aliases: true,
+                parent: {
+                  select: {
+                    id: true,
+                    name: true,
+                    aliases: true,
+                  },
+                },
+              },
+            },
+          },
+        },
         promotions: {
           where: { status: 'ACTIVE', expiresAt: { gt: now } },
           orderBy: { expiresAt: 'desc' },
@@ -188,6 +293,7 @@ async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?
         },
       },
     });
+    products = products.filter((product: any) => productMatchesSearch(product, sp.q));
     const promotionIds = products
       .map((product: any) => product.promotions[0]?.id)
       .filter(Boolean);
