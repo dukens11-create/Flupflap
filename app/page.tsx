@@ -56,15 +56,52 @@ function getUniqueSellerIds(products: Array<{ sellerId: string }>) {
 
 async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?: Record<string, string | number>) => string }) {
   const where: any = { status: 'APPROVED', inventory: { gt: 0 } };
-  if (sp.q) where.title = { contains: sp.q, mode: 'insensitive' };
 
-  // Category filtering: prefer categoryId-based filter when a structured category is selected,
-  // fall back to the legacy string-based category field for backward compatibility.
+  // Search across multiple fields: title, description, category string, and JSON attribute fields.
+  // Uses OR so any matching field returns the product. Case-insensitive for string columns;
+  // string_contains for JSON columns (substring match).
+  if (sp.q) {
+    where.AND = where.AND ?? [];
+    where.AND.push({
+      OR: [
+        { title: { contains: sp.q, mode: 'insensitive' } },
+        { description: { contains: sp.q, mode: 'insensitive' } },
+        { category: { contains: sp.q, mode: 'insensitive' } },
+        { productAttributes: { path: ['brand'], string_contains: sp.q } },
+        { productAttributes: { path: ['fragrance_type'], string_contains: sp.q } },
+        { productAttributes: { path: ['gender'], string_contains: sp.q } },
+      ],
+    });
+  }
+
+  // Category filtering: prefer categoryId/subcategoryId from new system, and also match the
+  // legacy string-based `category` field for backward compatibility with older listings.
   if (sp.subcategory) {
-    where.subcategoryId = sp.subcategory;
+    where.AND = where.AND ?? [];
+    const catOrConditions: any[] = [{ subcategoryId: sp.subcategory }];
+    try {
+      const subcatRecord = await prisma.category.findUnique({
+        where: { id: sp.subcategory },
+        select: { name: true },
+      });
+      if (subcatRecord?.name) {
+        catOrConditions.push({ category: { contains: subcatRecord.name, mode: 'insensitive' } });
+      }
+    } catch { /* ignore lookup failure — ID filter still applies */ }
+    where.AND.push({ OR: catOrConditions });
   } else if (sp.category) {
-    // category param is a Category.id from the new system
-    where.categoryId = sp.category;
+    where.AND = where.AND ?? [];
+    const catOrConditions: any[] = [{ categoryId: sp.category }];
+    try {
+      const catRecord = await prisma.category.findUnique({
+        where: { id: sp.category },
+        select: { name: true },
+      });
+      if (catRecord?.name) {
+        catOrConditions.push({ category: { contains: catRecord.name, mode: 'insensitive' } });
+      }
+    } catch { /* ignore lookup failure — ID filter still applies */ }
+    where.AND.push({ OR: catOrConditions });
   }
 
   if (sp.condition) where.condition = sp.condition;
