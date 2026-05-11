@@ -162,12 +162,26 @@ export default function MediaUpload({
   const [draggedImageId, setDraggedImageId] = useState<string | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
+  const videoPreviewRef = useRef<HTMLVideoElement>(null);
   const objectUrlsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => () => {
     objectUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
     objectUrlsRef.current.clear();
   }, []);
+
+  useEffect(() => {
+    const element = videoPreviewRef.current;
+    if (!element) return;
+
+    if (video?.previewKind === 'object-url' && video.previewUrl) {
+      element.src = video.previewUrl;
+    } else {
+      element.removeAttribute('src');
+    }
+
+    element.load();
+  }, [video]);
 
   async function uploadFile(file: File): Promise<string> {
     const fd = new FormData();
@@ -524,7 +538,7 @@ export default function MediaUpload({
           <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             {video.previewKind === 'object-url' ? (
               <video
-                src={video.previewUrl}
+                ref={videoPreviewRef}
                 controls
                 preload="metadata"
                 className="rounded-lg border border-slate-200 max-h-48 w-full object-cover"
