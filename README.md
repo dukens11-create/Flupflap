@@ -160,7 +160,12 @@ PLATFORM_FEE_PERCENT="7"
 Each checkout stores commission snapshots on order items so seller earnings, Stripe Connect fee splits, and reporting stay consistent even if listing prices change later.
 
 ## Image uploads
-This build supports image URLs by default. For production, connect Cloudinary, UploadThing, S3, or Vercel Blob and store the returned URL in `imageUrl`.
+Seller listing media uses Cloudinary direct upload with AI-enhanced image variants:
+
+- Up to 6 images + optional 1 video per listing
+- Image enhancement pipeline: background removal, sharpening, auto brightness/contrast, auto crop/centering, optional HD upscale
+- Sellers can preview and choose original vs enhanced image before submit
+- Optimized transformed URLs + thumbnails are stored alongside originals
 
 ## Taxes
 A placeholder `taxCents` field exists. For launch, connect Stripe Tax or TaxJar/Avalara because tax rules depend on state, city, nexus, product type, and seller location.

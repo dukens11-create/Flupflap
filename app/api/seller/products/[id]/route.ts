@@ -22,6 +22,9 @@ const updateSchema = z.object({
   condition: z.string().min(1).optional(),
   imageUrl: z.string().url().optional(),
   images: z.union([z.string().url(), z.array(z.string().url())]).optional(),
+  originalImages: z.union([z.string().url(), z.array(z.string().url())]).optional(),
+  enhancedImages: z.union([z.string().url(), z.array(z.string().url())]).optional(),
+  imageThumbnails: z.union([z.string().url(), z.array(z.string().url())]).optional(),
   videoUrl: z.string().url().optional().or(z.literal('')),
   inventory: z.string().optional(),
   pickupAvailable: z.string().optional(), // "true" when checkbox is checked
@@ -70,6 +73,15 @@ function resolveImages(submitted: string[] | null, existing: ExistingProduct): s
 function resolveVideoUrl(submitted: string | undefined, existing: ExistingProduct): string | null {
   if (submitted === undefined) return existing.videoUrl ?? null;
   return submitted || null;
+}
+
+function toUrlArray(
+  value: string | string[] | undefined,
+  fallback: string[] = [],
+): string[] {
+  if (Array.isArray(value)) return value.filter(Boolean);
+  if (typeof value === 'string' && value) return [value];
+  return fallback;
 }
 
 function buildListingRiskCandidate(
@@ -145,12 +157,33 @@ export async function POST(
     // Default: update
     const rawEntries = Object.fromEntries(form.entries());
     const imagesRaw = form.getAll('images').map(String).filter(Boolean);
-    const data = updateSchema.parse({ ...rawEntries, images: imagesRaw.length ? imagesRaw : undefined });
+    const originalImagesRaw = form.getAll('originalImages').map(String).filter(Boolean);
+    const enhancedImagesRaw = form.getAll('enhancedImages').map(String).filter(Boolean);
+    const imageThumbnailsRaw = form.getAll('imageThumbnails').map(String).filter(Boolean);
+    const data = updateSchema.parse({
+      ...rawEntries,
+      images: imagesRaw.length ? imagesRaw : undefined,
+      originalImages: originalImagesRaw.length ? originalImagesRaw : undefined,
+      enhancedImages: enhancedImagesRaw.length ? enhancedImagesRaw : undefined,
+      imageThumbnails: imageThumbnailsRaw.length ? imageThumbnailsRaw : undefined,
+    });
 
     const submittedImages = imagesRaw.length ? imagesRaw : data.imageUrl ? [data.imageUrl] : null;
     const resolvedImages = resolveImages(submittedImages, existing);
     const mainImage = resolvedImages[0] ?? existing.imageUrl;
     const videoUrl = resolveVideoUrl(data.videoUrl, existing);
+    const resolvedOriginalImages =
+      originalImagesRaw.length === resolvedImages.length
+        ? originalImagesRaw
+        : existing.originalImages?.length === resolvedImages.length
+          ? existing.originalImages
+          : resolvedImages;
+    const resolvedEnhancedImages =
+      enhancedImagesRaw.length > 0 ? enhancedImagesRaw.slice(0, resolvedImages.length) : existing.enhancedImages ?? [];
+    const resolvedImageThumbnails =
+      imageThumbnailsRaw.length > 0
+        ? imageThumbnailsRaw.slice(0, resolvedImages.length)
+        : existing.imageThumbnails ?? [];
 
     const riskAssessment = await getListingRiskAssessmentForCandidate(
       buildListingRiskCandidate(sellerId, existing, data, resolvedImages),
@@ -179,6 +212,13 @@ export async function POST(
         categoryId: data.categoryId || null,
         subcategoryId: data.subcategoryId || null,
         productAttributes: parseJsonOrNull(data.productAttributes),
+        imageUrl: mainImage,
+        images: resolvedImages,
+        mainImage,
+        videoUrl,
+        originalImages: resolvedOriginalImages,
+        enhancedImages: resolvedEnhancedImages,
+        imageThumbnails: resolvedImageThumbnails,
         // Reset to PENDING on edit so admin can re-review
         status: 'PENDING',
       },
@@ -251,6 +291,18 @@ export async function PATCH(
     const resolvedImages = resolveImages(imagesInput, existing);
     const mainImage = resolvedImages[0] ?? existing.imageUrl;
     const videoUrl = resolveVideoUrl(data.videoUrl, existing);
+    const resolvedOriginalImages = toUrlArray(
+      data.originalImages,
+      existing.originalImages?.length === resolvedImages.length ? existing.originalImages : resolvedImages,
+    );
+    const resolvedEnhancedImages = toUrlArray(data.enhancedImages, existing.enhancedImages ?? []).slice(
+      0,
+      resolvedImages.length,
+    );
+    const resolvedImageThumbnails = toUrlArray(data.imageThumbnails, existing.imageThumbnails ?? []).slice(
+      0,
+      resolvedImages.length,
+    );
 
     const riskAssessment = await getListingRiskAssessmentForCandidate(
       buildListingRiskCandidate(sellerId, existing, data, resolvedImages),
@@ -271,6 +323,9 @@ export async function PATCH(
         images: resolvedImages,
         mainImage,
         videoUrl,
+        originalImages: resolvedOriginalImages,
+        enhancedImages: resolvedEnhancedImages,
+        imageThumbnails: resolvedImageThumbnails,
         ...(data.inventory && { inventory: Number(data.inventory) }),
         ...(data.pickupAvailable !== undefined && { pickupAvailable: data.pickupAvailable === 'true' }),
         ...(data.pickupCity !== undefined && { pickupCity: data.pickupCity || null }),
