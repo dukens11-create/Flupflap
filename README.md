@@ -91,13 +91,15 @@ Set these in **Environment → Environment Variables** in the Render dashboard:
 | `NEXTAUTH_SECRET` | Random secret for NextAuth (use "Generate" in Render) |
 | `NEXTAUTH_URL` | Full public URL of your Render service (e.g. `https://flupflap.onrender.com`) |
 | `NEXT_PUBLIC_APP_URL` | Same as `NEXTAUTH_URL` |
-| `NEXT_PUBLIC_SITE_URL` | Public site URL used for redirects (e.g. `https://www.flupflap.com`) |
-| `NEXT_PUBLIC_API_URL` | Public API/base URL (use your app domain or backend URL) |
+| `NEXT_PUBLIC_SITE_URL` | Primary public site URL used for redirects and absolute links (e.g. `https://www.flupflap.com`) |
+| `NEXT_PUBLIC_API_URL` | Optional API base for external/mobile integrations; set to your backend URL if different from the site domain |
 | `STRIPE_SECRET_KEY` | Stripe secret key |
 | `STRIPE_PUBLISHABLE_KEY` | Stripe publishable key |
 | `STRIPE_WEBHOOK_SECRET` | Secret from your Stripe webhook endpoint |
 | `SHIPPO_API_TOKEN` | Shippo API token for shipping rates + label purchase |
 | `PLATFORM_FEE_PERCENT` | Legacy bootstrap env var (the app normalizes commission snapshots to `7`) |
+
+URL precedence for app redirects/absolute links: `NEXT_PUBLIC_SITE_URL` → `NEXT_PUBLIC_APP_URL` → `NEXTAUTH_URL`.
 
 ### Why the build succeeds but deployment fails
 

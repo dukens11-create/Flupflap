@@ -72,8 +72,8 @@ In the **Environment** tab, add:
 | `NEXTAUTH_SECRET` | Click **Generate** next to this field in Render |
 | `NEXTAUTH_URL` | The full public URL Render assigns you, e.g. `https://flupflap.onrender.com` |
 | `NEXT_PUBLIC_APP_URL` | Same value as `NEXTAUTH_URL` |
-| `NEXT_PUBLIC_SITE_URL` | Public site URL used for redirects, e.g. `https://www.flupflap.com` |
-| `NEXT_PUBLIC_API_URL` | Public API/base URL (same domain or your backend URL) |
+| `NEXT_PUBLIC_SITE_URL` | Primary public site URL used for redirects/absolute links, e.g. `https://www.flupflap.com` |
+| `NEXT_PUBLIC_API_URL` | Optional API base for external/mobile integrations; set only when API host differs from the site URL |
 | `STRIPE_SECRET_KEY` | From your Stripe dashboard → Developers → API keys |
 | `STRIPE_PUBLISHABLE_KEY` | From your Stripe dashboard → Developers → API keys |
 | `STRIPE_WEBHOOK_SECRET` | From Stripe → Webhooks → your endpoint → Signing secret |
@@ -86,6 +86,8 @@ In the **Environment** tab, add:
 | `TWILIO_ACCOUNT_SID` | From your Twilio Console — Account SID |
 | `TWILIO_AUTH_TOKEN` | From your Twilio Console — Auth Token |
 | `TWILIO_FROM_NUMBER` | Your Twilio phone number (e.g. `+15005550006`) |
+
+URL precedence for app redirects/absolute links: `NEXT_PUBLIC_SITE_URL` → `NEXT_PUBLIC_APP_URL` → `NEXTAUTH_URL`.
 
 ### Step 5 — Deploy
 
