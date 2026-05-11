@@ -77,9 +77,9 @@ export async function POST(req: Request) {
     console.log("Shippo token exists:", !!process.env.SHIPPO_API_TOKEN);
     const buyerAddressForLog = {
       ...buyerAddress,
-      street1: buyerAddress.street1 ? '[redacted]' : buyerAddress.street1,
-      street2: buyerAddress.street2 ? '[redacted]' : buyerAddress.street2,
-      zip: buyerAddress.zip ? '[redacted]' : buyerAddress.zip,
+      street1: buyerAddress.street1 ? '[redacted]' : undefined,
+      street2: buyerAddress.street2 ? '[redacted]' : undefined,
+      zip: buyerAddress.zip ? '[redacted]' : undefined,
     };
     console.log("Ship-to address:", buyerAddressForLog);
 
@@ -139,8 +139,8 @@ export async function POST(req: Request) {
       const fromAddress = resolveFromAddress(seller);
       const sellerAddress = {
         ...fromAddress,
-        street1: fromAddress.street1 ? '[redacted]' : fromAddress.street1,
-        zip: fromAddress.zip ? '[redacted]' : fromAddress.zip,
+        street1: fromAddress.street1 ? '[redacted]' : undefined,
+        zip: fromAddress.zip ? '[redacted]' : undefined,
       };
       console.log("Ship-from address:", sellerAddress);
 
