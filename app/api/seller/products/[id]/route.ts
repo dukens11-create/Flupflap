@@ -115,17 +115,15 @@ function getFirstSubmittedValue(...values: Array<string | undefined>) {
   return values.find((value) => typeof value === 'string' && value.trim().length > 0);
 }
 
-function parsePositiveNumber(value?: string | number | null) {
-  const trimmed = typeof value === 'number' ? String(value) : (value?.trim() ?? '');
+function parsePositiveNumber(value?: string | null) {
+  const trimmed = value?.trim() ?? '';
   if (!trimmed) return null;
   const parsed = Number(trimmed);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
 function getErrorMessage(err: unknown): string {
-  if (err instanceof Error && err.message) {
-    return err.message;
-  }
+  if (err instanceof Error) return err.message;
   return 'Unknown error.';
 }
 
@@ -160,6 +158,14 @@ function resolveSubmittedPackageDetails(data: ProductUpdateInput) {
     packageType: data.packageType?.trim() || null,
     shippingClass: data.shippingClass?.trim() || null,
   };
+}
+
+function getPackageDetailsErrorMessage(data: ProductUpdateInput) {
+  const distanceUnit = data.packageDimensionUnit?.trim().toLowerCase();
+  if (distanceUnit && distanceUnit !== 'in') {
+    return 'Only inches (in) are supported for package dimensions.';
+  }
+  return SHIPPING_PACKAGE_DETAILS_REQUIRED_MESSAGE;
 }
 
 function resolveOriginalImagesForProduct(
@@ -272,7 +278,7 @@ export async function POST(
     });
     const packageDetails = resolveSubmittedPackageDetails(data);
     if (!packageDetails) {
-      return redirectToEditForm(req, id, SHIPPING_PACKAGE_DETAILS_REQUIRED_MESSAGE);
+      return redirectToEditForm(req, id, getPackageDetailsErrorMessage(data));
     }
 
     const submittedImages = imagesRaw.length ? imagesRaw : data.imageUrl ? [data.imageUrl] : null;
@@ -345,7 +351,7 @@ export async function POST(
       });
     } catch (dbError) {
       const message = getErrorMessage(dbError);
-      console.error('[seller/products/[id] POST] database update error', { productId: id, sellerId: sellerId ?? null, message });
+      console.error('[seller/products/[id] POST] database update error', { productId: id, sellerId, message });
       if (dbError instanceof Error && dbError.stack) {
         console.error('[seller/products/[id] POST] stack trace', dbError.stack);
       }
@@ -360,7 +366,7 @@ export async function POST(
       return redirectToEditForm(req, id, 'Please review the listing details and try again.');
     }
     const message = getErrorMessage(err);
-    console.error('[seller/products/[id] POST] request handling error', { productId: id, sellerId: sellerId ?? null, message });
+    console.error('[seller/products/[id] POST] request handling error', { productId: id, sellerId, message });
     if (err instanceof Error && err.stack) {
       console.error('[seller/products/[id] POST] stack trace', err.stack);
     }
@@ -412,7 +418,7 @@ export async function PATCH(
     const data = updateSchema.parse(body);
     const packageDetails = resolveSubmittedPackageDetails(data);
     if (!packageDetails) {
-      return NextResponse.json({ error: SHIPPING_PACKAGE_DETAILS_REQUIRED_MESSAGE }, { status: 400 });
+      return NextResponse.json({ error: getPackageDetailsErrorMessage(data) }, { status: 400 });
     }
 
     // Resolve images for PATCH (JSON body): prefer explicit images list, then legacy imageUrl
