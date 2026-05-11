@@ -7,9 +7,7 @@ import type { Metadata } from 'next';
 import {
   sellerKycProviderLabel,
   sellerPhoneVerificationLabel,
-  sellerVerificationStatusTone,
 } from '@/lib/seller-verification';
-import { SellerVerificationStatus } from '@prisma/client';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,42 +28,75 @@ const REASON_OPTIONS = Object.entries(REASON_LABELS);
 function statusBadge(status: string) {
   const map: Record<string, string> = {
     ACTIVE: 'badge-green',
+    PENDING: 'badge-yellow',
+    RESTRICTED: 'badge-red',
     SUSPENDED: 'badge-yellow',
     BANNED: 'badge-red',
   };
   return map[status] ?? 'badge-slate';
 }
 
-const KYC_FILTER_OPTIONS = [
+function kycStatusBadge(status: string) {
+  const map: Record<string, string> = {
+    APPROVED: 'badge-green',
+    PENDING_REVIEW: 'badge-yellow',
+    REJECTED: 'badge-red',
+    NOT_SUBMITTED: 'badge-slate',
+  };
+  return map[status] ?? 'badge-slate';
+}
+
+function kycStatusLabel(status: string) {
+  const map: Record<string, string> = {
+    APPROVED: 'KYC Approved',
+    PENDING_REVIEW: 'KYC Pending Review',
+    REJECTED: 'KYC Rejected',
+    NOT_SUBMITTED: 'KYC Not Submitted',
+  };
+  return map[status] ?? status;
+}
+
+const SELLER_STATUS_FILTER_OPTIONS = [
   { value: '', label: 'All Sellers' },
-  { value: 'PENDING', label: 'Pending KYC' },
+  { value: 'PENDING', label: 'Pending Approval' },
+  { value: 'ACTIVE', label: 'Active' },
+  { value: 'RESTRICTED', label: 'Restricted' },
+  { value: 'SUSPENDED', label: 'Suspended' },
+  { value: 'BANNED', label: 'Banned' },
+] as const;
+
+const KYC_FILTER_OPTIONS = [
+  { value: '', label: 'All KYC' },
+  { value: 'PENDING_REVIEW', label: 'Pending KYC' },
   { value: 'APPROVED', label: 'KYC Approved' },
   { value: 'REJECTED', label: 'KYC Rejected' },
-  { value: 'NONE', label: 'Not Submitted' },
+  { value: 'NOT_SUBMITTED', label: 'Not Submitted' },
 ] as const;
 
 export default async function AdminSellersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ verification?: string; kyc?: string }>;
+  searchParams: Promise<{ verification?: string; kyc?: string; status?: string }>;
 }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect('/login');
   if (session.user.role !== 'ADMIN') redirect('/');
   const sp = await searchParams;
   const kycFilter = sp.kyc ?? '';
+  const statusFilter = sp.status ?? '';
 
-  // Build the verification status filter for the DB query.
-  const verificationFilter = (() => {
-    if (kycFilter === 'PENDING') return { verificationSubmission: { status: SellerVerificationStatus.PENDING } };
-    if (kycFilter === 'APPROVED') return { verificationSubmission: { status: SellerVerificationStatus.APPROVED } };
-    if (kycFilter === 'REJECTED') return { verificationSubmission: { status: SellerVerificationStatus.REJECTED } };
-    if (kycFilter === 'NONE') return { verificationSubmission: null };
-    return {};
-  })();
+  // Build the seller status filter for the DB query.
+  const sellerStatusFilter = statusFilter
+    ? { sellerStatus: statusFilter as any }
+    : {};
+
+  // Build the KYC status filter using the canonical kycStatus field on User.
+  const kycStatusFilter = kycFilter
+    ? { kycStatus: kycFilter as any }
+    : {};
 
   const sellers = await prisma.user.findMany({
-    where: { role: 'SELLER', ...verificationFilter },
+    where: { role: 'SELLER', ...sellerStatusFilter, ...kycStatusFilter },
     orderBy: { createdAt: 'desc' },
     include: {
       verificationSubmission: {
@@ -82,20 +113,46 @@ export default async function AdminSellersPage({
     },
   });
 
-  // Count sellers per KYC status for tab badges.
-  const [pendingCount, approvedCount, rejectedCount, noneCount] = await Promise.all([
-    prisma.user.count({ where: { role: 'SELLER', verificationSubmission: { status: SellerVerificationStatus.PENDING } } }),
-    prisma.user.count({ where: { role: 'SELLER', verificationSubmission: { status: SellerVerificationStatus.APPROVED } } }),
-    prisma.user.count({ where: { role: 'SELLER', verificationSubmission: { status: SellerVerificationStatus.REJECTED } } }),
-    prisma.user.count({ where: { role: 'SELLER', verificationSubmission: null } }),
+  // Count sellers per seller status and KYC status for tab badges.
+  const [
+    pendingStatusCount,
+    activeStatusCount,
+    restrictedStatusCount,
+    suspendedStatusCount,
+    bannedStatusCount,
+    kycPendingCount,
+    kycApprovedCount,
+    kycRejectedCount,
+    kycNotSubmittedCount,
+  ] = await Promise.all([
+    prisma.user.count({ where: { role: 'SELLER', sellerStatus: 'PENDING' } }),
+    prisma.user.count({ where: { role: 'SELLER', sellerStatus: 'ACTIVE' } }),
+    prisma.user.count({ where: { role: 'SELLER', sellerStatus: 'RESTRICTED' } }),
+    prisma.user.count({ where: { role: 'SELLER', sellerStatus: 'SUSPENDED' } }),
+    prisma.user.count({ where: { role: 'SELLER', sellerStatus: 'BANNED' } }),
+    prisma.user.count({ where: { role: 'SELLER', kycStatus: 'PENDING_REVIEW' } }),
+    prisma.user.count({ where: { role: 'SELLER', kycStatus: 'APPROVED' } }),
+    prisma.user.count({ where: { role: 'SELLER', kycStatus: 'REJECTED' } }),
+    prisma.user.count({ where: { role: 'SELLER', kycStatus: 'NOT_SUBMITTED' } }),
   ]);
 
-  const tabCounts: Record<string, number> = {
-    '': pendingCount + approvedCount + rejectedCount + noneCount,
-    PENDING: pendingCount,
-    APPROVED: approvedCount,
-    REJECTED: rejectedCount,
-    NONE: noneCount,
+  const totalSellerCount = pendingStatusCount + activeStatusCount + restrictedStatusCount + suspendedStatusCount + bannedStatusCount;
+
+  const sellerStatusCounts: Record<string, number> = {
+    '': totalSellerCount,
+    PENDING: pendingStatusCount,
+    ACTIVE: activeStatusCount,
+    RESTRICTED: restrictedStatusCount,
+    SUSPENDED: suspendedStatusCount,
+    BANNED: bannedStatusCount,
+  };
+
+  const kycCounts: Record<string, number> = {
+    '': totalSellerCount,
+    PENDING_REVIEW: kycPendingCount,
+    APPROVED: kycApprovedCount,
+    REJECTED: kycRejectedCount,
+    NOT_SUBMITTED: kycNotSubmittedCount,
   };
 
   return (
@@ -116,31 +173,64 @@ export default async function AdminSellersPage({
         </div>
       )}
 
+      {/* Seller Account Status Filter */}
+      <div className="mb-3">
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Filter by Seller Account Status</p>
+        <div className="flex flex-wrap gap-2">
+          {SELLER_STATUS_FILTER_OPTIONS.map(({ value, label }) => {
+            const isActive = statusFilter === value && !kycFilter;
+            const count = sellerStatusCounts[value] ?? 0;
+            const href = value ? `/admin/sellers?status=${value}` : '/admin/sellers';
+            return (
+              <a
+                key={value}
+                href={href}
+                className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium border transition-colors ${
+                  isActive
+                    ? 'bg-slate-900 text-white border-slate-900'
+                    : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'
+                }`}
+              >
+                {label}
+                <span className={`inline-flex items-center justify-center rounded-full px-1.5 py-0.5 text-xs font-bold min-w-[20px] ${
+                  isActive ? 'bg-white text-slate-900' : 'bg-slate-100 text-slate-600'
+                }`}>
+                  {count}
+                </span>
+              </a>
+            );
+          })}
+        </div>
+      </div>
+
       {/* KYC Status Filter Tabs */}
-      <div className="mb-6 flex flex-wrap gap-2">
-        {KYC_FILTER_OPTIONS.map(({ value, label }) => {
-          const isActive = kycFilter === value;
-          const count = tabCounts[value] ?? 0;
-          const href = value ? `/admin/sellers?kyc=${value}` : '/admin/sellers';
-          return (
-            <a
-              key={value}
-              href={href}
-              className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium border transition-colors ${
-                isActive
-                  ? 'bg-slate-900 text-white border-slate-900'
-                  : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'
-              }`}
-            >
-              {label}
-              <span className={`inline-flex items-center justify-center rounded-full px-1.5 py-0.5 text-xs font-bold min-w-[20px] ${
-                isActive ? 'bg-white text-slate-900' : 'bg-slate-100 text-slate-600'
-              }`}>
-                {count}
-              </span>
-            </a>
-          );
-        })}
+      <div className="mb-6">
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Filter by KYC Status</p>
+        <div className="flex flex-wrap gap-2">
+          {KYC_FILTER_OPTIONS.map(({ value, label }) => {
+            const isActive = kycFilter === value && !statusFilter;
+            const count = kycCounts[value] ?? 0;
+            const href = value ? `/admin/sellers?kyc=${value}` : '/admin/sellers';
+            return (
+              <a
+                key={value}
+                href={href}
+                className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium border transition-colors ${
+                  isActive
+                    ? 'bg-slate-900 text-white border-slate-900'
+                    : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'
+                }`}
+              >
+                {label}
+                <span className={`inline-flex items-center justify-center rounded-full px-1.5 py-0.5 text-xs font-bold min-w-[20px] ${
+                  isActive ? 'bg-white text-slate-900' : 'bg-slate-100 text-slate-600'
+                }`}>
+                  {count}
+                </span>
+              </a>
+            );
+          })}
+        </div>
       </div>
 
       {sellers.length === 0 ? (
@@ -170,8 +260,8 @@ export default async function AdminSellersPage({
                     </p>
                   )}
                   <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-                    <span className={`badge ${sellerVerificationStatusTone(seller.verificationSubmission?.status)}`}>
-                      Verification {seller.verificationSubmission?.status ?? 'Not submitted'}
+                    <span className={`badge ${kycStatusBadge(seller.kycStatus)}`}>
+                      {kycStatusLabel(seller.kycStatus)}
                     </span>
                     {seller.verificationSubmission?.provider && (
                       <span className="text-slate-500">
@@ -181,6 +271,11 @@ export default async function AdminSellersPage({
                     {seller.verificationSubmission?.phoneVerificationStatus && (
                       <span className="text-slate-500">
                         Phone verification: {sellerPhoneVerificationLabel(seller.verificationSubmission.phoneVerificationStatus)}
+                      </span>
+                    )}
+                    {seller.verifiedSeller && seller.approvedAt && (
+                      <span className="text-green-600 font-medium">
+                        ✓ Verified · Approved {seller.approvedAt.toLocaleDateString('en-US', DEFAULT_DATE_FORMAT_OPTIONS)}
                       </span>
                     )}
                   </div>
@@ -327,6 +422,7 @@ export default async function AdminSellersPage({
                       <select name="action" className="input" required>
                         <option value="">Select action…</option>
                         <option value="SUSPENDED">Suspend (temporary)</option>
+                        <option value="RESTRICTED">Restrict (partial restriction)</option>
                         <option value="BANNED">Ban (permanent)</option>
                         <option value="REINSTATED">Reinstate (lift restriction)</option>
                       </select>

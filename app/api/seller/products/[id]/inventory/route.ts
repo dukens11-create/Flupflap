@@ -20,7 +20,7 @@ export async function PATCH(
     }
 
     const dbUser = await prisma.user.findUnique({ where: { id: session.user.id } });
-    if (dbUser?.sellerStatus === 'SUSPENDED' || dbUser?.sellerStatus === 'BANNED') {
+    if (dbUser?.sellerStatus === 'SUSPENDED' || dbUser?.sellerStatus === 'BANNED' || dbUser?.sellerStatus === 'RESTRICTED') {
       return NextResponse.json({ error: 'Your seller account is currently restricted.' }, { status: 403 });
     }
 

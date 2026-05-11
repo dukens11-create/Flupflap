@@ -81,6 +81,12 @@ export async function POST(req: Request) {
       },
     });
 
+    // Sync canonical kycStatus on the User record so dashboard counts are consistent.
+    await prisma.user.update({
+      where: { id: session.user.id },
+      data: { kycStatus: 'PENDING_REVIEW' },
+    });
+
     if (verificationUrl) {
       return NextResponse.json({
         sessionUrl: verificationUrl,

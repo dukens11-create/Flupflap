@@ -45,6 +45,7 @@ export async function POST(req: Request) {
         phone: data.role === 'SELLER' ? (data.phone?.trim() ?? null) : null,
         ...(data.role === 'SELLER'
           ? {
+              sellerStatus: 'PENDING',
               hasFreePromotion: !!settings?.freePromotionEnabled,
               freePromotionStart: settings?.freePromotionEnabled ? now : null,
               freePromotionEnd,

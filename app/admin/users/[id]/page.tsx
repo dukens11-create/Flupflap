@@ -179,7 +179,7 @@ export default async function AdminUserDetailPage({
             <>
               <div>
                 <p className="label">Seller Status</p>
-                <span className={`badge ${user.sellerStatus === 'ACTIVE' ? 'badge-green' : user.sellerStatus === 'SUSPENDED' ? 'badge-yellow' : 'badge-red'}`}>
+                <span className={`badge ${user.sellerStatus === 'ACTIVE' ? 'badge-green' : user.sellerStatus === 'PENDING' ? 'badge-slate' : user.sellerStatus === 'SUSPENDED' ? 'badge-yellow' : 'badge-red'}`}>
                   {user.sellerStatus}
                 </span>
                 {user.sellerStatusReason && user.sellerStatus !== 'ACTIVE' && (

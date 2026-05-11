@@ -15,7 +15,7 @@ export async function createStripeConnectLinkForSeller(sellerId: string): Promis
       statusCode: 404,
     });
   }
-  if (user.sellerStatus === 'SUSPENDED' || user.sellerStatus === 'BANNED') {
+  if (user.sellerStatus === 'SUSPENDED' || user.sellerStatus === 'BANNED' || user.sellerStatus === 'RESTRICTED') {
     throw Object.assign(new Error('Seller account is restricted.'), {
       code: 'SELLER_RESTRICTED',
       statusCode: 403,

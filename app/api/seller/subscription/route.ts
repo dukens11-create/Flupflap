@@ -43,7 +43,7 @@ export async function POST() {
     }
 
     // Block restricted sellers
-    if (dbUser.sellerStatus === 'SUSPENDED' || dbUser.sellerStatus === 'BANNED') {
+    if (dbUser.sellerStatus === 'SUSPENDED' || dbUser.sellerStatus === 'BANNED' || dbUser.sellerStatus === 'RESTRICTED') {
       return NextResponse.json({ error: 'Your seller account is currently restricted.' }, { status: 403 });
     }
 

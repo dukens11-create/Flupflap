@@ -141,6 +141,24 @@ export async function POST(
       },
     });
 
+    // Sync canonical kycStatus, sellerStatus, verifiedSeller, and approvedAt
+    // onto the User record so all dashboard counts use a single source of truth.
+    const now = new Date();
+    await prisma.user.update({
+      where: { id },
+      data:
+        data.status === SellerVerificationStatus.APPROVED
+          ? {
+              kycStatus: 'APPROVED',
+              sellerStatus: 'ACTIVE',
+              verifiedSeller: true,
+              approvedAt: now,
+            }
+          : {
+              kycStatus: 'REJECTED',
+            },
+    });
+
     // Notify the seller of the admin's decision. Admin review decisions always
     // create fresh notifications (no deduplication) so sellers receive a
     // notification for every approval/rejection cycle.

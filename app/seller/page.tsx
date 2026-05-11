@@ -133,7 +133,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
     }
   }
   const sellerStatus = dbUser?.sellerStatus ?? 'ACTIVE';
-  const isRestricted = sellerStatus === 'SUSPENDED' || sellerStatus === 'BANNED';
+  const isRestricted = sellerStatus === 'SUSPENDED' || sellerStatus === 'BANNED' || sellerStatus === 'RESTRICTED';
   const subscriptionActive = dbUser ? isSubscriptionActive(dbUser) : false;
   const subscriptionPeriodEnd = dbUser?.subscriptionCurrentPeriodEnd ?? null;
   const subscriptionStatus = dbUser?.subscriptionStatus ?? null;

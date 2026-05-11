@@ -193,6 +193,33 @@ export async function applyAutomatedKycResult(input: {
 
   // Notify the seller when their verification status changes to a terminal state.
   const previousStatus = existingVerification?.status ?? null;
+
+  // Sync canonical kycStatus (and sellerStatus on approval) onto the User record
+  // so dashboard counts stay consistent with the SellerVerification table.
+  if (previousStatus !== status) {
+    if (status === SellerVerificationStatus.APPROVED) {
+      await prisma.user.update({
+        where: { id: input.sellerId },
+        data: {
+          kycStatus: 'APPROVED',
+          sellerStatus: 'ACTIVE',
+          verifiedSeller: true,
+          approvedAt: now,
+        },
+      });
+    } else if (status === SellerVerificationStatus.REJECTED) {
+      await prisma.user.update({
+        where: { id: input.sellerId },
+        data: { kycStatus: 'REJECTED' },
+      });
+    } else if (status === SellerVerificationStatus.PENDING) {
+      await prisma.user.update({
+        where: { id: input.sellerId },
+        data: { kycStatus: 'PENDING_REVIEW' },
+      });
+    }
+  }
+
   if (previousStatus !== status) {
     if (status === SellerVerificationStatus.APPROVED) {
       // Use a stable dedupeKey so repeated webhooks for the same approval don't
