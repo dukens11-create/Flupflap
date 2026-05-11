@@ -51,6 +51,10 @@ function inferSellerSchemaType(name: string): 'Person' | 'Organization' {
   return /\b(llc|inc|ltd|corp|company|co\.)\b/i.test(name) ? 'Organization' : 'Person';
 }
 
+function getProductImages(images: string[], fallbackImageUrl: string): string[] {
+  return (images.length ? images : [fallbackImageUrl]).filter(Boolean);
+}
+
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   const product = await prisma.product.findUnique({
@@ -75,7 +79,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   }
 
   const canonicalPath = `/products/${product.id}`;
-  const imageCandidates = (product.images?.length ? product.images : [product.imageUrl]).filter(Boolean);
+  const imageCandidates = getProductImages(product.images, product.imageUrl);
   const socialImages = imageCandidates.length ? imageCandidates : [BRAND_LOGO_PATH];
   const productDescription = summarizeDescription(product.description);
   const title = `${product.title} | ${product.category}`;
@@ -140,7 +144,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
   }
   const sellerResponseStats = await getSellerResponseStats(product.seller.id);
   const canonicalUrl = absoluteUrl(`/products/${product.id}`);
-  const imageCandidates = (product.images?.length ? product.images : [product.imageUrl]).filter(Boolean);
+  const imageCandidates = getProductImages(product.images, product.imageUrl);
   const productJsonLd = {
     '@context': 'https://schema.org',
     '@type': 'Product',
