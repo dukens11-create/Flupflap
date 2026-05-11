@@ -45,6 +45,10 @@ function centsToPriceString(cents: number): string {
   return `${dollarsPortion}.${centsPortion}`;
 }
 
+function inferSellerSchemaType(name: string): 'Person' | 'Organization' {
+  return /\b(llc|inc|ltd|corp|company|co\.)\b/i.test(name) ? 'Organization' : 'Person';
+}
+
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   const product = await prisma.product.findUnique({
@@ -152,7 +156,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
       itemCondition: getSchemaItemCondition(product.condition),
     },
     seller: {
-      '@type': 'Person',
+      '@type': inferSellerSchemaType(product.seller.name),
       name: product.seller.name,
     },
   };
