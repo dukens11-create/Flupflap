@@ -209,6 +209,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
         country: true,
         createdAt: true,
         updatedAt: true,
+        kycStartedAt: true,
         eligibleToListAt: true,
         adminFallbackStatus: true,
         adminFallbackReason: true,
@@ -438,14 +439,21 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                 <span className={`badge ${sellerVerificationStatusTone(verificationSubmission?.status)}`}>
                   {sellerVerificationStatusLabel(verificationSubmission?.status)}
                 </span>
+                {verificationSubmission?.kycStartedAt && (
+                  <span className="text-xs text-slate-400">
+                    Submitted {verificationSubmission.kycStartedAt.toLocaleDateString('en-US', DEFAULT_DATE_FORMAT_OPTIONS)}
+                  </span>
+                )}
               </div>
               <p className="mt-3 text-sm text-slate-600 max-w-2xl">
                 To sell on FlupFlap, verify your identity with a government ID and selfie.
               </p>
               {verificationSubmission?.status === 'REJECTED' && verificationSubmission.rejectionReason && (
-                <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-                  <span className="font-semibold">Verification was rejected:</span> {verificationSubmission.rejectionReason}
-                </p>
+                <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+                  <p className="font-semibold mb-1">Verification was rejected:</p>
+                  <p>{verificationSubmission.rejectionReason}</p>
+                  <p className="mt-2 text-xs text-red-700">Please re-submit your documents to proceed.</p>
+                </div>
               )}
               {verificationSubmission?.status === 'APPROVED' && (
                 <div className="mt-3 flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2">
@@ -459,7 +467,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                 </p>
               )}
               {!verificationApproved && (
-                <KycVerifyButton />
+                <KycVerifyButton isRejected={verificationSubmission?.status === 'REJECTED'} />
               )}
             </div>
           </div>

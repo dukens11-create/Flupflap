@@ -3,9 +3,11 @@ import {
   SellerKycProvider,
   SellerPhoneVerificationStatus,
   SellerVerificationStatus,
+  NotificationType,
 } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { appUrl, getCurrentStripeMode, stripe } from '@/lib/stripe';
+import { createNotification } from '@/lib/notifications';
 
 export type SellerKycChecks = {
   governmentIdVerified: boolean;
@@ -17,7 +19,10 @@ export type SellerKycChecks = {
 const DEFAULT_PROVIDER_REJECTION_REASON = 'Provider verification failed.';
 
 export function resolveAutomatedKycStatus(checks: SellerKycChecks): SellerVerificationStatus {
-  if (checks.governmentIdVerified && checks.selfieVerified && checks.addressVerified && checks.phoneVerified) {
+  // Identity verification (government ID + selfie) is the primary KYC gate.
+  // Address and phone checks from Stripe Connect are supplementary and are not
+  // required to unlock selling features.
+  if (checks.governmentIdVerified && checks.selfieVerified) {
     return SellerVerificationStatus.APPROVED;
   }
   return SellerVerificationStatus.PENDING;
@@ -103,10 +108,16 @@ export async function applyAutomatedKycResult(input: {
 }) {
   const status = input.forcedStatus ?? resolveAutomatedKycStatus(input.checks);
   const now = new Date();
-  const seller = await prisma.user.findUnique({
-    where: { id: input.sellerId },
-    select: { phone: true },
-  });
+  const [seller, existingVerification] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: input.sellerId },
+      select: { phone: true },
+    }),
+    prisma.sellerVerification.findUnique({
+      where: { sellerId: input.sellerId },
+      select: { status: true },
+    }),
+  ]);
 
   await prisma.sellerVerification.upsert({
     where: { sellerId: input.sellerId },
@@ -179,6 +190,36 @@ export async function applyAutomatedKycResult(input: {
       webhookLastReceivedAt: now,
     },
   });
+
+  // Notify the seller when their verification status changes to a terminal state.
+  const previousStatus = existingVerification?.status ?? null;
+  if (previousStatus !== status) {
+    if (status === SellerVerificationStatus.APPROVED) {
+      // Use a stable dedupeKey so repeated webhooks for the same approval don't
+      // stack up multiple notifications; the upsert resets readAt each time.
+      await createNotification({
+        userId: input.sellerId,
+        type: NotificationType.PAYOUT,
+        title: 'Identity verification approved ✓',
+        body: 'Your identity has been verified. You can now list and sell on FlupFlap once your subscription is active.',
+        link: '/seller',
+        dedupeKey: `kyc-approved:${input.sellerId}`,
+      });
+    } else if (status === SellerVerificationStatus.REJECTED) {
+      const reason = input.rejectionReason ?? DEFAULT_PROVIDER_REJECTION_REASON;
+      // Use the webhookEventId as the dedupeKey to prevent duplicate notifications
+      // from the same Stripe event being retried. When no event ID is available
+      // (rare edge case), skip deduplication so the seller always receives the notice.
+      await createNotification({
+        userId: input.sellerId,
+        type: NotificationType.PAYOUT,
+        title: 'Identity verification requires attention',
+        body: `Your identity verification was not approved: ${reason}. Please re-submit your documents from your seller dashboard.`,
+        link: '/seller',
+        dedupeKey: input.webhookEventId ? `kyc-rejected:${input.sellerId}:${input.webhookEventId}` : undefined,
+      });
+    }
+  }
 }
 
 export function stripeKycChecksFromAccount(account: {

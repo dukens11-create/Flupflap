@@ -169,7 +169,10 @@ export async function POST(req: Request) {
 
     let forcedStatus: SellerVerificationStatus | undefined;
     let rejectionReason: string | null = null;
-    if (event.type === 'identity.verification_session.requires_input' && !hadPassedIdentityChecks) {
+    if (event.type === 'identity.verification_session.verified') {
+      // Stripe has confirmed the identity — mark the seller as approved immediately.
+      forcedStatus = SellerVerificationStatus.APPROVED;
+    } else if (event.type === 'identity.verification_session.requires_input' && !hadPassedIdentityChecks) {
       forcedStatus = SellerVerificationStatus.REJECTED;
       rejectionReason =
         sessionObject.last_error?.reason

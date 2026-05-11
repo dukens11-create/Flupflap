@@ -1,12 +1,14 @@
 import {
   SellerAdminFallbackStatus,
   SellerVerificationStatus,
+  NotificationType,
 } from '@prisma/client';
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
+import { createNotification } from '@/lib/notifications';
 
 const schema = z
   .object({
@@ -137,6 +139,23 @@ export async function POST(
         reviewedAt: new Date(),
         reviewedById: session.user.id,
       },
+    });
+
+    // Notify the seller of the admin's decision. Admin review decisions always
+    // create fresh notifications (no deduplication) so sellers receive a
+    // notification for every approval/rejection cycle.
+    await createNotification({
+      userId: id,
+      type: NotificationType.PAYOUT,
+      title:
+        data.status === SellerVerificationStatus.APPROVED
+          ? 'Identity verification approved ✓'
+          : 'Identity verification rejected',
+      body:
+        data.status === SellerVerificationStatus.APPROVED
+          ? 'An admin has approved your identity verification. You can now list items on FlupFlap once your subscription is active.'
+          : `Your identity verification was rejected: ${data.rejectionReason}. Please re-submit your documents from your seller dashboard.`,
+      link: '/seller',
     });
 
     return NextResponse.redirect(new URL('/admin/sellers?verification=updated', req.url));

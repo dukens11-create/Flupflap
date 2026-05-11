@@ -9,6 +9,7 @@ import {
   sellerPhoneVerificationLabel,
   sellerVerificationStatusTone,
 } from '@/lib/seller-verification';
+import { SellerVerificationStatus } from '@prisma/client';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,18 +36,36 @@ function statusBadge(status: string) {
   return map[status] ?? 'badge-slate';
 }
 
+const KYC_FILTER_OPTIONS = [
+  { value: '', label: 'All Sellers' },
+  { value: 'PENDING', label: 'Pending KYC' },
+  { value: 'APPROVED', label: 'KYC Approved' },
+  { value: 'REJECTED', label: 'KYC Rejected' },
+  { value: 'NONE', label: 'Not Submitted' },
+] as const;
+
 export default async function AdminSellersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ verification?: string }>;
+  searchParams: Promise<{ verification?: string; kyc?: string }>;
 }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect('/login');
   if (session.user.role !== 'ADMIN') redirect('/');
   const sp = await searchParams;
+  const kycFilter = sp.kyc ?? '';
+
+  // Build the verification status filter for the DB query.
+  const verificationFilter = (() => {
+    if (kycFilter === 'PENDING') return { verificationSubmission: { status: SellerVerificationStatus.PENDING } };
+    if (kycFilter === 'APPROVED') return { verificationSubmission: { status: SellerVerificationStatus.APPROVED } };
+    if (kycFilter === 'REJECTED') return { verificationSubmission: { status: SellerVerificationStatus.REJECTED } };
+    if (kycFilter === 'NONE') return { verificationSubmission: null };
+    return {};
+  })();
 
   const sellers = await prisma.user.findMany({
-    where: { role: 'SELLER' },
+    where: { role: 'SELLER', ...verificationFilter },
     orderBy: { createdAt: 'desc' },
     include: {
       verificationSubmission: {
@@ -63,13 +82,29 @@ export default async function AdminSellersPage({
     },
   });
 
+  // Count sellers per KYC status for tab badges.
+  const [pendingCount, approvedCount, rejectedCount, noneCount] = await Promise.all([
+    prisma.user.count({ where: { role: 'SELLER', verificationSubmission: { status: SellerVerificationStatus.PENDING } } }),
+    prisma.user.count({ where: { role: 'SELLER', verificationSubmission: { status: SellerVerificationStatus.APPROVED } } }),
+    prisma.user.count({ where: { role: 'SELLER', verificationSubmission: { status: SellerVerificationStatus.REJECTED } } }),
+    prisma.user.count({ where: { role: 'SELLER', verificationSubmission: null } }),
+  ]);
+
+  const tabCounts: Record<string, number> = {
+    '': pendingCount + approvedCount + rejectedCount + noneCount,
+    PENDING: pendingCount,
+    APPROVED: approvedCount,
+    REJECTED: rejectedCount,
+    NONE: noneCount,
+  };
+
   return (
     <main id="kyc-verification" className="max-w-5xl mx-auto">
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-black">Seller Management</h1>
           <p className="text-slate-500 text-sm">
-            Suspend or ban seller accounts for policy violations.
+            Review KYC verification submissions and manage seller accounts.
           </p>
         </div>
         <a href="/admin" className="btn-outline text-sm">← Admin Dashboard</a>
@@ -80,6 +115,33 @@ export default async function AdminSellersPage({
           ✅ Seller verification review updated.
         </div>
       )}
+
+      {/* KYC Status Filter Tabs */}
+      <div className="mb-6 flex flex-wrap gap-2">
+        {KYC_FILTER_OPTIONS.map(({ value, label }) => {
+          const isActive = kycFilter === value;
+          const count = tabCounts[value] ?? 0;
+          const href = value ? `/admin/sellers?kyc=${value}` : '/admin/sellers';
+          return (
+            <a
+              key={value}
+              href={href}
+              className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium border transition-colors ${
+                isActive
+                  ? 'bg-slate-900 text-white border-slate-900'
+                  : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'
+              }`}
+            >
+              {label}
+              <span className={`inline-flex items-center justify-center rounded-full px-1.5 py-0.5 text-xs font-bold min-w-[20px] ${
+                isActive ? 'bg-white text-slate-900' : 'bg-slate-100 text-slate-600'
+              }`}>
+                {count}
+              </span>
+            </a>
+          );
+        })}
+      </div>
 
       {sellers.length === 0 ? (
         <div className="card p-6 text-slate-500">No seller accounts yet.</div>
@@ -128,9 +190,14 @@ export default async function AdminSellersPage({
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="text-sm font-semibold text-slate-900">Verification submission</p>
+                    <p className="text-sm font-semibold text-slate-900">KYC Verification</p>
                     {seller.verificationSubmission ? (
                       <div className="mt-3 space-y-2 text-sm text-slate-600">
+                        {seller.verificationSubmission.kycStartedAt && (
+                          <p className="text-xs text-slate-500">
+                            Submitted {seller.verificationSubmission.kycStartedAt.toLocaleDateString('en-US', DEFAULT_DATE_FORMAT_OPTIONS)}
+                          </p>
+                        )}
                         <p>
                           <span className="font-medium text-slate-800">Phone:</span>{' '}
                           {seller.verificationSubmission.phoneNumber}
@@ -148,8 +215,8 @@ export default async function AdminSellersPage({
                         <div className="grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-4">
                           <p className={`rounded border px-2 py-1 ${seller.verificationSubmission.governmentIdVerified ? 'border-green-200 bg-green-50 text-green-700' : 'border-slate-200 bg-white'}`}>ID: {seller.verificationSubmission.governmentIdVerified ? 'Verified' : 'Pending'}</p>
                           <p className={`rounded border px-2 py-1 ${seller.verificationSubmission.selfieVerified ? 'border-green-200 bg-green-50 text-green-700' : 'border-slate-200 bg-white'}`}>Selfie: {seller.verificationSubmission.selfieVerified ? 'Verified' : 'Pending'}</p>
-                          <p className={`rounded border px-2 py-1 ${seller.verificationSubmission.addressVerified ? 'border-green-200 bg-green-50 text-green-700' : 'border-slate-200 bg-white'}`}>Address: {seller.verificationSubmission.addressVerified ? 'Verified' : 'Pending'}</p>
-                          <p className={`rounded border px-2 py-1 ${seller.verificationSubmission.phoneVerified ? 'border-green-200 bg-green-50 text-green-700' : 'border-slate-200 bg-white'}`}>Phone: {seller.verificationSubmission.phoneVerified ? 'Verified' : 'Pending'}</p>
+                          <p className={`rounded border px-2 py-1 ${seller.verificationSubmission.addressVerified ? 'border-green-200 bg-green-50 text-green-700' : 'border-slate-200 bg-white'}`}>Address: {seller.verificationSubmission.addressVerified ? 'Verified' : 'Supplementary'}</p>
+                          <p className={`rounded border px-2 py-1 ${seller.verificationSubmission.phoneVerified ? 'border-green-200 bg-green-50 text-green-700' : 'border-slate-200 bg-white'}`}>Phone: {seller.verificationSubmission.phoneVerified ? 'Verified' : 'Supplementary'}</p>
                         </div>
                         {seller.verificationSubmission.adminFallbackStatus !== 'NOT_REQUIRED' && (
                           <p className="text-xs text-slate-500">
