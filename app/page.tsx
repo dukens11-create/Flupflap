@@ -39,6 +39,7 @@ interface SearchParams {
   q?: string;
   category?: string;
   subcategory?: string;
+  refineCategory?: string;
   condition?: string;
   minPrice?: string;
   maxPrice?: string;
@@ -54,17 +55,86 @@ function getUniqueSellerIds(products: Array<{ sellerId: string }>) {
   return Array.from(new Set(products.map((product) => product.sellerId)));
 }
 
+function collectStringValues(value: unknown, strings: string[]) {
+  if (typeof value === 'string') {
+    strings.push(value);
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectStringValues(item, strings);
+    return;
+  }
+  if (value && typeof value === 'object') {
+    for (const nestedValue of Object.values(value as Record<string, unknown>)) {
+      collectStringValues(nestedValue, strings);
+    }
+  }
+}
+
+type SearchableProduct = {
+  title: string;
+  description: string;
+  category: string;
+  productAttributes: unknown;
+  categoryRef?: {
+    name?: string | null;
+    aliases?: string[] | null;
+  } | null;
+  subcategoryRef?: {
+    name?: string | null;
+    aliases?: string[] | null;
+    parent?: {
+      name?: string | null;
+      aliases?: string[] | null;
+      parent?: {
+        name?: string | null;
+        aliases?: string[] | null;
+      } | null;
+    } | null;
+  } | null;
+};
+
+function productMatchesSearch(product: SearchableProduct, query?: string) {
+  const normalizedQuery = query?.trim().toLocaleLowerCase();
+  if (!normalizedQuery) return true;
+
+  const searchableValues: string[] = [
+    product.title,
+    product.description,
+    product.category,
+    product.categoryRef?.name,
+    ...(product.categoryRef?.aliases ?? []),
+    product.subcategoryRef?.name,
+    ...(product.subcategoryRef?.aliases ?? []),
+    product.subcategoryRef?.parent?.name,
+    ...(product.subcategoryRef?.parent?.aliases ?? []),
+    product.subcategoryRef?.parent?.parent?.name,
+    ...(product.subcategoryRef?.parent?.parent?.aliases ?? []),
+  ].filter((value): value is string => typeof value === 'string' && value.length > 0);
+
+  collectStringValues(product.productAttributes, searchableValues);
+
+  return searchableValues.some((value) => value.toLocaleLowerCase().includes(normalizedQuery));
+}
+
 async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?: Record<string, string | number>) => string }) {
   const where: any = { status: 'APPROVED', inventory: { gt: 0 } };
-  if (sp.q) where.title = { contains: sp.q, mode: 'insensitive' };
 
   // Category filtering: prefer categoryId-based filter when a structured category is selected,
   // fall back to the legacy string-based category field for backward compatibility.
-  if (sp.subcategory) {
-    where.subcategoryId = sp.subcategory;
-  } else if (sp.category) {
-    // category param is a Category.id from the new system
+  if (sp.category) {
     where.categoryId = sp.category;
+  }
+  if (sp.refineCategory) {
+    where.subcategoryId = sp.refineCategory;
+  } else if (sp.subcategory) {
+    where.AND = where.AND ?? [];
+    where.AND.push({
+      OR: [
+        { subcategoryId: sp.subcategory },
+        { subcategoryRef: { is: { parentId: sp.subcategory } } },
+      ],
+    });
   }
 
   if (sp.condition) where.condition = sp.condition;
@@ -119,7 +189,7 @@ async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?
     products = await prisma.product.findMany({
       where,
       orderBy: { createdAt: 'desc' },
-      take: 60,
+      take: sp.q ? undefined : 60,
       include: {
         seller: {
           select: {
@@ -135,6 +205,34 @@ async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?
             },
           },
         },
+        categoryRef: {
+          select: {
+            id: true,
+            name: true,
+            aliases: true,
+          },
+        },
+        subcategoryRef: {
+          select: {
+            id: true,
+            name: true,
+            aliases: true,
+            parent: {
+              select: {
+                id: true,
+                name: true,
+                aliases: true,
+                parent: {
+                  select: {
+                    id: true,
+                    name: true,
+                    aliases: true,
+                  },
+                },
+              },
+            },
+          },
+        },
         promotions: {
           where: { status: 'ACTIVE', expiresAt: { gt: now } },
           orderBy: { expiresAt: 'desc' },
@@ -145,6 +243,7 @@ async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?
         },
       },
     });
+    products = products.filter((product: any) => productMatchesSearch(product, sp.q));
     const promotionIds = products
       .map((product: any) => product.promotions[0]?.id)
       .filter(Boolean);
