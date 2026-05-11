@@ -17,11 +17,7 @@ export const PRODUCT_VIDEO_TYPES = [
 ] as const;
 
 export function getProductMediaFolder() {
-  return (
-    process.env.CLOUDINARY_PRODUCT_MEDIA_FOLDER ??
-    process.env.CLOUDINARY_UPLOAD_FOLDER ??
-    'flupflap/products'
-  );
+  return process.env.CLOUDINARY_PRODUCT_MEDIA_FOLDER ?? 'flupflap/products';
 }
 
 export function getProductMediaKind(contentType: string) {

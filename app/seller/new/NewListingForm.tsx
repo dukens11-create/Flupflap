@@ -33,22 +33,11 @@ export default function NewListingForm() {
     progress: number;
     error: string;
   }) => {
-    setMediaState((current) => {
-      if (
-        current.imageCount === nextState.imageCount &&
-        current.uploading === nextState.uploading &&
-        current.progress === nextState.progress &&
-        current.error === nextState.error
-      ) {
-        return current;
-      }
-
-      return {
-        imageCount: nextState.imageCount,
-        uploading: nextState.uploading,
-        progress: nextState.progress,
-        error: nextState.error,
-      };
+    setMediaState({
+      imageCount: nextState.imageCount,
+      uploading: nextState.uploading,
+      progress: nextState.progress,
+      error: nextState.error,
     });
     if (nextState.imageCount > 0) {
       setErrors((current) => {

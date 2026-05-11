@@ -68,6 +68,19 @@ export async function POST(req: Request) {
 
   const timestamp = Math.floor(Date.now() / 1000);
   const folder = getProductMediaFolder();
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+  const apiKey = process.env.CLOUDINARY_API_KEY;
+  if (!cloudName || !apiKey) {
+    return NextResponse.json(
+      {
+        success: false,
+        message:
+          'Product media uploads are not configured on this server yet. Please add the Cloudinary environment variables and redeploy.',
+      },
+      { status: 503 },
+    );
+  }
+
   const paramsToSign = {
     folder,
     timestamp,
@@ -81,11 +94,10 @@ export async function POST(req: Request) {
 
   return NextResponse.json({
     success: true,
-    cloudName: process.env.CLOUDINARY_CLOUD_NAME,
-    apiKey: process.env.CLOUDINARY_API_KEY,
+    apiKey,
     folder,
     timestamp,
     signature,
-    uploadUrl: `https://api.cloudinary.com/v1_1/${process.env.CLOUDINARY_CLOUD_NAME}/${mediaKind}/upload`,
+    uploadUrl: `https://api.cloudinary.com/v1_1/${cloudName}/${mediaKind}/upload`,
   });
 }

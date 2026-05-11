@@ -9,6 +9,8 @@ import {
   PRODUCT_VIDEO_TYPES,
 } from '@/lib/product-media';
 
+const HUMAN_READABLE_INDEX_OFFSET = 1;
+
 interface MediaUploadProps {
   /** Existing image URLs for edit forms. */
   defaultImages?: string[];
@@ -58,6 +60,43 @@ export default function MediaUpload({
     });
   }, [images.length, onStateChange, uploadError, uploadProgress, uploading, videoUrl]);
 
+  function isValidUploadConfig(value: unknown): value is {
+    apiKey: string;
+    folder: string;
+    signature: string;
+    timestamp: number;
+    uploadUrl: string;
+  } {
+    if (!value || typeof value !== 'object') return false;
+    const candidate = value as Record<string, unknown>;
+    return (
+      typeof candidate.apiKey === 'string' &&
+      candidate.apiKey.length > 0 &&
+      typeof candidate.folder === 'string' &&
+      candidate.folder.length > 0 &&
+      typeof candidate.signature === 'string' &&
+      candidate.signature.length > 0 &&
+      typeof candidate.timestamp === 'number' &&
+      typeof candidate.uploadUrl === 'string' &&
+      candidate.uploadUrl.length > 0
+    );
+  }
+
+  function getCloudinaryErrorMessage(response: unknown) {
+    if (!response || typeof response !== 'object' || !('error' in response)) {
+      return undefined;
+    }
+
+    const error = (response as { error?: unknown }).error;
+    if (!error || typeof error !== 'object' || !('message' in error)) {
+      return undefined;
+    }
+
+    return typeof (error as { message?: unknown }).message === 'string'
+      ? (error as { message: string }).message
+      : undefined;
+  }
+
   async function getUploadConfig(file: File) {
     const res = await fetch('/api/upload/product-media', {
       method: 'POST',
@@ -74,13 +113,10 @@ export default function MediaUpload({
     if (!res.ok || !json?.success) {
       throw new Error(json?.message ?? 'Upload failed.');
     }
-    return json as {
-      apiKey: string;
-      folder: string;
-      signature: string;
-      timestamp: number;
-      uploadUrl: string;
-    };
+    if (!isValidUploadConfig(json)) {
+      throw new Error('Upload configuration is invalid. Please try again.');
+    }
+    return json;
   }
 
   async function uploadFile(file: File, onProgress: (progress: number) => void): Promise<string> {
@@ -109,11 +145,7 @@ export default function MediaUpload({
           return;
         }
 
-        const cloudinaryError =
-          response && typeof response === 'object' && 'error' in response
-            ? (response.error as { message?: string })?.message
-            : undefined;
-        reject(new Error(cloudinaryError ?? 'Upload failed.'));
+        reject(new Error(getCloudinaryErrorMessage(response) ?? 'Upload failed.'));
       };
       xhr.send(fd);
     });
@@ -156,7 +188,7 @@ export default function MediaUpload({
       const uploadedUrls: string[] = [];
 
       for (const [index, file] of toUpload.entries()) {
-        setUploadLabel(`Uploading image ${index + 1} of ${toUpload.length}`);
+        setUploadLabel(`Uploading image ${index + HUMAN_READABLE_INDEX_OFFSET} of ${toUpload.length}`);
         const url = await uploadFile(file, (progress) => {
           const overallProgress = Math.round(((index + progress / 100) / toUpload.length) * 100);
           setUploadProgress(overallProgress);
