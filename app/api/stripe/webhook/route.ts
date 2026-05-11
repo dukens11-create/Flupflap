@@ -624,7 +624,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // Decrement inventory and mark as SOLD if qty reaches 0
+    // Decrement inventory, track soldQty, and mark delistedAt if qty reaches 0
     for (const item of orderItems) {
       const activePromotion = await prisma.promotion.findFirst({
         where: {
@@ -647,6 +647,8 @@ export async function POST(req: Request) {
         where: { id: item.product.id },
         data: {
           inventory: newInventory,
+          soldQty: { increment: item.quantity },
+          ...(newInventory <= 0 ? { delistedAt: new Date() } : {}),
         },
       });
     }

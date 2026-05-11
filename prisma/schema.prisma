@@ -236,6 +236,11 @@ model Product {
   subcategoryRef     Category?       @relation("ProductSubCategory", fields: [subcategoryId], references: [id])
   /// Flexible category-specific attributes stored as JSON
   productAttributes  Json?
+  // Inventory analytics
+  soldQty       Int       @default(0)
+  viewCount     Int       @default(0)
+  delistedAt    DateTime?
+  lastViewedAt  DateTime?
   // Media fields (multi-image + video)
   images            String[]
   mainImage         String          @default("")
