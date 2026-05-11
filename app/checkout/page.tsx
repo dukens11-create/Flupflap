@@ -244,8 +244,9 @@ export default function CheckoutPage() {
       });
       setSelectedRates(autoSelected);
       setRatesFetched(true);
-      if (data.warnings?.length) {
-        setRateError(data.warnings.join(' '));
+      const rateMessages = [...(data.errors ?? []), ...(data.warnings ?? [])];
+      if (rateMessages.length) {
+        setRateError(rateMessages.join(' '));
       }
     } catch {
       setRateError('Shipping rate unavailable. Please check address or package details.');

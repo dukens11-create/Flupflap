@@ -204,7 +204,7 @@ export default function NewListingForm() {
                 placeholder="e.g. 1"
                 required
               />
-              <select name="weightUnit" className={shippingPackageInputClass} defaultValue="lb">
+              <select name="weightUnit" className={shippingPackageInputClass}>
                 <option value="lb">lb</option>
                 <option value="oz">oz</option>
               </select>

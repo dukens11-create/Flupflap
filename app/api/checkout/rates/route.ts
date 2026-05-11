@@ -255,14 +255,10 @@ export async function POST(req: Request) {
       p => `Product "${p.title}" has no shipping rates available.`,
     );
 
-    const warnings = [
-      ...errors,
-      ...uncoveredWarnings,
-    ];
-
     return NextResponse.json({
       groups,
-      warnings: warnings.length ? warnings : undefined,
+      errors: errors.length ? errors : undefined,
+      warnings: uncoveredWarnings.length ? uncoveredWarnings : undefined,
     });
   } catch (err: any) {
     console.error('[checkout/rates]', err);
