@@ -1,6 +1,8 @@
 'use client';
 import { useState } from 'react';
 
+const INPUT_CLASS = 'w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500';
+
 interface Props {
   initialShopName: string | null;
   initialShopLogoUrl: string | null;
@@ -76,7 +78,7 @@ export default function SellerShopProfileForm({
     }
   }
 
-  const inputClass = 'w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500';
+  const inputClass = INPUT_CLASS;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">

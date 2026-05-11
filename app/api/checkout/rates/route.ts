@@ -144,9 +144,10 @@ export async function POST(req: Request) {
         const qty = quantityByProductId.get(p.id) ?? 1;
         return sum + (p.weightOz ?? 0) * qty;
       }, 0);
-      const maxLength = Math.max(...sellerProducts.map(p => p.lengthIn ?? 0));
-      const maxWidth = Math.max(...sellerProducts.map(p => p.widthIn ?? 0));
-      const maxHeight = Math.max(...sellerProducts.map(p => p.heightIn ?? 0));
+      // Use explicit reduce with 0-fallback to avoid Math.max() returning -Infinity on empty arrays
+      const maxLength = sellerProducts.reduce((m, p) => Math.max(m, p.lengthIn ?? 0), 0);
+      const maxWidth = sellerProducts.reduce((m, p) => Math.max(m, p.widthIn ?? 0), 0);
+      const maxHeight = sellerProducts.reduce((m, p) => Math.max(m, p.heightIn ?? 0), 0);
 
       // Skip if no package dimensions available
       if (!totalWeightOz || !maxLength || !maxWidth || !maxHeight) {

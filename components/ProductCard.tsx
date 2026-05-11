@@ -49,6 +49,13 @@ export default function ProductCard({ p: product }:{p:any}){
   const filledStars = responseRate === null ? 0 : percentageToStarCount(responseRate);
   const cardClasses = `group flex h-full flex-col overflow-hidden rounded-[28px] border bg-white shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-xl ${isFeatured ? 'border-amber-200 ring-2 ring-amber-300' : 'border-slate-200'}`;
 
+  const shippingText = (() => {
+    const key = resolveShippingKey(product.shippingMode, product.shippingCents);
+    return key === 'product.shipping'
+      ? t('product.shipping', { amount: dollars(product.shippingCents) })
+      : t(key);
+  })();
+
   return (
     <div className={cardClasses}>
       <div className="relative aspect-[4/3] bg-slate-100">
@@ -68,12 +75,7 @@ export default function ProductCard({ p: product }:{p:any}){
           <h3 className="line-clamp-2 text-sm font-bold text-slate-900 sm:text-base">{product.title}</h3>
           <p className="text-lg font-black text-amber-600 sm:text-xl">{dollars(product.priceCents)}</p>
         </div>
-        <p className="text-xs text-slate-500">{(() => {
-          const key = resolveShippingKey(product.shippingMode, product.shippingCents);
-          return key === 'product.shipping'
-            ? t('product.shipping', { amount: dollars(product.shippingCents) })
-            : t(key);
-        })()}</p>
+        <p className="text-xs text-slate-500">{shippingText}</p>
         {product.pickupAvailable&&product.pickupCity&&<p className="text-xs font-medium text-emerald-700">{t('product.pickupIn', { location: pickupLocation })}</p>}
         {typeof product.inventory === 'number' && product.inventory > 0 && product.inventory <= 5 && product.status === 'APPROVED' && (
           <p className="text-xs font-semibold text-orange-600">Only {product.inventory} left!</p>

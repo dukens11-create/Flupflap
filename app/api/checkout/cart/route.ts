@@ -95,10 +95,11 @@ export async function POST(req: Request) {
     // must have shippingCents=0 to avoid double-billing the buyer for shipping.
     const liveRatesByProductId = new Map<string, number>();
     if (shippingRateInfo?.shipmentGroups?.length) {
+      // Build a Map from sellerId → group for O(1) lookup per product
+      const groupBySellerIdMap = new Map(shippingRateInfo.shipmentGroups.map(g => [g.sellerId, g]));
       for (const product of products) {
         if (pickupSet.has(product.id)) continue;
-        const group = shippingRateInfo.shipmentGroups.find(g => g.sellerId === product.sellerId);
-        if (group) liveRatesByProductId.set(product.id, 0);
+        if (groupBySellerIdMap.has(product.sellerId)) liveRatesByProductId.set(product.id, 0);
       }
     }
 

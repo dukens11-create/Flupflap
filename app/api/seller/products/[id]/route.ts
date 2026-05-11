@@ -10,6 +10,7 @@ import {
   shouldRecommendFraudReview,
 } from '@/lib/fraud-detection';
 import { parseJsonOrNull } from '@/lib/parse-json';
+import { SHIPPING_MODES } from '@/app/api/seller/products/route';
 
 const updateSchema = z.object({
   title: z.string().min(3).optional(),
@@ -153,15 +154,7 @@ export async function POST(
         ...(data.description && { description: data.description }),
         ...(data.price && { priceCents: cents(data.price) }),
         ...(data.shipping !== undefined && { shippingCents: cents(data.shipping || '0') }),
-        ...(data.shippingMode && { shippingMode: data.shippingMode }),
-        ...(data.category && { category: data.category }),
-        ...(data.condition && { condition: data.condition }),
-        imageUrl: mainImage,
-        images: resolvedImages,
-        mainImage,
-        videoUrl,
-        ...(data.inventory && { inventory: Number(data.inventory) }),
-        // Pickup fields — always written on form submit so we can clear them
+        ...(data.shippingMode && (SHIPPING_MODES as readonly string[]).includes(data.shippingMode) && { shippingMode: data.shippingMode }),
         pickupAvailable: data.pickupAvailable === 'true',
         pickupCity: data.pickupCity || null,
         pickupState: data.pickupState || null,
@@ -254,7 +247,7 @@ export async function PATCH(
         ...(data.description && { description: data.description }),
         ...(data.price && { priceCents: cents(data.price) }),
         ...(data.shipping !== undefined && { shippingCents: cents(data.shipping || '0') }),
-        ...(data.shippingMode && { shippingMode: data.shippingMode }),
+        ...(data.shippingMode && (SHIPPING_MODES as readonly string[]).includes(data.shippingMode) && { shippingMode: data.shippingMode }),
         ...(data.category && { category: data.category }),
         ...(data.condition && { condition: data.condition }),
         imageUrl: mainImage,

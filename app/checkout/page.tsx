@@ -185,7 +185,7 @@ export default function CheckoutPage() {
           sellerId: group.sellerId,
           shipmentId: group.shipmentId,
           rateId: cheapest?.id ?? '',
-          rateCents: cheapest ? Math.round(Number(cheapest.rate) * 100) : 0,
+          rateCents: cheapest && Number.isFinite(Number(cheapest.rate)) ? Math.round(Number(cheapest.rate) * 100) : 0,
           carrier: cheapest?.carrier ?? '',
           service: cheapest?.service ?? '',
         };
@@ -206,11 +206,12 @@ export default function CheckoutPage() {
   function handleSelectRate(sellerId: string, shipmentId: string, rate: RateQuote) {
     setSelectedRates(prev => {
       const next = prev.filter(r => r.sellerId !== sellerId);
+      const rateValue = Number(rate.rate);
       next.push({
         sellerId,
         shipmentId,
         rateId: rate.id,
-        rateCents: Math.round(Number(rate.rate) * 100),
+        rateCents: Number.isFinite(rateValue) ? Math.round(rateValue * 100) : 0,
         carrier: rate.carrier,
         service: rate.service,
       });

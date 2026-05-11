@@ -14,6 +14,9 @@ import {
 } from '@/lib/fraud-detection';
 import { parseJsonOrNull } from '@/lib/parse-json';
 
+export const SHIPPING_MODES = ['FLAT', 'FREE', 'CALCULATED'] as const;
+type ShippingMode = typeof SHIPPING_MODES[number];
+
 const schema = z.object({
   title: z.string().trim().optional(),
   description: z.string().trim().optional(),
@@ -196,9 +199,9 @@ export async function POST(req: Request) {
     }
 
     // Resolve shipping mode — defaults to CALCULATED for new listings with no explicit flat rate
-    const resolvedShippingMode = (() => {
-      if (data.shippingMode && ['FLAT', 'FREE', 'CALCULATED'].includes(data.shippingMode)) {
-        return data.shippingMode;
+    const resolvedShippingMode: ShippingMode = (() => {
+      if (data.shippingMode && (SHIPPING_MODES as readonly string[]).includes(data.shippingMode)) {
+        return data.shippingMode as ShippingMode;
       }
       // Legacy: if a non-zero flat shipping price was supplied without mode, treat as FLAT
       if (shippingValue > 0) return 'FLAT';
