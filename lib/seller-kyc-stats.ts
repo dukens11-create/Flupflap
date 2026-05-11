@@ -41,10 +41,12 @@ export const KYC_APPROVED_WHERE: Prisma.UserWhereInput = {
  * Matches sellers whose KYC is pending review.
  * Checks both `kycStatus` and the `SellerVerification` record for sellers
  * whose kycStatus wasn't yet back-filled after they submitted.
- * Excludes sellers already considered approved via any path.
+ * Explicitly excludes sellers considered approved via any path.
  */
 export const KYC_PENDING_REVIEW_WHERE: Prisma.UserWhereInput = {
-  NOT: KYC_APPROVED_WHERE,
+  verifiedSeller: false,
+  kycStatus: { not: 'APPROVED' },
+  NOT: { verificationSubmission: { status: 'APPROVED' } },
   OR: [
     { kycStatus: 'PENDING_REVIEW' },
     { verificationSubmission: { status: 'PENDING' } },
@@ -55,10 +57,12 @@ export const KYC_PENDING_REVIEW_WHERE: Prisma.UserWhereInput = {
  * Matches sellers whose KYC was rejected.
  * Checks both `kycStatus` and the `SellerVerification` record for sellers
  * whose kycStatus wasn't yet back-filled after rejection.
- * Excludes sellers already considered approved via any path.
+ * Explicitly excludes sellers considered approved via any path.
  */
 export const KYC_REJECTED_WHERE: Prisma.UserWhereInput = {
-  NOT: KYC_APPROVED_WHERE,
+  verifiedSeller: false,
+  kycStatus: { not: 'APPROVED' },
+  NOT: { verificationSubmission: { status: 'APPROVED' } },
   OR: [
     { kycStatus: 'REJECTED' },
     { verificationSubmission: { status: 'REJECTED' } },
