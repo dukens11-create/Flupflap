@@ -38,6 +38,7 @@ const updateSchema = z.object({
   categoryId: z.string().optional(),
   subcategoryId: z.string().optional(),
   productAttributes: z.string().optional(), // JSON string
+  mediaEnhancements: z.string().optional(),
 });
 
 type ProductUpdateInput = z.infer<typeof updateSchema>;
@@ -70,6 +71,33 @@ function resolveImages(submitted: string[] | null, existing: ExistingProduct): s
 function resolveVideoUrl(submitted: string | undefined, existing: ExistingProduct): string | null {
   if (submitted === undefined) return existing.videoUrl ?? null;
   return submitted || null;
+}
+
+function resolveProductAttributes(
+  productAttributesRaw: string | undefined,
+  mediaEnhancementsRaw: string | undefined
+) {
+  const parsedAttributes = parseJsonOrNull(productAttributesRaw);
+  const parsedMediaEnhancements = parseJsonOrNull(mediaEnhancementsRaw);
+
+  const normalizedAttributes: Record<string, unknown> =
+    parsedAttributes && typeof parsedAttributes === 'object' && !Array.isArray(parsedAttributes)
+      ? { ...(parsedAttributes as Record<string, unknown>) }
+      : {};
+
+  if (parsedMediaEnhancements) {
+    normalizedAttributes.mediaEnhancements = parsedMediaEnhancements;
+  }
+
+  if (Object.keys(normalizedAttributes).length > 0) {
+    return normalizedAttributes;
+  }
+
+  if (parsedAttributes === null || parsedAttributes === undefined) {
+    return null;
+  }
+
+  return parsedAttributes;
 }
 
 function buildListingRiskCandidate(
@@ -151,6 +179,10 @@ export async function POST(
     const resolvedImages = resolveImages(submittedImages, existing);
     const mainImage = resolvedImages[0] ?? existing.imageUrl;
     const videoUrl = resolveVideoUrl(data.videoUrl, existing);
+    const productAttributes = resolveProductAttributes(
+      data.productAttributes,
+      data.mediaEnhancements
+    );
 
     const riskAssessment = await getListingRiskAssessmentForCandidate(
       buildListingRiskCandidate(sellerId, existing, data, resolvedImages),
@@ -165,6 +197,10 @@ export async function POST(
         ...(data.price && { priceCents: cents(data.price) }),
         ...(data.shipping !== undefined && { shippingCents: cents(data.shipping || '0') }),
         ...(data.shippingMode && (SHIPPING_MODES as readonly string[]).includes(data.shippingMode) && { shippingMode: data.shippingMode }),
+        imageUrl: mainImage,
+        images: resolvedImages,
+        mainImage,
+        videoUrl,
         pickupAvailable: data.pickupAvailable === 'true',
         pickupCity: data.pickupCity || null,
         pickupState: data.pickupState || null,
@@ -178,7 +214,7 @@ export async function POST(
         // Category system fields
         categoryId: data.categoryId || null,
         subcategoryId: data.subcategoryId || null,
-        productAttributes: parseJsonOrNull(data.productAttributes),
+        productAttributes,
         // Reset to PENDING on edit so admin can re-review
         status: 'PENDING',
       },
@@ -251,6 +287,10 @@ export async function PATCH(
     const resolvedImages = resolveImages(imagesInput, existing);
     const mainImage = resolvedImages[0] ?? existing.imageUrl;
     const videoUrl = resolveVideoUrl(data.videoUrl, existing);
+    const productAttributes = resolveProductAttributes(
+      data.productAttributes,
+      data.mediaEnhancements
+    );
 
     const riskAssessment = await getListingRiskAssessmentForCandidate(
       buildListingRiskCandidate(sellerId, existing, data, resolvedImages),
@@ -285,7 +325,7 @@ export async function PATCH(
         // Category system fields
         categoryId: data.categoryId || null,
         subcategoryId: data.subcategoryId || null,
-        productAttributes: parseJsonOrNull(data.productAttributes),
+        productAttributes,
         status: 'PENDING',
       },
     });

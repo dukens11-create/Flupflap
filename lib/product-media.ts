@@ -16,7 +16,10 @@ export const PRODUCT_VIDEO_TYPES = [
   'video/webm',
 ] as const;
 
-export function getProductMediaFolder() {
+export function getProductMediaFolder(kind: 'image' | 'video' = 'image') {
+  if (kind === 'video') {
+    return process.env.CLOUDINARY_PRODUCT_VIDEO_FOLDER ?? 'flupflap/videos';
+  }
   return process.env.CLOUDINARY_PRODUCT_MEDIA_FOLDER ?? 'flupflap/products';
 }
 

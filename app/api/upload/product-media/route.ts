@@ -74,7 +74,7 @@ export async function POST(req: Request) {
   }
 
   const timestamp = Math.floor(Date.now() / 1000);
-  const folder = getProductMediaFolder();
+  const folder = getProductMediaFolder(mediaKind);
   const cloudinaryEnv = getCloudinaryEnvConfig();
   if (!cloudinaryEnv) {
     return NextResponse.json(
