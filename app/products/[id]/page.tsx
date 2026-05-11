@@ -13,6 +13,8 @@ import MakeOfferButton from '@/components/MakeOfferButton';
 import ReportItemButton from '@/components/ReportItemButton';
 import ReportSellerButton from '@/components/ReportSellerButton';
 import ProductGallery from '@/components/ProductGallery';
+import ProductViewTracker from '@/components/ProductViewTracker';
+import { Eye } from 'lucide-react';
 import type { Metadata } from 'next';
 import { expirePromotions } from '@/lib/promotions';
 import { getSellerResponseStats, SELLER_RESPONSE_WINDOW_HOURS } from '@/lib/messages';
@@ -135,6 +137,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
 
   // Hide the message button if the viewer is the seller of this product
   const isOwnListing = session?.user?.id === product.seller.id;
+  const isAdmin = session?.user?.role === 'ADMIN';
   const activePromotion = product.promotions[0] ?? null;
   if (activePromotion && !isOwnListing) {
     await prisma.promotion.update({
@@ -174,6 +177,8 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }}
       />
+      {/* Track page views — skips seller/admin server-side, dedupes per session client-side */}
+      {!isOwnListing && !isAdmin && <ProductViewTracker productId={product.id} />}
       <Link href="/" className="text-sm text-blue-600 hover:underline mb-4 inline-block">← Back to browse</Link>
       <div className="card overflow-hidden flex flex-col md:flex-row gap-0">
         <div className="w-full md:w-96 flex-shrink-0 bg-slate-100 p-0">
@@ -222,6 +227,12 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             <p className="text-xs text-slate-500 mt-2">
               Based on buyer messages from the last 90 days and replies sent within {SELLER_RESPONSE_WINDOW_HOURS} hours.
             </p>
+            {product.viewCount > 0 && (
+              <p className="text-xs text-slate-400 mt-1 flex items-center gap-1">
+                <Eye size={12} aria-hidden="true" />
+                <span>{product.viewCount.toLocaleString()} {product.viewCount === 1 ? 'person' : 'people'} viewed this item</span>
+              </p>
+            )}
           </div>
           <p className="text-slate-700 text-sm leading-relaxed">{product.description}</p>
 

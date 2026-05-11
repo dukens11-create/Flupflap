@@ -42,6 +42,32 @@ function statusBadge(status: string) {
   return map[status] ?? 'badge-slate';
 }
 
+function listingStatusLabel(status: string, inventory: number): string {
+  if (status === 'APPROVED' && inventory > 0) return 'Active';
+  if (status === 'APPROVED' && inventory === 0) return 'Out of stock';
+  if (status === 'HIDDEN') return 'Delisted';
+  if (status === 'SOLD') return 'Out of stock';
+  // Format any other status: replace underscores, title-case each word
+  return status
+    .split('_')
+    .map(word => word.charAt(0) + word.slice(1).toLowerCase())
+    .join(' ');
+}
+
+function listingStatusBadgeClass(status: string, inventory: number): string {
+  if (status === 'APPROVED' && inventory > 0) return 'badge-green';
+  if (status === 'APPROVED' && inventory === 0) return 'badge-yellow';
+  if (status === 'HIDDEN') return 'badge-red';
+  if (status === 'SOLD') return 'badge-yellow';
+  return statusBadge(status);
+}
+
+/** Returns "X.X%" when views > 0, null otherwise. */
+function calcConversionRate(orders: number, views: number): string | null {
+  if (views <= 0) return null;
+  return ((orders / views) * 100).toFixed(1);
+}
+
 function orderStatusBadge(status: string) {
   const greenStatuses = ['PAID', 'SHIPPED', 'DELIVERED', 'READY_FOR_PICKUP', 'PICKED_UP'];
   return greenStatuses.includes(status) ? 'badge-green' : 'badge-yellow';
@@ -215,6 +241,18 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   const productsAddedThisMonth = products.filter(p => p.createdAt >= monthStart).length;
   const activeListingsCount = products.filter(p => p.status === 'APPROVED').length;
   const totalCartAdds = products.reduce((sum, product) => sum + (product.cartInterest?.totalAdds ?? 0), 0);
+  const totalViewCount = products.reduce((sum, p) => sum + (p.viewCount ?? 0), 0);
+  const totalSoldQty = products.reduce((sum, p) => sum + (p.soldQty ?? 0), 0);
+  const totalRemainingStock = products.reduce((sum, p) => sum + (p.status === 'APPROVED' ? p.inventory : 0), 0);
+  // Conversion rate = unique purchase transactions / total views (not units, to avoid >100%)
+  const overallConversionRate = calcConversionRate(completedOrdersCount, totalViewCount);
+  // Per-product: count of distinct order IDs per product (used for per-listing conversion rate)
+  const orderCountByProductId = soldItems.reduce((acc, item) => {
+    const key = item.product.id;
+    if (!acc.has(key)) acc.set(key, new Set<string>());
+    acc.get(key)!.add(item.order.id);
+    return acc;
+  }, new Map<string, Set<string>>());
   const soldItemsThisWeek = soldItems.filter(i => i.order.createdAt >= weekStart);
   const soldItemsThisMonth = soldItems.filter(i => i.order.createdAt >= monthStart);
   const soldCountThisWeek = soldItemsThisWeek.reduce((s, i) => s + i.quantity, 0);
@@ -635,6 +673,12 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
           <StatCard label="Listed This Month" value={String(productsAddedThisMonth)} sub="new products this month" />
           <StatCard label="Active Listings" value={String(activeListingsCount)} sub="currently approved & live" />
           <StatCard label="Cart Adds" value={String(totalCartAdds)} sub="buyers adding your items to cart" />
+          <StatCard label="Total Views" value={totalViewCount.toLocaleString()} sub="product page visits (excl. seller/admin)" />
+          <StatCard label="Total Sold" value={totalSoldQty.toLocaleString()} sub="units sold across all listings" />
+          <StatCard label="Remaining Stock" value={totalRemainingStock.toLocaleString()} sub="units available across active listings" />
+          {overallConversionRate !== null && (
+            <StatCard label="Conversion Rate" value={`${overallConversionRate}%`} sub="unique purchase orders ÷ views" />
+          )}
           <StatCard label="Sold This Week" value={String(soldCountThisWeek)} sub="units from paid orders" />
           <StatCard label="Sold This Month" value={String(soldCountThisMonth)} sub="units from paid orders" />
           <StatCard label="Total Items Sold" value={String(itemsSoldCount)} sub="all time (paid orders)" />
@@ -723,6 +767,10 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
             {products.map(p => {
               const activePromo = p.promotions[0] ?? null;
               const cartAdds = p.cartInterest?.totalAdds ?? 0;
+              const viewCount = p.viewCount ?? 0;
+              const soldQty = p.soldQty ?? 0;
+              const productOrders = orderCountByProductId.get(p.id)?.size ?? 0;
+              const conversionRate = calcConversionRate(productOrders, viewCount);
               return (
                 <div key={p.id} className="card p-4 flex items-center justify-between gap-4">
                   <div className="flex-1 min-w-0">
@@ -733,14 +781,33 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                       )}
                     </div>
                     <p className="text-sm text-slate-500">{p.condition} · {p.category} · {dollars(p.priceCents)}</p>
-                    <p className="text-xs text-slate-500">
-                      Cart interest: <span className="font-semibold text-slate-700">{cartAdds}</span>{cartAdds === 1 ? ' add' : ' adds'}
-                      {p.cartInterest?.lastAddedAt
-                        ? ` · last activity ${p.cartInterest.lastAddedAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
-                        : ''}
-                    </p>
+                    <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-0.5">
+                      <p className="text-xs text-slate-500">
+                        Stock: <span className="font-semibold text-slate-700">{p.inventory}</span>
+                        {p.inventory <= 5 && p.inventory > 0 && p.status === 'APPROVED' && (
+                          <span className="ml-1 text-orange-600 font-medium">Low!</span>
+                        )}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        Sold: <span className="font-semibold text-slate-700">{soldQty}</span>
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        Views: <span className="font-semibold text-slate-700">{viewCount.toLocaleString()}</span>
+                      </p>
+                      {conversionRate !== null && (
+                        <p className="text-xs text-slate-500">
+                          Conversion: <span className="font-semibold text-slate-700">{conversionRate}%</span>
+                        </p>
+                      )}
+                      <p className="text-xs text-slate-500">
+                        Cart: <span className="font-semibold text-slate-700">{cartAdds}</span>{cartAdds === 1 ? ' add' : ' adds'}
+                        {p.cartInterest?.lastAddedAt
+                          ? ` · last ${p.cartInterest.lastAddedAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+                          : ''}
+                      </p>
+                    </div>
                   </div>
-                  <span className={statusBadge(p.status)}>{p.status}</span>
+                  <span className={listingStatusBadgeClass(p.status, p.inventory)}>{listingStatusLabel(p.status, p.inventory)}</span>
                   <div className="flex flex-wrap gap-2 flex-shrink-0 items-center">
                     {!isRestricted && p.status !== 'SOLD' && (
                       <SellerStockEditor productId={p.id} currentInventory={p.inventory} />

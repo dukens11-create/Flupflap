@@ -59,6 +59,9 @@ export default function ProductCard({ p: product }:{p:any}){
         </div>
         <p className="text-xs text-slate-500">{t('product.shipping', { amount: dollars(product.shippingCents || 0) })}</p>
         {product.pickupAvailable&&product.pickupCity&&<p className="text-xs font-medium text-emerald-700">{t('product.pickupIn', { location: pickupLocation })}</p>}
+        {typeof product.inventory === 'number' && product.inventory > 0 && product.inventory <= 5 && product.status === 'APPROVED' && (
+          <p className="text-xs font-semibold text-orange-600">Only {product.inventory} left!</p>
+        )}
 
         <div className="mt-auto space-y-3 border-t border-slate-100 pt-3">
           <div className="flex items-center gap-1">
