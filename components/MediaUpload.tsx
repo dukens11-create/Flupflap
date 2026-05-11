@@ -134,6 +134,8 @@ export default function MediaUpload({
       return crypto.randomUUID();
     }
 
+    // Fallback for environments without crypto.randomUUID (very old browsers).
+    // IDs are used only as React list keys, not for security-sensitive purposes.
     fallbackIdCounterRef.current += 1;
     return `${Date.now()}-${fallbackIdCounterRef.current}-${Math.random().toString(36).slice(2, 10)}`;
   }, []);
