@@ -534,7 +534,7 @@ export default function CategoryPicker({ defaultCategoryId, defaultSubcategoryId
   }
 
   function applyOptionSelection(option: PickerOption) {
-    setMainId(option.selection.mainId ?? null);
+    setMainId(option.selection.mainId);
     setSubId(option.selection.subId);
     setChildId(option.selection.childId);
     setAttrs({});
@@ -780,7 +780,7 @@ export default function CategoryPicker({ defaultCategoryId, defaultSubcategoryId
                             <div className="flex flex-col gap-0.5">
                               <span>{option.icon ? `${option.icon} ` : ''}{option.name}</span>
                               {option.breadcrumb ? (
-                                <span className="text-xs font-normal text-slate-500">{option.breadcrumb}</span>
+                                <span className="text-xs font-normal text-slate-500" aria-label={`Category path: ${option.breadcrumb}`}>{option.breadcrumb}</span>
                               ) : null}
                             </div>
                           </button>
