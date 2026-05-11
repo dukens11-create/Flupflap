@@ -40,9 +40,11 @@ function summarizeDescription(description: string): string {
 }
 
 function centsToPriceString(cents: number): string {
-  const dollarsPortion = Math.floor(cents / 100);
-  const centsPortion = Math.abs(cents % 100).toString().padStart(2, '0');
-  return `${dollarsPortion}.${centsPortion}`;
+  const sign = cents < 0 ? '-' : '';
+  const absoluteCents = Math.abs(cents);
+  const dollarsPortion = Math.floor(absoluteCents / 100);
+  const centsPortion = (absoluteCents % 100).toString().padStart(2, '0');
+  return `${sign}${dollarsPortion}.${centsPortion}`;
 }
 
 function inferSellerSchemaType(name: string): 'Person' | 'Organization' {
