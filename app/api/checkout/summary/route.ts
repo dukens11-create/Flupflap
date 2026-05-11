@@ -33,7 +33,7 @@ function isCalculatedShippingProduct(product: { shippingMode?: string | null; sh
 }
 
 function hasCompleteAddress(address?: ShippingRateInfo['buyerAddress']) {
-  return !!(address?.street1 && address?.city && address?.state && address?.zip && address?.country);
+  return !!(address?.name && address?.street1 && address?.city && address?.state && address?.zip && address?.country);
 }
 
 export async function POST(req: Request) {

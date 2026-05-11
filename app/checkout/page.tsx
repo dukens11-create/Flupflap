@@ -206,9 +206,10 @@ export default function CheckoutPage() {
     country: buyerCountry.trim() || 'US',
   }), [buyerCity, buyerCountry, buyerName, buyerState, buyerStreet1, buyerStreet2, buyerZip, session?.user?.name]);
 
-  const canProceedToCheckout = !hasCalculatedShipping
-    || allPickup
-    || (hasCompleteShippingSelection && !fetchingRates && !rateError && taxCalculated && !taxCalculating && !taxError);
+  const shippingReady = hasCompleteShippingSelection && !fetchingRates && !rateError;
+  const taxReady = taxCalculated && !taxCalculating && !taxError;
+  const taxNotReady = hasCalculatedShipping && (!shippingReady || !taxReady);
+  const canProceedToCheckout = !hasCalculatedShipping || allPickup || (shippingReady && taxReady);
 
   useEffect(() => {
     taxRequestVersionRef.current += 1;
@@ -238,7 +239,7 @@ export default function CheckoutPage() {
       return undefined;
     }
 
-    const timer = window.setTimeout(async () => {
+    async function fetchRatesAfterDebounce() {
       if (requestVersion !== rateRequestVersionRef.current) return;
 
       setFetchingRates(true);
@@ -291,6 +292,10 @@ export default function CheckoutPage() {
           setFetchingRates(false);
         }
       }
+    }
+
+    const timer = window.setTimeout(() => {
+      fetchRatesAfterDebounce().catch(() => undefined);
     }, 800);
 
     return () => {
@@ -305,9 +310,8 @@ export default function CheckoutPage() {
       return undefined;
     }
 
-    setTaxCalculating(true);
-
-    void (async () => {
+    async function fetchCheckoutSummary() {
+      setTaxCalculating(true);
       try {
         const res = await fetch('/api/checkout/summary', {
           method: 'POST',
@@ -348,7 +352,9 @@ export default function CheckoutPage() {
           setTaxCalculating(false);
         }
       }
-    })();
+    }
+
+    fetchCheckoutSummary().catch(() => undefined);
 
     return undefined;
   }, [
@@ -699,7 +705,7 @@ export default function CheckoutPage() {
         <div className="flex justify-between">
           <span className="text-slate-500">Tax fee</span>
           <span>
-            {hasCalculatedShipping && (fetchingRates || !hasCompleteShippingSelection || taxCalculating || !taxCalculated || !!taxError)
+            {taxNotReady
               ? 'TBD'
               : dollars(taxCents)}
           </span>
@@ -707,7 +713,7 @@ export default function CheckoutPage() {
         <div className="flex justify-between font-bold text-base border-t pt-2 mt-1">
           <span>Total</span>
           <span>
-            {hasCalculatedShipping && (!hasCompleteShippingSelection || fetchingRates || taxCalculating || !taxCalculated || !!taxError)
+            {taxNotReady
               ? 'TBD'
               : dollars(hasCalculatedShipping ? finalTotalCents : total + taxCents)}
           </span>
