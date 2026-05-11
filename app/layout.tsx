@@ -57,7 +57,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     name: 'FlupFlap',
     url: absoluteUrl('/'),
     logo: absoluteUrl('/flupflap_logo_brand.png'),
-    sameAs: [absoluteUrl('/')],
   };
 
   return (

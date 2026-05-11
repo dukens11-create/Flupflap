@@ -21,6 +21,13 @@ import { absoluteUrl, DEFAULT_SEO_DESCRIPTION } from '@/lib/seo';
 
 export const dynamic = 'force-dynamic';
 
+function getSchemaItemCondition(condition: string): string {
+  const normalized = condition.trim().toLowerCase();
+  if (normalized.includes('new')) return 'https://schema.org/NewCondition';
+  if (normalized.includes('refurb')) return 'https://schema.org/RefurbishedCondition';
+  return 'https://schema.org/UsedCondition';
+}
+
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   const product = await prisma.product.findUnique({
@@ -128,7 +135,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
       priceCurrency: 'USD',
       price: (product.priceCents / 100).toFixed(2),
       availability: product.inventory > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
-      itemCondition: 'https://schema.org/UsedCondition',
+      itemCondition: getSchemaItemCondition(product.condition),
     },
     seller: {
       '@type': 'Person',
