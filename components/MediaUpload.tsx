@@ -577,7 +577,7 @@ export default function MediaUpload({
               <input
                 ref={imageInputRef}
                 type="file"
-                accept={PRODUCT_IMAGE_TYPES.join(",")}
+                accept={PRODUCT_IMAGE_TYPES.join(", ")}
                 multiple
                 onChange={handleImageFilesChange}
                 className="hidden"
@@ -671,7 +671,7 @@ export default function MediaUpload({
                 <input
                   ref={videoInputRef}
                   type="file"
-                  accept={PRODUCT_VIDEO_TYPES.join(",")}
+                  accept={PRODUCT_VIDEO_TYPES.join(", ")}
                   onChange={handleVideoFileChange}
                   className="hidden"
                 />
@@ -692,7 +692,7 @@ export default function MediaUpload({
               <input
                 ref={videoInputRef}
                 type="file"
-                accept={PRODUCT_VIDEO_TYPES.join(",")}
+                accept={PRODUCT_VIDEO_TYPES.join(", ")}
                 onChange={handleVideoFileChange}
                 className="hidden"
               />
