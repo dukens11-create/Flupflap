@@ -19,9 +19,13 @@ export async function POST(req: Request) {
     if (!session?.user || session.user.role !== 'SELLER') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+    const sellerId = session.user.id;
+    if (!sellerId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     // Block restricted sellers from marking orders shipped
-    const dbUser = await prisma.user.findUnique({ where: { id: session.user.id } });
+    const dbUser = await prisma.user.findUnique({ where: { id: sellerId } });
     if (dbUser?.sellerStatus === 'SUSPENDED' || dbUser?.sellerStatus === 'BANNED' || dbUser?.sellerStatus === 'RESTRICTED') {
       return NextResponse.json({ error: 'Your seller account is currently restricted.' }, { status: 403 });
     }
@@ -29,7 +33,7 @@ export async function POST(req: Request) {
     const isJsonRequest = req.headers.get('content-type')?.includes('application/json');
     if (isJsonRequest) {
       const verification = await prisma.sellerVerification.findUnique({
-        where: { sellerId: session.user.id },
+        where: { sellerId },
         select: {
           status: true,
           eligibleToListAt: true,
@@ -59,7 +63,7 @@ export async function POST(req: Request) {
         where: {
           id: body.orderId,
           isPickup: false,
-          items: { some: { product: { sellerId: session.user.id } } },
+          items: { some: { product: { sellerId } } },
         },
         select: {
           id: true,
@@ -226,7 +230,7 @@ export async function POST(req: Request) {
     const order = await prisma.order.findFirst({
       where: {
         id: orderId,
-        items: { some: { product: { sellerId: session.user.id } } },
+        items: { some: { product: { sellerId } } },
       },
       select: {
         id: true,

@@ -1,4 +1,4 @@
-import { redirect } from 'next/navigation';
+import { forbidden, redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
@@ -111,11 +111,13 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect('/login');
   if (session.user.role !== 'SELLER') redirect('/');
+  const sellerId = session.user.id;
+  if (!sellerId) forbidden();
   const sp = await searchParams;
   const subscribedFromCheckout = sp.subscribed === '1';
 
   // Fetch full user to check seller status (session JWT may be stale)
-  let dbUser = await prisma.user.findUnique({ where: { id: session.user.id } });
+  let dbUser = await prisma.user.findUnique({ where: { id: sellerId } });
   const hasStoredSubscriptionCustomer = !!dbUser?.stripeCustomerId;
   const subscriptionLooksInactive = dbUser ? !isSubscriptionActive(dbUser) : false;
   const shouldAttemptSubscriptionRecovery = subscribedFromCheckout && hasStoredSubscriptionCustomer && subscriptionLooksInactive;
@@ -148,7 +150,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   await expirePromotions();
   const [products, orders, soldItems, verificationSubmission, promotionHistory] = await Promise.all([
     prisma.product.findMany({
-      where: { sellerId: session.user.id },
+      where: { sellerId },
       orderBy: { createdAt: 'desc' },
       include: {
         promotions: {
@@ -165,10 +167,10 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
       },
     }),
     prisma.order.findMany({
-      where: { items: { some: { product: { sellerId: session.user.id } } } },
+      where: { items: { some: { product: { sellerId } } } },
       include: {
         items: {
-          where: { product: { sellerId: session.user.id } },
+          where: { product: { sellerId } },
           include: { product: { select: { title: true } } },
         },
       },
@@ -178,7 +180,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
     // Order items belonging to this seller from completed orders (for earnings)
     prisma.orderItem.findMany({
       where: {
-        product: { sellerId: session.user.id },
+        product: { sellerId },
         order: { status: { in: ['PAID', 'SHIPPED', 'DELIVERED', 'PICKED_UP'] } },
       },
       include: {
@@ -188,7 +190,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
       orderBy: { order: { createdAt: 'desc' } },
     }),
     prisma.sellerVerification.findUnique({
-      where: { sellerId: session.user.id },
+      where: { sellerId },
       select: {
         provider: true,
         providerStatus: true,
@@ -216,7 +218,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
       },
     }),
     prisma.promotion.findMany({
-      where: { sellerId: session.user.id },
+      where: { sellerId },
       include: {
         product: { select: { id: true, title: true } },
       },
@@ -263,12 +265,12 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   const revenueThisMonthCents = soldItemsThisMonth.reduce((s, i) => s + i.sellerNetCents, 0);
   const pendingOrdersToShip = orders.filter((order) => order.status === 'PAID').length;
   const verificationApproved = isSellerVerificationApproved(verificationSubmission);
-  const inboxConversations = await getInboxConversations(session.user.id);
+  const inboxConversations = await getInboxConversations(sellerId);
   const unreadInboxCount = inboxConversations.reduce(
     (sum, conversation) => sum + conversation.unreadCount,
     0,
   );
-  const sellerResponseStats = await getSellerResponseStats(session.user.id);
+  const sellerResponseStats = await getSellerResponseStats(sellerId);
   let emptyListingsMessage: ReactNode = 'No listings yet. Subscribe to start selling.';
   if (subscriptionActive && verificationApproved) {
     emptyListingsMessage = (
@@ -302,7 +304,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   if (stripeInProgress && stripeAccountId) {
     if (stripeAccountMode && currentStripeMode && stripeAccountMode !== currentStripeMode) {
       await prisma.user.update({
-        where: { id: session.user.id },
+        where: { id: sellerId },
         data: { stripeAccountId: null, stripeAccountMode: null, stripeOnboardingComplete: false },
       });
       redirect('/seller?stripe=error&reason=stale_account');
@@ -318,7 +320,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
       if (acct.payouts_enabled) {
         // Missed webhook — sync the DB and show the connected banner.
         await prisma.user.update({
-          where: { id: session.user.id },
+          where: { id: sellerId },
           data: { stripeOnboardingComplete: true },
         });
         redirect('/seller?stripe=connected');
@@ -327,7 +329,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
       const reason = classifyStripeError(err).reason;
       if (reason === 'stale_account') {
         await prisma.user.update({
-          where: { id: session.user.id },
+          where: { id: sellerId },
           data: { stripeAccountId: null, stripeAccountMode: null, stripeOnboardingComplete: false },
         });
         redirect('/seller?stripe=error&reason=stale_account');

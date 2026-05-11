@@ -46,9 +46,13 @@ export async function POST(req: Request) {
     if (session.user.role !== 'SELLER') {
       return NextResponse.json({ error: 'Seller account required.' }, { status: 403 });
     }
+    const sellerId = session.user.id;
+    if (!sellerId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     // Check seller is not restricted
-    const dbUser = await prisma.user.findUnique({ where: { id: session.user.id } });
+    const dbUser = await prisma.user.findUnique({ where: { id: sellerId } });
     if (!dbUser || dbUser.sellerStatus !== 'ACTIVE') {
       return NextResponse.json({ error: 'Your account is restricted.' }, { status: 403 });
     }
@@ -62,7 +66,7 @@ export async function POST(req: Request) {
       where: {
         id: orderId,
         isPickup: true,
-        items: { some: { product: { sellerId: session.user.id } } },
+        items: { some: { product: { sellerId } } },
       },
       select: {
         id: true,
@@ -112,7 +116,7 @@ export async function POST(req: Request) {
       data: {
         status: 'PICKED_UP',
         pickupConfirmedAt: new Date(),
-        pickupConfirmedById: session.user.id,
+        pickupConfirmedById: sellerId,
       },
     });
 
