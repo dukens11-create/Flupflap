@@ -72,12 +72,19 @@ async function shippoRequest(path: string, method: 'GET' | 'POST', body?: unknow
 }
 
 function normalizeCarrier(value: unknown): string {
-  const raw = String(value ?? '').trim().toUpperCase();
+  const raw = String(value ?? '').trim();
   if (!raw) return '';
-  if (raw.includes('FEDEX')) return 'FEDEX';
-  if (raw.includes('USPS')) return 'USPS';
-  if (raw.includes('UPS')) return 'UPS';
-  return raw;
+  const normalized = raw.replace(/[^a-z0-9]/gi, '').toUpperCase();
+  if (normalized === 'FEDEX') return 'FEDEX';
+  if (normalized === 'USPS') return 'USPS';
+  if (normalized === 'UPS') return 'UPS';
+  return raw.toUpperCase();
+}
+
+function parseOptionalString(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
 }
 
 function parseDeliveryDays(value: unknown) {
@@ -161,17 +168,13 @@ export async function purchaseShipmentRate(params: {
     async: false,
   });
 
-  const trackingCode = typeof payload?.tracking_number === 'string' ? payload.tracking_number : null;
+  const trackingCode = parseOptionalString(payload?.tracking_number);
   const carrier = normalizeCarrier(payload?.rate?.provider || payload?.provider) || null;
-  const service = typeof payload?.rate?.servicelevel?.name === 'string'
-    ? payload.rate.servicelevel.name
-    : (typeof payload?.rate?.servicelevel?.token === 'string' ? payload.rate.servicelevel.token : null);
-  const labelUrl = typeof payload?.label_url === 'string'
-    ? payload.label_url
-    : null;
-  const trackingUrl = typeof payload?.tracking_url_provider === 'string'
-    ? payload.tracking_url_provider
-    : buildTrackingUrl(carrier, trackingCode);
+  const service = parseOptionalString(payload?.rate?.servicelevel?.name)
+    ?? parseOptionalString(payload?.rate?.servicelevel?.token);
+  const labelUrl = parseOptionalString(payload?.label_url);
+  const trackingUrl = parseOptionalString(payload?.tracking_url_provider)
+    || buildTrackingUrl(carrier, trackingCode);
 
   return {
     shipmentId: params.shipmentId,

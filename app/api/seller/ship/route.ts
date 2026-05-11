@@ -177,11 +177,11 @@ export async function POST(req: Request) {
             // Keep legacy field in sync for existing consumers while `carrier`
             // becomes the canonical shipment carrier field.
             shippingCarrier: carrier || order.shippingCarrier || null,
-            shippingService: purchased.service || order.shippingService || null,
+            shippingService: purchased.service ?? null,
             shipmentId: purchased.shipmentId || shipmentId,
             shipmentStatus: purchased.shipmentStatus || 'LABEL_PURCHASED',
             labelUrl: purchased.labelUrl || null,
-            trackingUrl: trackingUrl || order.trackingUrl || null,
+            trackingUrl: trackingUrl ?? null,
           },
         });
 
