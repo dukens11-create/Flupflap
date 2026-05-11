@@ -159,7 +159,7 @@ export default async function SellerEditPage({
         </div>
 
         <fieldset className={`border rounded-xl p-4 space-y-3 ${shippingSetupIncomplete ? 'border-yellow-300 bg-yellow-50/60' : 'border-slate-200'}`}>
-          <legend className="text-sm font-semibold text-slate-700 px-1">Shipping &amp; Package Details</legend>
+          <legend className="text-sm font-semibold text-slate-700 px-1">Shipping & Package Details</legend>
           <p className="text-xs text-slate-500">
             Required for reliable Shippo rate calculation and publishing this product.
           </p>

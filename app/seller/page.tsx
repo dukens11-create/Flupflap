@@ -782,7 +782,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
       </section>
 
       <section id="shipping-package-details" className="mb-8">
-        <h2 className="text-xl font-bold mb-3">Shipping &amp; Package Details</h2>
+        <h2 className="text-xl font-bold mb-3">Shipping & Package Details</h2>
         <div className="card p-4 space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="font-semibold text-slate-900">Keep package details complete for reliable Shippo rates.</p>

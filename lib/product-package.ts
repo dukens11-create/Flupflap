@@ -131,7 +131,7 @@ export function formatPackageDisplay(
   packageDetails: NonNullable<ReturnType<typeof getEffectivePackageDetails>>,
   includeFallbackNotice = false,
 ) {
-  const dimensions = `${formatPackageNumber(packageDetails.lengthIn)} × ${formatPackageNumber(packageDetails.widthIn)} × ${formatPackageNumber(packageDetails.heightIn)} in`;
+  const dimensions = `${formatPackageNumber(packageDetails.lengthIn)} x ${formatPackageNumber(packageDetails.widthIn)} x ${formatPackageNumber(packageDetails.heightIn)} in`;
   const fallbackNotice = includeFallbackNotice
     ? ' · fallback defaults shown until you save real package details'
     : '';
