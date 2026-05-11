@@ -647,7 +647,6 @@ export async function POST(req: Request) {
         where: { id: item.product.id },
         data: {
           inventory: newInventory,
-          status: newInventory <= 0 ? 'SOLD' : undefined,
         },
       });
     }

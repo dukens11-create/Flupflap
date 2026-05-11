@@ -52,6 +52,17 @@ export async function POST(req: Request) {
 
     if (!products.length) return NextResponse.json({ error: 'No valid products in cart.' }, { status: 400 });
 
+    // Validate requested quantities do not exceed available inventory
+    for (const product of products) {
+      const reqItem = items.find(i => i.productId === product.id);
+      if (reqItem && reqItem.quantity > product.inventory) {
+        return NextResponse.json(
+          { error: `Only ${product.inventory} unit${product.inventory === 1 ? '' : 's'} of "${product.title}" available.` },
+          { status: 400 },
+        );
+      }
+    }
+
     const pickupSet = new Set(pickupItemIds);
     const { commissionItems, platformFeeCents } = buildCheckoutCommissionItems(
       products,

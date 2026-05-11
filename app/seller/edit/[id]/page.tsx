@@ -129,11 +129,12 @@ export default async function SellerEditPage({
           required
         />
         <div>
-          <label className="label">Inventory (qty)</label>
+          <label className="label">Available quantity / Stock</label>
           <input
             name="inventory"
             type="number"
             min="1"
+            max="9999"
             className="input"
             defaultValue={product.inventory}
           />

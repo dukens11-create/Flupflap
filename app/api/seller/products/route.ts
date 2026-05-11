@@ -174,8 +174,8 @@ export async function POST(req: Request) {
 
     const inventoryRaw = data.inventoryQty || data.inventory || '';
     const inventoryQty = Number(inventoryRaw);
-    if (!inventoryRaw || Number.isNaN(inventoryQty) || !Number.isInteger(inventoryQty) || inventoryQty < 1) {
-      return jsonError('Please enter an inventory quantity of at least 1.', 400);
+    if (!inventoryRaw || Number.isNaN(inventoryQty) || !Number.isInteger(inventoryQty) || inventoryQty < 1 || inventoryQty > 9999) {
+      return jsonError('Please enter an inventory quantity between 1 and 9999.', 400);
     }
 
     if (!data.condition) {

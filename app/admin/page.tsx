@@ -338,6 +338,7 @@ export default async function AdminPage({
                     <p className="font-bold">{p.title}</p>
                     <p className="text-sm text-slate-500">{p.condition} · {p.category} · {dollars(p.priceCents)}</p>
                     <p className="text-xs text-slate-400">Seller: {p.seller.name} ({p.seller.email})</p>
+                    <p className="text-xs text-slate-500 mt-0.5">Stock: <span className={`font-semibold ${p.inventory <= 0 ? 'text-red-600' : p.inventory <= 5 ? 'text-orange-600' : 'text-green-700'}`}>{p.inventory <= 0 ? 'Out of stock' : `${p.inventory} available`}</span></p>
                     <p className="text-sm text-slate-600 mt-1 line-clamp-2">{p.description}</p>
                   </div>
                   <div className="flex flex-col gap-2">
@@ -365,6 +366,7 @@ export default async function AdminPage({
               <div className="flex-1 min-w-0">
                 <p className="font-medium truncate">{p.title}</p>
                 <p className="text-xs text-slate-500">{p.seller.name} · {p.condition} · {dollars(p.priceCents)}</p>
+                <p className="text-xs text-slate-500">Stock: <span className={`font-semibold ${p.inventory <= 0 ? 'text-red-600' : p.inventory <= 5 ? 'text-orange-600' : 'text-green-700'}`}>{p.inventory <= 0 ? 'Out of stock' : `${p.inventory}`}</span></p>
               </div>
               <span className={statusBadge(p.status)}>{p.status}</span>
             </div>

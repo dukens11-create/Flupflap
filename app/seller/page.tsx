@@ -24,6 +24,7 @@ import { buildTrackingUrl } from '@/lib/shipping';
 import SellerShippingLabelForm from '@/components/SellerShippingLabelForm';
 import KycVerifyButton from '@/components/KycVerifyButton';
 import StripeConnectButton from '@/components/StripeConnectButton';
+import SellerStockEditor from '@/components/SellerStockEditor';
 
 export const dynamic = 'force-dynamic';
 
@@ -722,7 +723,10 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                     </p>
                   </div>
                   <span className={statusBadge(p.status)}>{p.status}</span>
-                  <div className="flex gap-2 flex-shrink-0">
+                  <div className="flex flex-wrap gap-2 flex-shrink-0 items-center">
+                    {!isRestricted && p.status !== 'SOLD' && (
+                      <SellerStockEditor productId={p.id} currentInventory={p.inventory} />
+                    )}
                     {p.status === 'APPROVED' && !activePromo && !isRestricted && (
                       <Link href={`/seller/promote/${p.id}`} className="btn bg-yellow-500 hover:bg-yellow-600 text-white text-xs py-1 px-2">Promote Listing</Link>
                     )}
