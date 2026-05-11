@@ -202,27 +202,27 @@ export default async function AdminPage({
           <div className="rounded-xl bg-white/10 p-3"><p className="text-xs text-slate-200">Total Sellers</p><p className="text-2xl font-black">{sellerCount}</p></div>
           <div className="rounded-xl bg-white/10 p-3"><p className="text-xs text-slate-200">Total Orders</p><p className="text-2xl font-black">{totalOrdersCount}</p></div>
           <div className="rounded-xl bg-white/10 p-3"><p className="text-xs text-slate-200">Total Revenue</p><p className="text-2xl font-black">{dollars(totalRevenueCents)}</p></div>
-          <a href="/admin/sellers?status=PENDING" className="rounded-xl bg-white/10 p-3 hover:bg-white/20 transition-colors">
+          <a href="/admin/sellers?status=PENDING" aria-label="View pending seller accounts" className="rounded-xl bg-white/10 p-3 hover:bg-white/20 transition-colors">
             <p className="text-xs text-slate-200">Pending Seller Accounts</p>
             <p className={`text-2xl font-black ${pendingSellerApprovalsCount > 0 ? 'text-yellow-300' : ''}`}>{pendingSellerApprovalsCount}</p>
           </a>
-          <a href="/admin/sellers?kyc=PENDING_REVIEW" className="rounded-xl bg-white/10 p-3 hover:bg-white/20 transition-colors">
+          <a href="/admin/sellers?kyc=PENDING_REVIEW" aria-label="View sellers with KYC pending review" className="rounded-xl bg-white/10 p-3 hover:bg-white/20 transition-colors">
             <p className="text-xs text-slate-200">KYC Pending Review</p>
             <p className={`text-2xl font-black ${pendingKycReviewsCount > 0 ? 'text-yellow-300' : ''}`}>{pendingKycReviewsCount}</p>
           </a>
-          <a href="/admin/sellers?kyc=APPROVED" className="rounded-xl bg-white/10 p-3 hover:bg-white/20 transition-colors">
+          <a href="/admin/sellers?kyc=APPROVED" aria-label="View sellers with KYC approved" className="rounded-xl bg-white/10 p-3 hover:bg-white/20 transition-colors">
             <p className="text-xs text-slate-200">KYC Approved</p>
             <p className="text-2xl font-black text-green-300">{kycApprovedCount}</p>
           </a>
-          <a href="/admin/sellers?kyc=REJECTED" className="rounded-xl bg-white/10 p-3 hover:bg-white/20 transition-colors">
+          <a href="/admin/sellers?kyc=REJECTED" aria-label="View sellers with KYC rejected" className="rounded-xl bg-white/10 p-3 hover:bg-white/20 transition-colors">
             <p className="text-xs text-slate-200">KYC Rejected</p>
             <p className={`text-2xl font-black ${kycRejectedCount > 0 ? 'text-red-300' : ''}`}>{kycRejectedCount}</p>
           </a>
-          <a href="/admin/sellers?kyc=NOT_SUBMITTED" className="rounded-xl bg-white/10 p-3 hover:bg-white/20 transition-colors">
+          <a href="/admin/sellers?kyc=NOT_SUBMITTED" aria-label="View sellers with KYC not submitted" className="rounded-xl bg-white/10 p-3 hover:bg-white/20 transition-colors">
             <p className="text-xs text-slate-200">KYC Not Submitted</p>
             <p className="text-2xl font-black">{kycNotSubmittedCount}</p>
           </a>
-          <a href="/admin/sellers" className="rounded-xl bg-white/10 p-3 hover:bg-white/20 transition-colors">
+          <a href="/admin/sellers" aria-label="View suspended or restricted sellers" className="rounded-xl bg-white/10 p-3 hover:bg-white/20 transition-colors">
             <p className="text-xs text-slate-200">Suspended/Restricted Sellers</p>
             <p className={`text-2xl font-black ${restrictedSellersCount > 0 ? 'text-red-300' : ''}`}>{restrictedSellersCount}</p>
           </a>
