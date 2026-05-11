@@ -114,7 +114,7 @@ export default function MediaUpload({ defaultImages = [], defaultVideoUrl = '', 
         {images.length > 0 && (
           <div className="flex flex-wrap gap-3 mb-3">
             {images.map((url, i) => (
-              <div key={url + i} className="relative group">
+              <div key={url} className="relative group">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={url}
@@ -194,9 +194,8 @@ export default function MediaUpload({ defaultImages = [], defaultVideoUrl = '', 
           type="url"
           name="imageUrl"
           value={mainImage}
-          onChange={() => {/* controlled by state */}}
-          required={required}
           readOnly
+          required={required}
           tabIndex={-1}
           aria-hidden="true"
           style={{ position: 'absolute', width: 0, height: 0, overflow: 'hidden', opacity: 0 }}

@@ -116,11 +116,20 @@ export default async function SellerEditPage({
             </select>
           </div>
         </div>
-        <MediaUpload
-          defaultImages={product.images?.length ? product.images : product.imageUrl ? [product.imageUrl] : []}
-          defaultVideoUrl={product.videoUrl ?? ''}
-          required
-        />
+        {(() => {
+          const defaultImages = product.images?.length
+            ? product.images
+            : product.imageUrl
+              ? [product.imageUrl]
+              : [];
+          return (
+            <MediaUpload
+              defaultImages={defaultImages}
+              defaultVideoUrl={product.videoUrl ?? ''}
+              required
+            />
+          );
+        })()}
         <div>
           <label className="label">Inventory (qty)</label>
           <input

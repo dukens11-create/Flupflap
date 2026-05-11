@@ -72,7 +72,7 @@ export default function ProductGallery({ images, title, videoUrl }: ProductGalle
         <div className="flex gap-2 overflow-x-auto pb-1">
           {images.map((url, i) => (
             <button
-              key={url + i}
+              key={url}
               type="button"
               onClick={() => setCurrentIndex(i)}
               className={`relative flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition ${

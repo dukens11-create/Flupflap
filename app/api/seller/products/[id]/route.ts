@@ -29,17 +29,39 @@ const updateSchema = z.object({
 
 type ProductUpdateInput = z.infer<typeof updateSchema>;
 
+type ExistingProduct = NonNullable<Awaited<ReturnType<typeof getSellerProduct>>>;
+
 async function getSellerProduct(id: string, sellerId: string) {
   return prisma.product.findFirst({ where: { id, sellerId } });
 }
 
+/**
+ * Resolve the images array from form/JSON data, falling back to the existing
+ * product's images or imageUrl.
+ */
+function resolveImages(submitted: string[] | null, existing: ExistingProduct): string[] {
+  if (submitted && submitted.length > 0) return submitted;
+  if (existing.images?.length) return existing.images;
+  if (existing.imageUrl) return [existing.imageUrl];
+  return [];
+}
+
+/**
+ * Resolve the video URL: if the caller provides a value, use it (empty string → null).
+ * If the caller provides nothing (undefined), keep the existing value.
+ */
+function resolveVideoUrl(submitted: string | undefined, existing: ExistingProduct): string | null {
+  if (submitted === undefined) return existing.videoUrl ?? null;
+  return submitted && submitted.startsWith('http') ? submitted : null;
+}
+
 function buildListingRiskCandidate(
   sellerId: string,
-  existing: NonNullable<Awaited<ReturnType<typeof getSellerProduct>>>,
+  existing: ExistingProduct,
   data: ProductUpdateInput,
-  resolvedImages: string[],
+  resolvedImgs: string[],
 ) {
-  const mainImage = resolvedImages[0] ?? data.imageUrl ?? existing.imageUrl;
+  const mainImage = resolvedImgs[0] ?? data.imageUrl ?? existing.imageUrl;
   return {
     sellerId,
     title: data.title ?? existing.title,
@@ -101,20 +123,10 @@ export async function POST(
     const imagesRaw = form.getAll('images').map(String).filter(Boolean);
     const data = updateSchema.parse({ ...rawEntries, images: imagesRaw.length ? imagesRaw : undefined });
 
-    // Resolve images: prefer multi-images, fall back to legacy imageUrl or existing images
-    const resolvedImages: string[] = imagesRaw.length
-      ? imagesRaw
-      : data.imageUrl
-        ? [data.imageUrl]
-        : existing.images?.length
-          ? existing.images
-          : existing.imageUrl
-            ? [existing.imageUrl]
-            : [];
+    const submittedImages = imagesRaw.length ? imagesRaw : data.imageUrl ? [data.imageUrl] : null;
+    const resolvedImages = resolveImages(submittedImages, existing);
     const mainImage = resolvedImages[0] ?? existing.imageUrl;
-    const videoUrl = data.videoUrl !== undefined
-      ? (data.videoUrl && data.videoUrl.startsWith('http') ? data.videoUrl : null)
-      : existing.videoUrl;
+    const videoUrl = resolveVideoUrl(data.videoUrl, existing);
 
     const riskAssessment = await getListingRiskAssessmentForCandidate(
       buildListingRiskCandidate(session.user.id, existing, data, resolvedImages),
@@ -194,18 +206,16 @@ export async function PATCH(
     const data = updateSchema.parse(body);
 
     // Resolve images for PATCH (JSON body)
-    const imagesInput = Array.isArray(data.images)
+    const imagesInput: string[] | null = Array.isArray(data.images)
       ? data.images
       : data.images
-        ? [data.images]
+        ? [data.images as string]
         : data.imageUrl
           ? [data.imageUrl]
           : null;
-    const resolvedImages = imagesInput ?? existing.images ?? (existing.imageUrl ? [existing.imageUrl] : []);
+    const resolvedImages = resolveImages(imagesInput, existing);
     const mainImage = resolvedImages[0] ?? existing.imageUrl;
-    const videoUrl = data.videoUrl !== undefined
-      ? (data.videoUrl && data.videoUrl.startsWith('http') ? data.videoUrl : null)
-      : existing.videoUrl;
+    const videoUrl = resolveVideoUrl(data.videoUrl, existing);
 
     const riskAssessment = await getListingRiskAssessmentForCandidate(
       buildListingRiskCandidate(session.user.id, existing, data, resolvedImages),
@@ -222,7 +232,7 @@ export async function PATCH(
         ...(data.category && { category: data.category }),
         ...(data.condition && { condition: data.condition }),
         ...(imagesInput && { imageUrl: mainImage, images: resolvedImages, mainImage }),
-        ...(videoUrl !== undefined && { videoUrl }),
+        videoUrl,
         ...(data.inventory && { inventory: Number(data.inventory) }),
         ...(data.pickupAvailable !== undefined && { pickupAvailable: data.pickupAvailable === 'true' }),
         ...(data.pickupCity !== undefined && { pickupCity: data.pickupCity || null }),
