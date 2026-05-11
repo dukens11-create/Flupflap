@@ -343,7 +343,7 @@ Demo accounts created by seed:
 | NextAuth errors / redirect loop | `NEXTAUTH_SECRET` or `NEXTAUTH_URL` missing | Set both env vars; `NEXTAUTH_URL` must match the public Render URL |
 | Stripe webhook `400` errors | `STRIPE_WEBHOOK_SECRET` missing or wrong | Re-copy the signing secret from Stripe and update the env var |
 | App loads but images are broken | Image host not in `next.config.js` | Add the hostname to `remotePatterns` in `next.config.js` |
-| Image upload returns "not configured" error | Cloudinary env vars missing | Add `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` in Render → Environment and redeploy |
+| Image upload returns "not configured" error | Cloudinary env vars missing or app not redeployed after adding them | Add `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` in Render → Environment, redeploy, then confirm Render logs show `Cloudinary config exists { cloudName: true, apiKey: true, apiSecret: true }` |
 | Seller login returns `step: "signin"` from `/api/auth/otp/send` | OTP feature disabled or account is not a seller | Check server logs for `[otp/send] OTP skipped: ...`; set `ENABLE_SMS_OTP=true` (or unset) to require seller OTP |
 | Seller login returns `step: "add_phone"` from `/api/auth/otp/send` | Seller account has no phone on file | Complete `/api/auth/otp/setup-phone`; logs show `[otp/send] Seller requires phone setup before OTP` |
 | Seller OTP send returns 400 invalid phone | Saved seller phone fails normalization | Update seller phone in E.164 format; logs include `[otp/send] OTP blocked: invalid normalized phone` |

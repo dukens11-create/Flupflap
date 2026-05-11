@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
-import { getCloudinary, isCloudinaryConfigured } from '@/lib/cloudinary';
+import { getCloudinary, isCloudinaryConfigured, logCloudinaryConfigExists } from '@/lib/cloudinary';
 import {
   getProductMediaKind,
   getProductMediaFolder,
@@ -13,6 +13,8 @@ export async function POST(req: Request) {
   if (!session?.user || !['SELLER', 'ADMIN'].includes(session.user.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
+
+  logCloudinaryConfigExists();
 
   if (!isCloudinaryConfigured()) {
     return NextResponse.json(
