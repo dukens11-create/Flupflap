@@ -53,6 +53,10 @@ export type MediaUploadState = {
 };
 
 function createItemId() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
@@ -73,6 +77,48 @@ function formatFileSize(bytes: number | null) {
 
   const mb = kb / 1024;
   return `${mb.toFixed(mb >= 100 ? 0 : 1)} MB`;
+}
+
+function getSafePreviewUrl(url: string) {
+  if (!url) return '';
+
+  if (url.startsWith('blob:')) {
+    return url;
+  }
+
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      return parsed.toString();
+    }
+  } catch {
+    return '';
+  }
+
+  return '';
+}
+
+function getMediaStatusMessage(
+  required: boolean | undefined,
+  imageCount: number,
+  imageUploadCount: number,
+  videoUploading: boolean,
+  hasMediaErrors: boolean,
+  firstItemError: string
+) {
+  if (imageUploadCount > 0 || videoUploading) {
+    return 'Please wait for your selected media to finish uploading.';
+  }
+
+  if (hasMediaErrors) {
+    return firstItemError || 'Please fix the media upload error before submitting.';
+  }
+
+  if (required && imageCount === 0) {
+    return 'Please upload at least one image.';
+  }
+
+  return '';
 }
 
 /**
@@ -293,13 +339,14 @@ export default function MediaUpload({
   const hasMediaErrors = images.some((image) => image.status === 'error') || video?.status === 'error';
   const firstItemError =
     images.find((image) => image.status === 'error')?.error ?? video?.error ?? uploadError;
-  const mediaMessage = imageUploadCount > 0 || videoUploading
-    ? 'Please wait for your selected media to finish uploading.'
-    : hasMediaErrors
-      ? firstItemError || 'Please fix the media upload error before submitting.'
-      : required && images.length === 0
-        ? 'Please upload at least one image.'
-        : '';
+  const mediaMessage = getMediaStatusMessage(
+    required,
+    images.length,
+    imageUploadCount,
+    Boolean(videoUploading),
+    Boolean(hasMediaErrors),
+    firstItemError || ''
+  );
   const mediaReady =
     uploadedImageUrls.length === images.length &&
     !imageUploadCount &&
@@ -314,7 +361,7 @@ export default function MediaUpload({
       imageCount: images.length,
       uploadedImageCount: uploadedImageUrls.length,
       isUploading: imageUploadCount > 0 || videoUploading,
-      hasErrors: Boolean(hasMediaErrors),
+      hasErrors: hasMediaErrors,
       canSubmit: mediaReady,
       message: mediaMessage,
     });
@@ -360,7 +407,7 @@ export default function MediaUpload({
                 <div className="relative overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={image.previewUrl}
+                    src={getSafePreviewUrl(image.previewUrl)}
                     alt={`Product image ${i + 1}`}
                     className="h-40 w-full object-cover"
                   />
@@ -433,9 +480,11 @@ export default function MediaUpload({
           </div>
         )}
 
-        {uploadedImageUrls.map((url, index) => (
-          <input key={`${url}-${index}`} type="hidden" name="images" value={url} />
-        ))}
+        {images
+          .filter((image) => image.uploadedUrl)
+          .map((image) => (
+            <input key={image.id} type="hidden" name="images" value={image.uploadedUrl} />
+          ))}
         <input
           type="url"
           name="imageUrl"
@@ -450,7 +499,7 @@ export default function MediaUpload({
           type="text"
           value={mediaReady ? 'ready' : ''}
           readOnly
-          required={required || imageUploadCount > 0 || videoUploading || Boolean(hasMediaErrors)}
+          required={required || imageUploadCount > 0 || videoUploading || hasMediaErrors}
           tabIndex={-1}
           aria-hidden="true"
           style={{ position: 'absolute', width: 0, height: 0, overflow: 'hidden', opacity: 0 }}
@@ -470,7 +519,7 @@ export default function MediaUpload({
         {video ? (
           <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <video
-              src={video.previewUrl}
+              src={getSafePreviewUrl(video.previewUrl)}
               controls
               preload="metadata"
               className="rounded-lg border border-slate-200 max-h-48 w-full object-cover"

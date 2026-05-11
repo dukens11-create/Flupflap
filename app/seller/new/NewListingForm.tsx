@@ -133,7 +133,7 @@ export default function NewListingForm() {
           setMediaState(nextState);
           setErrors((current) => {
             if (!current.images) return current;
-            if (nextState.isUploading || nextState.hasErrors || (nextState.imageCount === 0 && !nextState.canSubmit)) {
+            if (nextState.isUploading || nextState.hasErrors || !nextState.canSubmit) {
               return { ...current, images: nextState.message || current.images };
             }
 
