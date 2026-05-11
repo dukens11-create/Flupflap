@@ -30,6 +30,12 @@ interface PickerOption {
   slug: string;
   aliases: string[];
   icon?: string | null;
+  breadcrumb?: string;
+  selection: {
+    mainId: string;
+    subId: string | null;
+    childId: string | null;
+  };
 }
 
 interface Props {
@@ -183,6 +189,37 @@ function resolveOptionAliases(node: CategoryNode): string[] {
   return [...new Set([...explicitAliases, ...legacyAliases])];
 }
 
+function flattenCategoryOptions(
+  nodes: CategoryNode[],
+  parents: CategoryNode[] = [],
+  rootId?: string,
+  branchId?: string | null,
+): PickerOption[] {
+  return nodes.flatMap(node => {
+    const nextParents = [...parents, node];
+    const mainId = rootId ?? node.id;
+    const subId = rootId ? (branchId ?? node.id) : null;
+    const childId = rootId && branchId ? node.id : null;
+    const breadcrumb = parents.map(parent => parent.name).join(' › ');
+
+    const current: PickerOption = {
+      id: node.id,
+      name: node.name,
+      slug: node.slug,
+      aliases: resolveOptionAliases(node),
+      icon: node.icon,
+      breadcrumb,
+      selection: { mainId, subId, childId },
+    };
+
+    const childBranchId = rootId ? (branchId ?? node.id) : null;
+    return [
+      current,
+      ...flattenCategoryOptions(node.children, nextParents, mainId, childBranchId),
+    ];
+  });
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function findNodeById(nodes: CategoryNode[], id: string): CategoryNode | null {
@@ -276,7 +313,7 @@ export default function CategoryPicker({ defaultCategoryId, defaultSubcategoryId
       setLoadError(false);
 
       try {
-        const response = await fetch('/api/categories');
+        const response = await fetch('/api/categories', { cache: 'no-store' });
         if (!response.ok) throw new Error('Failed to load categories');
 
         const data = (await response.json()) as CategoryNode[];
@@ -323,17 +360,41 @@ export default function CategoryPicker({ defaultCategoryId, defaultSubcategoryId
   const childCategories = subNode?.children ?? [];
 
   const mainOptions = useMemo<PickerOption[]>(
-    () => categories.map(c => ({ id: c.id, name: c.name, slug: c.slug, aliases: resolveOptionAliases(c), icon: c.icon })),
+    () => categories.map(c => ({
+      id: c.id,
+      name: c.name,
+      slug: c.slug,
+      aliases: resolveOptionAliases(c),
+      icon: c.icon,
+      selection: { mainId: c.id, subId: null, childId: null },
+    })),
     [categories],
   );
   const subOptions = useMemo<PickerOption[]>(
-    () => subcategories.map(c => ({ id: c.id, name: c.name, slug: c.slug, aliases: resolveOptionAliases(c), icon: null })),
-    [subcategories],
+    () => subcategories.map(c => ({
+      id: c.id,
+      name: c.name,
+      slug: c.slug,
+      aliases: resolveOptionAliases(c),
+      icon: null,
+      breadcrumb: mainNode?.name ?? '',
+      selection: { mainId: mainId ?? c.parentId ?? c.id, subId: c.id, childId: null },
+    })),
+    [mainId, mainNode?.name, subcategories],
   );
   const childOptions = useMemo<PickerOption[]>(
-    () => childCategories.map(c => ({ id: c.id, name: c.name, slug: c.slug, aliases: resolveOptionAliases(c), icon: null })),
-    [childCategories],
+    () => childCategories.map(c => ({
+      id: c.id,
+      name: c.name,
+      slug: c.slug,
+      aliases: resolveOptionAliases(c),
+      icon: null,
+      breadcrumb: [mainNode?.name, subNode?.name].filter(Boolean).join(' › '),
+      selection: { mainId: mainId ?? c.parentId ?? c.id, subId: subId ?? c.parentId, childId: c.id },
+    })),
+    [childCategories, mainId, mainNode?.name, subId, subNode?.name],
   );
+  const searchableMainOptions = useMemo<PickerOption[]>(() => flattenCategoryOptions(categories), [categories]);
 
   const schema = resolveSchema(categories, mainId, subId, childId);
   const leafName = resolveLeafName(categories, mainId, subId, childId);
@@ -460,6 +521,14 @@ export default function CategoryPicker({ defaultCategoryId, defaultSubcategoryId
     setAttrs({});
   }
 
+  function applyOptionSelection(option: PickerOption) {
+    setMainId(option.selection.mainId || null);
+    setSubId(option.selection.subId);
+    setChildId(option.selection.childId);
+    setAttrs({});
+    setCategoryError('');
+  }
+
   function handleAttrChange(name: string, value: string) {
     setAttrs(prev => ({ ...prev, [name]: value }));
   }
@@ -470,9 +539,15 @@ export default function CategoryPicker({ defaultCategoryId, defaultSubcategoryId
         label: 'Category',
         placeholder: 'Search categories...',
         emptyLabel: 'No categories found.',
-        options: mainOptions,
+        options: debouncedSearchQuery.trim() ? searchableMainOptions : mainOptions,
         selectedId: mainId,
-        onSelect: (id: string) => handleMainChange(id),
+        onSelect: (option: PickerOption) => {
+          if (debouncedSearchQuery.trim()) {
+            applyOptionSelection(option);
+            return;
+          }
+          handleMainChange(option.id);
+        },
       };
     }
     if (activePicker === 'sub') {
@@ -482,7 +557,7 @@ export default function CategoryPicker({ defaultCategoryId, defaultSubcategoryId
         emptyLabel: 'No subcategories found.',
         options: subOptions,
         selectedId: subId,
-        onSelect: (id: string) => handleSubChange(id),
+        onSelect: (option: PickerOption) => handleSubChange(option.id),
       };
     }
     if (activePicker === 'child') {
@@ -492,7 +567,7 @@ export default function CategoryPicker({ defaultCategoryId, defaultSubcategoryId
         emptyLabel: 'No matching categories found.',
         options: childOptions,
         selectedId: childId,
-        onSelect: (id: string) => handleChildChange(id),
+        onSelect: (option: PickerOption) => handleChildChange(option.id),
       };
     }
     return null;
@@ -686,11 +761,16 @@ export default function CategoryPicker({ defaultCategoryId, defaultSubcategoryId
                             type="button"
                             className={`w-full px-4 py-3 text-left transition-colors ${isSelected ? 'bg-slate-50 text-slate-900 font-medium' : 'text-slate-700 hover:bg-slate-50'}`}
                             onClick={() => {
-                              pickerConfig.onSelect(option.id);
+                              pickerConfig.onSelect(option);
                               setActivePicker(null);
                             }}
                           >
-                            {option.icon ? `${option.icon} ` : ''}{option.name}
+                            <div className="flex flex-col gap-0.5">
+                              <span>{option.icon ? `${option.icon} ` : ''}{option.name}</span>
+                              {option.breadcrumb ? (
+                                <span className="text-xs font-normal text-slate-500">{option.breadcrumb}</span>
+                              ) : null}
+                            </div>
                           </button>
                         </li>
                       );
