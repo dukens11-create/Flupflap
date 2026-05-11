@@ -7,6 +7,8 @@ import { buildCheckoutCommissionItems, getMarketplaceSettings } from '@/lib/comm
 import { checkoutErrorResponse } from '@/lib/checkout-errors';
 import { isSellerVerificationApproved } from '@/lib/seller-verification';
 
+const SHIPPING_LINE_ITEM_NAME = 'Shipping';
+
 type ShipmentGroup = {
   sellerId: string;
   shipmentId: string;
@@ -211,7 +213,7 @@ export async function POST(req: Request) {
       lineItems.push({
         price_data: {
           currency: 'usd',
-          product_data: { name: 'Shipping', images: [] },
+          product_data: { name: SHIPPING_LINE_ITEM_NAME, images: [] },
           unit_amount: validatedShippingRateInfo.totalRateCents,
         },
         quantity: 1,
@@ -223,11 +225,17 @@ export async function POST(req: Request) {
     );
     if (requiresLiveShippingSelection) {
       const hasShippingLine = lineItems.some(item => (
-        item.price_data.product_data.name === 'Shipping'
+        item.price_data.product_data.name === SHIPPING_LINE_ITEM_NAME
         && item.price_data.unit_amount === shippingAmount
       ));
       const expectedSubtotalCents = productSubtotalCents + shippingAmount;
       if (!hasShippingLine || shippingAmount <= 0 || checkoutSubtotalCents !== expectedSubtotalCents) {
+        console.error('[checkout/cart] shipping validation failed', {
+          hasShippingLine,
+          shippingAmount,
+          checkoutSubtotalCents,
+          expectedSubtotalCents,
+        });
         return NextResponse.json(
           { error: 'Unable to process checkout. Please refresh and try again.' },
           { status: 400 },
