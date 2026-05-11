@@ -104,6 +104,9 @@ function getSafePreviewUrl(url: string) {
   return '';
 }
 
+const DARK_IMAGE_BRIGHTNESS_THRESHOLD = 70;
+const BLURRY_IMAGE_VARIANCE_THRESHOLD = 500;
+
 async function detectImageEnhancementSuggestion(
   sourceUrl: string
 ): Promise<{ enhancement: ProductImageEnhancementOption; message: string } | null> {
@@ -141,16 +144,15 @@ async function detectImageEnhancementSuggestion(
     }
 
     const avgBrightness = brightnessSum / pixelCount;
-    const meanLuminance = avgBrightness;
     let variance = 0;
     for (let index = 0; index < luminance.length; index += 1) {
-      const diff = luminance[index] - meanLuminance;
+      const diff = (luminance[index] ?? 0) - avgBrightness;
       variance += diff * diff;
     }
     variance /= Math.max(1, luminance.length);
 
-    const isDark = avgBrightness < 70;
-    const isBlurry = variance < 500;
+    const isDark = avgBrightness < DARK_IMAGE_BRIGHTNESS_THRESHOLD;
+    const isBlurry = variance < BLURRY_IMAGE_VARIANCE_THRESHOLD;
 
     if (isDark && isBlurry) {
       return {
