@@ -224,7 +224,13 @@ export async function POST(req: Request) {
           rates: result.rates,
         });
       } catch (err: any) {
-        console.error(`[checkout/rates] Shippo error for seller ${sellerId}:`, err?.message ?? err);
+        console.error(`[checkout/rates] Shippo error for seller ${sellerId}:`, err?.message ?? err, {
+          sellerCountry: fromAddress.country,
+          sellerState: fromAddress.state,
+          buyerState: buyerAddress.state,
+          buyerCountry: buyerAddress.country || 'US',
+          parcel,
+        });
         errors.push(
           `Shipping rate unavailable. Please check address or package details. Seller "${seller.shopName || 'a seller'}" could not be quoted.`,
         );
@@ -232,9 +238,9 @@ export async function POST(req: Request) {
     }
 
     if (!groups.length && errors.length > 0) {
-      console.error('[checkout/rates] unavailable details', errors);
+      console.error('[checkout/rates] all seller groups failed:', errors);
       return NextResponse.json(
-        { error: 'Shipping rate unavailable. Please check address or package details.' },
+        { error: errors.join(' ') },
         { status: 503 },
       );
     }

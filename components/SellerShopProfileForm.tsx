@@ -187,14 +187,14 @@ export default function SellerShopProfileForm({
           </div>
           <div>
             <label className="block text-xs font-semibold text-slate-600 mb-1" htmlFor="shipFromState">
-              State
+              State (2-letter abbreviation)
             </label>
             <input
               id="shipFromState"
               type="text"
               value={shipFromState}
               onChange={(e) => setShipFromState(e.target.value)}
-              maxLength={50}
+              maxLength={2}
               placeholder="e.g. NY"
               className={INPUT_CLASS}
             />
@@ -218,17 +218,19 @@ export default function SellerShopProfileForm({
           </div>
           <div>
             <label className="block text-xs font-semibold text-slate-600 mb-1" htmlFor="shipFromCountry">
-              Country (2-letter code)
+              Country
             </label>
-            <input
+            <select
               id="shipFromCountry"
-              type="text"
               value={shipFromCountry}
               onChange={(e) => setShipFromCountry(e.target.value)}
-              maxLength={2}
-              placeholder="US"
               className={INPUT_CLASS}
-            />
+            >
+              <option value="US">United States (US)</option>
+              <option value="CA">Canada (CA)</option>
+              <option value="GB">United Kingdom (GB)</option>
+              <option value="AU">Australia (AU)</option>
+            </select>
           </div>
         </div>
 

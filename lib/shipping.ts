@@ -1,6 +1,63 @@
 const SHIPPO_API_BASE = 'https://api.goshippo.com';
 const SUPPORTED_CARRIERS = new Set(['USPS', 'UPS', 'FEDEX']);
 
+/**
+ * Map common country full names / aliases to ISO 3166-1 alpha-2 codes.
+ * Shippo requires the 2-letter code; sellers may have stored a full name.
+ */
+const COUNTRY_NAME_TO_CODE: Record<string, string> = {
+  'united states': 'US',
+  'united states of america': 'US',
+  'usa': 'US',
+  'canada': 'CA',
+  'united kingdom': 'GB',
+  'great britain': 'GB',
+  'uk': 'GB',
+  'australia': 'AU',
+};
+
+/** Normalize a country value to a 2-letter ISO code. Leaves already-valid 2-letter codes as-is. */
+function normalizeCountryCode(value: string | null | undefined): string {
+  const trimmed = (value ?? '').trim();
+  if (!trimmed) return 'US';
+  if (trimmed.length === 2) return trimmed.toUpperCase();
+  const lower = trimmed.toLowerCase();
+  return COUNTRY_NAME_TO_CODE[lower] ?? trimmed.toUpperCase();
+}
+
+/**
+ * Map US state full names to their 2-letter USPS abbreviations.
+ * Shippo (and most carriers) require the abbreviation for US addresses.
+ */
+const US_STATE_NAME_TO_ABBR: Record<string, string> = {
+  'alabama': 'AL', 'alaska': 'AK', 'arizona': 'AZ', 'arkansas': 'AR',
+  'california': 'CA', 'colorado': 'CO', 'connecticut': 'CT', 'delaware': 'DE',
+  'florida': 'FL', 'georgia': 'GA', 'hawaii': 'HI', 'idaho': 'ID',
+  'illinois': 'IL', 'indiana': 'IN', 'iowa': 'IA', 'kansas': 'KS',
+  'kentucky': 'KY', 'louisiana': 'LA', 'maine': 'ME', 'maryland': 'MD',
+  'massachusetts': 'MA', 'michigan': 'MI', 'minnesota': 'MN', 'mississippi': 'MS',
+  'missouri': 'MO', 'montana': 'MT', 'nebraska': 'NE', 'nevada': 'NV',
+  'new hampshire': 'NH', 'new jersey': 'NJ', 'new mexico': 'NM', 'new york': 'NY',
+  'north carolina': 'NC', 'north dakota': 'ND', 'ohio': 'OH', 'oklahoma': 'OK',
+  'oregon': 'OR', 'pennsylvania': 'PA', 'rhode island': 'RI', 'south carolina': 'SC',
+  'south dakota': 'SD', 'tennessee': 'TN', 'texas': 'TX', 'utah': 'UT',
+  'vermont': 'VT', 'virginia': 'VA', 'washington': 'WA', 'west virginia': 'WV',
+  'wisconsin': 'WI', 'wyoming': 'WY', 'district of columbia': 'DC',
+  'puerto rico': 'PR', 'guam': 'GU', 'virgin islands': 'VI',
+  'american samoa': 'AS', 'northern mariana islands': 'MP',
+};
+
+/**
+ * Normalize a US state value to its 2-letter abbreviation.
+ * Leaves already-abbreviated (≤2 chars) or non-US values as-is.
+ */
+function normalizeStateCode(value: string | null | undefined): string {
+  const trimmed = (value ?? '').trim();
+  if (trimmed.length <= 2) return trimmed.toUpperCase();
+  const abbr = US_STATE_NAME_TO_ABBR[trimmed.toLowerCase()];
+  return abbr ?? trimmed;
+}
+
 type AddressInput = {
   name?: string | null;
   street1: string;
@@ -40,14 +97,19 @@ function getShippoApiToken() {
 }
 
 function serializeAddress(address: AddressInput) {
+  const country = normalizeCountryCode(address.country);
+  // Normalize state to 2-letter abbreviation for US addresses; carriers require it.
+  const state = country === 'US'
+    ? normalizeStateCode(address.state)
+    : (address.state?.trim() ?? '');
   return {
     name: address.name?.trim() || undefined,
     street1: address.street1,
     street2: address.street2?.trim() || undefined,
     city: address.city,
-    state: address.state,
+    state,
     zip: address.zip,
-    country: address.country?.trim() || 'US',
+    country,
     phone: address.phone?.trim() || undefined,
   };
 }

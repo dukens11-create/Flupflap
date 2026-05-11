@@ -604,14 +604,18 @@ export default function CheckoutPage() {
               ? 'Free (pickup)'
               : hasCalculatedShipping && !ratesFetched
                 ? 'Calculated after address entry'
-                : totalShipping === 0
-                  ? 'Free'
-                  : dollars(totalShipping)}
+                : hasCalculatedShipping && ratesFetched && rateError
+                  ? 'Shipping unavailable'
+                  : hasCalculatedShipping && ratesFetched && !hasCompleteShippingSelection
+                    ? 'Shipping not selected'
+                    : totalShipping === 0
+                      ? 'Free'
+                      : dollars(totalShipping)}
           </span>
         </div>
         <div className="flex justify-between font-bold text-base border-t pt-2 mt-1">
           <span>Total</span>
-          <span>{hasCalculatedShipping && !ratesFetched ? 'TBD' : dollars(total)}</span>
+          <span>{hasCalculatedShipping && (!ratesFetched || !hasCompleteShippingSelection) ? 'TBD' : dollars(total)}</span>
         </div>
       </div>
 
