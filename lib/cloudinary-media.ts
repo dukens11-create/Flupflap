@@ -11,6 +11,7 @@ export type CloudinaryImageVariants = {
   thumbnailUrl: string;
 };
 
+// Listing upload delivery target: large enough for product zoom while still optimized.
 const ENHANCED_IMAGE_MAX_WIDTH = 1400;
 const ENHANCED_IMAGE_MAX_HEIGHT = 1400;
 const DELIVERY_OPTIMIZATION = {

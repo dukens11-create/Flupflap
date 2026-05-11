@@ -95,7 +95,16 @@ function resolveOriginalImagesForProduct(
   if (existing.originalImages?.length === resolvedImages.length) {
     return existing.originalImages;
   }
-  return resolvedImages;
+  return resolvedImages.map((selectedImageUrl, index) => {
+    if (existing.originalImages?.[index]) {
+      return existing.originalImages[index];
+    }
+    const matchedEnhancedIndex = existing.enhancedImages?.findIndex((url) => url === selectedImageUrl) ?? -1;
+    if (matchedEnhancedIndex >= 0 && existing.originalImages?.[matchedEnhancedIndex]) {
+      return existing.originalImages[matchedEnhancedIndex];
+    }
+    return selectedImageUrl;
+  });
 }
 
 function buildListingRiskCandidate(

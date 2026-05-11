@@ -163,6 +163,7 @@ export default function MediaUpload({
     defaultImages.map((url, index) => {
       const originalUrl = defaultOriginalImages[index] || url;
       const enhancedUrl = defaultEnhancedImages[index] || '';
+      // If the saved form image matches the enhanced URL, keep "After" selected.
       const selectedVariant: 'original' | 'enhanced' = enhancedUrl && url === enhancedUrl ? 'enhanced' : 'original';
       const selectedUrl = selectedVariant === 'enhanced' ? enhancedUrl : originalUrl;
       return {
@@ -420,6 +421,7 @@ export default function MediaUpload({
                   };
                 }),
               );
+              setUploadError('');
             })
             .catch((err: unknown) => {
               const msg = err instanceof Error ? err.message : 'AI enhancement failed.';
@@ -566,6 +568,7 @@ export default function MediaUpload({
             : image,
         ),
       );
+      setUploadError('');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'AI enhancement failed.';
       setImages((prev) =>
@@ -684,7 +687,9 @@ export default function MediaUpload({
           <div className="mb-3 grid gap-3 sm:grid-cols-2">
             {images.map((image, i) => {
               const showRetryButton =
-                (image.enhancementStatus === 'error' || !image.enhancedUrl) && !!image.originalUrl;
+                image.status === 'uploaded' &&
+                image.enhancementStatus === 'error' &&
+                !!image.originalUrl;
               return (
               <div
                 key={image.id}
