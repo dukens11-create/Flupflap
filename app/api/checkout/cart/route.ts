@@ -197,7 +197,14 @@ export async function POST(req: Request) {
     // Add live shipping as a separate line item if selected
     const shippingAmount = validatedShippingRateInfo?.totalRateCents ?? 0;
     for (const selectedRate of validatedShippingRateInfo?.shipmentGroups ?? []) {
-      console.log("Selected shipping rate:", selectedRate);
+      console.log("Selected shipping rate:", {
+        sellerId: selectedRate.sellerId,
+        shipmentId: selectedRate.shipmentId,
+        rateId: selectedRate.rateId,
+        carrier: selectedRate.carrier,
+        service: selectedRate.service,
+        rateCents: selectedRate.rateCents,
+      });
     }
     console.log("Stripe shipping amount:", shippingAmount);
     if (validatedShippingRateInfo?.totalRateCents && validatedShippingRateInfo.totalRateCents > 0) {
@@ -222,7 +229,7 @@ export async function POST(req: Request) {
       const expectedSubtotalCents = productSubtotalCents + shippingAmount;
       if (!hasShippingLine || shippingAmount <= 0 || checkoutSubtotalCents !== expectedSubtotalCents) {
         return NextResponse.json(
-          { error: 'Shipping rate unavailable. Please check address or package details.' },
+          { error: 'Unable to process checkout. Please refresh and try again.' },
           { status: 400 },
         );
       }

@@ -75,7 +75,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Please provide a complete shipping address.' }, { status: 400 });
     }
     console.log("Shippo token exists:", !!process.env.SHIPPO_API_TOKEN);
-    console.log("Ship-to address:", buyerAddress);
+    const buyerAddressForLog = {
+      ...buyerAddress,
+      street1: buyerAddress.street1 ? '[redacted]' : buyerAddress.street1,
+      street2: buyerAddress.street2 ? '[redacted]' : buyerAddress.street2,
+      zip: buyerAddress.zip ? '[redacted]' : buyerAddress.zip,
+    };
+    console.log("Ship-to address:", buyerAddressForLog);
 
     // Load products with their seller shipping profile and dimensions
     const products = await prisma.product.findMany({
@@ -131,7 +137,11 @@ export async function POST(req: Request) {
     for (const [sellerId, sellerProducts] of sellerGroups) {
       const seller = sellerProducts[0].seller;
       const fromAddress = resolveFromAddress(seller);
-      const sellerAddress = fromAddress;
+      const sellerAddress = {
+        ...fromAddress,
+        street1: fromAddress.street1 ? '[redacted]' : fromAddress.street1,
+        zip: fromAddress.zip ? '[redacted]' : fromAddress.zip,
+      };
       console.log("Ship-from address:", sellerAddress);
 
       // Validate that we have a ship-from address
@@ -195,9 +205,15 @@ export async function POST(req: Request) {
           widthIn: maxWidth,
           heightIn: maxHeight,
         });
-        const rates = result.rates;
+        const rates = result.rates.map((rate) => ({
+          id: rate.id,
+          carrier: rate.carrier,
+          service: rate.service,
+          rate: rate.rate,
+          deliveryDays: rate.deliveryDays,
+        }));
         console.log("Shippo rates:", rates);
-        if (!result.rates.length) {
+        if (!rates.length) {
           throw new Error('No supported shipping rates returned.');
         }
 
