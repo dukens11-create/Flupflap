@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 const MAX_IMAGES = 6;
 const ACCEPTED_IMAGE_TYPES = 'image/jpeg,image/png,image/webp,image/gif';
@@ -63,7 +63,7 @@ function getFileNameFromUrl(url: string) {
   }
 }
 
-function formatFileSize(bytes: number | null) {
+function formatFileSizeOrStatus(bytes: number | null) {
   if (bytes === null) return 'Uploaded';
   if (bytes < 1024) return `${bytes} B`;
 
@@ -130,14 +130,14 @@ export default function MediaUpload({
   onStateChange,
 }: MediaUploadProps) {
   const fallbackIdCounterRef = useRef(0);
-  const createItemId = () => {
+  const createItemId = useCallback(() => {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
       return crypto.randomUUID();
     }
 
     fallbackIdCounterRef.current += 1;
     return `${Date.now()}-${fallbackIdCounterRef.current}-${Math.random().toString(36).slice(2, 10)}`;
-  };
+  }, []);
   const [images, setImages] = useState<ImageUploadItem[]>(() =>
     defaultImages.map((url) => ({
       id: createItemId(),
@@ -461,7 +461,7 @@ export default function MediaUpload({
                 </div>
                 <div className="mt-3 space-y-1">
                   <p className="truncate text-sm font-medium text-slate-900">{image.fileName}</p>
-                  <p className="text-xs text-slate-500">{formatFileSize(image.fileSize)}</p>
+                  <p className="text-xs text-slate-500">{formatFileSizeOrStatus(image.fileSize)}</p>
                   {image.status === 'uploading' && (
                     <p className="text-xs font-medium text-blue-600">Uploading image…</p>
                   )}
@@ -586,7 +586,7 @@ export default function MediaUpload({
             )}
             <div className="space-y-1">
               <p className="truncate text-sm font-medium text-slate-900">{video.fileName}</p>
-              <p className="text-xs text-slate-500">{formatFileSize(video.fileSize)}</p>
+              <p className="text-xs text-slate-500">{formatFileSizeOrStatus(video.fileSize)}</p>
               {video.status === 'uploading' && (
                 <p className="text-xs font-medium text-blue-600">Uploading video…</p>
               )}

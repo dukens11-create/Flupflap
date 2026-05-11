@@ -131,7 +131,7 @@ stores the returned `images[]`, `imageUrl`, and optional `videoUrl` values
 before the product create/update request is submitted.
 
 - Accepted image formats: JPEG, PNG, WebP, GIF (up to 10 MB each)
-- Accepted video formats: MP4, MOV, WebM (up to 200 MB)
+- Accepted video formats: MP4, MOV, WebM (1 video, up to 200 MB)
 - Product media is stored under the Cloudinary folder set by
   `CLOUDINARY_UPLOAD_FOLDER` (defaults to `flupflap/products`)
 
