@@ -22,6 +22,9 @@ const updateSchema = z.object({
   condition: z.string().min(1).optional(),
   imageUrl: z.string().url().optional(),
   images: z.union([z.string().url(), z.array(z.string().url())]).optional(),
+  originalImages: z.union([z.string().url(), z.array(z.string().url())]).optional(),
+  enhancedImages: z.union([z.string().url(), z.array(z.string().url())]).optional(),
+  imageThumbnails: z.union([z.string().url(), z.array(z.string().url())]).optional(),
   videoUrl: z.string().url().optional().or(z.literal('')),
   inventory: z.string().optional(),
   pickupAvailable: z.string().optional(), // "true" when checkbox is checked
@@ -38,7 +41,6 @@ const updateSchema = z.object({
   categoryId: z.string().optional(),
   subcategoryId: z.string().optional(),
   productAttributes: z.string().optional(), // JSON string
-  mediaEnhancements: z.string().optional(),
 });
 
 type ProductUpdateInput = z.infer<typeof updateSchema>;
@@ -73,31 +75,36 @@ function resolveVideoUrl(submitted: string | undefined, existing: ExistingProduc
   return submitted || null;
 }
 
-function resolveProductAttributes(
-  productAttributesRaw: string | undefined,
-  mediaEnhancementsRaw: string | undefined
-) {
-  const parsedAttributes = parseJsonOrNull(productAttributesRaw);
-  const parsedMediaEnhancements = parseJsonOrNull(mediaEnhancementsRaw);
+function toUrlArray(
+  value: string | string[] | undefined,
+  fallback: string[] = [],
+): string[] {
+  if (Array.isArray(value)) return value.filter(Boolean);
+  if (typeof value === 'string' && value) return [value];
+  return fallback;
+}
 
-  const normalizedAttributes: Record<string, unknown> =
-    parsedAttributes && typeof parsedAttributes === 'object' && !Array.isArray(parsedAttributes)
-      ? { ...(parsedAttributes as Record<string, unknown>) }
-      : {};
-
-  if (parsedMediaEnhancements) {
-    normalizedAttributes.mediaEnhancements = parsedMediaEnhancements;
+function resolveOriginalImagesForProduct(
+  submittedOriginalImages: string[] | null,
+  resolvedImages: string[],
+  existing: ExistingProduct,
+): string[] {
+  if (submittedOriginalImages?.length === resolvedImages.length) {
+    return submittedOriginalImages;
   }
-
-  if (Object.keys(normalizedAttributes).length > 0) {
-    return normalizedAttributes;
+  if (existing.originalImages?.length === resolvedImages.length) {
+    return existing.originalImages;
   }
-
-  if (parsedAttributes === null || parsedAttributes === undefined) {
-    return null;
-  }
-
-  return parsedAttributes;
+  return resolvedImages.map((selectedImageUrl, index) => {
+    if (existing.originalImages?.[index]) {
+      return existing.originalImages[index];
+    }
+    const matchedEnhancedIndex = existing.enhancedImages?.findIndex((url) => url === selectedImageUrl) ?? -1;
+    if (matchedEnhancedIndex >= 0 && existing.originalImages?.[matchedEnhancedIndex]) {
+      return existing.originalImages[matchedEnhancedIndex];
+    }
+    return selectedImageUrl;
+  });
 }
 
 function buildListingRiskCandidate(
@@ -173,16 +180,32 @@ export async function POST(
     // Default: update
     const rawEntries = Object.fromEntries(form.entries());
     const imagesRaw = form.getAll('images').map(String).filter(Boolean);
-    const data = updateSchema.parse({ ...rawEntries, images: imagesRaw.length ? imagesRaw : undefined });
+    const originalImagesRaw = form.getAll('originalImages').map(String).filter(Boolean);
+    const enhancedImagesRaw = form.getAll('enhancedImages').map(String).filter(Boolean);
+    const imageThumbnailsRaw = form.getAll('imageThumbnails').map(String).filter(Boolean);
+    const data = updateSchema.parse({
+      ...rawEntries,
+      images: imagesRaw.length ? imagesRaw : undefined,
+      originalImages: originalImagesRaw.length ? originalImagesRaw : undefined,
+      enhancedImages: enhancedImagesRaw.length ? enhancedImagesRaw : undefined,
+      imageThumbnails: imageThumbnailsRaw.length ? imageThumbnailsRaw : undefined,
+    });
 
     const submittedImages = imagesRaw.length ? imagesRaw : data.imageUrl ? [data.imageUrl] : null;
     const resolvedImages = resolveImages(submittedImages, existing);
     const mainImage = resolvedImages[0] ?? existing.imageUrl;
     const videoUrl = resolveVideoUrl(data.videoUrl, existing);
-    const productAttributes = resolveProductAttributes(
-      data.productAttributes,
-      data.mediaEnhancements
+    const resolvedOriginalImages = resolveOriginalImagesForProduct(
+      originalImagesRaw.length ? originalImagesRaw : null,
+      resolvedImages,
+      existing,
     );
+    const resolvedEnhancedImages =
+      enhancedImagesRaw.length > 0 ? enhancedImagesRaw.slice(0, resolvedImages.length) : existing.enhancedImages ?? [];
+    const resolvedImageThumbnails =
+      imageThumbnailsRaw.length > 0
+        ? imageThumbnailsRaw.slice(0, resolvedImages.length)
+        : existing.imageThumbnails ?? [];
 
     const riskAssessment = await getListingRiskAssessmentForCandidate(
       buildListingRiskCandidate(sellerId, existing, data, resolvedImages),
@@ -197,8 +220,6 @@ export async function POST(
         ...(data.price && { priceCents: cents(data.price) }),
         ...(data.shipping !== undefined && { shippingCents: cents(data.shipping || '0') }),
         ...(data.shippingMode && (SHIPPING_MODES as readonly string[]).includes(data.shippingMode) && { shippingMode: data.shippingMode }),
-        // Keep both fields in sync for legacy consumers (`imageUrl`) and multi-media UI (`mainImage`).
-        ...{ imageUrl: mainImage, mainImage, images: resolvedImages, videoUrl },
         pickupAvailable: data.pickupAvailable === 'true',
         pickupCity: data.pickupCity || null,
         pickupState: data.pickupState || null,
@@ -212,7 +233,14 @@ export async function POST(
         // Category system fields
         categoryId: data.categoryId || null,
         subcategoryId: data.subcategoryId || null,
-        productAttributes,
+        productAttributes: parseJsonOrNull(data.productAttributes),
+        imageUrl: mainImage,
+        images: resolvedImages,
+        mainImage,
+        videoUrl,
+        originalImages: resolvedOriginalImages,
+        enhancedImages: resolvedEnhancedImages,
+        imageThumbnails: resolvedImageThumbnails,
         // Reset to PENDING on edit so admin can re-review
         status: 'PENDING',
       },
@@ -285,9 +313,15 @@ export async function PATCH(
     const resolvedImages = resolveImages(imagesInput, existing);
     const mainImage = resolvedImages[0] ?? existing.imageUrl;
     const videoUrl = resolveVideoUrl(data.videoUrl, existing);
-    const productAttributes = resolveProductAttributes(
-      data.productAttributes,
-      data.mediaEnhancements
+    const originalImagesFallback = resolveOriginalImagesForProduct(null, resolvedImages, existing);
+    const resolvedOriginalImages = toUrlArray(data.originalImages, originalImagesFallback);
+    const resolvedEnhancedImages = toUrlArray(data.enhancedImages, existing.enhancedImages ?? []).slice(
+      0,
+      resolvedImages.length,
+    );
+    const resolvedImageThumbnails = toUrlArray(data.imageThumbnails, existing.imageThumbnails ?? []).slice(
+      0,
+      resolvedImages.length,
     );
 
     const riskAssessment = await getListingRiskAssessmentForCandidate(
@@ -305,8 +339,13 @@ export async function PATCH(
         ...(data.shippingMode && (SHIPPING_MODES as readonly string[]).includes(data.shippingMode) && { shippingMode: data.shippingMode }),
         ...(data.category && { category: data.category }),
         ...(data.condition && { condition: data.condition }),
-        // Keep both fields in sync for legacy consumers (`imageUrl`) and multi-media UI (`mainImage`).
-        ...{ imageUrl: mainImage, mainImage, images: resolvedImages, videoUrl },
+        imageUrl: mainImage,
+        images: resolvedImages,
+        mainImage,
+        videoUrl,
+        originalImages: resolvedOriginalImages,
+        enhancedImages: resolvedEnhancedImages,
+        imageThumbnails: resolvedImageThumbnails,
         ...(data.inventory && { inventory: Number(data.inventory) }),
         ...(data.pickupAvailable !== undefined && { pickupAvailable: data.pickupAvailable === 'true' }),
         ...(data.pickupCity !== undefined && { pickupCity: data.pickupCity || null }),
@@ -321,7 +360,7 @@ export async function PATCH(
         // Category system fields
         categoryId: data.categoryId || null,
         subcategoryId: data.subcategoryId || null,
-        productAttributes,
+        productAttributes: parseJsonOrNull(data.productAttributes),
         status: 'PENDING',
       },
     });

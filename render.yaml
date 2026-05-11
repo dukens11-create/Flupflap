@@ -38,4 +38,18 @@ services:
         sync: false
       - key: PLATFORM_FEE_PERCENT
         value: "7"
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: CLOUDINARY_PRODUCTS_FOLDER
+        value: "flupflap/products"
+      - key: CLOUDINARY_VIDEOS_FOLDER
+        value: "flupflap/videos"
+      - key: CLOUDINARY_USERS_FOLDER
+        value: "flupflap/users"
+      - key: CLOUDINARY_THUMBNAILS_FOLDER
+        value: "flupflap/thumbnails"
     healthCheckPath: /

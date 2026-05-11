@@ -16,11 +16,41 @@ export const PRODUCT_VIDEO_TYPES = [
   'video/webm',
 ] as const;
 
-export function getProductMediaFolder(kind: 'image' | 'video' = 'image') {
-  if (kind === 'video') {
-    return process.env.CLOUDINARY_PRODUCT_VIDEO_FOLDER ?? 'flupflap/videos';
+const DEFAULT_PRODUCTS_FOLDER = 'flupflap/products';
+const DEFAULT_VIDEOS_FOLDER = 'flupflap/videos';
+const DEFAULT_USERS_FOLDER = 'flupflap/users';
+const DEFAULT_THUMBNAILS_FOLDER = 'flupflap/thumbnails';
+
+export function getCloudinaryProductsFolder() {
+  return process.env.CLOUDINARY_PRODUCTS_FOLDER?.trim()
+    || process.env.CLOUDINARY_PRODUCT_MEDIA_FOLDER?.trim()
+    || DEFAULT_PRODUCTS_FOLDER;
+}
+
+export function getCloudinaryVideosFolder() {
+  return process.env.CLOUDINARY_VIDEOS_FOLDER?.trim() || DEFAULT_VIDEOS_FOLDER;
+}
+
+export function getCloudinaryUsersFolder() {
+  return process.env.CLOUDINARY_USERS_FOLDER?.trim() || DEFAULT_USERS_FOLDER;
+}
+
+export function getCloudinaryThumbnailsFolder() {
+  return process.env.CLOUDINARY_THUMBNAILS_FOLDER?.trim() || DEFAULT_THUMBNAILS_FOLDER;
+}
+
+export function getProductMediaFolderByKind(resourceType: 'image' | 'video') {
+  return resourceType === 'video' ? getCloudinaryVideosFolder() : getCloudinaryProductsFolder();
+}
+
+export function getProductMediaFolder(contentType?: string) {
+  if (contentType) {
+    const mediaKind = getProductMediaKind(contentType);
+    if (mediaKind) {
+      return getProductMediaFolderByKind(mediaKind);
+    }
   }
-  return process.env.CLOUDINARY_PRODUCT_MEDIA_FOLDER ?? 'flupflap/products';
+  return getCloudinaryProductsFolder();
 }
 
 export function getProductMediaKind(contentType: string) {

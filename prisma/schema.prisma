@@ -263,6 +263,9 @@ model Product {
   lastViewedAt  DateTime?
   // Media fields (multi-image + video)
   images            String[]
+  originalImages    String[]         @default([])
+  enhancedImages    String[]         @default([])
+  imageThumbnails   String[]         @default([])
   mainImage         String          @default("")
   videoUrl          String?
   // Package dimensions for live shipping rate calculation

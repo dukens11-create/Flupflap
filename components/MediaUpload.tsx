@@ -8,17 +8,16 @@ import {
   PRODUCT_IMAGE_TYPES,
   PRODUCT_VIDEO_TYPES,
 } from '@/lib/product-media';
-import {
-  getOptimizedProductImageUrl,
-  getProductImageThumbnailUrl,
-  PRODUCT_IMAGE_ENHANCEMENT_LABELS,
-  PRODUCT_IMAGE_ENHANCEMENT_OPTIONS,
-  type ProductImageEnhancementOption,
-} from '@/lib/product-image-enhancement';
 
 interface MediaUploadProps {
   /** Existing image URLs for edit forms. */
   defaultImages?: string[];
+  /** Existing original image URLs (optional, for enhanced media forms). */
+  defaultOriginalImages?: string[];
+  /** Existing enhanced image URLs (optional, for enhanced media forms). */
+  defaultEnhancedImages?: string[];
+  /** Existing image thumbnail URLs (optional, for enhanced media forms). */
+  defaultImageThumbnails?: string[];
   /** Existing video URL for edit forms. */
   defaultVideoUrl?: string;
   /** Whether at least one image is required. */
@@ -27,18 +26,18 @@ interface MediaUploadProps {
   onStateChange?: (state: MediaUploadState) => void;
 }
 
-type UploadStatus = 'uploading' | 'processing' | 'uploaded' | 'error';
+type UploadStatus = 'uploading' | 'uploaded' | 'error';
 
 type ImageUploadItem = {
   id: string;
   previewUrl: string;
   safePreviewUrl: string;
-  originalUploadedUrl: string;
   uploadedUrl: string;
+  originalUrl: string;
+  enhancedUrl: string;
   thumbnailUrl: string;
-  selectedEnhancement: ProductImageEnhancementOption;
-  suggestedEnhancement: ProductImageEnhancementOption | null;
-  suggestionMessage?: string;
+  selectedVariant: 'original' | 'enhanced';
+  enhancementStatus: 'idle' | 'processing' | 'ready' | 'error';
   fileName: string;
   fileSize: number | null;
   status: UploadStatus;
@@ -61,6 +60,7 @@ export type MediaUploadState = {
   imageCount: number;
   uploadedImageCount: number;
   isUploading: boolean;
+  isEnhancing: boolean;
   hasErrors: boolean;
   canSubmit: boolean;
   message: string;
@@ -104,96 +104,21 @@ function getSafePreviewUrl(url: string) {
   return '';
 }
 
-// Brightness is measured on a 0-255 luminance scale from sampled pixels.
-const DARK_IMAGE_BRIGHTNESS_THRESHOLD = 70;
-// Variance of sampled luminance values; lower variance often indicates blur/low detail.
-const BLURRY_IMAGE_VARIANCE_THRESHOLD = 500;
-
-async function detectImageEnhancementSuggestion(
-  sourceUrl: string
-): Promise<{ enhancement: ProductImageEnhancementOption; message: string } | null> {
-  if (!sourceUrl) return null;
-
-  try {
-    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error('Image analysis failed.'));
-      img.src = sourceUrl;
-    });
-
-    // Keep analysis lightweight while preserving enough detail for quality hints.
-    const maxDimension = 128;
-    const canvas = document.createElement('canvas');
-    const ratio = Math.min(maxDimension / image.width, maxDimension / image.height, 1);
-    canvas.width = Math.max(1, Math.round(image.width * ratio));
-    canvas.height = Math.max(1, Math.round(image.height * ratio));
-    const context = canvas.getContext('2d');
-    if (!context) return null;
-
-    context.drawImage(image, 0, 0, canvas.width, canvas.height);
-    const data = context.getImageData(0, 0, canvas.width, canvas.height).data;
-    const pixelCount = Math.max(1, data.length / 4);
-    let brightnessSum = 0;
-    const luminance: number[] = [];
-
-    for (let index = 0; index < data.length; index += 4) {
-      const r = data[index] ?? 0;
-      const g = data[index + 1] ?? 0;
-      const b = data[index + 2] ?? 0;
-      // Rec. 709 luma coefficients for perceived brightness.
-      const value = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-      brightnessSum += value;
-      luminance.push(value);
-    }
-
-    const avgBrightness = brightnessSum / pixelCount;
-    let variance = 0;
-    for (let index = 0; index < luminance.length; index += 1) {
-      const diff = (luminance[index] ?? 0) - avgBrightness;
-      variance += diff * diff;
-    }
-    variance /= Math.max(1, luminance.length);
-
-    const isDark = avgBrightness < DARK_IMAGE_BRIGHTNESS_THRESHOLD;
-    const isBlurry = variance < BLURRY_IMAGE_VARIANCE_THRESHOLD;
-
-    if (isDark && isBlurry) {
-      return {
-        enhancement: 'auto_enhance',
-        message: 'This image looks dark and soft. Auto enhance is recommended.',
-      };
-    }
-    if (isDark) {
-      return {
-        enhancement: 'auto_enhance',
-        message: 'This image looks dark. Auto enhance is recommended.',
-      };
-    }
-    if (isBlurry) {
-      return {
-        enhancement: 'hd_upscale',
-        message: 'This image looks a bit blurry. HD upscale may improve clarity.',
-      };
-    }
-  } catch {
-    return null;
-  }
-
-  return null;
-}
-
 function getMediaStatusMessage(
   required: boolean | undefined,
   imageCount: number,
   imageUploadCount: number,
-  imageProcessingCount: number,
+  imageEnhancingCount: number,
   videoUploading: boolean,
   hasMediaErrors: boolean,
   firstItemError: string
 ) {
-  if (imageUploadCount > 0 || imageProcessingCount > 0 || videoUploading) {
+  if (imageUploadCount > 0 || videoUploading) {
     return 'Please wait for your selected media to finish uploading.';
+  }
+
+  if (imageEnhancingCount > 0) {
+    return 'Generating AI-enhanced image previews…';
   }
 
   if (hasMediaErrors) {
@@ -216,6 +141,9 @@ function getMediaStatusMessage(
  */
 export default function MediaUpload({
   defaultImages = [],
+  defaultOriginalImages = [],
+  defaultEnhancedImages = [],
+  defaultImageThumbnails = [],
   defaultVideoUrl = '',
   required,
   onStateChange,
@@ -232,19 +160,27 @@ export default function MediaUpload({
     return `${Date.now()}-${fallbackIdCounterRef.current}-${Math.random().toString(36).slice(2, 10)}`;
   }, []);
   const [images, setImages] = useState<ImageUploadItem[]>(() =>
-    defaultImages.map((url) => ({
-      id: createItemId(),
-      previewUrl: url,
-      safePreviewUrl: getSafePreviewUrl(url),
-      originalUploadedUrl: url,
-      uploadedUrl: getOptimizedProductImageUrl(url, 'keep_original'),
-      thumbnailUrl: getProductImageThumbnailUrl(url, 'keep_original'),
-      selectedEnhancement: 'keep_original' as const,
-      suggestedEnhancement: null,
-      fileName: getFileNameFromUrl(url),
-      fileSize: null,
-      status: 'uploaded' as const,
-    }))
+    defaultImages.map((url, index) => {
+      const originalUrl = defaultOriginalImages[index] || url;
+      const enhancedUrl = defaultEnhancedImages[index] || '';
+      // If the saved form image matches the enhanced URL, keep "After" selected.
+      const selectedVariant: 'original' | 'enhanced' = enhancedUrl && url === enhancedUrl ? 'enhanced' : 'original';
+      const selectedUrl = selectedVariant === 'enhanced' ? enhancedUrl : originalUrl;
+      return {
+        id: createItemId(),
+        previewUrl: selectedUrl,
+        safePreviewUrl: getSafePreviewUrl(selectedUrl),
+        uploadedUrl: originalUrl,
+        originalUrl,
+        enhancedUrl,
+        thumbnailUrl: defaultImageThumbnails[index] || '',
+        selectedVariant,
+        enhancementStatus: enhancedUrl ? ('ready' as const) : ('idle' as const),
+        fileName: getFileNameFromUrl(selectedUrl),
+        fileSize: null,
+        status: 'uploaded' as const,
+      };
+    })
   );
   const [video, setVideo] = useState<VideoUploadItem | null>(() =>
     defaultVideoUrl
@@ -261,9 +197,8 @@ export default function MediaUpload({
       : null
   );
   const [uploadError, setUploadError] = useState('');
-  const [defaultEnhancement, setDefaultEnhancement] =
-    useState<ProductImageEnhancementOption>('keep_original');
   const [draggedImageId, setDraggedImageId] = useState<string | null>(null);
+  const [hdUpscale, setHdUpscale] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const videoPreviewRef = useRef<HTMLVideoElement>(null);
@@ -340,6 +275,35 @@ export default function MediaUpload({
     return json;
   }
 
+  function getSelectedImageUrl(image: ImageUploadItem) {
+    if (image.selectedVariant === 'enhanced' && image.enhancedUrl) return image.enhancedUrl;
+    return image.originalUrl || image.uploadedUrl;
+  }
+
+  async function getEnhancedVariants(imageUrl: string, enableUpscale: boolean) {
+    const res = await fetch('/api/upload/product-media/enhance', {
+      method: 'POST',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imageUrl, hdUpscale: enableUpscale }),
+    });
+    const json = await res.json();
+    if (!res.ok || !json?.success) {
+      throw new Error(json?.message ?? 'Failed to enhance image.');
+    }
+    if (
+      typeof json.originalUrl !== 'string' ||
+      typeof json.enhancedUrl !== 'string' ||
+      typeof json.thumbnailUrl !== 'string'
+    ) {
+      throw new Error('Received invalid media enhancement response.');
+    }
+    return {
+      originalUrl: json.originalUrl,
+      enhancedUrl: json.enhancedUrl,
+      thumbnailUrl: json.thumbnailUrl,
+    };
+  }
+
   async function uploadFile(file: File): Promise<string> {
     const uploadConfig = await getUploadConfig(file);
     const fd = new FormData();
@@ -365,55 +329,6 @@ export default function MediaUpload({
       };
       xhr.send(fd);
     });
-  }
-
-  function applyEnhancementUrls(
-    originalUploadedUrl: string,
-    selectedEnhancement: ProductImageEnhancementOption
-  ) {
-    return {
-      uploadedUrl: getOptimizedProductImageUrl(originalUploadedUrl, selectedEnhancement),
-      thumbnailUrl: getProductImageThumbnailUrl(originalUploadedUrl, selectedEnhancement),
-    };
-  }
-
-  function getBeforeThumbnailUrl(image: ImageUploadItem) {
-    if (image.originalUploadedUrl) {
-      return getProductImageThumbnailUrl(image.originalUploadedUrl, 'keep_original');
-    }
-    return image.safePreviewUrl;
-  }
-
-  function handleEnhancementChange(imageId: string, nextEnhancement: ProductImageEnhancementOption) {
-    setImages((prev) =>
-      prev.map((image) => {
-        if (image.id !== imageId) return image;
-        if (!image.originalUploadedUrl) {
-          return { ...image, selectedEnhancement: nextEnhancement };
-        }
-        return {
-          ...image,
-          selectedEnhancement: nextEnhancement,
-          ...applyEnhancementUrls(image.originalUploadedUrl, nextEnhancement),
-        };
-      })
-    );
-  }
-
-  function applyEnhancementToAll(nextEnhancement: ProductImageEnhancementOption) {
-    setDefaultEnhancement(nextEnhancement);
-    setImages((prev) =>
-      prev.map((image) => {
-        if (!image.originalUploadedUrl) {
-          return { ...image, selectedEnhancement: nextEnhancement };
-        }
-        return {
-          ...image,
-          selectedEnhancement: nextEnhancement,
-          ...applyEnhancementUrls(image.originalUploadedUrl, nextEnhancement),
-        };
-      })
-    );
   }
 
   async function handleImageFilesChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -456,11 +371,12 @@ export default function MediaUpload({
         id: createItemId(),
         previewUrl,
         safePreviewUrl: previewUrl,
-        originalUploadedUrl: '',
         uploadedUrl: '',
+        originalUrl: '',
+        enhancedUrl: '',
         thumbnailUrl: '',
-        selectedEnhancement: defaultEnhancement,
-        suggestedEnhancement: null,
+        selectedVariant: 'original' as const,
+        enhancementStatus: 'idle' as const,
         fileName: file.name,
         fileSize: file.size,
         status: 'uploading' as const,
@@ -476,39 +392,52 @@ export default function MediaUpload({
           setImages((prev) =>
             prev.map((image) =>
               image.id === item.id
-                ? { ...image, originalUploadedUrl: url, status: 'processing', error: undefined }
+                ? {
+                    ...image,
+                    uploadedUrl: url,
+                    originalUrl: url,
+                    selectedVariant: 'original',
+                    status: 'uploaded',
+                    enhancementStatus: 'processing',
+                    error: undefined,
+                  }
                 : image
             )
           );
-          detectImageEnhancementSuggestion(item.safePreviewUrl)
-            .then((suggestion) => {
+
+          return getEnhancedVariants(url, hdUpscale)
+            .then((variants) => {
               setImages((prev) =>
                 prev.map((image) => {
                   if (image.id !== item.id) return image;
-                  const selectedEnhancement = image.selectedEnhancement;
                   return {
                     ...image,
-                    selectedEnhancement,
-                    suggestedEnhancement: suggestion?.enhancement ?? null,
-                    suggestionMessage: suggestion?.message,
-                    ...applyEnhancementUrls(url, selectedEnhancement),
-                    status: 'uploaded',
+                    originalUrl: variants.originalUrl,
+                    enhancedUrl: variants.enhancedUrl,
+                    thumbnailUrl: variants.thumbnailUrl,
+                    selectedVariant: 'enhanced',
+                    enhancementStatus: 'ready',
                     error: undefined,
                   };
-                })
+                }),
               );
+              setUploadError('');
             })
-            .catch(() => {
+            .catch((err: unknown) => {
+              const msg = err instanceof Error ? err.message : 'AI enhancement failed.';
               setImages((prev) =>
-                prev.map((image) => {
-                  if (image.id !== item.id) return image;
-                  return {
-                    ...image,
-                    ...applyEnhancementUrls(url, image.selectedEnhancement),
-                    status: 'uploaded',
-                  };
-                })
+                prev.map((image) =>
+                  image.id === item.id
+                    ? {
+                        ...image,
+                        enhancementStatus: 'error',
+                        selectedVariant: 'original',
+                        error: msg,
+                      }
+                    : image,
+                ),
               );
+              setUploadError((current) => current || msg);
             });
         })
         .catch((err: unknown) => {
@@ -599,6 +528,65 @@ export default function MediaUpload({
     });
   }
 
+  function chooseImageVariant(imageId: string, variant: 'original' | 'enhanced') {
+    setImages((prev) =>
+      prev.map((image) => {
+        if (image.id !== imageId) return image;
+        const canUseEnhanced = variant === 'enhanced' && !!image.enhancedUrl;
+        return {
+          ...image,
+          selectedVariant: canUseEnhanced ? 'enhanced' : 'original',
+        };
+      }),
+    );
+  }
+
+  async function retryEnhancement(imageId: string) {
+    const target = images.find((image) => image.id === imageId);
+    if (!target?.originalUrl) return;
+
+    setImages((prev) =>
+      prev.map((image) =>
+        image.id === imageId ? { ...image, enhancementStatus: 'processing', error: undefined } : image,
+      ),
+    );
+
+    try {
+      const variants = await getEnhancedVariants(target.originalUrl, hdUpscale);
+      setImages((prev) =>
+        prev.map((image) =>
+          image.id === imageId
+            ? {
+                ...image,
+                originalUrl: variants.originalUrl,
+                enhancedUrl: variants.enhancedUrl,
+                thumbnailUrl: variants.thumbnailUrl,
+                selectedVariant: 'enhanced',
+                enhancementStatus: 'ready',
+                error: undefined,
+              }
+            : image,
+        ),
+      );
+      setUploadError('');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'AI enhancement failed.';
+      setImages((prev) =>
+        prev.map((image) =>
+          image.id === imageId
+            ? {
+                ...image,
+                enhancementStatus: 'error',
+                selectedVariant: 'original',
+                error: msg,
+              }
+            : image,
+        ),
+      );
+      setUploadError((current) => current || msg);
+    }
+  }
+
   function removeVideo() {
     setVideo((current) => {
       if (current && objectUrlsRef.current.has(current.previewUrl)) {
@@ -622,18 +610,22 @@ export default function MediaUpload({
     }
   }
 
-  const uploadedImageUrls = images.map((image) => image.uploadedUrl).filter(Boolean);
+  const uploadedImageUrls = images.map((image) => getSelectedImageUrl(image)).filter(Boolean);
   const imageUploadCount = images.filter((image) => image.status === 'uploading').length;
-  const imageProcessingCount = images.filter((image) => image.status === 'processing').length;
+  const imageEnhancingCount = images.filter((image) => image.enhancementStatus === 'processing').length;
   const videoUploading = video?.status === 'uploading';
-  const hasMediaErrors = images.some((image) => image.status === 'error') || video?.status === 'error';
+  const hasMediaErrors =
+    images.some((image) => image.status === 'error' || image.enhancementStatus === 'error') ||
+    video?.status === 'error';
   const firstItemError =
-    images.find((image) => image.status === 'error')?.error ?? video?.error ?? uploadError;
+    images.find((image) => image.status === 'error' || image.enhancementStatus === 'error')?.error ??
+    video?.error ??
+    uploadError;
   const mediaMessage = getMediaStatusMessage(
     required,
     images.length,
     imageUploadCount,
-    imageProcessingCount,
+    imageEnhancingCount,
     videoUploading,
     hasMediaErrors,
     firstItemError || ''
@@ -641,20 +633,11 @@ export default function MediaUpload({
   const mediaReady =
     uploadedImageUrls.length === images.length &&
     !imageUploadCount &&
-    !imageProcessingCount &&
+    !imageEnhancingCount &&
     !videoUploading &&
     !hasMediaErrors &&
     (!video || !!video.uploadedUrl) &&
     (!required || images.length > 0);
-  const mediaEnhancementPayload = images
-    .filter((image) => image.uploadedUrl)
-    .map((image) => ({
-      finalUrl: image.uploadedUrl,
-      originalUrl: image.originalUploadedUrl || image.uploadedUrl,
-      thumbnailUrl: image.thumbnailUrl || image.uploadedUrl,
-      enhancement: image.selectedEnhancement,
-      suggestedEnhancement: image.suggestedEnhancement,
-    }));
   const mainImage = uploadedImageUrls[0] ?? '';
   const safeUploadedVideoUrl = video ? getSafePreviewUrl(video.uploadedUrl) : '';
 
@@ -662,7 +645,8 @@ export default function MediaUpload({
     onStateChange?.({
       imageCount: images.length,
       uploadedImageCount: uploadedImageUrls.length,
-      isUploading: imageUploadCount > 0 || imageProcessingCount > 0 || videoUploading,
+      isUploading: imageUploadCount > 0 || videoUploading,
+      isEnhancing: imageEnhancingCount > 0,
       hasErrors: hasMediaErrors,
       canSubmit: mediaReady,
       message: mediaMessage,
@@ -670,7 +654,7 @@ export default function MediaUpload({
   }, [
     hasMediaErrors,
     imageUploadCount,
-    imageProcessingCount,
+    imageEnhancingCount,
     images.length,
     mediaMessage,
     mediaReady,
@@ -689,38 +673,24 @@ export default function MediaUpload({
           </label>
           <p className="text-sm text-slate-500">{images.length}/{MAX_PRODUCT_IMAGES} images</p>
         </div>
-        <div className="mt-2 grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-[1fr_auto] sm:items-end">
-          <div>
-            <label className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-              Default enhancement for new uploads
-            </label>
-            <select
-              className="input mt-1"
-              value={defaultEnhancement}
-              onChange={(event) =>
-                setDefaultEnhancement(event.target.value as ProductImageEnhancementOption)
-              }
-            >
-              {PRODUCT_IMAGE_ENHANCEMENT_OPTIONS.map((option) => (
-                <option key={option} value={option}>
-                  {PRODUCT_IMAGE_ENHANCEMENT_LABELS[option]}
-                </option>
-              ))}
-            </select>
-          </div>
-          <button
-            type="button"
-            className="rounded-md border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700"
-            onClick={() => applyEnhancementToAll(defaultEnhancement)}
-            disabled={!images.length}
-          >
-            Apply to all images
-          </button>
-        </div>
+        <label className="mt-2 inline-flex items-center gap-2 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            checked={hdUpscale}
+            onChange={(event) => setHdUpscale(event.target.checked)}
+            className="rounded"
+          />
+          Enable HD upscale for new AI-enhanced images
+        </label>
 
         {images.length > 0 && (
           <div className="mb-3 grid gap-3 sm:grid-cols-2">
-            {images.map((image, i) => (
+            {images.map((image, i) => {
+              const showRetryButton =
+                image.status === 'uploaded' &&
+                image.enhancementStatus === 'error' &&
+                !!image.originalUrl;
+              return (
               <div
                 key={image.id}
                 draggable
@@ -738,76 +708,77 @@ export default function MediaUpload({
                 aria-label={`Product image ${i + 1}. Drag to reorder or use arrow keys and move buttons.`}
                 className={`rounded-xl border bg-white p-3 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-200 ${draggedImageId === image.id ? 'border-blue-400' : 'border-slate-200'}`}
               >
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <div className="relative overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={getBeforeThumbnailUrl(image)}
-                      alt={`Original product image ${i + 1}`}
-                      className="h-36 w-full object-cover"
-                    />
-                    <span className="absolute left-2 top-2 rounded bg-slate-700 px-2 py-1 text-[11px] font-semibold text-white">
-                      Before
-                    </span>
-                  </div>
-                  <div className="relative overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={image.thumbnailUrl || image.safePreviewUrl}
-                      alt={`Processed product image ${i + 1}`}
-                      className="h-36 w-full object-cover"
-                    />
+                <div className="relative overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={getSafePreviewUrl(getSelectedImageUrl(image)) || image.safePreviewUrl}
+                    alt={`Product image ${i + 1}`}
+                    className="h-40 w-full object-cover"
+                  />
+                  {i === 0 && (
                     <span className="absolute left-2 top-2 rounded bg-blue-600 px-2 py-1 text-[11px] font-semibold text-white">
-                      After
+                      Thumbnail
                     </span>
-                    {i === 0 && (
-                      <span className="absolute right-2 top-2 rounded bg-emerald-600 px-2 py-1 text-[11px] font-semibold text-white">
-                        Thumbnail
-                      </span>
-                    )}
-                  </div>
+                  )}
                 </div>
                 <div className="mt-3 space-y-1">
                   <p className="truncate text-sm font-medium text-slate-900">{image.fileName}</p>
                   <p className="text-xs text-slate-500">{getFileSizeDisplay(image.fileSize)}</p>
                   {image.status === 'uploading' && (
-                    <p className="text-xs font-medium text-blue-600">Uploading image...</p>
-                  )}
-                  {image.status === 'processing' && (
-                    <p className="text-xs font-medium text-blue-600">Preparing AI preview...</p>
+                    <p className="text-xs font-medium text-blue-600">Uploading image…</p>
                   )}
                   {image.status === 'uploaded' && (
                     <p className="text-xs font-medium text-emerald-600">Ready to submit</p>
                   )}
+                  {image.status === 'uploaded' && image.enhancementStatus === 'processing' && (
+                    <p className="text-xs font-medium text-blue-600">Enhancing image with AI…</p>
+                  )}
+                  {image.status === 'uploaded' && image.enhancementStatus === 'ready' && (
+                    <p className="text-xs font-medium text-emerald-600">AI-enhanced version ready</p>
+                  )}
                   {image.status === 'error' && (
                     <p className="text-xs font-medium text-red-600">{image.error}</p>
                   )}
-                  {image.suggestionMessage && (
-                    <p className="text-xs font-medium text-amber-600">{image.suggestionMessage}</p>
+                  {image.status !== 'error' && image.enhancementStatus === 'error' && (
+                    <p className="text-xs font-medium text-red-600">{image.error}</p>
                   )}
                 </div>
-                <div>
-                  <label className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                    Enhancement mode
-                  </label>
-                  <select
-                    className="input mt-1"
-                    value={image.selectedEnhancement}
-                    onChange={(event) =>
-                      handleEnhancementChange(
-                        image.id,
-                        event.target.value as ProductImageEnhancementOption
-                      )
-                    }
-                    disabled={image.status === 'uploading' || image.status === 'error'}
-                  >
-                    {PRODUCT_IMAGE_ENHANCEMENT_OPTIONS.map((option) => (
-                      <option key={option} value={option}>
-                        {PRODUCT_IMAGE_ENHANCEMENT_LABELS[option]}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                {image.status === 'uploaded' && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => chooseImageVariant(image.id, 'original')}
+                      className={`rounded-md border px-2.5 py-1 text-xs font-medium ${
+                        image.selectedVariant === 'original'
+                          ? 'border-blue-300 bg-blue-50 text-blue-700'
+                          : 'border-slate-300 text-slate-700'
+                      }`}
+                    >
+                      Before (Original)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => chooseImageVariant(image.id, 'enhanced')}
+                      disabled={!image.enhancedUrl || image.enhancementStatus === 'processing'}
+                      className={`rounded-md border px-2.5 py-1 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-40 ${
+                        image.selectedVariant === 'enhanced'
+                          ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                          : 'border-slate-300 text-slate-700'
+                      }`}
+                    >
+                      After (Enhanced)
+                    </button>
+                    {showRetryButton && (
+                      <button
+                        type="button"
+                        onClick={() => retryEnhancement(image.id)}
+                        className="rounded-md border border-amber-300 px-2.5 py-1 text-xs font-medium text-amber-700"
+                      >
+                        Retry AI enhance
+                      </button>
+                    )}
+                  </div>
+                )}
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button
                     type="button"
@@ -834,7 +805,8 @@ export default function MediaUpload({
                   </button>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
@@ -855,31 +827,21 @@ export default function MediaUpload({
               JPEG, PNG, WebP, GIF • max 10 MB each
               {images.length > 1 && ' • Drag to reorder on desktop or use the move buttons'}
             </p>
-            <p className="mt-1 text-xs text-slate-500">
-              AI enhancement is optional. Originals are always preserved in Cloudinary.
-            </p>
           </div>
         )}
 
         {images
-          .filter((image) => image.uploadedUrl)
+          .filter((image) => getSelectedImageUrl(image))
           .map((image) => (
             <Fragment key={image.id}>
               {/* Keep both names for backward-compatible seller submit payloads. */}
-              <input type="hidden" name="images" value={image.uploadedUrl} />
-              <input type="hidden" name="imageUrls" value={image.uploadedUrl} />
-              <input
-                type="hidden"
-                name="originalImages"
-                value={image.originalUploadedUrl || image.uploadedUrl}
-              />
+              <input type="hidden" name="images" value={getSelectedImageUrl(image)} />
+              <input type="hidden" name="imageUrls" value={getSelectedImageUrl(image)} />
+              {image.originalUrl && <input type="hidden" name="originalImages" value={image.originalUrl} />}
+              {image.enhancedUrl && <input type="hidden" name="enhancedImages" value={image.enhancedUrl} />}
+              {image.thumbnailUrl && <input type="hidden" name="imageThumbnails" value={image.thumbnailUrl} />}
             </Fragment>
           ))}
-        <input
-          type="hidden"
-          name="mediaEnhancements"
-          value={JSON.stringify(mediaEnhancementPayload)}
-        />
         <input
           type="url"
           name="imageUrl"
@@ -941,7 +903,7 @@ export default function MediaUpload({
               <p className="truncate text-sm font-medium text-slate-900">{video.fileName}</p>
               <p className="text-xs text-slate-500">{getFileSizeDisplay(video.fileSize)}</p>
               {video.status === 'uploading' && (
-                <p className="text-xs font-medium text-blue-600">Uploading video...</p>
+                <p className="text-xs font-medium text-blue-600">Uploading video…</p>
               )}
               {video.status === 'uploaded' && (
                 <p className="text-xs font-medium text-emerald-600">Ready to submit</p>
@@ -989,9 +951,9 @@ export default function MediaUpload({
         <input type="hidden" name="videoUrl" value={video?.uploadedUrl ?? ''} />
       </div>
 
-      {(imageUploadCount > 0 || imageProcessingCount > 0 || videoUploading) && (
+      {(imageUploadCount > 0 || imageEnhancingCount > 0 || videoUploading) && (
         <p className="text-sm text-slate-500" aria-live="polite">
-          {imageProcessingCount > 0 ? 'Preparing enhanced image previews...' : 'Uploading media...'}
+          {imageEnhancingCount > 0 ? 'Enhancing images…' : 'Uploading media…'}
         </p>
       )}
       {uploadError && (

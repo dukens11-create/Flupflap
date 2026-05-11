@@ -25,6 +25,7 @@ export default function NewListingForm() {
     imageCount: 0,
     uploadedImageCount: 0,
     isUploading: false,
+    isEnhancing: false,
     hasErrors: false,
     canSubmit: false,
     message: 'Please upload at least one image.',
@@ -239,7 +240,7 @@ export default function NewListingForm() {
       <button
         className="btn-primary w-full disabled:opacity-60 disabled:cursor-not-allowed"
         type="submit"
-        disabled={submitting || mediaState.isUploading}
+        disabled={submitting || mediaState.isUploading || mediaState.isEnhancing}
       >
         {submitting ? 'Submitting…' : 'Submit for review'}
       </button>
