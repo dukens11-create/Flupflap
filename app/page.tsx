@@ -71,7 +71,30 @@ function collectStringValues(value: unknown, strings: string[]) {
   }
 }
 
-function productMatchesSearch(product: any, query?: string) {
+type SearchableProduct = {
+  title: string;
+  description: string;
+  category: string;
+  productAttributes: unknown;
+  categoryRef?: {
+    name?: string | null;
+    aliases?: string[] | null;
+  } | null;
+  subcategoryRef?: {
+    name?: string | null;
+    aliases?: string[] | null;
+    parent?: {
+      name?: string | null;
+      aliases?: string[] | null;
+      parent?: {
+        name?: string | null;
+        aliases?: string[] | null;
+      } | null;
+    } | null;
+  } | null;
+};
+
+function productMatchesSearch(product: SearchableProduct, query?: string) {
   const normalizedQuery = query?.trim().toLocaleLowerCase();
   if (!normalizedQuery) return true;
 

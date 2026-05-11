@@ -185,7 +185,7 @@ export default function BrowseFilters() {
             value={selectedRefineCategoryId}
             onChange={e => updateSearchParam('refineCategory', e.target.value)}
           >
-            <option value="">All refine categories</option>
+            <option value="">All categories</option>
             {refineCategories.map(c => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
