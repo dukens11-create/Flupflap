@@ -240,7 +240,7 @@ export async function POST(req: Request) {
     if (!groups.length && errors.length > 0) {
       console.error('[checkout/rates] all seller groups failed:', errors);
       return NextResponse.json(
-        { error: errors[0] },
+        { error: errors.join(' ') },
         { status: 503 },
       );
     }

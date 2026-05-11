@@ -51,8 +51,8 @@ const US_STATE_NAME_TO_ABBR: Record<string, string> = {
  * Normalize a US state value to its 2-letter abbreviation.
  * Leaves already-abbreviated (≤2 chars) or non-US values as-is.
  */
-function normalizeStateCode(value: string): string {
-  const trimmed = value.trim();
+function normalizeStateCode(value: string | null | undefined): string {
+  const trimmed = (value ?? '').trim();
   if (trimmed.length <= 2) return trimmed.toUpperCase();
   const abbr = US_STATE_NAME_TO_ABBR[trimmed.toLowerCase()];
   return abbr ?? trimmed;
@@ -99,7 +99,9 @@ function getShippoApiToken() {
 function serializeAddress(address: AddressInput) {
   const country = normalizeCountryCode(address.country);
   // Normalize state to 2-letter abbreviation for US addresses; carriers require it.
-  const state = country === 'US' ? normalizeStateCode(address.state) : address.state.trim();
+  const state = country === 'US'
+    ? normalizeStateCode(address.state)
+    : (address.state?.trim() ?? '');
   return {
     name: address.name?.trim() || undefined,
     street1: address.street1,
