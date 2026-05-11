@@ -145,6 +145,8 @@ export default function NewListingForm() {
             <input name="shipping" type="number" step="0.01" min="0" className="input" placeholder="0.00" />
           </div>
         )}
+        {/* Ensure shipping is 0 when not using flat rate to prevent stale value submission */}
+        {shippingMode !== 'FLAT' && <input type="hidden" name="shipping" value="0" />}
       </div>
       <div className="flex gap-3">
         <div className="flex-1">

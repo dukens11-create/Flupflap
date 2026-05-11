@@ -196,7 +196,19 @@ export async function POST(req: Request) {
       );
     }
 
-    return NextResponse.json({ groups, warnings: errors.length ? errors : undefined });
+    // Validate that all calculated-shipping products have a corresponding rate group
+    const groupSellerIds = new Set(groups.map(g => g.sellerId));
+    const uncoveredProducts = products.filter(
+      p => !groupSellerIds.has(p.sellerId) && (p.shippingMode === 'CALCULATED' || (!p.shippingMode && p.shippingCents === 0)),
+    );
+    const uncoveredWarnings = uncoveredProducts.map(
+      p => `Product "${p.title}" has no shipping rates available.`,
+    );
+
+    return NextResponse.json({
+      groups,
+      warnings: [...errors, ...uncoveredWarnings].length ? [...errors, ...uncoveredWarnings] : undefined,
+    });
   } catch (err: any) {
     console.error('[checkout/rates]', err);
     return NextResponse.json(

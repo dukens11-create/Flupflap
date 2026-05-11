@@ -78,7 +78,7 @@ export default function SellerShopProfileForm({
     }
   }
 
-  const inputClass = INPUT_CLASS;
+  
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -94,7 +94,7 @@ export default function SellerShopProfileForm({
           maxLength={80}
           required
           placeholder="e.g. Cool Finds Store"
-          className={inputClass}
+          className={INPUT_CLASS}
         />
         <p className="mt-1 text-xs text-slate-400">
           This is the name buyers will see on product listings instead of your personal name.
@@ -112,7 +112,7 @@ export default function SellerShopProfileForm({
           onChange={(e) => setShopLogoUrl(e.target.value)}
           maxLength={2000}
           placeholder="https://example.com/logo.png"
-          className={inputClass}
+          className={INPUT_CLASS}
         />
         <p className="mt-1 text-xs text-slate-400">
           Paste the URL of an image to use as your shop logo.
@@ -153,7 +153,7 @@ export default function SellerShopProfileForm({
             onChange={(e) => setShipFromName(e.target.value)}
             maxLength={100}
             placeholder="e.g. Jane Smith or Cool Finds Store"
-            className={inputClass}
+            className={INPUT_CLASS}
           />
         </div>
 
@@ -168,7 +168,7 @@ export default function SellerShopProfileForm({
             onChange={(e) => setShipFromStreet(e.target.value)}
             maxLength={200}
             placeholder="e.g. 123 Main St"
-            className={inputClass}
+            className={INPUT_CLASS}
           />
         </div>
 
@@ -184,7 +184,7 @@ export default function SellerShopProfileForm({
               onChange={(e) => setShipFromCity(e.target.value)}
               maxLength={100}
               placeholder="e.g. New York"
-              className={inputClass}
+              className={INPUT_CLASS}
             />
           </div>
           <div>
@@ -198,7 +198,7 @@ export default function SellerShopProfileForm({
               onChange={(e) => setShipFromState(e.target.value)}
               maxLength={50}
               placeholder="e.g. NY"
-              className={inputClass}
+              className={INPUT_CLASS}
             />
           </div>
         </div>
@@ -215,7 +215,7 @@ export default function SellerShopProfileForm({
               onChange={(e) => setShipFromZip(e.target.value)}
               maxLength={20}
               placeholder="e.g. 10001"
-              className={inputClass}
+              className={INPUT_CLASS}
             />
           </div>
           <div>
@@ -229,7 +229,7 @@ export default function SellerShopProfileForm({
               onChange={(e) => setShipFromCountry(e.target.value)}
               maxLength={2}
               placeholder="US"
-              className={inputClass}
+              className={INPUT_CLASS}
             />
           </div>
         </div>
@@ -245,7 +245,7 @@ export default function SellerShopProfileForm({
             onChange={(e) => setShipFromPhone(e.target.value)}
             maxLength={30}
             placeholder="e.g. +12125550100"
-            className={inputClass}
+            className={INPUT_CLASS}
           />
         </div>
       </fieldset>

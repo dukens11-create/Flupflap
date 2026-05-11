@@ -684,6 +684,10 @@ export async function POST(req: Request) {
         select: { email: true, name: true },
       });
 
+      // Collect all purchased label results; only persist the first valid one to the order record
+      // (the Order schema stores a single label/tracking for backward compatibility).
+      const purchasedLabels: Array<{ sellerId: string; result: Awaited<ReturnType<typeof purchaseShipmentRate>>; group: typeof shippingRateInfo.shipmentGroups[number] }> = [];
+
       for (const group of shippingRateInfo.shipmentGroups) {
         if (!group.shipmentId || !group.rateId) continue;
         try {
@@ -691,62 +695,72 @@ export async function POST(req: Request) {
             shipmentId: group.shipmentId,
             rateId: group.rateId,
           });
-
-          // Persist label and tracking info on the order (first group wins for backward compat)
-          await prisma.order.update({
-            where: { id: order.id },
-            data: {
-              labelUrl: result.labelUrl ?? undefined,
-              trackingNumber: result.trackingNumber ?? undefined,
-              carrier: result.carrier ?? undefined,
-              shipmentId: result.shipmentId ?? undefined,
-              status: 'SHIPPED',
-            },
-          });
-
-          // Send tracking notification to buyer
-          await createNotification({
-            userId: buyerId,
-            type: NotificationType.SHIPPING,
-            title: 'Your order has shipped!',
-            body: `Carrier: ${result.carrier ?? group.carrier}. Tracking: ${result.trackingNumber ?? 'N/A'}`,
-            link: `/orders/${order.id}`,
-            data: { orderId: order.id, trackingNumber: result.trackingNumber, carrier: result.carrier },
-          });
-
-          // Notify the seller with the label URL
-          const sellerIds = [...new Set(orderItems.map(i => i.product.seller.id))];
-          await createNotifications(
-            sellerIds.map(sellerId => ({
-              userId: sellerId,
-              type: NotificationType.SHIPPING as NotificationType,
-              title: 'Shipping label ready',
-              body: `Label created for order ${order.id}. Carrier: ${result.carrier ?? group.carrier}.`,
-              link: '/seller',
-              data: { orderId: order.id, labelUrl: result.labelUrl },
-            })),
-          );
-
-          // Email tracking info to buyer
-          if (buyer?.email) {
-            const trackingUrl = result.trackingUrl ?? buildTrackingUrl(result.carrier, result.trackingNumber);
-            const trackingLine = result.trackingNumber
-              ? `<p>Tracking number: <strong>${result.trackingNumber}</strong>${trackingUrl ? ` (<a href="${trackingUrl}">Track your package</a>)` : ''}</p>`
-              : '';
-            await sendEmail(
-              buyer.email,
-              'Your FlupFlap order has shipped!',
-              `<p>Hi ${buyer.name ?? 'there'},</p>
-<p>Great news! Your order has been shipped.</p>
-${trackingLine}
-<p>Carrier: <strong>${result.carrier ?? group.carrier}</strong></p>
-<p><a href="${process.env.NEXT_PUBLIC_APP_URL ?? ''}/orders/${order.id}">View your order</a></p>
-<p>— The FlupFlap team</p>`,
-            );
-          }
+          purchasedLabels.push({ sellerId: group.sellerId, result, group });
         } catch (labelErr: any) {
           console.error('[webhook] auto-label purchase failed for shipment', group.shipmentId, labelErr?.message ?? labelErr);
           // Non-fatal: the order is created; seller can still manually purchase a label
+        }
+      }
+
+      // Persist the first successfully purchased label to the order
+      if (purchasedLabels.length > 0) {
+        const primary = purchasedLabels[0];
+        await prisma.order.update({
+          where: { id: order.id },
+          data: {
+            labelUrl: primary.result.labelUrl ?? undefined,
+            trackingNumber: primary.result.trackingNumber ?? undefined,
+            carrier: primary.result.carrier ?? undefined,
+            shipmentId: primary.result.shipmentId ?? undefined,
+            status: 'SHIPPED',
+          },
+        });
+      }
+
+      // Send a single tracking notification/email aggregating all labels
+      if (purchasedLabels.length > 0) {
+        const trackingSummary = purchasedLabels
+          .map(l => `${l.result.carrier ?? l.group.carrier}: ${l.result.trackingNumber ?? 'N/A'}`)
+          .join('; ');
+
+        await createNotification({
+          userId: buyerId,
+          type: NotificationType.SHIPPING,
+          title: 'Your order has shipped!',
+          body: trackingSummary,
+          link: `/orders/${order.id}`,
+          data: { orderId: order.id, trackingSummary },
+        });
+
+        // Notify each seller with their label URL
+        for (const { sellerId, result, group } of purchasedLabels) {
+          await createNotification({
+            userId: sellerId,
+            type: NotificationType.SHIPPING,
+            title: 'Shipping label ready',
+            body: `Label created for order ${order.id}. Carrier: ${result.carrier ?? group.carrier}.`,
+            link: '/seller',
+            data: { orderId: order.id, labelUrl: result.labelUrl },
+          });
+        }
+
+        // Email tracking info to buyer
+        if (buyer?.email) {
+          const trackingLines = purchasedLabels.map(l => {
+            const trackingUrl = l.result.trackingUrl ?? buildTrackingUrl(l.result.carrier, l.result.trackingNumber);
+            return l.result.trackingNumber
+              ? `<li>${l.result.carrier ?? l.group.carrier}: <strong>${l.result.trackingNumber}</strong>${trackingUrl ? ` (<a href="${trackingUrl}">Track</a>)` : ''}</li>`
+              : `<li>${l.result.carrier ?? l.group.carrier}: label created</li>`;
+          }).join('\n');
+          await sendEmail(
+            buyer.email,
+            'Your FlupFlap order has shipped!',
+            `<p>Hi ${buyer.name ?? 'there'},</p>
+<p>Great news! Your order has been shipped.</p>
+<ul>${trackingLines}</ul>
+<p><a href="${process.env.NEXT_PUBLIC_APP_URL ?? ''}/orders/${order.id}">View your order</a></p>
+<p>— The FlupFlap team</p>`,
+          );
         }
       }
     }
