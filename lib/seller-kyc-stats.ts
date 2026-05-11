@@ -108,54 +108,61 @@ export interface SellerKycCounts {
  * Returns KYC status counts for all sellers.  Uses the defensive OR conditions
  * above so the results are correct even before a `kycStatus` back-fill has run.
  *
- * Also emits a debug log listing each seller's email and detected KYC status
- * so discrepancies between pages can be investigated without exposing private
- * documents (government IDs, selfie images, etc. are never logged).
+ * When the `DEBUG_KYC_STATS` environment variable is set to `"true"`, also
+ * emits a debug log listing each seller's email and detected KYC status so
+ * discrepancies between pages can be investigated.  This is opt-in to avoid
+ * logging PII (email addresses) or incurring the extra DB query in production.
+ * Private documents (government IDs, selfie images, etc.) are never logged.
  */
 export async function getSellerKycCounts(): Promise<SellerKycCounts> {
+  const debugEnabled = process.env.DEBUG_KYC_STATS === 'true';
+
   const [kycApprovedCount, kycPendingCount, kycRejectedCount, kycNotSubmittedCount, sellersForLog] =
     await Promise.all([
       prisma.user.count({ where: { role: 'SELLER', ...KYC_APPROVED_WHERE } }),
       prisma.user.count({ where: { role: 'SELLER', ...KYC_PENDING_REVIEW_WHERE } }),
       prisma.user.count({ where: { role: 'SELLER', ...KYC_REJECTED_WHERE } }),
       prisma.user.count({ where: { role: 'SELLER', ...KYC_NOT_SUBMITTED_WHERE } }),
-      // Fetch only safe, non-document fields for debug logging.
-      prisma.user.findMany({
-        where: { role: 'SELLER' },
-        select: {
-          email: true,
-          kycStatus: true,
-          verifiedSeller: true,
-          verificationSubmission: {
+      // Only fetch individual seller rows when debug logging is requested.
+      debugEnabled
+        ? prisma.user.findMany({
+            where: { role: 'SELLER' },
             select: {
-              status: true,
-              providerStatus: true,
+              email: true,
+              kycStatus: true,
+              verifiedSeller: true,
+              verificationSubmission: {
+                select: {
+                  status: true,
+                  providerStatus: true,
+                },
+              },
             },
-          },
-        },
-      }),
+          })
+        : Promise.resolve([]),
     ]);
 
-  // Debug log: one line per seller showing email + derived KYC status.
-  // Private documents (ID images, selfie URLs, etc.) are never included.
-  for (const seller of sellersForLog) {
-    const effectiveStatus = deriveEffectiveKycStatus({
-      kycStatus: seller.kycStatus,
-      verifiedSeller: seller.verifiedSeller,
-      verificationSubmission: seller.verificationSubmission
-        ? { status: seller.verificationSubmission.status, providerStatus: seller.verificationSubmission.providerStatus }
-        : null,
-    });
-    console.log('[kyc-stats]', seller.email, {
-      kycStatus: seller.kycStatus,
-      verifiedSeller: seller.verifiedSeller,
-      submissionStatus: seller.verificationSubmission?.status ?? null,
-      providerStatus: seller.verificationSubmission?.providerStatus ?? null,
-      effectiveStatus,
-    });
+  if (debugEnabled) {
+    // Debug log: one line per seller showing email + derived KYC status.
+    // Private documents (ID images, selfie URLs, etc.) are never included.
+    for (const seller of sellersForLog) {
+      const effectiveStatus = deriveEffectiveKycStatus({
+        kycStatus: seller.kycStatus,
+        verifiedSeller: seller.verifiedSeller,
+        verificationSubmission: seller.verificationSubmission
+          ? { status: seller.verificationSubmission.status, providerStatus: seller.verificationSubmission.providerStatus }
+          : null,
+      });
+      console.log('[kyc-stats]', seller.email, {
+        kycStatus: seller.kycStatus,
+        verifiedSeller: seller.verifiedSeller,
+        submissionStatus: seller.verificationSubmission?.status ?? null,
+        providerStatus: seller.verificationSubmission?.providerStatus ?? null,
+        effectiveStatus,
+      });
+    }
+    console.log('[kyc-stats] counts', { kycApprovedCount, kycPendingCount, kycRejectedCount, kycNotSubmittedCount });
   }
-
-  console.log('[kyc-stats] counts', { kycApprovedCount, kycPendingCount, kycRejectedCount, kycNotSubmittedCount });
 
   return { kycApprovedCount, kycPendingCount, kycRejectedCount, kycNotSubmittedCount };
 }
