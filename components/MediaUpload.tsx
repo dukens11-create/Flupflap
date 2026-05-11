@@ -27,6 +27,8 @@ type ImageUploadItem = {
   previewUrl: string;
   safePreviewUrl: string;
   uploadedUrl: string;
+  originalUrl: string;
+  thumbnailUrl: string;
   fileName: string;
   fileSize: number | null;
   status: UploadStatus;
@@ -38,6 +40,7 @@ type VideoUploadItem = {
   previewUrl: string;
   safePreviewUrl: string;
   uploadedUrl: string;
+  originalUrl: string;
   fileName: string;
   fileSize: number | null;
   previewKind: 'object-url' | 'remote-url';
@@ -142,13 +145,15 @@ export default function MediaUpload({
   const [images, setImages] = useState<ImageUploadItem[]>(() =>
     defaultImages.map((url) => ({
       id: createItemId(),
-      previewUrl: url,
-      safePreviewUrl: getSafePreviewUrl(url),
-      uploadedUrl: url,
-      fileName: getFileNameFromUrl(url),
-      fileSize: null,
-      status: 'uploaded' as const,
-    }))
+        previewUrl: url,
+        safePreviewUrl: getSafePreviewUrl(url),
+        uploadedUrl: url,
+        originalUrl: url,
+        thumbnailUrl: url,
+        fileName: getFileNameFromUrl(url),
+        fileSize: null,
+        status: 'uploaded' as const,
+      }))
   );
   const [video, setVideo] = useState<VideoUploadItem | null>(() =>
     defaultVideoUrl
@@ -157,6 +162,7 @@ export default function MediaUpload({
           previewUrl: defaultVideoUrl,
           safePreviewUrl: getSafePreviewUrl(defaultVideoUrl),
           uploadedUrl: defaultVideoUrl,
+          originalUrl: defaultVideoUrl,
           fileName: getFileNameFromUrl(defaultVideoUrl),
           fileSize: null,
           previewKind: 'remote-url',
@@ -193,6 +199,7 @@ export default function MediaUpload({
 
   function isValidUploadConfig(value: unknown): value is {
     apiKey: string;
+    backup: boolean;
     folder: string;
     signature: string;
     timestamp: number;
@@ -203,6 +210,7 @@ export default function MediaUpload({
     return (
       typeof candidate.apiKey === 'string' &&
       candidate.apiKey.length > 0 &&
+      typeof candidate.backup === 'boolean' &&
       typeof candidate.folder === 'string' &&
       candidate.folder.length > 0 &&
       typeof candidate.signature === 'string' &&
@@ -242,25 +250,80 @@ export default function MediaUpload({
     return json;
   }
 
-  async function uploadFile(file: File): Promise<string> {
+  type UploadedMediaAsset = {
+    optimizedUrl: string;
+    originalUrl: string;
+    thumbnailUrl: string;
+  };
+
+  type CloudinaryUploadResponse = {
+    secure_url?: string;
+    public_id?: string;
+    resource_type?: string;
+    version?: number;
+    error?: unknown;
+  };
+
+  async function finalizeUploadedMedia(
+    response: CloudinaryUploadResponse
+  ): Promise<UploadedMediaAsset> {
+    if (!response.secure_url || !response.public_id || !response.resource_type) {
+      throw new Error('Upload did not return Cloudinary asset metadata.');
+    }
+
+    const res = await fetch('/api/upload/product-media/finalize', {
+      method: 'POST',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        originalUrl: response.secure_url,
+        publicId: response.public_id,
+        resourceType: response.resource_type,
+        version: response.version,
+      }),
+    });
+    const json = await res.json();
+    if (!res.ok || !json?.success || !json?.media) {
+      throw new Error(json?.message ?? 'Failed to finalize upload media.');
+    }
+
+    const media = json.media as {
+      optimizedUrl?: string;
+      enhancedUrl?: string;
+      originalUrl?: string;
+      thumbnailUrl?: string | null;
+    };
+    const optimizedUrl = media.enhancedUrl || media.optimizedUrl;
+    if (!optimizedUrl || !media.originalUrl) {
+      throw new Error('Missing optimized Cloudinary media URL.');
+    }
+
+    return {
+      optimizedUrl,
+      originalUrl: media.originalUrl,
+      thumbnailUrl: media.thumbnailUrl || optimizedUrl,
+    };
+  }
+
+  async function uploadFile(file: File): Promise<UploadedMediaAsset> {
     const uploadConfig = await getUploadConfig(file);
     const fd = new FormData();
     fd.append('file', file);
     fd.append('api_key', uploadConfig.apiKey);
+    fd.append('backup', String(uploadConfig.backup));
     fd.append('folder', uploadConfig.folder);
     fd.append('signature', uploadConfig.signature);
     fd.append('timestamp', String(uploadConfig.timestamp));
 
-    return new Promise<string>((resolve, reject) => {
+    return new Promise<UploadedMediaAsset>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open('POST', uploadConfig.uploadUrl);
       xhr.responseType = 'json';
       xhr.onerror = () =>
         reject(new Error('Upload failed. Please check your connection and try again.'));
       xhr.onload = () => {
-        const response = xhr.response;
+        const response = xhr.response as CloudinaryUploadResponse;
         if (xhr.status >= 200 && xhr.status < 300 && response?.secure_url) {
-          resolve(response.secure_url as string);
+          finalizeUploadedMedia(response).then(resolve).catch(reject);
           return;
         }
         reject(new Error(getCloudinaryErrorMessage(response) ?? 'Upload failed.'));
@@ -310,6 +373,8 @@ export default function MediaUpload({
         previewUrl,
         safePreviewUrl: previewUrl,
         uploadedUrl: '',
+        originalUrl: '',
+        thumbnailUrl: '',
         fileName: file.name,
         fileSize: file.size,
         status: 'uploading' as const,
@@ -321,11 +386,18 @@ export default function MediaUpload({
 
     nextItems.forEach((item, index) => {
       uploadFile(toUpload[index])
-        .then((url) => {
+        .then((asset) => {
           setImages((prev) =>
             prev.map((image) =>
               image.id === item.id
-                ? { ...image, uploadedUrl: url, status: 'uploaded', error: undefined }
+                ? {
+                    ...image,
+                    uploadedUrl: asset.optimizedUrl,
+                    originalUrl: asset.originalUrl,
+                    thumbnailUrl: asset.thumbnailUrl,
+                    status: 'uploaded',
+                    error: undefined,
+                  }
                 : image
             )
           );
@@ -370,6 +442,7 @@ export default function MediaUpload({
       previewUrl,
       safePreviewUrl: previewUrl,
       uploadedUrl: '',
+      originalUrl: '',
       fileName: file.name,
       fileSize: file.size,
       previewKind: 'object-url',
@@ -380,10 +453,16 @@ export default function MediaUpload({
     if (videoInputRef.current) videoInputRef.current.value = '';
 
     try {
-      const url = await uploadFile(file);
+      const asset = await uploadFile(file);
       setVideo((current) =>
         current?.id === nextVideo.id
-          ? { ...current, uploadedUrl: url, status: 'uploaded', error: undefined }
+          ? {
+              ...current,
+              uploadedUrl: asset.optimizedUrl,
+              originalUrl: asset.originalUrl,
+              status: 'uploaded',
+              error: undefined,
+            }
           : current
       );
     } catch (err: unknown) {
@@ -599,6 +678,8 @@ export default function MediaUpload({
               {/* Keep both names for backward-compatible seller submit payloads. */}
               <input type="hidden" name="images" value={image.uploadedUrl} />
               <input type="hidden" name="imageUrls" value={image.uploadedUrl} />
+              <input type="hidden" name="imageOriginalUrls" value={image.originalUrl || image.uploadedUrl} />
+              <input type="hidden" name="imageThumbnailUrls" value={image.thumbnailUrl || image.uploadedUrl} />
             </Fragment>
           ))}
         <input
@@ -708,6 +789,7 @@ export default function MediaUpload({
         )}
 
         <input type="hidden" name="videoUrl" value={video?.uploadedUrl ?? ''} />
+        <input type="hidden" name="videoOriginalUrl" value={video?.originalUrl ?? video?.uploadedUrl ?? ''} />
       </div>
 
       {(imageUploadCount > 0 || videoUploading) && (

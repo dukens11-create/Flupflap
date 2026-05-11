@@ -13,6 +13,11 @@ import {
   shouldRecommendFraudReview,
 } from '@/lib/fraud-detection';
 import { parseJsonOrNull } from '@/lib/parse-json';
+import {
+  getCloudinaryProductsFolder,
+  getCloudinaryThumbnailsFolder,
+  getCloudinaryVideosFolder,
+} from '@/lib/product-media';
 
 export const SHIPPING_MODES = ['FLAT', 'FREE', 'CALCULATED'] as const;
 type ShippingMode = typeof SHIPPING_MODES[number];
@@ -31,8 +36,11 @@ const schema = z.object({
   imageUrl: z.string().url().optional(),
   images: z.array(z.string().url()).optional(),
   imageUrls: z.array(z.string().url()).optional(),
+  imageOriginalUrls: z.array(z.string().url()).optional(),
+  imageThumbnailUrls: z.array(z.string().url()).optional(),
   video: z.string().url().optional().or(z.literal('')),
   videoUrl: z.string().url().optional().or(z.literal('')),
+  videoOriginalUrl: z.string().url().optional().or(z.literal('')),
   inventory: z.string().trim().optional(),
   inventoryQty: z.string().trim().optional(),
   brand: z.string().trim().optional(),
@@ -155,10 +163,14 @@ export async function POST(req: Request) {
     // Collect multiple "images" values from form (MediaUpload uses multiple hidden inputs)
     const imagesRaw = form.getAll('images').map(String).filter(Boolean);
     const imageUrlsRaw = form.getAll('imageUrls').map(String).filter(Boolean);
+    const imageOriginalUrlsRaw = form.getAll('imageOriginalUrls').map(String).filter(Boolean);
+    const imageThumbnailUrlsRaw = form.getAll('imageThumbnailUrls').map(String).filter(Boolean);
     const parsed = schema.safeParse({
       ...rawEntries,
       images: imagesRaw.length ? imagesRaw : undefined,
       imageUrls: imageUrlsRaw.length ? imageUrlsRaw : undefined,
+      imageOriginalUrls: imageOriginalUrlsRaw.length ? imageOriginalUrlsRaw : undefined,
+      imageThumbnailUrls: imageThumbnailUrlsRaw.length ? imageThumbnailUrlsRaw : undefined,
     });
     if (!parsed.success) {
       return jsonError(parsed.error.issues[0]?.message ?? 'Invalid input.', 400);
@@ -257,6 +269,13 @@ export async function POST(req: Request) {
 
     const mainImage = resolvedImages[0] ?? '';
     const videoUrl = data.videoUrl || data.video || null;
+    const videoOriginalUrl = data.videoOriginalUrl || videoUrl;
+    const resolvedImageOriginalUrls = resolvedImages.map(
+      (url, index) => imageOriginalUrlsRaw[index] || url,
+    );
+    const resolvedImageThumbnailUrls = resolvedImages.map(
+      (url, index) => imageThumbnailUrlsRaw[index] || url,
+    );
     const pickupAvailable = data.pickupAvailable === 'true' || data.localPickupAvailable === 'true';
     const pickupCity = data.pickupCity || data.localPickupCity || null;
     const pickupState = data.pickupState || data.localPickupState || null;
@@ -293,7 +312,10 @@ export async function POST(req: Request) {
       gender: (normalizedAttributes.gender as string | undefined) ?? null,
       inventoryQty,
       imageUrls: resolvedImages,
+      imageOriginalUrls: resolvedImageOriginalUrls,
+      imageThumbnailUrls: resolvedImageThumbnailUrls,
       videoUrl,
+      videoOriginalUrl,
       sellerId: `${sellerId.slice(0, 6)}…`,
     };
     console.info('[seller/products POST] validated payload', loggingPayload);
@@ -310,6 +332,26 @@ export async function POST(req: Request) {
 
     let product;
     try {
+      const cloudinaryMedia = {
+        folders: {
+          products: getCloudinaryProductsFolder(),
+          videos: getCloudinaryVideosFolder(),
+          thumbnails: getCloudinaryThumbnailsFolder(),
+        },
+        images: resolvedImages.map((optimizedUrl, index) => ({
+          optimizedUrl,
+          originalUrl: resolvedImageOriginalUrls[index] ?? optimizedUrl,
+          thumbnailUrl: resolvedImageThumbnailUrls[index] ?? optimizedUrl,
+        })),
+        video: videoUrl
+          ? {
+              optimizedUrl: videoUrl,
+              originalUrl: videoOriginalUrl ?? videoUrl,
+            }
+          : null,
+      } as const;
+      normalizedAttributes.cloudinaryMedia = cloudinaryMedia;
+
       product = await prisma.product.create({
         data: {
           title,

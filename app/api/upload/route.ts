@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth-options';
 import { getCloudinary, isCloudinaryConfigured, logCloudinaryConfigStatus } from '@/lib/cloudinary';
 import {
   getProductMediaKind,
-  getProductMediaFolder,
+  getProductMediaFolderByKind,
   getProductMediaMaxBytes,
 } from '@/lib/product-media';
 
@@ -54,18 +54,41 @@ export async function POST(req: Request) {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
     const cloudinary = getCloudinary();
-    const folder = getProductMediaFolder();
+    const folder = getProductMediaFolderByKind(mediaKind);
 
-    const result = await new Promise<{ secure_url: string }>((resolve, reject) => {
+    const result = await new Promise<{ secure_url: string; public_id: string; version?: number }>((resolve, reject) => {
       cloudinary.uploader
-        .upload_stream({ folder, resource_type: 'auto' }, (err, res) => {
+        .upload_stream({ backup: true, folder, resource_type: 'auto' }, (err, res) => {
           if (err || !res) reject(err ?? new Error('No result from Cloudinary'));
-          else resolve(res as { secure_url: string });
+          else resolve(res as { secure_url: string; public_id: string; version?: number });
         })
         .end(buffer);
     });
 
-    return NextResponse.json({ url: result.secure_url });
+    const optimizedUrl =
+      mediaKind === 'video'
+        ? cloudinary.url(result.public_id, {
+            secure: true,
+            resource_type: 'video',
+            type: 'upload',
+            version: result.version,
+            transformation: [{ quality: 'auto:good' }],
+            format: 'webm',
+          })
+        : cloudinary.url(result.public_id, {
+            secure: true,
+            resource_type: 'image',
+            type: 'upload',
+            version: result.version,
+            transformation: [
+              { effect: 'improve' },
+              { effect: 'sharpen' },
+              { quality: 'auto:good' },
+              { fetch_format: 'webp' },
+            ],
+          });
+
+    return NextResponse.json({ originalUrl: result.secure_url, url: optimizedUrl });
   } catch (err) {
     console.error('[api/upload]', err);
     return NextResponse.json({ error: 'Upload failed. Please try again.' }, { status: 500 });

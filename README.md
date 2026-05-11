@@ -96,6 +96,13 @@ Set these in **Environment → Environment Variables** in the Render dashboard:
 | `STRIPE_WEBHOOK_SECRET` | Secret from your Stripe webhook endpoint |
 | `SHIPPO_API_TOKEN` | Shippo API token for shipping rates + label purchase |
 | `PLATFORM_FEE_PERCENT` | Legacy bootstrap env var (the app normalizes commission snapshots to `7`) |
+| `CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name (required for media uploads) |
+| `CLOUDINARY_API_KEY` | Cloudinary API key (required for media uploads) |
+| `CLOUDINARY_API_SECRET` | Cloudinary API secret (required for media uploads) |
+| `CLOUDINARY_PRODUCTS_FOLDER` | Product image folder (default `flupflap/products`) |
+| `CLOUDINARY_VIDEOS_FOLDER` | Product video folder (default `flupflap/videos`) |
+| `CLOUDINARY_USERS_FOLDER` | User media folder (default `flupflap/users`) |
+| `CLOUDINARY_THUMBNAILS_FOLDER` | Generated thumbnail folder (default `flupflap/thumbnails`) |
 
 ### Why the build succeeds but deployment fails
 
@@ -160,7 +167,14 @@ PLATFORM_FEE_PERCENT="7"
 Each checkout stores commission snapshots on order items so seller earnings, Stripe Connect fee splits, and reporting stay consistent even if listing prices change later.
 
 ## Image uploads
-This build supports image URLs by default. For production, connect Cloudinary, UploadThing, S3, or Vercel Blob and store the returned URL in `imageUrl`.
+Seller listing uploads use Cloudinary with signed backend upload configuration.
+
+- Originals are uploaded with Cloudinary backup enabled.
+- Product images are stored in `flupflap/products` (configurable via `CLOUDINARY_PRODUCTS_FOLDER`).
+- Product videos are stored in `flupflap/videos` (configurable via `CLOUDINARY_VIDEOS_FOLDER`).
+- Generated thumbnails are stored in `flupflap/thumbnails` (configurable via `CLOUDINARY_THUMBNAILS_FOLDER`).
+- Delivery URLs returned to the app use AI enhancement + sharpening + auto quality + WebP for images and auto quality + WebM optimization for videos.
+- Listings support up to 6 images and 1 video.
 
 ## Taxes
 A placeholder `taxCents` field exists. For launch, connect Stripe Tax or TaxJar/Avalara because tax rules depend on state, city, nexus, product type, and seller location.
