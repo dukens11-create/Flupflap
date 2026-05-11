@@ -14,6 +14,7 @@ function LoginForm() {
 
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [redirecting, setRedirecting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   // Multi-step seller flow: credentials → (add_phone?) → otp
@@ -24,6 +25,8 @@ function LoginForm() {
   const [pendingPassword, setPendingPassword] = useState('');
 
   async function redirectByRole() {
+    setRedirecting(true);
+    setLoading(true);
     let role: string | null = null;
     try {
       const sessionRes = await fetch('/api/auth/session');
@@ -34,6 +37,7 @@ function LoginForm() {
     } catch {
       // ignore and fallback to callback/default route
     }
+    await new Promise((resolve) => setTimeout(resolve, 180));
     router.push(resolveRoleLoginDestination(role, callbackUrl));
     router.refresh();
   }
@@ -206,6 +210,17 @@ function LoginForm() {
     setError('');
   }
 
+  if (redirecting) {
+    return (
+      <div className="card p-6 mt-6">
+        <div className="flex items-center gap-3 text-slate-700">
+          <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-blue-600" />
+          <p className="text-sm font-medium">{t('login.signingIn')}</p>
+        </div>
+      </div>
+    );
+  }
+
   if (step === 'add_phone') {
     return (
       <form onSubmit={submitPhone} className="card p-6 mt-6 space-y-4">
@@ -325,6 +340,20 @@ function LoginForm() {
   );
 }
 
+function SignupPrompt() {
+  const { t } = useI18n();
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get('callbackUrl');
+  const signupHref = callbackUrl ? `/signup?callbackUrl=${encodeURIComponent(callbackUrl)}` : '/signup';
+
+  return (
+    <p className="text-center text-sm text-slate-500 mt-4">
+      {t('login.noAccount')}{' '}
+      <Link href={signupHref} className="text-blue-600 hover:underline">{t('login.signUp')}</Link>
+    </p>
+  );
+}
+
 export default function LoginPage() {
   const { t } = useI18n();
   return (
@@ -333,10 +362,9 @@ export default function LoginPage() {
       <Suspense fallback={<div className="card p-6 mt-6 h-48 animate-pulse bg-slate-100 rounded-2xl" />}>
         <LoginForm />
       </Suspense>
-      <p className="text-center text-sm text-slate-500 mt-4">
-        {t('login.noAccount')}{' '}
-        <Link href="/signup" className="text-blue-600 hover:underline">{t('login.signUp')}</Link>
-      </p>
+      <Suspense fallback={null}>
+        <SignupPrompt />
+      </Suspense>
     </main>
   );
 }

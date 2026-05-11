@@ -110,6 +110,9 @@ export default function Navbar() {
   const { t } = useI18n();
   const navLinkClass = 'rounded-full px-3 py-2 transition-colors hover:bg-slate-100 link-hover-navy';
   const actionLinkClass = 'relative flex items-center gap-1 rounded-full px-3 py-2 transition-colors hover:bg-slate-100 link-hover-navy';
+  const callbackPath = pathname && pathname !== '/' ? pathname : null;
+  const loginHref = callbackPath ? `/login?callbackUrl=${encodeURIComponent(callbackPath)}` : '/login';
+  const signupHref = callbackPath ? `/signup?callbackUrl=${encodeURIComponent(callbackPath)}` : '/signup';
 
   return (
     <header className="sticky top-0 z-30 border-b border-slate-200 bg-white">
@@ -199,10 +202,10 @@ export default function Navbar() {
                 </>
               ) : (
                 <>
-                  <Link href="/login" className={actionLinkClass}>
+                  <Link href={loginHref} className={actionLinkClass}>
                     <LogIn size={16} /> {t('nav.login')}
                   </Link>
-                  <Link href="/signup" className="btn-brand">
+                  <Link href={signupHref} className="btn-brand">
                     <UserPlus size={14} /> {t('nav.signUp')}
                   </Link>
                 </>
@@ -248,10 +251,10 @@ export default function Navbar() {
                 </button>
               ) : (
                 <>
-                  <Link href="/login" className="rounded-lg px-3 py-2 hover:bg-white/80 text-slate-700" onClick={() => setMobileOpen(false)}>
+                  <Link href={loginHref} className="rounded-lg px-3 py-2 hover:bg-white/80 text-slate-700" onClick={() => setMobileOpen(false)}>
                     {t('nav.login')}
                   </Link>
-                  <Link href="/signup" className="rounded-lg px-3 py-2 hover:bg-white/80 text-slate-700" onClick={() => setMobileOpen(false)}>
+                  <Link href={signupHref} className="rounded-lg px-3 py-2 hover:bg-white/80 text-slate-700" onClick={() => setMobileOpen(false)}>
                     {t('nav.signUp')}
                   </Link>
                 </>

@@ -1,15 +1,19 @@
 "use client";
 import { useState } from 'react';
 import { signIn } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useI18n } from '@/components/I18nProvider';
+import { resolveRoleLoginDestination } from '@/lib/role-experience';
 
 export default function SignupPage() {
   const { t } = useI18n();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get('callbackUrl');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [redirecting, setRedirecting] = useState(false);
   const [role, setRole] = useState('CUSTOMER');
   const [showPassword, setShowPassword] = useState(false);
 
@@ -32,14 +36,40 @@ export default function SignupPage() {
       return;
     }
 
-    await signIn('credentials', {
+    const signInResult = await signIn('credentials', {
       email: payload.email,
       password: payload.password,
       redirect: false,
     });
 
-    router.push(payload.role === 'SELLER' ? '/seller' : '/');
+    if (signInResult?.error) {
+      setError(t('login.invalidCredentials'));
+      setLoading(false);
+      return;
+    }
+
+    setRedirecting(true);
+    await new Promise((resolve) => setTimeout(resolve, 180));
+    const signedUpRole = typeof payload.role === 'string' ? payload.role : null;
+    router.push(resolveRoleLoginDestination(signedUpRole, callbackUrl));
+    router.refresh();
   }
+
+  if (redirecting) {
+    return (
+      <main className="mx-auto max-w-md px-4 py-10">
+        <h1 className="text-3xl font-black">{t('signup.title')}</h1>
+        <div className="card p-6 mt-6">
+          <div className="flex items-center gap-3 text-slate-700">
+            <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-blue-600" />
+            <p className="text-sm font-medium">{t('signup.creatingAccount')}</p>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  const loginHref = callbackUrl ? `/login?callbackUrl=${encodeURIComponent(callbackUrl)}` : '/login';
 
   return (
     <main className="mx-auto max-w-md px-4 py-10">
@@ -104,7 +134,7 @@ export default function SignupPage() {
       </form>
       <p className="text-center text-sm text-slate-500 mt-4">
         {t('signup.alreadyHave')}{' '}
-        <Link href="/login" className="text-blue-600 hover:underline">{t('signup.signIn')}</Link>
+        <Link href={loginHref} className="text-blue-600 hover:underline">{t('signup.signIn')}</Link>
       </p>
     </main>
   );

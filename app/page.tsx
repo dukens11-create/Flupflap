@@ -371,7 +371,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const { t } = await getServerTranslations();
   const session = await getServerSession(authOptions);
   const experienceRole = normalizeExperienceRole(session?.user?.role);
-  if (experienceRole === 'seller' || experienceRole === 'admin') {
+  if (experienceRole === 'admin') {
     redirect(getRoleDefaultPath(session?.user?.role));
   }
 
