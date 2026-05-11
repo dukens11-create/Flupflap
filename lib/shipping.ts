@@ -72,12 +72,11 @@ async function shippoRequest(path: string, method: 'GET' | 'POST', body?: unknow
 }
 
 function normalizeCarrier(value: unknown): string {
-  const raw = String(value ?? '').trim();
+  const raw = String(value ?? '').trim().toUpperCase();
   if (!raw) return '';
-  // Shippo provider names may include spaces/punctuation; normalize to token form
-  // so we can compare against the supported carrier whitelist consistently.
-  const normalized = raw.replace(/[^a-z0-9]/gi, '').toUpperCase();
-  return normalized;
+  if (raw === 'USPS' || raw === 'UPS') return raw;
+  if (raw === 'FEDEX' || raw === 'FED_EX' || raw === 'FED-EX' || raw === 'FED EX') return 'FEDEX';
+  return raw;
 }
 
 function parseOptionalString(value: unknown): string | null {
@@ -133,8 +132,7 @@ export async function createShipmentRates(params: {
           id: String(rate?.object_id ?? ''),
           carrier,
           service: parseOptionalString(rate?.servicelevel?.name)
-            ?? parseOptionalString(rate?.servicelevel?.token)
-            ?? '',
+            ?? parseOptionalString(rate?.servicelevel?.token),
           rate: String(rate?.amount ?? ''),
           currency,
           deliveryDays: parseDeliveryDays(rate?.estimated_days),
@@ -148,6 +146,10 @@ export async function createShipmentRates(params: {
         && !!rate.rate
         && !!rate.currency
       ))
+      .map((rate: any) => ({
+        ...rate,
+        service: rate.service as string,
+      }))
       .filter((rate: ShipmentRateQuote) => Number.isFinite(Number(rate.rate)))
       .map((rate: ShipmentRateQuote) => ({
         ...rate,
@@ -176,18 +178,21 @@ export async function purchaseShipmentRate(params: {
   const labelUrl = parseOptionalString(payload?.label_url);
   const trackingUrl = parseOptionalString(payload?.tracking_url_provider)
     || buildTrackingUrl(carrier, trackingCode);
-  // Shippo transaction payloads are not fully consistent across rate types, so
-  // resolve the shipment id from the most specific to least specific source.
   const rateShipmentId = parseOptionalString(payload?.rate?.shipment);
   const transactionShipmentObjectId = parseOptionalString(payload?.shipment?.object_id);
   const transactionShipmentId = parseOptionalString(payload?.shipment);
   const responseShipmentId = rateShipmentId
     ?? transactionShipmentObjectId
-    ?? transactionShipmentId
-    ?? params.shipmentId;
+    ?? transactionShipmentId;
+  if (responseShipmentId && responseShipmentId !== params.shipmentId) {
+    console.warn('[shipping] Shippo transaction returned mismatched shipment id', {
+      expected: params.shipmentId,
+      received: responseShipmentId,
+    });
+  }
 
   return {
-    shipmentId: responseShipmentId,
+    shipmentId: responseShipmentId ?? params.shipmentId,
     shipmentStatus: typeof payload?.status === 'string' ? payload.status : null,
     trackingNumber: trackingCode,
     carrier,

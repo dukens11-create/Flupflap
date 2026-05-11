@@ -122,7 +122,7 @@ export async function POST(req: Request) {
           if (!fromZip) missing.push('ZIP');
           return NextResponse.json(
             { error: `Ship-from address is incomplete. Missing: ${missing.join(', ')}.` },
-            { status: 503 },
+            { status: 422 },
           );
         }
 
