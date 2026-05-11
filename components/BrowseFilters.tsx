@@ -128,7 +128,7 @@ export default function BrowseFilters() {
             onChange={e => updateSearchParam('condition', e.target.value)}
           >
             <option value="">{t('filters.anyCondition')}</option>
-            {CONDITIONS.map(c => <option key={c} value={c}>{c}</option>)}
+            {CONDITIONS.map(c => <option key={c} value={c}>{t(`filters.conditions.${c}`)}</option>)}
           </select>
         )}
         <input
@@ -160,7 +160,7 @@ export default function BrowseFilters() {
               onChange={e => updateSearchParam('condition', e.target.value)}
             >
               <option value="">{t('filters.anyCondition')}</option>
-              {CONDITIONS.map(c => <option key={c} value={c}>{c}</option>)}
+              {CONDITIONS.map(c => <option key={c} value={c}>{t(`filters.conditions.${c}`)}</option>)}
             </select>
           )}
           {/* Brand */}
