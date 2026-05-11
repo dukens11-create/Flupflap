@@ -37,6 +37,13 @@ export const KYC_APPROVED_WHERE: Prisma.UserWhereInput = {
   ],
 };
 
+// Shared exclusion guard reused by KYC_PENDING_REVIEW_WHERE and KYC_REJECTED_WHERE.
+// Prevents sellers who are approved via any path from leaking into other buckets.
+const KYC_APPROVED_EXCLUSION: Prisma.UserWhereInput = {
+  verifiedSeller: false,
+  NOT: { OR: [{ kycStatus: 'APPROVED' }, { verificationSubmission: { status: 'APPROVED' } }] },
+};
+
 /**
  * Matches sellers whose KYC is pending review.
  * Checks both `kycStatus` and the `SellerVerification` record for sellers
@@ -44,8 +51,7 @@ export const KYC_APPROVED_WHERE: Prisma.UserWhereInput = {
  * Explicitly excludes sellers considered approved via any path.
  */
 export const KYC_PENDING_REVIEW_WHERE: Prisma.UserWhereInput = {
-  verifiedSeller: false,
-  NOT: { OR: [{ kycStatus: 'APPROVED' }, { verificationSubmission: { status: 'APPROVED' } }] },
+  ...KYC_APPROVED_EXCLUSION,
   OR: [
     { kycStatus: 'PENDING_REVIEW' },
     { verificationSubmission: { status: 'PENDING' } },
@@ -59,8 +65,7 @@ export const KYC_PENDING_REVIEW_WHERE: Prisma.UserWhereInput = {
  * Explicitly excludes sellers considered approved via any path.
  */
 export const KYC_REJECTED_WHERE: Prisma.UserWhereInput = {
-  verifiedSeller: false,
-  NOT: { OR: [{ kycStatus: 'APPROVED' }, { verificationSubmission: { status: 'APPROVED' } }] },
+  ...KYC_APPROVED_EXCLUSION,
   OR: [
     { kycStatus: 'REJECTED' },
     { verificationSubmission: { status: 'REJECTED' } },
@@ -77,6 +82,7 @@ export const KYC_REJECTED_WHERE: Prisma.UserWhereInput = {
 export const KYC_NOT_SUBMITTED_WHERE: Prisma.UserWhereInput = {
   kycStatus: 'NOT_SUBMITTED',
   verifiedSeller: false,
+  // Prisma relation filter: only matches sellers with no SellerVerification record.
   verificationSubmission: { is: null },
 };
 
