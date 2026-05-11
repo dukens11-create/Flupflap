@@ -11,6 +11,7 @@ import {
   getListingRiskAssessmentForCandidate,
   shouldRecommendFraudReview,
 } from '@/lib/fraud-detection';
+import { parseJsonOrNull } from '@/lib/parse-json';
 
 const schema = z.object({
   title: z.string().min(3),
@@ -121,7 +122,7 @@ export async function POST(req: Request) {
         pickupPostalCode: data.pickupPostalCode || null,
         categoryId: data.categoryId || null,
         subcategoryId: data.subcategoryId || null,
-        productAttributes: data.productAttributes ? (() => { try { return JSON.parse(data.productAttributes!); } catch { return null; } })() : null,
+        productAttributes: parseJsonOrNull(data.productAttributes),
       },
     });
 

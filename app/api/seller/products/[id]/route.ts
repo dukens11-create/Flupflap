@@ -9,6 +9,7 @@ import {
   getListingRiskAssessmentForCandidate,
   shouldRecommendFraudReview,
 } from '@/lib/fraud-detection';
+import { parseJsonOrNull } from '@/lib/parse-json';
 
 const updateSchema = z.object({
   title: z.string().min(3).optional(),
@@ -123,7 +124,7 @@ export async function POST(
         // Category system fields
         categoryId: data.categoryId || null,
         subcategoryId: data.subcategoryId || null,
-        productAttributes: data.productAttributes ? (() => { try { return JSON.parse(data.productAttributes!); } catch { return null; } })() : null,
+        productAttributes: parseJsonOrNull(data.productAttributes),
         // Reset to PENDING on edit so admin can re-review
         status: 'PENDING',
       },
@@ -199,7 +200,7 @@ export async function PATCH(
         // Category system fields
         categoryId: data.categoryId || null,
         subcategoryId: data.subcategoryId || null,
-        productAttributes: data.productAttributes ? (() => { try { return JSON.parse(data.productAttributes!); } catch { return null; } })() : null,
+        productAttributes: parseJsonOrNull(data.productAttributes),
         status: 'PENDING',
       },
     });

@@ -222,8 +222,9 @@ async function seedCategories() {
     { name: 'Trading Cards', slug: 'collectibles-cards', parentId: collectibles.id, level: 1, sortOrder: 4 },
   ]});
 
-  // Silence unused variable warnings for used-only-for-parentId vars
-  void phones; void audio;
+  // Silence TypeScript "unused variable" warnings for categories only used
+  // as implicit references (their IDs are not used as parent for children)
+  void phones; void cameras; void audio;
 
   console.log('Categories seeded.');
 }
