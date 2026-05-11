@@ -4,13 +4,15 @@
  * Shared KYC status counting helpers used by both the Admin Dashboard
  * (app/admin/page.tsx) and Seller Management (app/admin/sellers/page.tsx).
  *
- * A seller is considered "KYC Approved" if EITHER:
- *   - `kycStatus === 'APPROVED'`  (canonical field, set by the new flow)
- *   - `verifiedSeller === true`   (legacy field, set before kycStatus existed)
+ * A seller is considered "KYC Approved" if ANY of the following are true:
+ *   - `kycStatus === 'APPROVED'`                    (canonical field, set by the new flow)
+ *   - `verifiedSeller === true`                     (legacy flag, set before kycStatus existed)
+ *   - `verificationSubmission.status === 'APPROVED'`(has an approved SellerVerification record
+ *                                                    whose result wasn't yet back-filled to kycStatus)
  *
- * This prevents the regression where sellers approved before the schema
- * migration appear as "Not Submitted" because their `kycStatus` was never
- * back-filled.
+ * This prevents the regression where sellers approved before or during the
+ * schema migration appear as "Not Submitted" because their `kycStatus` was
+ * never back-filled.
  *
  * Run `scripts/sync-seller-statuses.ts --confirm` to back-fill `kycStatus`
  * from legacy fields so the OR conditions are no longer needed.
@@ -23,39 +25,65 @@ import type { Prisma } from '@prisma/client';
 
 /**
  * Matches sellers considered "KYC Approved".
- * Reads both the canonical `kycStatus` and the legacy `verifiedSeller` flag so
- * that previously-approved sellers are never silently miscounted.
+ * Reads the canonical `kycStatus`, the legacy `verifiedSeller` flag, AND the
+ * `SellerVerification.status` relation so that sellers approved via any path
+ * are never silently miscounted.
  */
 export const KYC_APPROVED_WHERE: Prisma.UserWhereInput = {
-  OR: [{ kycStatus: 'APPROVED' }, { verifiedSeller: true }],
+  OR: [
+    { kycStatus: 'APPROVED' },
+    { verifiedSeller: true },
+    { verificationSubmission: { status: 'APPROVED' } },
+  ],
+};
+
+// Shared exclusion guard reused by KYC_PENDING_REVIEW_WHERE and KYC_REJECTED_WHERE.
+// Prevents sellers who are approved via any path from leaking into other buckets.
+const KYC_APPROVED_EXCLUSION: Prisma.UserWhereInput = {
+  verifiedSeller: false,
+  NOT: { OR: [{ kycStatus: 'APPROVED' }, { verificationSubmission: { status: 'APPROVED' } }] },
 };
 
 /**
  * Matches sellers whose KYC is pending review.
- * Excludes sellers already considered approved via the legacy flag.
+ * Checks both `kycStatus` and the `SellerVerification` record for sellers
+ * whose kycStatus wasn't yet back-filled after they submitted.
+ * Explicitly excludes sellers considered approved via any path.
  */
 export const KYC_PENDING_REVIEW_WHERE: Prisma.UserWhereInput = {
-  kycStatus: 'PENDING_REVIEW',
-  verifiedSeller: false,
+  ...KYC_APPROVED_EXCLUSION,
+  OR: [
+    { kycStatus: 'PENDING_REVIEW' },
+    { verificationSubmission: { status: 'PENDING' } },
+  ],
 };
 
 /**
  * Matches sellers whose KYC was rejected.
- * Excludes sellers already considered approved via the legacy flag.
+ * Checks both `kycStatus` and the `SellerVerification` record for sellers
+ * whose kycStatus wasn't yet back-filled after rejection.
+ * Explicitly excludes sellers considered approved via any path.
  */
 export const KYC_REJECTED_WHERE: Prisma.UserWhereInput = {
-  kycStatus: 'REJECTED',
-  verifiedSeller: false,
+  ...KYC_APPROVED_EXCLUSION,
+  OR: [
+    { kycStatus: 'REJECTED' },
+    { verificationSubmission: { status: 'REJECTED' } },
+  ],
 };
 
 /**
  * Matches sellers who have not submitted KYC.
- * Excludes any seller where `verifiedSeller = true` so legacy-approved sellers
- * are never counted as "Not Submitted".
+ * A seller is "Not Submitted" only when they have NO SellerVerification record,
+ * kycStatus is NOT_SUBMITTED, and verifiedSeller is false.
+ * This ensures sellers with an approved/pending/rejected submission are never
+ * miscounted as "Not Submitted" due to un-backfilled kycStatus.
  */
 export const KYC_NOT_SUBMITTED_WHERE: Prisma.UserWhereInput = {
   kycStatus: 'NOT_SUBMITTED',
   verifiedSeller: false,
+  // Prisma relation filter: only matches sellers with no SellerVerification record.
+  verificationSubmission: { is: null },
 };
 
 // ─── Shared count function ─────────────────────────────────────────────────────
@@ -90,9 +118,14 @@ export async function getSellerKycCounts(): Promise<SellerKycCounts> {
  * multiple legacy and current fields — without touching the database.
  *
  * Priority order (highest to lowest):
- *   1. verifiedSeller = true  → 'APPROVED'
- *   2. kycStatus !== null     → use kycStatus as-is
- *   3. fallback               → 'NOT_SUBMITTED'
+ *   1. verifiedSeller = true                       → 'APPROVED'
+ *   2. verificationSubmission.status = 'APPROVED'  → 'APPROVED'
+ *   3. kycStatus = 'APPROVED'                      → 'APPROVED'
+ *   4. kycStatus = 'PENDING_REVIEW'                → 'PENDING_REVIEW'
+ *   5. kycStatus = 'REJECTED'                      → 'REJECTED'
+ *   6. verificationSubmission.status = 'PENDING'   → 'PENDING_REVIEW'
+ *   7. verificationSubmission.status = 'REJECTED'  → 'REJECTED'
+ *   8. fallback                                    → 'NOT_SUBMITTED'
  *
  * Use this in application code when you need the display status for a seller
  * whose `kycStatus` may not yet have been back-filled.
@@ -100,11 +133,17 @@ export async function getSellerKycCounts(): Promise<SellerKycCounts> {
 export function deriveEffectiveKycStatus(seller: {
   kycStatus?: string | null;
   verifiedSeller?: boolean | null;
+  verificationSubmission?: { status: string } | null;
 }): 'APPROVED' | 'PENDING_REVIEW' | 'REJECTED' | 'NOT_SUBMITTED' {
   // verifiedSeller takes priority: it is the legacy approval flag set before
   // the kycStatus field existed.  When true the seller is always APPROVED
   // regardless of the kycStatus value, which may not yet have been back-filled.
   if (seller.verifiedSeller) return 'APPROVED';
+
+  // Check SellerVerification record — covers sellers approved via the
+  // verification flow whose kycStatus wasn't yet back-filled.
+  if (seller.verificationSubmission?.status === 'APPROVED') return 'APPROVED';
+
   switch (seller.kycStatus) {
     case 'APPROVED':
       return 'APPROVED';
@@ -112,7 +151,12 @@ export function deriveEffectiveKycStatus(seller: {
       return 'PENDING_REVIEW';
     case 'REJECTED':
       return 'REJECTED';
-    default:
-      return 'NOT_SUBMITTED';
   }
+
+  // Fall back to verificationSubmission status for sellers whose kycStatus
+  // was never synced from the submission record.
+  if (seller.verificationSubmission?.status === 'PENDING') return 'PENDING_REVIEW';
+  if (seller.verificationSubmission?.status === 'REJECTED') return 'REJECTED';
+
+  return 'NOT_SUBMITTED';
 }
