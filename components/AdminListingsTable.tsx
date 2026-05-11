@@ -3,6 +3,8 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 
+const LOW_STOCK_THRESHOLD = 5;
+
 export interface AdminListing {
   id: string;
   title: string;
@@ -106,7 +108,7 @@ export default function AdminListingsTable({ listings }: { listings: AdminListin
       if (sellerFilter !== 'all' && l.seller.id !== sellerFilter) return false;
       // Stock level
       if (stockFilter === 'in_stock' && l.inventory <= 0) return false;
-      if (stockFilter === 'low_stock' && (l.inventory <= 0 || l.inventory > 5)) return false;
+      if (stockFilter === 'low_stock' && (l.inventory <= 0 || l.inventory > LOW_STOCK_THRESHOLD)) return false;
       if (stockFilter === 'out_of_stock' && l.inventory > 0) return false;
       return true;
     });
@@ -124,22 +126,33 @@ export default function AdminListingsTable({ listings }: { listings: AdminListin
   const handleStock = (v: StockFilter) => { setStockFilter(v); setPage(1); };
   const handlePageSize = (v: 10 | 25 | 50) => { setPageSize(v); setPage(1); };
 
+  const [actionError, setActionError] = useState<string | null>(null);
+
   const doAction = useCallback(
     async (id: string, action: 'approve' | 'reject' | 'remove') => {
       if (action === 'remove') {
         if (!window.confirm('Permanently delete this listing? This cannot be undone.')) return;
       }
       setActionLoading(`${id}:${action}`);
+      setActionError(null);
       try {
+        let res: Response;
         if (action === 'remove') {
-          await fetch(`/api/admin/products/${id}`, { method: 'DELETE' });
+          res = await fetch(`/api/admin/products/${id}`, { method: 'DELETE' });
         } else {
           const fd = new FormData();
           fd.append('_method', action);
           fd.append('redirectTo', '');
-          await fetch(`/api/admin/products/${id}`, { method: 'POST', body: fd });
+          res = await fetch(`/api/admin/products/${id}`, { method: 'POST', body: fd });
+        }
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          setActionError((data as { error?: string }).error ?? `Action failed (${res.status})`);
+          return;
         }
         router.refresh();
+      } catch {
+        setActionError('Network error — please try again.');
       } finally {
         setActionLoading(null);
       }
@@ -294,11 +307,18 @@ export default function AdminListingsTable({ listings }: { listings: AdminListin
           >
             <option value="all">All stock levels</option>
             <option value="in_stock">In stock</option>
-            <option value="low_stock">Low stock (≤5)</option>
+            <option value="low_stock">Low stock (≤{LOW_STOCK_THRESHOLD})</option>
             <option value="out_of_stock">Out of stock</option>
           </select>
         </div>
       </div>
+
+      {actionError && (
+        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 flex items-center justify-between gap-3">
+          <span>⚠ {actionError}</span>
+          <button onClick={() => setActionError(null)} className="text-red-400 hover:text-red-600 font-bold leading-none">✕</button>
+        </div>
+      )}
 
       {filtered.length === 0 ? (
         <div className="card p-8 text-center text-slate-500">No listings match the current filters.</div>
@@ -331,7 +351,7 @@ export default function AdminListingsTable({ listings }: { listings: AdminListin
                       <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{l.seller.name}</td>
                       <td className="px-3 py-2.5 text-right font-medium text-slate-900 whitespace-nowrap">{dollars(l.priceCents)}</td>
                       <td className="px-3 py-2.5 text-right whitespace-nowrap">
-                        <span className={`font-semibold ${l.inventory <= 0 ? 'text-red-600' : l.inventory <= 5 ? 'text-orange-600' : 'text-green-700'}`}>
+                        <span className={`font-semibold ${l.inventory <= 0 ? 'text-red-600' : l.inventory <= LOW_STOCK_THRESHOLD ? 'text-orange-600' : 'text-green-700'}`}>
                           {l.inventory}
                         </span>
                       </td>
@@ -361,7 +381,7 @@ export default function AdminListingsTable({ listings }: { listings: AdminListin
                     <div className="flex items-center gap-2 mt-0.5">
                       <span className="text-xs font-semibold text-slate-900">{dollars(l.priceCents)}</span>
                       <span className="text-xs text-slate-400">·</span>
-                      <span className={`text-xs font-medium ${l.inventory <= 0 ? 'text-red-600' : l.inventory <= 5 ? 'text-orange-600' : 'text-slate-500'}`}>
+                      <span className={`text-xs font-medium ${l.inventory <= 0 ? 'text-red-600' : l.inventory <= LOW_STOCK_THRESHOLD ? 'text-orange-600' : 'text-slate-500'}`}>
                         {l.inventory <= 0 ? 'Out of stock' : `${l.inventory} in stock`}
                       </span>
                     </div>
