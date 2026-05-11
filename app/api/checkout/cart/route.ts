@@ -30,8 +30,17 @@ type ShippingRateInfo = {
   };
 };
 
+/**
+ * Treat explicit CALCULATED mode or legacy zero-shipping products (without mode)
+ * as live-rate items that must be quoted via Shippo before checkout.
+ */
 function isCalculatedShippingProduct(product: { shippingMode?: string | null; shippingCents: number }) {
   return product.shippingMode === 'CALCULATED' || (!product.shippingMode && product.shippingCents === 0);
+}
+
+/** Returns true only when the buyer address includes required street/city/state/zip fields. */
+function hasCompleteAddress(address?: ShippingRateInfo['buyerAddress']) {
+  return !!(address?.street1 && address?.city && address?.state && address?.zip);
 }
 
 export async function POST(req: Request) {
@@ -108,7 +117,7 @@ export async function POST(req: Request) {
           { status: 400 },
         );
       }
-      if (!shippingRateInfo?.buyerAddress?.street1 || !shippingRateInfo?.buyerAddress?.city || !shippingRateInfo?.buyerAddress?.state || !shippingRateInfo?.buyerAddress?.zip) {
+      if (!hasCompleteAddress(shippingRateInfo?.buyerAddress)) {
         return NextResponse.json(
           { error: 'Please provide a complete shipping address before checkout.' },
           { status: 400 },

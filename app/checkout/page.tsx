@@ -224,17 +224,21 @@ export default function CheckoutPage() {
         setRatesFetched(true);
         return;
       }
+      if (groups.some(group => group.rates.length === 0)) {
+        setRateError('One or more shipping methods are unavailable. Please try again.');
+        setRatesFetched(true);
+        return;
+      }
       // Auto-select cheapest rate per group
-      const autoSelected: SelectedRate[] = groups.flatMap((group) => {
+      const autoSelected: SelectedRate[] = groups.map((group) => {
         const cheapest = group.rates[0]; // already sorted by rate asc
-        if (!cheapest) return [];
         return {
           sellerId: group.sellerId,
           shipmentId: group.shipmentId,
-          rateId: cheapest?.id ?? '',
-          rateCents: cheapest ? convertRateToCents(cheapest.rate) : 0,
-          carrier: cheapest?.carrier ?? '',
-          service: cheapest?.service ?? '',
+          rateId: cheapest.id,
+          rateCents: convertRateToCents(cheapest.rate),
+          carrier: cheapest.carrier,
+          service: cheapest.service,
           deliveryDays: cheapest.deliveryDays,
         };
       });
