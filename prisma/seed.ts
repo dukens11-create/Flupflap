@@ -7,6 +7,7 @@ import {
 } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import bcrypt from 'bcryptjs';
+import { PERFUME_SIZE_OPTIONS } from '@/lib/category-attribute-schema';
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL ?? '' });
 const prisma = new PrismaClient({ adapter });
@@ -47,7 +48,7 @@ const CLOTHING_FIELDS = fields(
 );
 const PERFUME_FIELDS = fields(
   { name: 'brand', label: 'Brand', type: 'text' },
-  { name: 'size_ml', label: 'Size (ml)', type: 'select', options: ['30ml', '50ml', '75ml', '100ml', '150ml', '200ml'] },
+  { name: 'size_ml', label: 'Size (ml)', type: 'select', options: [...PERFUME_SIZE_OPTIONS] },
   { name: 'fragrance_type', label: 'Fragrance Type', type: 'select', options: ['Floral', 'Woody', 'Fresh', 'Oriental', 'Citrus', 'Gourmand'] },
   { name: 'gender', label: 'Gender', type: 'select', options: ['Men', 'Women', 'Unisex'] },
 );
