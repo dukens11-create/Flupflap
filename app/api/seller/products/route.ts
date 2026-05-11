@@ -31,6 +31,9 @@ const schema = z.object({
   imageUrl: z.string().url().optional(),
   images: z.array(z.string().url()).optional(),
   imageUrls: z.array(z.string().url()).optional(),
+  originalImages: z.array(z.string().url()).optional(),
+  enhancedImages: z.array(z.string().url()).optional(),
+  imageThumbnails: z.array(z.string().url()).optional(),
   video: z.string().url().optional().or(z.literal('')),
   videoUrl: z.string().url().optional().or(z.literal('')),
   inventory: z.string().trim().optional(),
@@ -155,10 +158,16 @@ export async function POST(req: Request) {
     // Collect multiple "images" values from form (MediaUpload uses multiple hidden inputs)
     const imagesRaw = form.getAll('images').map(String).filter(Boolean);
     const imageUrlsRaw = form.getAll('imageUrls').map(String).filter(Boolean);
+    const originalImagesRaw = form.getAll('originalImages').map(String).filter(Boolean);
+    const enhancedImagesRaw = form.getAll('enhancedImages').map(String).filter(Boolean);
+    const imageThumbnailsRaw = form.getAll('imageThumbnails').map(String).filter(Boolean);
     const parsed = schema.safeParse({
       ...rawEntries,
       images: imagesRaw.length ? imagesRaw : undefined,
       imageUrls: imageUrlsRaw.length ? imageUrlsRaw : undefined,
+      originalImages: originalImagesRaw.length ? originalImagesRaw : undefined,
+      enhancedImages: enhancedImagesRaw.length ? enhancedImagesRaw : undefined,
+      imageThumbnails: imageThumbnailsRaw.length ? imageThumbnailsRaw : undefined,
     });
     if (!parsed.success) {
       return jsonError(parsed.error.issues[0]?.message ?? 'Invalid input.', 400);
@@ -256,6 +265,10 @@ export async function POST(req: Request) {
     }
 
     const mainImage = resolvedImages[0] ?? '';
+    const resolvedOriginalImages =
+      originalImagesRaw.length === resolvedImages.length ? originalImagesRaw : resolvedImages;
+    const resolvedEnhancedImages = enhancedImagesRaw.slice(0, resolvedImages.length);
+    const resolvedImageThumbnails = imageThumbnailsRaw.slice(0, resolvedImages.length);
     const videoUrl = data.videoUrl || data.video || null;
     const pickupAvailable = data.pickupAvailable === 'true' || data.localPickupAvailable === 'true';
     const pickupCity = data.pickupCity || data.localPickupCity || null;
@@ -293,6 +306,9 @@ export async function POST(req: Request) {
       gender: (normalizedAttributes.gender as string | undefined) ?? null,
       inventoryQty,
       imageUrls: resolvedImages,
+      originalImages: resolvedOriginalImages,
+      enhancedImages: resolvedEnhancedImages,
+      imageThumbnails: resolvedImageThumbnails,
       videoUrl,
       sellerId: `${sellerId.slice(0, 6)}…`,
     };
@@ -319,6 +335,9 @@ export async function POST(req: Request) {
           category,
           imageUrl: mainImage,
           images: resolvedImages,
+          originalImages: resolvedOriginalImages,
+          enhancedImages: resolvedEnhancedImages,
+          imageThumbnails: resolvedImageThumbnails,
           mainImage,
           videoUrl,
           sellerId,

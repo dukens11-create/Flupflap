@@ -130,6 +130,11 @@ When a seller picks files on the **List Item** or **Edit Listing** page, the
 browser requests a signed upload from `/api/upload/product-media`, then uploads
 the image/video directly to Cloudinary from the browser. The hosted URLs are
 stored in the listing form and submitted with the rest of the product data.
+For images, the client also calls `/api/upload/product-media/enhance` to
+generate AI-enhanced variants (background removal, sharpening, brightness /
+contrast auto-enhancement, auto-crop/centering, optional HD upscale,
+optimized delivery URL, and thumbnail URL). Sellers can preview and choose
+original vs enhanced before submitting.
 
 - Accepted image formats: JPEG, PNG, WebP, GIF (1–6 images, up to 10 MB each)
 - Accepted video formats: MP4, MOV, WebM (optional, 1 video, up to 200 MB)
