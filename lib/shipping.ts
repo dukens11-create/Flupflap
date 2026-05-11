@@ -175,9 +175,13 @@ export async function purchaseShipmentRate(params: {
   const labelUrl = parseOptionalString(payload?.label_url);
   const trackingUrl = parseOptionalString(payload?.tracking_url_provider)
     || buildTrackingUrl(carrier, trackingCode);
+  const responseShipmentId = parseOptionalString(payload?.rate?.shipment)
+    ?? parseOptionalString(payload?.shipment?.object_id)
+    ?? parseOptionalString(payload?.shipment)
+    ?? params.shipmentId;
 
   return {
-    shipmentId: params.shipmentId,
+    shipmentId: responseShipmentId,
     shipmentStatus: typeof payload?.status === 'string' ? payload.status : null,
     trackingNumber: trackingCode,
     carrier,
