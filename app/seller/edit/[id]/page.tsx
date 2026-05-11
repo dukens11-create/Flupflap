@@ -54,6 +54,9 @@ export default async function SellerEditPage({
     : product.imageUrl
       ? [product.imageUrl]
       : [];
+  const defaultOriginalImages = product.originalImages?.length ? product.originalImages : defaultImages;
+  const defaultEnhancedImages = product.enhancedImages?.length ? product.enhancedImages : [];
+  const defaultImageThumbnails = product.imageThumbnails?.length ? product.imageThumbnails : [];
   // Use the most specific category slug for the condition picker seed value.
   const defaultCategorySlug =
     product.subcategoryRef?.slug ?? product.categoryRef?.slug ?? undefined;
@@ -128,6 +131,9 @@ export default async function SellerEditPage({
         </div>
         <MediaUpload
           defaultImages={defaultImages}
+          defaultOriginalImages={defaultOriginalImages}
+          defaultEnhancedImages={defaultEnhancedImages}
+          defaultImageThumbnails={defaultImageThumbnails}
           defaultVideoUrl={product.videoUrl ?? ''}
           required
         />

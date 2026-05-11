@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { Prisma } from '@prisma/client';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { cents } from '@/lib/money';
@@ -12,11 +11,6 @@ import {
 } from '@/lib/fraud-detection';
 import { parseJsonOrNull } from '@/lib/parse-json';
 import { SHIPPING_MODES } from '@/app/api/seller/products/route';
-import {
-  getCloudinaryProductsFolder,
-  getCloudinaryThumbnailsFolder,
-  getCloudinaryVideosFolder,
-} from '@/lib/product-media';
 
 const updateSchema = z.object({
   title: z.string().min(3).optional(),
@@ -28,10 +22,10 @@ const updateSchema = z.object({
   condition: z.string().min(1).optional(),
   imageUrl: z.string().url().optional(),
   images: z.union([z.string().url(), z.array(z.string().url())]).optional(),
-  imageOriginalUrls: z.array(z.string().url()).optional(),
-  imageThumbnailUrls: z.array(z.string().url()).optional(),
+  originalImages: z.union([z.string().url(), z.array(z.string().url())]).optional(),
+  enhancedImages: z.union([z.string().url(), z.array(z.string().url())]).optional(),
+  imageThumbnails: z.union([z.string().url(), z.array(z.string().url())]).optional(),
   videoUrl: z.string().url().optional().or(z.literal('')),
-  videoOriginalUrl: z.string().url().optional().or(z.literal('')),
   inventory: z.string().optional(),
   pickupAvailable: z.string().optional(), // "true" when checkbox is checked
   pickupCity: z.string().max(100).optional(),
@@ -81,6 +75,38 @@ function resolveVideoUrl(submitted: string | undefined, existing: ExistingProduc
   return submitted || null;
 }
 
+function toUrlArray(
+  value: string | string[] | undefined,
+  fallback: string[] = [],
+): string[] {
+  if (Array.isArray(value)) return value.filter(Boolean);
+  if (typeof value === 'string' && value) return [value];
+  return fallback;
+}
+
+function resolveOriginalImagesForProduct(
+  submittedOriginalImages: string[] | null,
+  resolvedImages: string[],
+  existing: ExistingProduct,
+): string[] {
+  if (submittedOriginalImages?.length === resolvedImages.length) {
+    return submittedOriginalImages;
+  }
+  if (existing.originalImages?.length === resolvedImages.length) {
+    return existing.originalImages;
+  }
+  return resolvedImages.map((selectedImageUrl, index) => {
+    if (existing.originalImages?.[index]) {
+      return existing.originalImages[index];
+    }
+    const matchedEnhancedIndex = existing.enhancedImages?.findIndex((url) => url === selectedImageUrl) ?? -1;
+    if (matchedEnhancedIndex >= 0 && existing.originalImages?.[matchedEnhancedIndex]) {
+      return existing.originalImages[matchedEnhancedIndex];
+    }
+    return selectedImageUrl;
+  });
+}
+
 function buildListingRiskCandidate(
   sellerId: string,
   existing: ExistingProduct,
@@ -97,33 +123,6 @@ function buildListingRiskCandidate(
     condition: data.condition ?? existing.condition,
     imageUrl: mainImage,
   };
-}
-
-function buildCloudinaryMediaMetadata(
-  optimizedImages: string[],
-  originalImages: string[],
-  thumbnailImages: string[],
-  optimizedVideo: string | null,
-  originalVideo: string | null,
-) {
-  return {
-    folders: {
-      products: getCloudinaryProductsFolder(),
-      videos: getCloudinaryVideosFolder(),
-      thumbnails: getCloudinaryThumbnailsFolder(),
-    },
-    images: optimizedImages.map((optimizedUrl, index) => ({
-      optimizedUrl,
-      originalUrl: originalImages[index] ?? optimizedUrl,
-      thumbnailUrl: thumbnailImages[index] ?? optimizedUrl,
-    })),
-    video: optimizedVideo
-      ? {
-          optimizedUrl: optimizedVideo,
-          originalUrl: originalVideo ?? optimizedVideo,
-        }
-      : null,
-  } as const;
 }
 
 /** POST handles both edits (_method=update) and deletes (_method=delete) via HTML forms */
@@ -181,40 +180,32 @@ export async function POST(
     // Default: update
     const rawEntries = Object.fromEntries(form.entries());
     const imagesRaw = form.getAll('images').map(String).filter(Boolean);
-    const imageOriginalUrlsRaw = form.getAll('imageOriginalUrls').map(String).filter(Boolean);
-    const imageThumbnailUrlsRaw = form.getAll('imageThumbnailUrls').map(String).filter(Boolean);
+    const originalImagesRaw = form.getAll('originalImages').map(String).filter(Boolean);
+    const enhancedImagesRaw = form.getAll('enhancedImages').map(String).filter(Boolean);
+    const imageThumbnailsRaw = form.getAll('imageThumbnails').map(String).filter(Boolean);
     const data = updateSchema.parse({
       ...rawEntries,
       images: imagesRaw.length ? imagesRaw : undefined,
-      imageOriginalUrls: imageOriginalUrlsRaw.length ? imageOriginalUrlsRaw : undefined,
-      imageThumbnailUrls: imageThumbnailUrlsRaw.length ? imageThumbnailUrlsRaw : undefined,
+      originalImages: originalImagesRaw.length ? originalImagesRaw : undefined,
+      enhancedImages: enhancedImagesRaw.length ? enhancedImagesRaw : undefined,
+      imageThumbnails: imageThumbnailsRaw.length ? imageThumbnailsRaw : undefined,
     });
 
     const submittedImages = imagesRaw.length ? imagesRaw : data.imageUrl ? [data.imageUrl] : null;
     const resolvedImages = resolveImages(submittedImages, existing);
     const mainImage = resolvedImages[0] ?? existing.imageUrl;
     const videoUrl = resolveVideoUrl(data.videoUrl, existing);
-    const videoOriginalUrl = data.videoOriginalUrl || videoUrl;
-    const resolvedImageOriginalUrls = resolvedImages.map(
-      (url, index) => imageOriginalUrlsRaw[index] || url,
-    );
-    const resolvedImageThumbnailUrls = resolvedImages.map(
-      (url, index) => imageThumbnailUrlsRaw[index] || url,
-    );
-    const parsedAttributes = parseJsonOrNull(data.productAttributes);
-    const baseAttributes =
-      parsedAttributes && typeof parsedAttributes === 'object' && !Array.isArray(parsedAttributes)
-        ? (parsedAttributes as Record<string, unknown>)
-        : existing.productAttributes && typeof existing.productAttributes === 'object' && !Array.isArray(existing.productAttributes)
-          ? ({ ...(existing.productAttributes as Record<string, unknown>) })
-          : {};
-    baseAttributes.cloudinaryMedia = buildCloudinaryMediaMetadata(
+    const resolvedOriginalImages = resolveOriginalImagesForProduct(
+      originalImagesRaw.length ? originalImagesRaw : null,
       resolvedImages,
-      resolvedImageOriginalUrls,
-      resolvedImageThumbnailUrls,
-      videoUrl,
-      videoOriginalUrl,
+      existing,
     );
+    const resolvedEnhancedImages =
+      enhancedImagesRaw.length > 0 ? enhancedImagesRaw.slice(0, resolvedImages.length) : existing.enhancedImages ?? [];
+    const resolvedImageThumbnails =
+      imageThumbnailsRaw.length > 0
+        ? imageThumbnailsRaw.slice(0, resolvedImages.length)
+        : existing.imageThumbnails ?? [];
 
     const riskAssessment = await getListingRiskAssessmentForCandidate(
       buildListingRiskCandidate(sellerId, existing, data, resolvedImages),
@@ -229,10 +220,6 @@ export async function POST(
         ...(data.price && { priceCents: cents(data.price) }),
         ...(data.shipping !== undefined && { shippingCents: cents(data.shipping || '0') }),
         ...(data.shippingMode && (SHIPPING_MODES as readonly string[]).includes(data.shippingMode) && { shippingMode: data.shippingMode }),
-        imageUrl: mainImage,
-        images: resolvedImages,
-        mainImage,
-        videoUrl,
         pickupAvailable: data.pickupAvailable === 'true',
         pickupCity: data.pickupCity || null,
         pickupState: data.pickupState || null,
@@ -246,7 +233,14 @@ export async function POST(
         // Category system fields
         categoryId: data.categoryId || null,
         subcategoryId: data.subcategoryId || null,
-        productAttributes: baseAttributes as Prisma.InputJsonValue,
+        productAttributes: parseJsonOrNull(data.productAttributes),
+        imageUrl: mainImage,
+        images: resolvedImages,
+        mainImage,
+        videoUrl,
+        originalImages: resolvedOriginalImages,
+        enhancedImages: resolvedEnhancedImages,
+        imageThumbnails: resolvedImageThumbnails,
         // Reset to PENDING on edit so admin can re-review
         status: 'PENDING',
       },
@@ -319,26 +313,15 @@ export async function PATCH(
     const resolvedImages = resolveImages(imagesInput, existing);
     const mainImage = resolvedImages[0] ?? existing.imageUrl;
     const videoUrl = resolveVideoUrl(data.videoUrl, existing);
-    const videoOriginalUrl = data.videoOriginalUrl || videoUrl;
-    const resolvedImageOriginalUrls = resolvedImages.map(
-      (url, index) => data.imageOriginalUrls?.[index] || url,
+    const originalImagesFallback = resolveOriginalImagesForProduct(null, resolvedImages, existing);
+    const resolvedOriginalImages = toUrlArray(data.originalImages, originalImagesFallback);
+    const resolvedEnhancedImages = toUrlArray(data.enhancedImages, existing.enhancedImages ?? []).slice(
+      0,
+      resolvedImages.length,
     );
-    const resolvedImageThumbnailUrls = resolvedImages.map(
-      (url, index) => data.imageThumbnailUrls?.[index] || url,
-    );
-    const parsedAttributes = parseJsonOrNull(data.productAttributes);
-    const baseAttributes =
-      parsedAttributes && typeof parsedAttributes === 'object' && !Array.isArray(parsedAttributes)
-        ? (parsedAttributes as Record<string, unknown>)
-        : existing.productAttributes && typeof existing.productAttributes === 'object' && !Array.isArray(existing.productAttributes)
-          ? ({ ...(existing.productAttributes as Record<string, unknown>) })
-          : {};
-    baseAttributes.cloudinaryMedia = buildCloudinaryMediaMetadata(
-      resolvedImages,
-      resolvedImageOriginalUrls,
-      resolvedImageThumbnailUrls,
-      videoUrl,
-      videoOriginalUrl,
+    const resolvedImageThumbnails = toUrlArray(data.imageThumbnails, existing.imageThumbnails ?? []).slice(
+      0,
+      resolvedImages.length,
     );
 
     const riskAssessment = await getListingRiskAssessmentForCandidate(
@@ -360,6 +343,9 @@ export async function PATCH(
         images: resolvedImages,
         mainImage,
         videoUrl,
+        originalImages: resolvedOriginalImages,
+        enhancedImages: resolvedEnhancedImages,
+        imageThumbnails: resolvedImageThumbnails,
         ...(data.inventory && { inventory: Number(data.inventory) }),
         ...(data.pickupAvailable !== undefined && { pickupAvailable: data.pickupAvailable === 'true' }),
         ...(data.pickupCity !== undefined && { pickupCity: data.pickupCity || null }),
@@ -374,7 +360,7 @@ export async function PATCH(
         // Category system fields
         categoryId: data.categoryId || null,
         subcategoryId: data.subcategoryId || null,
-        productAttributes: baseAttributes as Prisma.InputJsonValue,
+        productAttributes: parseJsonOrNull(data.productAttributes),
         status: 'PENDING',
       },
     });
