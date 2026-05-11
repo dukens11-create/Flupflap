@@ -43,6 +43,11 @@ export default async function SellerEditPage({
 
   const priceDollars = (product.priceCents / 100).toFixed(2);
   const shippingDollars = (product.shippingCents / 100).toFixed(2);
+  const defaultImages = product.images?.length
+    ? product.images
+    : product.imageUrl
+      ? [product.imageUrl]
+      : [];
 
   return (
     <main className="max-w-xl mx-auto">
@@ -116,20 +121,11 @@ export default async function SellerEditPage({
             </select>
           </div>
         </div>
-        {(() => {
-          const defaultImages = product.images?.length
-            ? product.images
-            : product.imageUrl
-              ? [product.imageUrl]
-              : [];
-          return (
-            <MediaUpload
-              defaultImages={defaultImages}
-              defaultVideoUrl={product.videoUrl ?? ''}
-              required
-            />
-          );
-        })()}
+        <MediaUpload
+          defaultImages={defaultImages}
+          defaultVideoUrl={product.videoUrl ?? ''}
+          required
+        />
         <div>
           <label className="label">Inventory (qty)</label>
           <input

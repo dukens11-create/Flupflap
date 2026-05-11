@@ -94,6 +94,7 @@ export default function ProductGallery({ images, title, videoUrl }: ProductGalle
             src={videoUrl}
             controls
             playsInline
+            preload="metadata"
             className="w-full rounded-xl border border-slate-200 max-h-80 object-cover"
           />
         </div>

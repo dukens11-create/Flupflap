@@ -206,14 +206,15 @@ export async function PATCH(
     const body: unknown = await req.json();
     const data = updateSchema.parse(body);
 
-    // Resolve images for PATCH (JSON body)
-    const imagesInput: string[] | null = Array.isArray(data.images)
-      ? data.images
-      : data.images
-        ? [data.images as string]
-        : data.imageUrl
-          ? [data.imageUrl]
-          : null;
+    // Resolve images for PATCH (JSON body): prefer explicit images list, then legacy imageUrl
+    let imagesInput: string[] | null = null;
+    if (Array.isArray(data.images) && data.images.length > 0) {
+      imagesInput = data.images;
+    } else if (typeof data.images === 'string' && data.images) {
+      imagesInput = [data.images];
+    } else if (data.imageUrl) {
+      imagesInput = [data.imageUrl];
+    }
     const resolvedImages = resolveImages(imagesInput, existing);
     const mainImage = resolvedImages[0] ?? existing.imageUrl;
     const videoUrl = resolveVideoUrl(data.videoUrl, existing);

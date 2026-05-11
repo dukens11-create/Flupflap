@@ -223,6 +223,7 @@ export default function MediaUpload({ defaultImages = [], defaultVideoUrl = '', 
             <video
               src={videoUrl}
               controls
+              preload="metadata"
               className="rounded-lg border border-slate-200 max-h-48 w-full object-cover"
             />
             <button
