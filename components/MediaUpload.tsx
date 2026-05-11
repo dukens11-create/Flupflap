@@ -39,6 +39,7 @@ type VideoUploadItem = {
   uploadedUrl: string;
   fileName: string;
   fileSize: number | null;
+  previewKind: 'object-url' | 'remote-url';
   status: UploadStatus;
   error?: string;
 };
@@ -152,6 +153,7 @@ export default function MediaUpload({
           uploadedUrl: defaultVideoUrl,
           fileName: getFileNameFromUrl(defaultVideoUrl),
           fileSize: null,
+          previewKind: 'remote-url',
           status: 'uploaded' as const,
         }
       : null
@@ -245,7 +247,7 @@ export default function MediaUpload({
                 : image
             )
           );
-          setUploadError(msg);
+          setUploadError((current) => current || msg);
         });
     });
   }
@@ -277,6 +279,7 @@ export default function MediaUpload({
       uploadedUrl: '',
       fileName: file.name,
       fileSize: file.size,
+      previewKind: 'object-url',
       status: 'uploading',
     };
 
@@ -297,7 +300,7 @@ export default function MediaUpload({
           ? { ...current, status: 'error', error: msg }
           : current
       );
-      setUploadError(msg);
+      setUploadError((current) => current || msg);
     }
   }
 
@@ -343,8 +346,8 @@ export default function MediaUpload({
     required,
     images.length,
     imageUploadCount,
-    Boolean(videoUploading),
-    Boolean(hasMediaErrors),
+    videoUploading,
+    hasMediaErrors,
     firstItemError || ''
   );
   const mediaReady =
@@ -355,6 +358,7 @@ export default function MediaUpload({
     (!video || !!video.uploadedUrl) &&
     (!required || images.length > 0);
   const mainImage = uploadedImageUrls[0] ?? '';
+  const safeUploadedVideoUrl = video ? getSafePreviewUrl(video.uploadedUrl) : '';
 
   useEffect(() => {
     onStateChange?.({
@@ -499,7 +503,7 @@ export default function MediaUpload({
           type="text"
           value={mediaReady ? 'ready' : ''}
           readOnly
-          required={required || imageUploadCount > 0 || videoUploading || hasMediaErrors}
+          required={!mediaReady}
           tabIndex={-1}
           aria-hidden="true"
           style={{ position: 'absolute', width: 0, height: 0, overflow: 'hidden', opacity: 0 }}
@@ -518,12 +522,30 @@ export default function MediaUpload({
 
         {video ? (
           <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <video
-              src={getSafePreviewUrl(video.previewUrl)}
-              controls
-              preload="metadata"
-              className="rounded-lg border border-slate-200 max-h-48 w-full object-cover"
-            />
+            {video.previewKind === 'object-url' ? (
+              <video
+                src={video.previewUrl}
+                controls
+                preload="metadata"
+                className="rounded-lg border border-slate-200 max-h-48 w-full object-cover"
+              />
+            ) : (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                Current uploaded video is attached.
+                {safeUploadedVideoUrl && (
+                  <div className="mt-3">
+                    <a
+                      href={safeUploadedVideoUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-2 rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700"
+                    >
+                      Open current video
+                    </a>
+                  </div>
+                )}
+              </div>
+            )}
             <div className="space-y-1">
               <p className="truncate text-sm font-medium text-slate-900">{video.fileName}</p>
               <p className="text-xs text-slate-500">{formatFileSize(video.fileSize)}</p>
