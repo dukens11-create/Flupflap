@@ -1,3 +1,5 @@
+import { PERFUME_SIZE_OPTIONS } from '@/lib/category-attribute-schema';
+
 type FieldDef = {
   name: string;
   label: string;
@@ -47,7 +49,7 @@ const CLOTHING_FIELDS: FieldDef[] = [
 ];
 const PERFUME_FIELDS: FieldDef[] = [
   { name: 'brand', label: 'Brand', type: 'text' },
-  { name: 'size_ml', label: 'Size (ml)', type: 'select', options: ['30ml', '50ml', '75ml', '100ml', '150ml', '200ml'] },
+  { name: 'size_ml', label: 'Size (ml)', type: 'select', options: [...PERFUME_SIZE_OPTIONS] },
   { name: 'fragrance_type', label: 'Fragrance Type', type: 'select', options: ['Floral', 'Woody', 'Fresh', 'Oriental', 'Citrus', 'Gourmand'] },
   { name: 'gender', label: 'Gender', type: 'select', options: ['Men', 'Women', 'Unisex'] },
 ];

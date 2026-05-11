@@ -1,14 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-
-const MAX_IMAGES = 6;
-const ACCEPTED_IMAGE_TYPES = 'image/jpeg,image/png,image/webp,image/gif';
-const ACCEPTED_VIDEO_TYPES = 'video/mp4,video/quicktime,video/webm';
-const ACCEPTED_IMAGE_TYPES_LIST = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-const ACCEPTED_VIDEO_TYPES_LIST = ['video/mp4', 'video/quicktime', 'video/webm'];
-const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MB
-const MAX_VIDEO_BYTES = 200 * 1024 * 1024; // 200 MB
+import {
+  MAX_PRODUCT_IMAGES,
+  MAX_PRODUCT_IMAGE_BYTES,
+  MAX_PRODUCT_VIDEO_BYTES,
+  PRODUCT_IMAGE_TYPES,
+  PRODUCT_VIDEO_TYPES,
+} from '@/lib/product-media';
 
 interface MediaUploadProps {
   /** Existing image URLs for edit forms. */
@@ -190,43 +189,112 @@ export default function MediaUpload({
     element.load();
   }, [video]);
 
+  function isValidUploadConfig(value: unknown): value is {
+    apiKey: string;
+    folder: string;
+    signature: string;
+    timestamp: number;
+    uploadUrl: string;
+  } {
+    if (!value || typeof value !== 'object') return false;
+    const candidate = value as Record<string, unknown>;
+    return (
+      typeof candidate.apiKey === 'string' &&
+      candidate.apiKey.length > 0 &&
+      typeof candidate.folder === 'string' &&
+      candidate.folder.length > 0 &&
+      typeof candidate.signature === 'string' &&
+      candidate.signature.length > 0 &&
+      typeof candidate.timestamp === 'number' &&
+      typeof candidate.uploadUrl === 'string' &&
+      candidate.uploadUrl.length > 0
+    );
+  }
+
+  function getCloudinaryErrorMessage(response: unknown) {
+    if (!response || typeof response !== 'object' || !('error' in response)) {
+      return undefined;
+    }
+    const error = (response as { error?: unknown }).error;
+    if (!error || typeof error !== 'object' || !('message' in error)) {
+      return undefined;
+    }
+    return typeof (error as { message?: unknown }).message === 'string'
+      ? (error as { message: string }).message
+      : undefined;
+  }
+
+  async function getUploadConfig(file: File) {
+    const res = await fetch('/api/upload/product-media', {
+      method: 'POST',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contentType: file.type, fileSize: file.size }),
+    });
+    const json = await res.json();
+    if (!res.ok || !json?.success) {
+      throw new Error(json?.message ?? 'Upload failed.');
+    }
+    if (!isValidUploadConfig(json)) {
+      throw new Error('Upload configuration is invalid. Please try again.');
+    }
+    return json;
+  }
+
   async function uploadFile(file: File): Promise<string> {
+    const uploadConfig = await getUploadConfig(file);
     const fd = new FormData();
     fd.append('file', file);
-    const res = await fetch('/api/upload', { method: 'POST', body: fd });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.error ?? 'Upload failed.');
-    return json.url as string;
+    fd.append('api_key', uploadConfig.apiKey);
+    fd.append('folder', uploadConfig.folder);
+    fd.append('signature', uploadConfig.signature);
+    fd.append('timestamp', String(uploadConfig.timestamp));
+
+    return new Promise<string>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', uploadConfig.uploadUrl);
+      xhr.responseType = 'json';
+      xhr.onerror = () =>
+        reject(new Error('Upload failed. Please check your connection and try again.'));
+      xhr.onload = () => {
+        const response = xhr.response;
+        if (xhr.status >= 200 && xhr.status < 300 && response?.secure_url) {
+          resolve(response.secure_url as string);
+          return;
+        }
+        reject(new Error(getCloudinaryErrorMessage(response) ?? 'Upload failed.'));
+      };
+      xhr.send(fd);
+    });
   }
 
   async function handleImageFilesChange(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
     if (!files.length) return;
 
-    const invalidTypeFile = files.find(file => !ACCEPTED_IMAGE_TYPES_LIST.includes(file.type));
+    const invalidTypeFile = files.find(file => !PRODUCT_IMAGE_TYPES.includes(file.type as (typeof PRODUCT_IMAGE_TYPES)[number]));
     if (invalidTypeFile) {
       setUploadError('Unsupported image format. Please upload JPEG, PNG, WebP, or GIF.');
       if (imageInputRef.current) imageInputRef.current.value = '';
       return;
     }
 
-    const tooLargeImage = files.find(file => file.size > MAX_IMAGE_BYTES);
+    const tooLargeImage = files.find(file => file.size > MAX_PRODUCT_IMAGE_BYTES);
     if (tooLargeImage) {
       setUploadError('One or more images are too large. Maximum size is 10 MB each.');
       if (imageInputRef.current) imageInputRef.current.value = '';
       return;
     }
 
-    const remaining = MAX_IMAGES - images.length;
+    const remaining = MAX_PRODUCT_IMAGES - images.length;
     if (remaining <= 0) {
-      setUploadError(`Maximum ${MAX_IMAGES} images allowed.`);
+      setUploadError(`Maximum ${MAX_PRODUCT_IMAGES} images allowed.`);
       if (imageInputRef.current) imageInputRef.current.value = '';
       return;
     }
 
     const toUpload = files.slice(0, remaining);
     if (files.length > remaining) {
-      setUploadError(`Only ${remaining} more image(s) can be added (max ${MAX_IMAGES}). Extra files ignored.`);
+      setUploadError(`Only ${remaining} more image(s) can be added (max ${MAX_PRODUCT_IMAGES}). Extra files ignored.`);
     } else {
       setUploadError('');
     }
@@ -277,12 +345,12 @@ export default function MediaUpload({
   async function handleVideoFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!ACCEPTED_VIDEO_TYPES_LIST.includes(file.type)) {
+    if (!PRODUCT_VIDEO_TYPES.includes(file.type as (typeof PRODUCT_VIDEO_TYPES)[number])) {
       setUploadError('Unsupported video format. Please upload MP4, MOV, or WebM.');
       if (videoInputRef.current) videoInputRef.current.value = '';
       return;
     }
-    if (file.size > MAX_VIDEO_BYTES) {
+    if (file.size > MAX_PRODUCT_VIDEO_BYTES) {
       setUploadError('Video is too large. Maximum size is 200 MB.');
       if (videoInputRef.current) videoInputRef.current.value = '';
       return;
@@ -423,7 +491,7 @@ export default function MediaUpload({
           <label className="label">
             Product Images <span className="text-slate-400 font-normal">(1–6, first = thumbnail)</span>
           </label>
-          <p className="text-sm text-slate-500">{images.length}/{MAX_IMAGES} images</p>
+          <p className="text-sm text-slate-500">{images.length}/{MAX_PRODUCT_IMAGES} images</p>
         </div>
 
         {images.length > 0 && (
@@ -502,14 +570,14 @@ export default function MediaUpload({
           </div>
         )}
 
-        {images.length < MAX_IMAGES && (
+        {images.length < MAX_PRODUCT_IMAGES && (
           <div>
             <label className="inline-flex items-center gap-2 cursor-pointer btn-outline text-sm">
               {images.length === 0 ? 'Choose images' : 'Add more images'}
               <input
                 ref={imageInputRef}
                 type="file"
-                accept={ACCEPTED_IMAGE_TYPES}
+                accept={PRODUCT_IMAGE_TYPES.join(",")}
                 multiple
                 onChange={handleImageFilesChange}
                 className="hidden"
@@ -603,7 +671,7 @@ export default function MediaUpload({
                 <input
                   ref={videoInputRef}
                   type="file"
-                  accept={ACCEPTED_VIDEO_TYPES}
+                  accept={PRODUCT_VIDEO_TYPES.join(",")}
                   onChange={handleVideoFileChange}
                   className="hidden"
                 />
@@ -624,7 +692,7 @@ export default function MediaUpload({
               <input
                 ref={videoInputRef}
                 type="file"
-                accept={ACCEPTED_VIDEO_TYPES}
+                accept={PRODUCT_VIDEO_TYPES.join(",")}
                 onChange={handleVideoFileChange}
                 className="hidden"
               />
