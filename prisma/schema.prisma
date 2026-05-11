@@ -158,6 +158,10 @@ model User {
   freePromotionExpiresAt        DateTime?
   // Profile picture
   image                         String?
+  // Seller public shop profile (never exposes legal name to buyers)
+  shopName                      String?
+  shopLogoUrl                   String?
+  shopDescription               String?
 }
 
 model SellerOtp {

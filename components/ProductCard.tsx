@@ -77,7 +77,7 @@ export default function ProductCard({ p: product }:{p:any}){
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-sm text-slate-700">
               <Store size={14} className="text-slate-400" />
-              <span className="truncate font-semibold">{product.seller?.name ?? t('product.sellerFallback')}</span>
+              <span className="truncate font-semibold">{product.seller?.shopName?.trim() || t('product.sellerFallback')}</span>
             </div>
             <div className="flex items-center gap-2">
               <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold ${sellerVerified ? 'bg-emerald-100 text-emerald-700' : phoneVerified ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>
