@@ -11,6 +11,7 @@ const schema = z.object({
   resourceType: z.enum(['image', 'video']),
   version: z.number().int().positive().optional(),
 });
+const DEFAULT_THUMBNAIL_BASE_PUBLIC_ID = 'image';
 
 function isTrustedCloudinaryUrl(url: string) {
   try {
@@ -114,7 +115,7 @@ export async function POST(req: Request) {
       ],
     });
 
-    const thumbPublicId = `${publicId.split('/').pop() ?? 'image'}-thumb`;
+    const thumbPublicId = `${publicId.split('/').pop() ?? DEFAULT_THUMBNAIL_BASE_PUBLIC_ID}-thumb`;
     const thumbnail = await cloudinary.uploader.upload(originalUrl, {
       resource_type: 'image',
       folder: getCloudinaryThumbnailsFolder(),

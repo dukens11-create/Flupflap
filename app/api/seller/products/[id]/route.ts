@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { Prisma } from '@prisma/client';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { cents } from '@/lib/money';
@@ -245,7 +246,7 @@ export async function POST(
         // Category system fields
         categoryId: data.categoryId || null,
         subcategoryId: data.subcategoryId || null,
-        productAttributes: baseAttributes as any,
+        productAttributes: baseAttributes as Prisma.InputJsonValue,
         // Reset to PENDING on edit so admin can re-review
         status: 'PENDING',
       },
@@ -373,7 +374,7 @@ export async function PATCH(
         // Category system fields
         categoryId: data.categoryId || null,
         subcategoryId: data.subcategoryId || null,
-        productAttributes: baseAttributes as any,
+        productAttributes: baseAttributes as Prisma.InputJsonValue,
         status: 'PENDING',
       },
     });

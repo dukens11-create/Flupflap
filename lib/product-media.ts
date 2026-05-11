@@ -39,8 +39,8 @@ export function getCloudinaryThumbnailsFolder() {
   return process.env.CLOUDINARY_THUMBNAILS_FOLDER?.trim() || DEFAULT_THUMBNAILS_FOLDER;
 }
 
-export function getProductMediaFolderByKind(mediaKind: 'image' | 'video') {
-  return mediaKind === 'video' ? getCloudinaryVideosFolder() : getCloudinaryProductsFolder();
+export function getProductMediaFolderByKind(resourceType: 'image' | 'video') {
+  return resourceType === 'video' ? getCloudinaryVideosFolder() : getCloudinaryProductsFolder();
 }
 
 export function getProductMediaFolder(contentType?: string) {
