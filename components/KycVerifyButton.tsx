@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-export default function KycVerifyButton() {
+export default function KycVerifyButton({ isRejected = false }: { isRejected?: boolean }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,7 +39,7 @@ export default function KycVerifyButton() {
         </p>
       ) : (
         <button className="btn-primary" onClick={handleVerify} disabled={loading}>
-          Verify Identity
+          {isRejected ? 'Re-submit Verification' : 'Verify Identity'}
         </button>
       )}
       {error && (
