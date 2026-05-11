@@ -111,7 +111,7 @@ function toUrlArray(
   return fallback;
 }
 
-function getFirstSubmittedValue(...values: Array<string | undefined>) {
+function getFirstNonEmptyString(...values: Array<string | undefined>) {
   return values.find((value) => typeof value === 'string' && value.trim().length > 0);
 }
 
@@ -134,18 +134,17 @@ function redirectToEditForm(req: Request, id: string, message: string) {
 }
 
 function resolveSubmittedPackageDetails(data: ProductUpdateInput) {
-  const weightValue = getFirstSubmittedValue(data.weight, data.packageWeight, data.weightOz);
-  const hasLegacyWeightInput = !getFirstSubmittedValue(data.weight, data.packageWeight) && !!data.weightOz?.trim();
+  const weightValue = getFirstNonEmptyString(data.weight, data.packageWeight, data.weightOz);
+  const hasLegacyWeightInput = !getFirstNonEmptyString(data.weight, data.packageWeight) && !!data.weightOz?.trim();
   const weightUnit = hasLegacyWeightInput
     ? 'oz'
-    : normalizeWeightUnit(getFirstSubmittedValue(data.weightUnit, data.packageWeightUnit));
-  const distanceUnit = data.packageDimensionUnit?.trim().toLowerCase();
+    : normalizeWeightUnit(getFirstNonEmptyString(data.weightUnit, data.packageWeightUnit));
   const weight = parsePositiveNumber(weightValue);
-  const lengthIn = parsePositiveNumber(getFirstSubmittedValue(data.length, data.packageLength, data.lengthIn));
-  const widthIn = parsePositiveNumber(getFirstSubmittedValue(data.width, data.packageWidth, data.widthIn));
-  const heightIn = parsePositiveNumber(getFirstSubmittedValue(data.height, data.packageHeight, data.heightIn));
+  const lengthIn = parsePositiveNumber(getFirstNonEmptyString(data.length, data.packageLength, data.lengthIn));
+  const widthIn = parsePositiveNumber(getFirstNonEmptyString(data.width, data.packageWidth, data.widthIn));
+  const heightIn = parsePositiveNumber(getFirstNonEmptyString(data.height, data.packageHeight, data.heightIn));
 
-  if ((distanceUnit && distanceUnit !== 'in') || !weight || !lengthIn || !widthIn || !heightIn) {
+  if (!weight || !lengthIn || !widthIn || !heightIn) {
     return null;
   }
 
@@ -214,17 +213,18 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
+  let id = '';
   let sellerId: string | undefined;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user || session.user.role !== 'SELLER') {
-      return redirectToEditForm(req, id, 'Please sign in as the listing owner and try again.');
+      return NextResponse.redirect(new URL('/login', req.url), 303);
     }
     sellerId = session.user.id;
     if (!sellerId) {
-      return redirectToEditForm(req, id, 'Please sign in as the listing owner and try again.');
+      return NextResponse.redirect(new URL('/login', req.url), 303);
     }
+    ({ id } = await params);
 
     // Block restricted sellers from editing or deleting listings
     const dbUser = await prisma.user.findUnique({ where: { id: sellerId } });
