@@ -131,5 +131,9 @@ export function formatPackageDisplay(
   packageDetails: NonNullable<ReturnType<typeof getEffectivePackageDetails>>,
   includeFallbackNotice = false,
 ) {
-  return `Package: ${formatPackageNumber(packageDetails.weight)} ${packageDetails.weightUnit} · ${formatPackageNumber(packageDetails.lengthIn)} × ${formatPackageNumber(packageDetails.widthIn)} × ${formatPackageNumber(packageDetails.heightIn)} in${includeFallbackNotice ? ' · fallback defaults shown until you save real package details' : ''}`;
+  const dimensions = `${formatPackageNumber(packageDetails.lengthIn)} × ${formatPackageNumber(packageDetails.widthIn)} × ${formatPackageNumber(packageDetails.heightIn)} in`;
+  const fallbackNotice = includeFallbackNotice
+    ? ' · fallback defaults shown until you save real package details'
+    : '';
+  return `Package: ${formatPackageNumber(packageDetails.weight)} ${packageDetails.weightUnit} · ${dimensions}${fallbackNotice}`;
 }
