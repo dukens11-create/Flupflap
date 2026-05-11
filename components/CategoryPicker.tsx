@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -20,6 +20,12 @@ export interface CategoryNode {
   sortOrder: number;
   attributeSchema: FieldDef[] | null;
   children: CategoryNode[];
+}
+
+interface PickerOption {
+  id: string;
+  name: string;
+  icon?: string | null;
 }
 
 interface Props {
@@ -84,11 +90,28 @@ function resolveLeafName(
 export default function CategoryPicker({ defaultCategoryId, defaultSubcategoryId, defaultAttributes }: Props) {
   const [categories, setCategories] = useState<CategoryNode[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [reloadToken, setReloadToken] = useState(0);
 
   const [mainId, setMainId] = useState<string | null>(defaultCategoryId ?? null);
   const [subId, setSubId] = useState<string | null>(defaultSubcategoryId ?? null);
   const [childId, setChildId] = useState<string | null>(null);
   const [attrs, setAttrs] = useState<Record<string, string>>(defaultAttributes ?? {});
+  const [activePicker, setActivePicker] = useState<'main' | 'sub' | 'child' | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [categoryError, setCategoryError] = useState('');
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const triggerRefs = useRef<{
+    main: HTMLButtonElement | null;
+    sub: HTMLButtonElement | null;
+    child: HTMLButtonElement | null;
+  }>({
+    main: null,
+    sub: null,
+    child: null,
+  });
+  const lastTriggerRef = useRef<'main' | 'sub' | 'child' | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   // Reset attribute state when defaultAttributes prop changes (e.g. editing different products)
   useEffect(() => {
@@ -96,17 +119,27 @@ export default function CategoryPicker({ defaultCategoryId, defaultSubcategoryId
   }, [defaultAttributes]);
 
   useEffect(() => {
-    fetch('/api/categories')
-      .then(r => r.json())
-      .then((data: CategoryNode[]) => {
-        setCategories(data);
-        setLoading(false);
+    let mounted = true;
+
+    async function loadCategories() {
+      setLoading(true);
+      setLoadError(false);
+
+      try {
+        const response = await fetch('/api/categories');
+        if (!response.ok) throw new Error('Failed to load categories');
+
+        const data = (await response.json()) as CategoryNode[];
+        if (!mounted) return;
+
+        const nextCategories = Array.isArray(data) ? data : [];
+        setCategories(nextCategories);
 
         // If defaultSubcategoryId is set, figure out its parent main category if not provided
         if (defaultSubcategoryId && !defaultCategoryId) {
-          const node = findNodeById(data, defaultSubcategoryId);
+          const node = findNodeById(nextCategories, defaultSubcategoryId);
           if (node?.parentId) {
-            const parent = findNodeById(data, node.parentId);
+            const parent = findNodeById(nextCategories, node.parentId);
             if (parent?.level === 0) setMainId(parent.id);
             else if (parent?.parentId) {
               setSubId(parent.id);
@@ -115,9 +148,21 @@ export default function CategoryPicker({ defaultCategoryId, defaultSubcategoryId
             }
           }
         }
-      })
-      .catch(() => setLoading(false));
-  }, [defaultCategoryId, defaultSubcategoryId]);
+      } catch {
+        if (!mounted) return;
+        setLoadError(true);
+        setCategories([]);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+
+    loadCategories();
+
+    return () => {
+      mounted = false;
+    };
+  }, [defaultCategoryId, defaultSubcategoryId, reloadToken]);
 
   const mainNode = mainId ? findNodeById(categories, mainId) : null;
   const subNode = subId ? findNodeById(categories, subId) : null;
@@ -126,6 +171,18 @@ export default function CategoryPicker({ defaultCategoryId, defaultSubcategoryId
   const subcategories = mainNode?.children ?? [];
   // Children of sub = child categories
   const childCategories = subNode?.children ?? [];
+  const mainOptions = useMemo<PickerOption[]>(
+    () => categories.map(c => ({ id: c.id, name: c.name, icon: c.icon })),
+    [categories],
+  );
+  const subOptions = useMemo<PickerOption[]>(
+    () => subcategories.map(c => ({ id: c.id, name: c.name, icon: null })),
+    [subcategories],
+  );
+  const childOptions = useMemo<PickerOption[]>(
+    () => childCategories.map(c => ({ id: c.id, name: c.name, icon: null })),
+    [childCategories],
+  );
 
   const schema = resolveSchema(categories, mainId, subId, childId);
   const leafName = resolveLeafName(categories, mainId, subId, childId);
@@ -153,11 +210,84 @@ export default function CategoryPicker({ defaultCategoryId, defaultSubcategoryId
   // Hidden field values for form submission
   const effectiveSubId = childId ?? subId;
 
+  useEffect(() => {
+    if (!activePicker) return;
+
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousBodyTouchAction = document.body.style.touchAction;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+
+    document.body.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
+    document.documentElement.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.body.style.touchAction = previousBodyTouchAction;
+      document.documentElement.style.overflow = previousHtmlOverflow;
+    };
+  }, [activePicker]);
+
+  useEffect(() => {
+    if (!activePicker) {
+      setSearchQuery('');
+    }
+  }, [activePicker]);
+
+  useEffect(() => {
+    if (!activePicker && lastTriggerRef.current) {
+      const key = lastTriggerRef.current;
+      triggerRefs.current[key]?.focus();
+      lastTriggerRef.current = null;
+    }
+  }, [activePicker]);
+
+  useEffect(() => {
+    if (!activePicker) return;
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        setActivePicker(null);
+      }
+    }
+
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [activePicker]);
+
+  useEffect(() => {
+    if (!activePicker) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      searchInputRef.current?.focus();
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [activePicker]);
+
+  useEffect(() => {
+    const form = wrapperRef.current?.closest('form');
+    if (!form) return;
+
+    function handleSubmit(event: Event) {
+      if (!mainId) {
+        event.preventDefault();
+        setCategoryError('Please select a category.');
+      }
+    }
+
+    form.addEventListener('submit', handleSubmit);
+    return () => form.removeEventListener('submit', handleSubmit);
+  }, [mainId]);
+
   function handleMainChange(id: string) {
     setMainId(id || null);
     setSubId(null);
     setChildId(null);
     setAttrs({});
+    setCategoryError('');
   }
 
   function handleSubChange(id: string) {
@@ -175,17 +305,129 @@ export default function CategoryPicker({ defaultCategoryId, defaultSubcategoryId
     setAttrs(prev => ({ ...prev, [name]: value }));
   }
 
-  if (loading) {
+  function getPickerConfig() {
+    if (activePicker === 'main') {
+      return {
+        label: 'Category',
+        placeholder: 'Search categories...',
+        emptyLabel: 'No categories found.',
+        options: mainOptions,
+        selectedId: mainId,
+        onSelect: (id: string) => handleMainChange(id),
+      };
+    }
+    if (activePicker === 'sub') {
+      return {
+        label: 'Subcategory',
+        placeholder: 'Search subcategories...',
+        emptyLabel: 'No subcategories found.',
+        options: subOptions,
+        selectedId: subId,
+        onSelect: (id: string) => handleSubChange(id),
+      };
+    }
+    if (activePicker === 'child') {
+      return {
+        label: 'Refine category',
+        placeholder: 'Search categories...',
+        emptyLabel: 'No matching categories found.',
+        options: childOptions,
+        selectedId: childId,
+        onSelect: (id: string) => handleChildChange(id),
+      };
+    }
+    return null;
+  }
+
+  function findOptionName(options: PickerOption[], id: string | null): string {
+    if (!id) return '';
+    return options.find(option => option.id === id)?.name ?? '';
+  }
+
+  function renderPickerTrigger(params: {
+    pickerKey: 'main' | 'sub' | 'child';
+    label: string;
+    required?: boolean;
+    placeholder: string;
+    disabled?: boolean;
+    selectedName: string;
+    onOpen: () => void;
+    invalid?: boolean;
+    errorText?: string;
+  }) {
+    const {
+      pickerKey,
+      label,
+      required,
+      placeholder,
+      disabled,
+      selectedName,
+      onOpen,
+      invalid,
+      errorText,
+    } = params;
+
     return (
-      <div className="space-y-3">
-        <div className="label">Category</div>
-        <div className="input flex items-center text-slate-400 text-sm">Loading categories…</div>
+      <div>
+        <label className="label">
+          {label} {required && <span className="text-red-500">*</span>}
+        </label>
+        <button
+          type="button"
+          ref={el => {
+            triggerRefs.current[pickerKey] = el;
+          }}
+          className={`input flex items-center justify-between text-left ${disabled ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : ''} ${invalid ? 'border-red-500 ring-1 ring-red-100' : ''}`}
+          onClick={onOpen}
+          disabled={disabled}
+          aria-haspopup="dialog"
+          aria-invalid={invalid}
+        >
+          <span className={selectedName ? 'text-slate-900' : 'text-slate-400'}>
+            {selectedName || placeholder}
+          </span>
+          <span className="text-slate-500">▾</span>
+        </button>
+        {errorText ? <p className="mt-1 text-xs text-red-600">{errorText}</p> : null}
       </div>
     );
   }
 
+  if (loading) {
+    return (
+      <div className="space-y-3">
+        <div className="label">Category</div>
+        <div className="input flex items-center text-slate-400 text-sm">Loading categories...</div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="space-y-3">
+        <div className="label">Category</div>
+        <div className="input flex items-center text-red-600 text-sm">
+          Unable to load categories. Please try again.
+        </div>
+        <button
+          type="button"
+          className="btn-outline"
+          onClick={() => setReloadToken(prev => prev + 1)}
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
+
+  const pickerConfig = getPickerConfig();
+  const filteredOptions =
+    pickerConfig?.options.filter(option =>
+      option.name.toLowerCase().includes(searchQuery.trim().toLowerCase()),
+    ) ?? [];
+
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" ref={wrapperRef}>
       {/* Hidden form fields */}
       <input type="hidden" name="categoryId" value={mainId ?? ''} />
       <input type="hidden" name="subcategoryId" value={effectiveSubId ?? ''} />
@@ -193,54 +435,110 @@ export default function CategoryPicker({ defaultCategoryId, defaultSubcategoryId
       <input type="hidden" name="productAttributes" value={JSON.stringify(attrs)} />
 
       {/* Main category */}
-      <div>
-        <label className="label">Category <span className="text-red-500">*</span></label>
-        <select
-          className="input"
-          value={mainId ?? ''}
-          onChange={e => handleMainChange(e.target.value)}
-          required
-        >
-          <option value="">Select a category…</option>
-          {categories.map(c => (
-            <option key={c.id} value={c.id}>
-              {c.icon ? `${c.icon} ` : ''}{c.name}
-            </option>
-          ))}
-        </select>
-      </div>
+      {renderPickerTrigger({
+        pickerKey: 'main',
+        label: 'Category',
+        required: true,
+        placeholder: 'Select a category...',
+        selectedName: findOptionName(mainOptions, mainId),
+        onOpen: () => {
+          lastTriggerRef.current = 'main';
+          setActivePicker('main');
+        },
+        invalid: !!categoryError,
+        errorText: categoryError,
+      })}
 
       {/* Subcategory (level 1) */}
       {subcategories.length > 0 && (
-        <div>
-          <label className="label">Subcategory</label>
-          <select
-            className="input"
-            value={subId ?? ''}
-            onChange={e => handleSubChange(e.target.value)}
-          >
-            <option value="">Select a subcategory…</option>
-            {subcategories.map(c => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-        </div>
+        renderPickerTrigger({
+          pickerKey: 'sub',
+          label: 'Subcategory',
+          placeholder: 'Select a subcategory...',
+          selectedName: findOptionName(subOptions, subId),
+          onOpen: () => {
+            lastTriggerRef.current = 'sub';
+            setActivePicker('sub');
+          },
+        })
       )}
 
       {/* Child category (level 2) */}
       {childCategories.length > 0 && (
-        <div>
-          <label className="label">Refine category</label>
-          <select
-            className="input"
-            value={childId ?? ''}
-            onChange={e => handleChildChange(e.target.value)}
+        renderPickerTrigger({
+          pickerKey: 'child',
+          label: 'Refine category',
+          placeholder: 'Select a category...',
+          selectedName: findOptionName(childOptions, childId),
+          onOpen: () => {
+            lastTriggerRef.current = 'child';
+            setActivePicker('child');
+          },
+        })
+      )}
+
+      {pickerConfig && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center sm:justify-center"
+          role="dialog"
+          aria-modal="true"
+          aria-label={pickerConfig.label}
+          onClick={() => setActivePicker(null)}
+        >
+          <div
+            className="absolute inset-0 bg-slate-900/45"
+            role="presentation"
+          />
+          <div
+            className="relative z-[60] w-full max-h-[82vh] rounded-t-2xl sm:rounded-2xl sm:max-w-xl bg-white border border-slate-200 shadow-xl overflow-hidden"
+            onClick={e => e.stopPropagation()}
           >
-            <option value="">Select…</option>
-            {childCategories.map(c => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
+            <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between gap-3">
+              <div className="font-semibold text-slate-900">{pickerConfig.label}</div>
+              <button
+                type="button"
+                className="text-slate-500 hover:text-slate-700 text-sm"
+                onClick={() => setActivePicker(null)}
+              >
+                Close
+              </button>
+            </div>
+            <div className="p-4">
+              <input
+                type="text"
+                ref={searchInputRef}
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder={pickerConfig.placeholder}
+                className="input"
+              />
+            </div>
+            <div className="max-h-[56vh] overflow-y-auto overscroll-contain">
+              {filteredOptions.length > 0 ? (
+                <ul className="divide-y divide-slate-100">
+                  {filteredOptions.map(option => {
+                    const isSelected = pickerConfig.selectedId === option.id;
+                    return (
+                      <li key={option.id}>
+                        <button
+                          type="button"
+                          className={`w-full px-4 py-3 text-left transition-colors ${isSelected ? 'bg-slate-50 text-slate-900 font-medium' : 'text-slate-700 hover:bg-slate-50'}`}
+                          onClick={() => {
+                            pickerConfig.onSelect(option.id);
+                            setActivePicker(null);
+                          }}
+                        >
+                          {option.icon ? `${option.icon} ` : ''}{option.name}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <div className="px-4 py-6 text-sm text-slate-500">{pickerConfig.emptyLabel}</div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
