@@ -5,8 +5,6 @@ import { prisma } from '@/lib/db';
 import { createShipmentRates } from '@/lib/shipping';
 import { getMissingPackageProductTitles } from '@/lib/product-package';
 
-const OUNCES_PER_POUND = 16;
-
 type BuyerAddress = {
   name?: string;
   street1: string;
@@ -203,7 +201,7 @@ export async function POST(req: Request) {
           },
           fromAddress,
           weightOz: totalWeightOz,
-          weightUnit: totalWeightOz >= OUNCES_PER_POUND ? 'lb' : 'oz',
+          weightUnit: 'oz',
           lengthIn: maxLength,
           widthIn: maxWidth,
           heightIn: maxHeight,

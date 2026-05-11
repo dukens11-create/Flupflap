@@ -41,9 +41,7 @@ export function formatPackageNumber(value: number): string {
     return String(value);
   }
   const formatted = value.toFixed(2);
-  return formatted.includes('.')
-    ? formatted.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '')
-    : formatted;
+  return formatted.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
 }
 
 export function hasStoredPackageDetails(product: PackageDetailsInput): boolean {
@@ -127,4 +125,11 @@ export function getEffectivePackageDetails(
     packageType: product.packageType?.trim() || null,
     shippingClass: getShippingClass(product.productAttributes),
   };
+}
+
+export function formatPackageDisplay(
+  packageDetails: NonNullable<ReturnType<typeof getEffectivePackageDetails>>,
+  includeFallbackNotice = false,
+) {
+  return `Package: ${formatPackageNumber(packageDetails.weight)} ${packageDetails.weightUnit} · ${formatPackageNumber(packageDetails.lengthIn)} × ${formatPackageNumber(packageDetails.widthIn)} × ${formatPackageNumber(packageDetails.heightIn)} in${includeFallbackNotice ? ' · fallback defaults shown until you save real package details' : ''}`;
 }

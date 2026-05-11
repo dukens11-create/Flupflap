@@ -62,6 +62,7 @@ export default function NewListingForm() {
     const packageLengthRaw = String(formData.get('length') ?? '').trim();
     const packageWidthRaw = String(formData.get('width') ?? '').trim();
     const packageHeightRaw = String(formData.get('height') ?? '').trim();
+    const packageInputs = [packageWeightRaw, packageLengthRaw, packageWidthRaw, packageHeightRaw];
     const images = formData.getAll('images').map(String).filter(Boolean);
     const fallbackImage = String(formData.get('imageUrl') ?? '').trim();
     const resolvedImages = images.length > 0 ? images : (fallbackImage ? [fallbackImage] : []);
@@ -80,9 +81,9 @@ export default function NewListingForm() {
       nextErrors.inventoryQty = 'Please enter an inventory quantity between 1 and 9999.';
     }
 
-    const packageValues = [packageWeightRaw, packageLengthRaw, packageWidthRaw, packageHeightRaw].map(Number);
+    const packageValues = packageInputs.map(Number);
     if (
-      [packageWeightRaw, packageLengthRaw, packageWidthRaw, packageHeightRaw].some((value) => !value)
+      packageInputs.some((value) => !value)
       || packageValues.some((value) => Number.isNaN(value) || value <= 0)
     ) {
       nextErrors.shippingPackage = 'Shipping package details are required.';
