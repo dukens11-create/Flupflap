@@ -455,6 +455,9 @@ export async function POST(req: Request) {
     } | null ?? null;
 
     const liveShippingCents = shippingRateInfo?.totalRateCents ?? 0;
+    const taxCents = typeof cs.total_details?.amount_tax === 'number'
+      ? cs.total_details.amount_tax
+      : 0;
 
     const subtotalCents = orderItems.reduce((sum, item) => sum + item.lineSubtotalCents, 0);
     // Use live shipping total if available, otherwise fall back to flat shipping on items
@@ -462,7 +465,7 @@ export async function POST(req: Request) {
       ? liveShippingCents
       : orderItems.reduce((sum, item) => sum + item.shippingCents * item.quantity, 0);
     const platformFeeCents = orderItems.reduce((sum, item) => sum + item.commissionFeeCents, 0);
-    const totalCents = subtotalCents + shippingTotalCents;
+    const totalCents = subtotalCents + shippingTotalCents + taxCents;
 
     const shipping = cs.shipping_details ?? {};
 
@@ -471,6 +474,7 @@ export async function POST(req: Request) {
 
     // Gather pickup location from first pickup product for order record
     const firstPickupProduct = products.find(p => pickupSet.has(p.id));
+    const firstSelectedShippingRate = shippingRateInfo?.shipmentGroups?.[0];
 
     const order = await prisma.order.create({
       data: {
@@ -478,6 +482,7 @@ export async function POST(req: Request) {
         totalCents,
         subtotalCents,
         shippingCents: shippingTotalCents,
+        taxCents,
         platformFeeCents,
         sellerPayoutCents: totalCents - platformFeeCents,
         status: 'PAID',
@@ -487,6 +492,8 @@ export async function POST(req: Request) {
         pickupCode: isPickupOrder ? generatePickupCode() : null,
         pickupCity: isPickupOrder ? (firstPickupProduct?.pickupCity ?? null) : null,
         pickupState: isPickupOrder ? (firstPickupProduct?.pickupState ?? null) : null,
+        selectedShipmentId: firstSelectedShippingRate?.shipmentId ?? null,
+        selectedRateId: firstSelectedShippingRate?.rateId ?? null,
         shippingName: shipping?.name ?? liveAddress?.name ?? null,
         shippingLine1: shipping?.address?.line1 ?? liveAddress?.street1 ?? null,
         shippingLine2: shipping?.address?.line2 ?? liveAddress?.street2 ?? null,

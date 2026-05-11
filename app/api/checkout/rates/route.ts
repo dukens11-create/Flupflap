@@ -173,6 +173,9 @@ export async function POST(req: Request) {
           widthIn: maxWidth,
           heightIn: maxHeight,
         });
+        if (!result.rates.length) {
+          throw new Error('No supported shipping rates returned.');
+        }
 
         groups.push({
           sellerId,

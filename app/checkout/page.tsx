@@ -42,6 +42,7 @@ type SelectedRate = {
   rateCents: number;
   carrier: string;
   service: string;
+  deliveryDays: number | null;
 };
 
 function dollars(cents: number) {
@@ -120,6 +121,10 @@ export default function CheckoutPage() {
     () => items.filter(i => !isPickup(i.id)),
     [items, isPickup],
   );
+  const calculatedShippingItems = useMemo(
+    () => nonPickupItems.filter(i => isCalculatedShipping(i)),
+    [nonPickupItems],
+  );
 
   const subtotal = useMemo(
     () => items.reduce((s, i) => s + i.priceCents * i.quantity, 0),
@@ -146,11 +151,29 @@ export default function CheckoutPage() {
 
   const totalShipping = hasCalculatedShipping ? liveShippingCents + flatShipping : flatShipping;
   const total = subtotal + totalShipping;
+  const requiredRateSellerIds = useMemo(
+    () => new Set(rateGroups.map(group => group.sellerId)),
+    [rateGroups],
+  );
+  const hasCompleteShippingSelection = useMemo(() => {
+    if (!hasCalculatedShipping) return true;
+    if (!ratesFetched) return false;
+    if (!rateGroups.length) return false;
+    return Array.from(requiredRateSellerIds).every((sellerId) => {
+      const selectedRate = selectedRates.find(rate => rate.sellerId === sellerId);
+      return !!selectedRate
+        && !!selectedRate.shipmentId
+        && !!selectedRate.rateId
+        && selectedRate.rateCents > 0;
+    });
+  }, [hasCalculatedShipping, rateGroups, ratesFetched, requiredRateSellerIds, selectedRates]);
 
   const pickupItemIds = useMemo(
     () => items.filter(i => isPickup(i.id)).map(i => i.id),
     [items, isPickup],
   );
+  const allPickup = pickupItemIds.length > 0 && pickupItemIds.length === items.length;
+  const canProceedToCheckout = !hasCalculatedShipping || allPickup || (hasCompleteShippingSelection && !rateError);
 
   const buyerAddressComplete = buyerStreet1.trim() && buyerCity.trim() && buyerState.trim() && buyerZip.trim();
 
@@ -166,7 +189,7 @@ export default function CheckoutPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          items: nonPickupItems.map(i => ({ productId: i.id, quantity: i.quantity })),
+          items: calculatedShippingItems.map(i => ({ productId: i.id, quantity: i.quantity })),
           buyerAddress: {
             name: buyerName.trim() || session?.user?.name || 'Buyer',
             street1: buyerStreet1.trim(),
@@ -196,9 +219,15 @@ export default function CheckoutPage() {
         };
       });
       setRateGroups(groups);
+      if (!groups.length) {
+        setRateError('Shipping rate unavailable. Please try again.');
+        setRatesFetched(true);
+        return;
+      }
       // Auto-select cheapest rate per group
-      const autoSelected: SelectedRate[] = groups.map((group) => {
+      const autoSelected: SelectedRate[] = groups.flatMap((group) => {
         const cheapest = group.rates[0]; // already sorted by rate asc
+        if (!cheapest) return [];
         return {
           sellerId: group.sellerId,
           shipmentId: group.shipmentId,
@@ -206,6 +235,7 @@ export default function CheckoutPage() {
           rateCents: cheapest ? convertRateToCents(cheapest.rate) : 0,
           carrier: cheapest?.carrier ?? '',
           service: cheapest?.service ?? '',
+          deliveryDays: cheapest.deliveryDays,
         };
       });
       setSelectedRates(autoSelected);
@@ -224,14 +254,17 @@ export default function CheckoutPage() {
   function handleSelectRate(sellerId: string, shipmentId: string, rate: RateQuote) {
     setSelectedRates(prev => {
       const next = prev.filter(r => r.sellerId !== sellerId);
-      next.push({
+      const shippingRate: SelectedRate = {
         sellerId,
         shipmentId,
         rateId: rate.id,
         rateCents: convertRateToCents(rate.rate),
         carrier: rate.carrier,
         service: rate.service,
-      });
+        deliveryDays: rate.deliveryDays,
+      };
+      console.log("Selected shipping:", shippingRate);
+      next.push(shippingRate);
       return next;
     });
   }
@@ -243,15 +276,16 @@ export default function CheckoutPage() {
     }
 
     // If live shipping is needed, validate rates selected
-    if (hasCalculatedShipping && !ratesFetched) {
-      setError('Please calculate shipping rates before proceeding.');
+    if (hasCalculatedShipping && !canProceedToCheckout) {
+      setError(rateError || 'Please select a valid shipping option before proceeding.');
       return;
     }
 
     setChecking(true);
     setError('');
     try {
-      const shippingRateInfo = hasCalculatedShipping && selectedRates.length > 0
+      console.log("Final checkout total:", total);
+      const shippingRateInfo = hasCalculatedShipping && hasCompleteShippingSelection
         ? {
             shipmentGroups: selectedRates.map(r => ({
               sellerId: r.sellerId,
@@ -332,8 +366,6 @@ export default function CheckoutPage() {
       </main>
     );
   }
-
-  const allPickup = pickupItemIds.length > 0 && pickupItemIds.length === items.length;
 
   return (
     <main className="max-w-2xl mx-auto">
@@ -532,13 +564,27 @@ export default function CheckoutPage() {
                     </span>
                     <span className="text-slate-600 text-right flex-shrink-0">
                       ${rate.rate}
-                      {rate.deliveryDays !== null ? <span className="text-slate-400 text-xs ml-1">({rate.deliveryDays}d)</span> : null}
+                      {rate.deliveryDays !== null ? <span className="text-slate-400 text-xs ml-1">(Est. {rate.deliveryDays} day{rate.deliveryDays === 1 ? '' : 's'})</span> : null}
                     </span>
                   </label>
                 );
               })}
             </div>
           ))}
+
+          {selectedRates.length > 0 && (
+            <div className="rounded-xl border border-slate-200 p-3 space-y-2">
+              <p className="text-xs font-semibold text-slate-600">Selected shipping</p>
+              {selectedRates.map((rate) => (
+                <p key={`${rate.sellerId}-${rate.rateId}`} className="text-xs text-slate-600">
+                  <span className="font-medium">{rate.carrier}</span> · {rate.service}
+                  {rate.deliveryDays !== null ? ` · Estimated delivery ${rate.deliveryDays} day${rate.deliveryDays === 1 ? '' : 's'}` : ''}
+                  {' · '}
+                  {dollars(rate.rateCents)}
+                </p>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -571,7 +617,7 @@ export default function CheckoutPage() {
         </p>
       ) : hasCalculatedShipping ? (
         <p className="text-xs text-slate-500 mb-3">
-          Enter your shipping address and calculate rates to see your final total before payment.
+          Enter your shipping address, choose a shipping option, and verify your final total before payment.
         </p>
       ) : (
         <p className="text-xs text-slate-500 mb-3">
@@ -589,13 +635,13 @@ export default function CheckoutPage() {
         </Link>
         <button
           onClick={handleCheckout}
-          disabled={checking || (hasCalculatedShipping && !allPickup && !ratesFetched)}
+          disabled={checking || !canProceedToCheckout}
           className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {checking
             ? 'Redirecting to payment…'
-            : hasCalculatedShipping && !allPickup && !ratesFetched
-              ? 'Calculate shipping first'
+            : !canProceedToCheckout
+              ? 'Select shipping first'
               : 'Proceed to payment →'}
         </button>
       </div>
