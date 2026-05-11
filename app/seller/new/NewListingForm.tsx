@@ -44,6 +44,7 @@ export default function NewListingForm() {
       return nextErrors;
     });
   }, []);
+  const shippingPackageInputClass = `input ${errors.shippingPackage ? 'border-red-300 ring-1 ring-red-100' : ''}`;
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -199,11 +200,11 @@ export default function NewListingForm() {
                 type="number"
                 step="0.01"
                 min="0.01"
-                className="input"
+                className={shippingPackageInputClass}
                 placeholder="e.g. 1"
                 required
               />
-              <select name="weightUnit" className="input" defaultValue="lb">
+              <select name="weightUnit" className={shippingPackageInputClass} defaultValue="lb">
                 <option value="lb">lb</option>
                 <option value="oz">oz</option>
               </select>
@@ -211,7 +212,7 @@ export default function NewListingForm() {
           </div>
           <div>
             <label className="label">Package type</label>
-            <select name="packageType" className="input" defaultValue="PACKAGE">
+            <select name="packageType" className={shippingPackageInputClass} defaultValue="PACKAGE">
               <option value="PACKAGE">Package / Parcel</option>
               <option value="LETTER">Letter</option>
               <option value="FLAT_RATE_ENVELOPE">Flat Rate Envelope</option>
@@ -224,27 +225,31 @@ export default function NewListingForm() {
         </div>
         <div>
           <label className="label">Shipping class (optional)</label>
-          <input name="shippingClass" className="input" placeholder="e.g. Standard parcel" />
+          <input name="shippingClass" className={shippingPackageInputClass} placeholder="e.g. Standard parcel" />
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div>
             <label className="label">Length (in)</label>
-            <input name="length" type="number" step="0.01" min="0.01" className="input" placeholder="e.g. 8" required />
+            <input name="length" type="number" step="0.01" min="0.01" className={shippingPackageInputClass} placeholder="e.g. 8" required />
           </div>
           <div>
             <label className="label">Width (in)</label>
-            <input name="width" type="number" step="0.01" min="0.01" className="input" placeholder="e.g. 6" required />
+            <input name="width" type="number" step="0.01" min="0.01" className={shippingPackageInputClass} placeholder="e.g. 6" required />
           </div>
           <div>
             <label className="label">Height (in)</label>
-            <input name="height" type="number" step="0.01" min="0.01" className="input" placeholder="e.g. 4" required />
+            <input name="height" type="number" step="0.01" min="0.01" className={shippingPackageInputClass} placeholder="e.g. 4" required />
           </div>
           <div>
             <label className="label">Dimension unit</label>
-            <input value="in" className="input bg-slate-50 text-slate-500" readOnly />
+            <input value="in" className={`${shippingPackageInputClass} bg-slate-50 text-slate-500`} readOnly />
           </div>
         </div>
-        {errors.shippingPackage && <p className="text-xs text-red-600">{errors.shippingPackage}</p>}
+        {errors.shippingPackage && (
+          <p className="text-xs text-red-600">
+            {errors.shippingPackage} Fill in weight, length, width, and height.
+          </p>
+        )}
       </fieldset>
 
       <fieldset className="border border-slate-200 rounded-xl p-4 space-y-3">

@@ -73,7 +73,7 @@ export function getShippingClass(productAttributes: unknown): string | null {
 export function setShippingClass(
   productAttributes: unknown,
   shippingClass: string | null | undefined,
-): Record<string, unknown> | undefined {
+): Record<string, unknown> {
   const nextAttributes =
     productAttributes && typeof productAttributes === 'object' && !Array.isArray(productAttributes)
       ? { ...(productAttributes as Record<string, unknown>) }
@@ -86,7 +86,7 @@ export function setShippingClass(
     delete nextAttributes.shippingClass;
   }
 
-  return Object.keys(nextAttributes).length ? nextAttributes : undefined;
+  return nextAttributes;
 }
 
 export function getEffectivePackageDetails(

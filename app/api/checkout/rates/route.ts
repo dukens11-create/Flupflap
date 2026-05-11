@@ -200,7 +200,7 @@ export async function POST(req: Request) {
             country: buyerAddress.country || 'US',
           },
           fromAddress,
-          weightOz: totalWeightOz,
+          weightValue: totalWeightOz,
           weightUnit: 'oz',
           lengthIn: maxLength,
           widthIn: maxWidth,

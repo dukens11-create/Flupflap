@@ -259,11 +259,12 @@ export async function POST(
       buildListingRiskCandidate(sellerId, existing, data, resolvedImages),
       id,
     );
-    const nextProductAttributes =
-      setShippingClass(parseJsonOrNull(data.productAttributes), packageDetails.shippingClass)
-      ?? setShippingClass(existing.productAttributes, packageDetails.shippingClass);
+    const nextProductAttributes = setShippingClass(
+      data.productAttributes === undefined ? existing.productAttributes : parseJsonOrNull(data.productAttributes),
+      packageDetails.shippingClass,
+    );
     const nextProductAttributesValue =
-      nextProductAttributes === undefined
+      Object.keys(nextProductAttributes).length === 0
         ? Prisma.JsonNull
         : (nextProductAttributes as Prisma.InputJsonValue);
 
@@ -396,7 +397,7 @@ export async function PATCH(
       data.shippingClass !== undefined ? packageDetails.shippingClass : getShippingClass(parsedAttributes),
     );
     const nextProductAttributesValue =
-      nextProductAttributes === undefined
+      Object.keys(nextProductAttributes).length === 0
         ? Prisma.JsonNull
         : (nextProductAttributes as Prisma.InputJsonValue);
 

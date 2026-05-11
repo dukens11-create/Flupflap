@@ -145,7 +145,7 @@ export async function POST(req: Request) {
             country: fromCountry,
             phone: fromPhone,
           },
-          weightOz,
+          weightValue: weightOz,
           lengthIn,
           widthIn,
           heightIn,

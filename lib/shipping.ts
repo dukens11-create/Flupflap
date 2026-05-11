@@ -159,14 +159,14 @@ function parseDeliveryDays(value: unknown) {
 export async function createShipmentRates(params: {
   toAddress: AddressInput;
   fromAddress: AddressInput;
-  weightOz: number;
+  weightValue: number;
   weightUnit?: 'lb' | 'oz';
   lengthIn: number;
   widthIn: number;
   heightIn: number;
 }) {
   const weightUnit = params.weightUnit === 'lb' ? 'lb' : 'oz';
-  const weight = weightUnit === 'lb' ? params.weightOz / 16 : params.weightOz;
+  const weight = params.weightValue;
   const payload = await shippoRequest('/shipments/', 'POST', {
     address_to: serializeAddress(params.toAddress),
     address_from: serializeAddress(params.fromAddress),
