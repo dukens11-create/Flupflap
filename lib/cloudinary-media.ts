@@ -11,6 +11,14 @@ export type CloudinaryImageVariants = {
   thumbnailUrl: string;
 };
 
+const ENHANCED_IMAGE_MAX_WIDTH = 1400;
+const ENHANCED_IMAGE_MAX_HEIGHT = 1400;
+const DELIVERY_OPTIMIZATION = {
+  fetch_format: 'auto' as const,
+  quality: 'auto' as const,
+  dpr: 'auto' as const,
+};
+
 function parseCloudinaryImageRef(imageUrl: string): CloudinaryImageRef | null {
   const env = getCloudinaryEnvConfig();
   if (!env) return null;
@@ -72,11 +80,9 @@ export function buildCloudinaryImageVariants(
   const originalUrl = cloudinary.url(ref.publicId, {
     resource_type: 'image',
     secure: true,
-    fetch_format: 'auto',
-    quality: 'auto',
-    dpr: 'auto',
+    ...DELIVERY_OPTIMIZATION,
     ...(ref.version ? { version: ref.version } : {}),
-    transformation: [{ crop: 'limit', width: 1400, height: 1400 }],
+    transformation: [{ crop: 'limit', width: ENHANCED_IMAGE_MAX_WIDTH, height: ENHANCED_IMAGE_MAX_HEIGHT }],
   });
 
   const enhancedTransforms: Array<Record<string, string | number>> = [
@@ -84,12 +90,17 @@ export function buildCloudinaryImageVariants(
     { effect: 'sharpen' },
     { effect: 'auto_brightness' },
     { effect: 'auto_contrast' },
-    { crop: 'auto', gravity: 'auto', width: 1400, height: 1400 },
+    {
+      crop: 'auto',
+      gravity: 'auto',
+      width: ENHANCED_IMAGE_MAX_WIDTH,
+      height: ENHANCED_IMAGE_MAX_HEIGHT,
+    },
   ];
   if (hdUpscale) {
     enhancedTransforms.push({ effect: 'upscale' });
   }
-  enhancedTransforms.push({ fetch_format: 'auto', quality: 'auto', dpr: 'auto' });
+  enhancedTransforms.push(DELIVERY_OPTIMIZATION);
 
   const enhancedUrl = cloudinary.url(ref.publicId, {
     resource_type: 'image',
@@ -101,8 +112,8 @@ export function buildCloudinaryImageVariants(
   const thumbnailUrl = cloudinary.url(ref.publicId, {
     resource_type: 'image',
     secure: true,
-    fetch_format: 'auto',
-    quality: 'auto',
+    fetch_format: DELIVERY_OPTIMIZATION.fetch_format,
+    quality: DELIVERY_OPTIMIZATION.quality,
     ...(ref.version ? { version: ref.version } : {}),
     transformation: [{ crop: 'fill', gravity: 'auto', width: 420, height: 420 }],
   });

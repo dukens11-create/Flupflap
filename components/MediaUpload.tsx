@@ -164,13 +164,13 @@ export default function MediaUpload({
       const originalUrl = defaultOriginalImages[index] || url;
       const enhancedUrl = defaultEnhancedImages[index] || '';
       const selectedVariant: 'original' | 'enhanced' =
-        enhancedUrl && url === enhancedUrl ? 'enhanced' : 'original';
+        enhancedUrl && (url === enhancedUrl || url !== originalUrl) ? 'enhanced' : 'original';
       const selectedUrl = selectedVariant === 'enhanced' ? enhancedUrl : originalUrl;
       return {
         id: createItemId(),
         previewUrl: selectedUrl,
         safePreviewUrl: getSafePreviewUrl(selectedUrl),
-        uploadedUrl: selectedUrl,
+        uploadedUrl: originalUrl,
         originalUrl,
         enhancedUrl,
         thumbnailUrl: defaultImageThumbnails[index] || '',
@@ -415,7 +415,6 @@ export default function MediaUpload({
                     originalUrl: variants.originalUrl,
                     enhancedUrl: variants.enhancedUrl,
                     thumbnailUrl: variants.thumbnailUrl,
-                    uploadedUrl: variants.enhancedUrl,
                     selectedVariant: 'enhanced',
                     enhancementStatus: 'ready',
                     error: undefined,
@@ -432,7 +431,6 @@ export default function MediaUpload({
                         ...image,
                         enhancementStatus: 'error',
                         selectedVariant: 'original',
-                        uploadedUrl: image.originalUrl || image.uploadedUrl,
                         error: msg,
                       }
                     : image,
@@ -537,7 +535,6 @@ export default function MediaUpload({
         return {
           ...image,
           selectedVariant: canUseEnhanced ? 'enhanced' : 'original',
-          uploadedUrl: canUseEnhanced ? image.enhancedUrl : image.originalUrl || image.uploadedUrl,
         };
       }),
     );
@@ -563,7 +560,6 @@ export default function MediaUpload({
                 originalUrl: variants.originalUrl,
                 enhancedUrl: variants.enhancedUrl,
                 thumbnailUrl: variants.thumbnailUrl,
-                uploadedUrl: variants.enhancedUrl,
                 selectedVariant: 'enhanced',
                 enhancementStatus: 'ready',
                 error: undefined,
@@ -580,7 +576,6 @@ export default function MediaUpload({
                 ...image,
                 enhancementStatus: 'error',
                 selectedVariant: 'original',
-                uploadedUrl: image.originalUrl || image.uploadedUrl,
                 error: msg,
               }
             : image,
