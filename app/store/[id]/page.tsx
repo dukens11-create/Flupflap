@@ -45,8 +45,41 @@ export default async function SellerStorePage({ params }: Props) {
 
   const { id } = await params;
 
-  let seller: { id: string; name: string; verificationSubmission: { status: string | null } | null } | null = null;
-  let products: any[] = [];
+  type SellerRow = {
+    id: string;
+    name: string;
+    verificationSubmission: { status: string | null } | null;
+  };
+
+  type ProductRow = {
+    id: string;
+    title: string;
+    priceCents: number;
+    shippingCents: number;
+    condition: string;
+    category: string;
+    imageUrl: string;
+    pickupAvailable: boolean;
+    pickupCity: string | null;
+    pickupState: string | null;
+    cartInterest: { totalAdds: number } | null;
+    // Fields expected by ProductCard that are not fetched from DB on this page
+    activePromotion: null;
+    sellerResponseRate: null;
+    seller: {
+      id: string;
+      name: string;
+      phoneVerified: boolean;
+      verificationSubmission: {
+        status: string | null;
+        eligibleToListAt: Date | null;
+        adminFallbackStatus: string | null;
+      } | null;
+    };
+  };
+
+  let seller: SellerRow | null = null;
+  let products: ProductRow[] = [];
 
   try {
     seller = await prisma.user.findUnique({
@@ -60,7 +93,7 @@ export default async function SellerStorePage({ params }: Props) {
 
     if (!seller) notFound();
 
-    products = await prisma.product.findMany({
+    const rawProducts = await prisma.product.findMany({
       where: { sellerId: id, status: 'APPROVED' },
       orderBy: { createdAt: 'desc' },
       include: {
@@ -81,6 +114,12 @@ export default async function SellerStorePage({ params }: Props) {
         cartInterest: { select: { totalAdds: true } },
       },
     });
+
+    products = rawProducts.map((p) => ({
+      ...p,
+      activePromotion: null,
+      sellerResponseRate: null,
+    }));
   } catch {
     notFound();
   }
@@ -118,10 +157,10 @@ export default async function SellerStorePage({ params }: Props) {
         <section className="space-y-4">
           <h2 className="text-xl font-bold text-slate-900">Listings</h2>
           <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
-            {products.map((p: any) => (
+            {products.map((p) => (
               <ProductCard
                 key={p.id}
-                p={{ ...p, activePromotion: null, sellerResponseRate: null }}
+                p={p}
               />
             ))}
           </div>
