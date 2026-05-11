@@ -821,6 +821,9 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
               const conversionRate = calcConversionRate(productOrders, viewCount);
               const shippingSetupIncomplete = !hasStoredPackageDetails(p);
               const packageDetails = getEffectivePackageDetails(p);
+              const fallbackPackageNotice = shippingSetupIncomplete
+                ? ' · fallback defaults shown until you save real package details'
+                : '';
               return (
                 <div key={p.id} className="card p-4 flex items-center justify-between gap-4">
                   <div className="flex-1 min-w-0">
@@ -837,7 +840,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                     {packageDetails && (
                       <p className="text-xs text-slate-500 mt-1">
                         Package: {formatPackageNumber(packageDetails.weight)} {packageDetails.weightUnit} · {formatPackageNumber(packageDetails.lengthIn)} × {formatPackageNumber(packageDetails.widthIn)} × {formatPackageNumber(packageDetails.heightIn)} in
-                        {shippingSetupIncomplete ? ' · fallback defaults shown until you save real package details' : ''}
+                        {fallbackPackageNotice}
                       </p>
                     )}
                     <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-0.5">

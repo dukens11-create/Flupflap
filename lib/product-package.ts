@@ -30,10 +30,12 @@ export function normalizeWeightUnit(value: string | null | undefined): WeightUni
   return value?.trim().toLowerCase() === 'oz' ? 'oz' : 'lb';
 }
 
+/** Converts a submitted package weight to ounces so stored product data stays normalized. */
 export function convertWeightToOunces(weight: number, weightUnit: WeightUnit): number {
   return weightUnit === 'lb' ? weight * 16 : weight;
 }
 
+/** Formats package numbers for display by trimming unnecessary trailing zeros (e.g. 1.50 → "1.5", 2.00 → "2"). */
 export function formatPackageNumber(value: number): string {
   if (Number.isInteger(value)) {
     return String(value);
