@@ -28,6 +28,15 @@ function getSchemaItemCondition(condition: string): string {
   return 'https://schema.org/UsedCondition';
 }
 
+function summarizeDescription(description: string): string {
+  const trimmed = description.trim();
+  if (trimmed.length <= 160) return trimmed;
+  const snippet = trimmed.slice(0, 160);
+  const cutoff = snippet.lastIndexOf(' ');
+  if (cutoff >= 100) return `${snippet.slice(0, cutoff).trim()}…`;
+  return `${snippet.trim()}…`;
+}
+
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   const product = await prisma.product.findUnique({
@@ -53,7 +62,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
   const canonicalPath = `/products/${product.id}`;
   const imageCandidates = (product.images?.length ? product.images : [product.imageUrl]).filter(Boolean);
-  const productDescription = product.description.slice(0, 160);
+  const productDescription = summarizeDescription(product.description);
   const title = `${product.title} | ${product.category}`;
 
   return {
@@ -125,10 +134,6 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
     image: imageCandidates,
     sku: product.id,
     category: product.category,
-    brand: {
-      '@type': 'Brand',
-      name: 'FlupFlap',
-    },
     offers: {
       '@type': 'Offer',
       url: canonicalUrl,

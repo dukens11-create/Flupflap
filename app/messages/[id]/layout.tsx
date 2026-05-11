@@ -5,7 +5,6 @@ import { createPageMetadata } from '@/lib/seo';
 export const metadata: Metadata = createPageMetadata({
   title: 'Conversation',
   description: 'Securely message buyers and sellers on FlupFlap.',
-  path: '/messages',
   noIndex: true,
 });
 

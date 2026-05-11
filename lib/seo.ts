@@ -32,13 +32,13 @@ type MetadataOptions = {
 export function createPageMetadata({
   title,
   description = DEFAULT_SEO_DESCRIPTION,
-  path = '/',
+  path,
   noIndex = false,
 }: MetadataOptions): Metadata {
   return {
     title,
     description,
-    alternates: { canonical: path },
+    alternates: path ? { canonical: path } : undefined,
     openGraph: {
       title,
       description,
