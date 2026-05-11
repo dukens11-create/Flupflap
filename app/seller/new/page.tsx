@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
-import ImageUpload from '@/components/ImageUpload';
+import MediaUpload from '@/components/MediaUpload';
 import type { Metadata } from 'next';
 import { isSubscriptionActive } from '@/lib/subscription';
 import { syncSellerSubscriptionFromStripe } from '@/lib/subscription-sync';
@@ -96,7 +96,7 @@ export default async function SellerNewPage() {
             </select>
           </div>
         </div>
-        <ImageUpload required />
+        <MediaUpload required />
         <div>
           <label className="label">Inventory (qty)</label>
           <input name="inventory" type="number" min="1" defaultValue="1" className="input" />

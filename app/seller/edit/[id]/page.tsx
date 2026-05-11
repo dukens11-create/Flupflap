@@ -2,7 +2,7 @@ import { redirect, notFound } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
-import ImageUpload from '@/components/ImageUpload';
+import MediaUpload from '@/components/MediaUpload';
 import type { Metadata } from 'next';
 import { isSellerVerificationApproved } from '@/lib/seller-verification';
 
@@ -116,7 +116,11 @@ export default async function SellerEditPage({
             </select>
           </div>
         </div>
-        <ImageUpload defaultValue={product.imageUrl} required />
+        <MediaUpload
+          defaultImages={product.images?.length ? product.images : product.imageUrl ? [product.imageUrl] : []}
+          defaultVideoUrl={product.videoUrl ?? ''}
+          required
+        />
         <div>
           <label className="label">Inventory (qty)</label>
           <input

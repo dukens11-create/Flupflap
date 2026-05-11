@@ -199,6 +199,10 @@ model Product {
   pickupCity       String?
   pickupState      String?
   pickupPostalCode String?
+  // Media fields (multi-image + video)
+  images           String[]
+  mainImage        String          @default("")
+  videoUrl         String?
 
   @@index([status, category, condition])
   @@index([title])

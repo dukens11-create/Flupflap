@@ -18,6 +18,8 @@ const updateSchema = z.object({
   category: z.string().min(1).optional(),
   condition: z.string().min(1).optional(),
   imageUrl: z.string().url().optional(),
+  images: z.union([z.string().url(), z.array(z.string().url())]).optional(),
+  videoUrl: z.string().optional(),
   inventory: z.string().optional(),
   pickupAvailable: z.string().optional(), // "true" when checkbox is checked
   pickupCity: z.string().max(100).optional(),
@@ -35,7 +37,9 @@ function buildListingRiskCandidate(
   sellerId: string,
   existing: NonNullable<Awaited<ReturnType<typeof getSellerProduct>>>,
   data: ProductUpdateInput,
+  resolvedImages: string[],
 ) {
+  const mainImage = resolvedImages[0] ?? data.imageUrl ?? existing.imageUrl;
   return {
     sellerId,
     title: data.title ?? existing.title,
@@ -43,7 +47,7 @@ function buildListingRiskCandidate(
     priceCents: data.price ? cents(data.price) : existing.priceCents,
     category: data.category ?? existing.category,
     condition: data.condition ?? existing.condition,
-    imageUrl: data.imageUrl ?? existing.imageUrl,
+    imageUrl: mainImage,
   };
 }
 
@@ -93,10 +97,27 @@ export async function POST(
     }
 
     // Default: update
-    const raw = Object.fromEntries(form.entries());
-    const data = updateSchema.parse(raw);
+    const rawEntries = Object.fromEntries(form.entries());
+    const imagesRaw = form.getAll('images').map(String).filter(Boolean);
+    const data = updateSchema.parse({ ...rawEntries, images: imagesRaw.length ? imagesRaw : undefined });
+
+    // Resolve images: prefer multi-images, fall back to legacy imageUrl or existing images
+    const resolvedImages: string[] = imagesRaw.length
+      ? imagesRaw
+      : data.imageUrl
+        ? [data.imageUrl]
+        : existing.images?.length
+          ? existing.images
+          : existing.imageUrl
+            ? [existing.imageUrl]
+            : [];
+    const mainImage = resolvedImages[0] ?? existing.imageUrl;
+    const videoUrl = data.videoUrl !== undefined
+      ? (data.videoUrl && data.videoUrl.startsWith('http') ? data.videoUrl : null)
+      : existing.videoUrl;
+
     const riskAssessment = await getListingRiskAssessmentForCandidate(
-      buildListingRiskCandidate(session.user.id, existing, data),
+      buildListingRiskCandidate(session.user.id, existing, data, resolvedImages),
       id,
     );
 
@@ -109,7 +130,10 @@ export async function POST(
         ...(data.shipping !== undefined && { shippingCents: cents(data.shipping || '0') }),
         ...(data.category && { category: data.category }),
         ...(data.condition && { condition: data.condition }),
-        ...(data.imageUrl && { imageUrl: data.imageUrl }),
+        imageUrl: mainImage,
+        images: resolvedImages,
+        mainImage,
+        videoUrl,
         ...(data.inventory && { inventory: Number(data.inventory) }),
         // Pickup fields — always written on form submit so we can clear them
         pickupAvailable: data.pickupAvailable === 'true',
@@ -168,8 +192,23 @@ export async function PATCH(
 
     const body: unknown = await req.json();
     const data = updateSchema.parse(body);
+
+    // Resolve images for PATCH (JSON body)
+    const imagesInput = Array.isArray(data.images)
+      ? data.images
+      : data.images
+        ? [data.images]
+        : data.imageUrl
+          ? [data.imageUrl]
+          : null;
+    const resolvedImages = imagesInput ?? existing.images ?? (existing.imageUrl ? [existing.imageUrl] : []);
+    const mainImage = resolvedImages[0] ?? existing.imageUrl;
+    const videoUrl = data.videoUrl !== undefined
+      ? (data.videoUrl && data.videoUrl.startsWith('http') ? data.videoUrl : null)
+      : existing.videoUrl;
+
     const riskAssessment = await getListingRiskAssessmentForCandidate(
-      buildListingRiskCandidate(session.user.id, existing, data),
+      buildListingRiskCandidate(session.user.id, existing, data, resolvedImages),
       id,
     );
 
@@ -182,7 +221,8 @@ export async function PATCH(
         ...(data.shipping !== undefined && { shippingCents: cents(data.shipping || '0') }),
         ...(data.category && { category: data.category }),
         ...(data.condition && { condition: data.condition }),
-        ...(data.imageUrl && { imageUrl: data.imageUrl }),
+        ...(imagesInput && { imageUrl: mainImage, images: resolvedImages, mainImage }),
+        ...(videoUrl !== undefined && { videoUrl }),
         ...(data.inventory && { inventory: Number(data.inventory) }),
         ...(data.pickupAvailable !== undefined && { pickupAvailable: data.pickupAvailable === 'true' }),
         ...(data.pickupCity !== undefined && { pickupCity: data.pickupCity || null }),

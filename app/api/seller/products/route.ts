@@ -19,7 +19,9 @@ const schema = z.object({
   shipping: z.string().optional(),
   category: z.string().min(1),
   condition: z.string().min(1),
-  imageUrl: z.string().url(),
+  imageUrl: z.string().url().optional(),
+  images: z.union([z.string().url(), z.array(z.string().url())]).optional(),
+  videoUrl: z.string().optional(),
   inventory: z.string().optional(),
   pickupAvailable: z.string().optional(), // "true" when checkbox is checked
   pickupCity: z.string().max(100).optional(),
@@ -88,7 +90,24 @@ export async function POST(req: Request) {
     }
 
     const form = await req.formData();
-    const data = schema.parse(Object.fromEntries(form.entries()));
+    const rawEntries = Object.fromEntries(form.entries());
+    // Collect multiple "images" values from form (MediaUpload uses multiple hidden inputs)
+    const imagesRaw = form.getAll('images').map(String).filter(Boolean);
+    const data = schema.parse({ ...rawEntries, images: imagesRaw.length ? imagesRaw : undefined });
+
+    // Resolve images array: prefer multi-images, fall back to legacy imageUrl
+    const resolvedImages: string[] = imagesRaw.length
+      ? imagesRaw
+      : data.imageUrl
+        ? [data.imageUrl]
+        : [];
+    const mainImage = resolvedImages[0] ?? '';
+    const videoUrl = data.videoUrl && data.videoUrl.startsWith('http') ? data.videoUrl : null;
+
+    if (!mainImage) {
+      return NextResponse.json({ error: 'At least one product image is required.' }, { status: 400 });
+    }
+
     const riskAssessment = await getListingRiskAssessmentForCandidate({
       sellerId: session.user.id,
       title: data.title,
@@ -96,7 +115,7 @@ export async function POST(req: Request) {
       priceCents: cents(data.price),
       category: data.category,
       condition: data.condition,
-      imageUrl: data.imageUrl,
+      imageUrl: mainImage,
     });
 
     const product = await prisma.product.create({
@@ -106,7 +125,10 @@ export async function POST(req: Request) {
         priceCents: cents(data.price),
         condition: data.condition,
         category: data.category,
-        imageUrl: data.imageUrl,
+        imageUrl: mainImage,
+        images: resolvedImages,
+        mainImage,
+        videoUrl,
         sellerId: session.user.id,
         shippingCents: cents(data.shipping || '0'),
         inventory: Number(data.inventory || 1),
