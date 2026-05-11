@@ -378,7 +378,6 @@ export default function CheckoutPage() {
         service: rate.service,
         deliveryDays: rate.deliveryDays,
       };
-      console.log('Selected shipping:', shippingRate);
       next.push(shippingRate);
       return next;
     });
@@ -399,7 +398,6 @@ export default function CheckoutPage() {
     setChecking(true);
     setError('');
     try {
-      console.log('Final checkout total:', hasCalculatedShipping ? finalTotalCents : total + taxCents);
       const shippingRateInfo = hasCalculatedShipping && hasCompleteShippingSelection && taxCalculated && !taxError
         ? {
             shipmentGroups: selectedRates.map(r => ({
