@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import { prisma } from '@/lib/db';
-import { getCurrentStripeMode, stripe } from '@/lib/stripe';
+import { appUrl, getCurrentStripeMode, stripe } from '@/lib/stripe';
 import { calculateCommissionCents, calculateSellerNetCents, getMarketplaceSettings, resolveCommissionForSeller } from '@/lib/commission';
 import type { CheckoutCommissionItem } from '@/lib/commission';
 import crypto from 'crypto';
@@ -773,7 +773,7 @@ export async function POST(req: Request) {
             `<p>Hi ${buyer.name ?? 'there'},</p>
 <p>Great news! Your order has been shipped.</p>
 <ul>${trackingLines}</ul>
-<p><a href="${process.env.NEXT_PUBLIC_APP_URL ?? ''}/orders/${order.id}">View your order</a></p>
+<p><a href="${appUrl}/orders/${order.id}">View your order</a></p>
 <p>— The FlupFlap team</p>`,
           );
         }

@@ -72,6 +72,8 @@ In the **Environment** tab, add:
 | `NEXTAUTH_SECRET` | Click **Generate** next to this field in Render |
 | `NEXTAUTH_URL` | The full public URL Render assigns you, e.g. `https://flupflap.onrender.com` |
 | `NEXT_PUBLIC_APP_URL` | Same value as `NEXTAUTH_URL` |
+| `NEXT_PUBLIC_SITE_URL` | Public site URL used for redirects, e.g. `https://www.flupflap.com` |
+| `NEXT_PUBLIC_API_URL` | Public API/base URL (same domain or your backend URL) |
 | `STRIPE_SECRET_KEY` | From your Stripe dashboard → Developers → API keys |
 | `STRIPE_PUBLISHABLE_KEY` | From your Stripe dashboard → Developers → API keys |
 | `STRIPE_WEBHOOK_SECRET` | From Stripe → Webhooks → your endpoint → Signing secret |

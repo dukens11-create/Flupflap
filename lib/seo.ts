@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 
 const FALLBACK_SITE_URL = 'https://www.flupflap.com';
+const FALLBACK_DEV_SITE_URL = 'http://localhost:3000';
 export const BRAND_LOGO_PATH = '/flupflap_logo_brand.png';
 export const MARKETPLACE_CURRENCY = process.env.NEXT_PUBLIC_MARKETPLACE_CURRENCY ?? 'USD';
 
@@ -8,7 +9,11 @@ export const DEFAULT_SEO_DESCRIPTION =
   'Buy and sell everyday items on FlupFlap with verified sellers, low fees, and secure checkout.';
 
 export function getSiteUrl(): URL {
-  const configuredUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXTAUTH_URL ?? FALLBACK_SITE_URL;
+  const configuredUrl = process.env.NEXT_PUBLIC_SITE_URL
+    ?? process.env.NEXT_PUBLIC_APP_URL
+    ?? process.env.NEXTAUTH_URL
+    ?? process.env.NEXT_PUBLIC_API_URL
+    ?? (process.env.NODE_ENV === 'production' ? FALLBACK_SITE_URL : FALLBACK_DEV_SITE_URL);
   const normalized = configuredUrl.startsWith('http://') || configuredUrl.startsWith('https://')
     ? configuredUrl
     : `https://${configuredUrl}`;
@@ -16,7 +21,7 @@ export function getSiteUrl(): URL {
   try {
     return new URL(normalized);
   } catch {
-    return new URL(FALLBACK_SITE_URL);
+    return new URL(process.env.NODE_ENV === 'production' ? FALLBACK_SITE_URL : FALLBACK_DEV_SITE_URL);
   }
 }
 

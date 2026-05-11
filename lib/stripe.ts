@@ -1,4 +1,5 @@
 import Stripe from 'stripe';
+import { getSiteUrl } from '@/lib/seo';
 
 let _stripe: Stripe | null = null;
 export type StripeMode = 'test' | 'live';
@@ -114,4 +115,4 @@ export const stripe: Stripe = new Proxy({} as Stripe, {
   },
 });
 
-export const appUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+export const appUrl = getSiteUrl().toString().replace(/\/$/, '');
