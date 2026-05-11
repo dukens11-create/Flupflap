@@ -675,7 +675,7 @@ export default function CategoryPicker({ defaultCategoryId, defaultSubcategoryId
               {filteredOptions.length > 0 ? (
                 <>
                   {showingClosestMatches ? (
-                    <div className="px-4 pb-2 text-xs text-slate-500">Showing closest matches</div>
+                    <div className="px-4 pb-2 text-xs text-slate-500" aria-live="polite">Showing closest matches</div>
                   ) : null}
                   <ul className="divide-y divide-slate-100">
                     {filteredOptions.map(option => {
