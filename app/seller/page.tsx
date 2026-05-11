@@ -452,7 +452,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                 <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
                   <p className="font-semibold mb-1">Verification was rejected:</p>
                   <p>{verificationSubmission.rejectionReason}</p>
-                  <p className="mt-2 text-xs text-red-700">Please re-submit your documents using the button below.</p>
+                  <p className="mt-2 text-xs text-red-700">Please re-submit your documents to proceed.</p>
                 </div>
               )}
               {verificationSubmission?.status === 'APPROVED' && (

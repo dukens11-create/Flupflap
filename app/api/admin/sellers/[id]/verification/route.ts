@@ -141,7 +141,9 @@ export async function POST(
       },
     });
 
-    // Notify the seller of the admin's decision.
+    // Notify the seller of the admin's decision. Admin review decisions always
+    // create fresh notifications (no deduplication) so sellers receive a
+    // notification for every approval/rejection cycle.
     await createNotification({
       userId: id,
       type: NotificationType.PAYOUT,
@@ -152,9 +154,8 @@ export async function POST(
       body:
         data.status === SellerVerificationStatus.APPROVED
           ? 'An admin has approved your identity verification. You can now list items on FlupFlap once your subscription is active.'
-          : `Your identity verification was rejected: ${data.rejectionReason}. Please re-submit your documents on your seller dashboard.`,
+          : `Your identity verification was rejected: ${data.rejectionReason}. Please re-submit your documents from your seller dashboard.`,
       link: '/seller',
-      dedupeKey: `kyc-admin-${data.status.toLowerCase()}:${id}`,
     });
 
     return NextResponse.redirect(new URL('/admin/sellers?verification=updated', req.url));

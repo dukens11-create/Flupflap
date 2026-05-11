@@ -195,6 +195,8 @@ export async function applyAutomatedKycResult(input: {
   const previousStatus = existingVerification?.status ?? null;
   if (previousStatus !== status) {
     if (status === SellerVerificationStatus.APPROVED) {
+      // Use a stable dedupeKey so repeated webhooks for the same approval don't
+      // stack up multiple notifications; the upsert resets readAt each time.
       await createNotification({
         userId: input.sellerId,
         type: NotificationType.PAYOUT,
@@ -205,13 +207,16 @@ export async function applyAutomatedKycResult(input: {
       });
     } else if (status === SellerVerificationStatus.REJECTED) {
       const reason = input.rejectionReason ?? DEFAULT_PROVIDER_REJECTION_REASON;
+      // Use the webhookEventId as the dedupeKey to prevent duplicate notifications
+      // from the same Stripe event being retried. When no event ID is available
+      // (rare edge case), skip deduplication so the seller always receives the notice.
       await createNotification({
         userId: input.sellerId,
         type: NotificationType.PAYOUT,
         title: 'Identity verification requires attention',
-        body: `Your identity verification was not approved: ${reason}. Please re-submit your documents.`,
+        body: `Your identity verification was not approved: ${reason}. Please re-submit your documents from your seller dashboard.`,
         link: '/seller',
-        dedupeKey: `kyc-rejected:${input.sellerId}:${input.webhookEventId ?? now.getTime()}`,
+        dedupeKey: input.webhookEventId ? `kyc-rejected:${input.sellerId}:${input.webhookEventId}` : undefined,
       });
     }
   }
