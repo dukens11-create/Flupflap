@@ -5,6 +5,10 @@ import { useState, useRef } from 'react';
 const MAX_IMAGES = 6;
 const ACCEPTED_IMAGE_TYPES = 'image/jpeg,image/png,image/webp,image/gif';
 const ACCEPTED_VIDEO_TYPES = 'video/mp4,video/quicktime,video/webm';
+const ACCEPTED_IMAGE_TYPES_LIST = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+const ACCEPTED_VIDEO_TYPES_LIST = ['video/mp4', 'video/quicktime', 'video/webm'];
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MB
+const MAX_VIDEO_BYTES = 200 * 1024 * 1024; // 200 MB
 
 interface MediaUploadProps {
   /** Existing image URLs for edit forms. */
@@ -43,6 +47,20 @@ export default function MediaUpload({ defaultImages = [], defaultVideoUrl = '', 
     const files = Array.from(e.target.files ?? []);
     if (!files.length) return;
 
+    const invalidTypeFile = files.find(file => !ACCEPTED_IMAGE_TYPES_LIST.includes(file.type));
+    if (invalidTypeFile) {
+      setUploadError('Unsupported image format. Please upload JPEG, PNG, WebP, or GIF.');
+      if (imageInputRef.current) imageInputRef.current.value = '';
+      return;
+    }
+
+    const tooLargeImage = files.find(file => file.size > MAX_IMAGE_BYTES);
+    if (tooLargeImage) {
+      setUploadError('One or more images are too large. Maximum size is 10 MB each.');
+      if (imageInputRef.current) imageInputRef.current.value = '';
+      return;
+    }
+
     const remaining = MAX_IMAGES - images.length;
     if (remaining <= 0) {
       setUploadError(`Maximum ${MAX_IMAGES} images allowed.`);
@@ -72,7 +90,11 @@ export default function MediaUpload({ defaultImages = [], defaultVideoUrl = '', 
   async function handleVideoFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const MAX_VIDEO_BYTES = 200 * 1024 * 1024; // 200 MB
+    if (!ACCEPTED_VIDEO_TYPES_LIST.includes(file.type)) {
+      setUploadError('Unsupported video format. Please upload MP4, MOV, or WebM.');
+      if (videoInputRef.current) videoInputRef.current.value = '';
+      return;
+    }
     if (file.size > MAX_VIDEO_BYTES) {
       setUploadError('Video is too large. Maximum size is 200 MB.');
       if (videoInputRef.current) videoInputRef.current.value = '';
