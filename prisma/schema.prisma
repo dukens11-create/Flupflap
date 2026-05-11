@@ -162,6 +162,14 @@ model User {
   shopName                      String?
   shopLogoUrl                   String?
   shopDescription               String?
+  // Seller ship-from address (used for live shipping rate calculation)
+  shipFromName                  String?
+  shipFromStreet                String?
+  shipFromCity                  String?
+  shipFromState                 String?
+  shipFromZip                   String?
+  shipFromCountry               String?
+  shipFromPhone                 String?
 }
 
 model SellerOtp {
@@ -245,6 +253,14 @@ model Product {
   images            String[]
   mainImage         String          @default("")
   videoUrl          String?
+  // Package dimensions for live shipping rate calculation
+  weightOz          Float?
+  lengthIn          Float?
+  widthIn           Float?
+  heightIn          Float?
+  packageType       String?         // 'PACKAGE' | 'LETTER' | 'FLAT_RATE_ENVELOPE' etc.
+  /// Shipping mode: 'FLAT' uses shippingCents, 'FREE' = no cost, 'CALCULATED' = live rates
+  shippingMode      String?         // 'FLAT' | 'FREE' | 'CALCULATED'
 
   @@index([status, category, condition])
   @@index([title])
@@ -304,6 +320,9 @@ model Order {
   pickupCodeAttempts    Int         @default(0)
   pickupConfirmedAt     DateTime?
   pickupConfirmedById   String?
+  // Stored EasyPost IDs for auto-label creation after payment
+  selectedShipmentId    String?
+  selectedRateId        String?
   createdAt             DateTime    @default(now())
   updatedAt             DateTime    @updatedAt
   items                 OrderItem[]
@@ -671,6 +690,8 @@ model CheckoutSessionSnapshot {
   pickupItemIds    Json
   commissionItems  Json
   directToSellerId String?
+  /// Selected live shipping rate info: { totalRateCents, carrier, service, shipmentGroups: [{sellerId, shipmentId, rateId, rateCents}], buyerAddress }
+  shippingRateInfo Json?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 

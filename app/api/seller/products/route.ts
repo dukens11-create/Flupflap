@@ -14,12 +14,16 @@ import {
 } from '@/lib/fraud-detection';
 import { parseJsonOrNull } from '@/lib/parse-json';
 
+export const SHIPPING_MODES = ['FLAT', 'FREE', 'CALCULATED'] as const;
+type ShippingMode = typeof SHIPPING_MODES[number];
+
 const schema = z.object({
   title: z.string().trim().optional(),
   description: z.string().trim().optional(),
   price: z.string().trim().optional(),
   shipping: z.string().trim().optional(),
   shippingPrice: z.string().trim().optional(),
+  shippingMode: z.string().trim().optional(), // 'FLAT' | 'FREE' | 'CALCULATED'
   category: z.string().trim().optional(),
   subcategory: z.string().trim().optional(),
   refineCategory: z.string().trim().optional(),
@@ -44,6 +48,12 @@ const schema = z.object({
   localPickupCity: z.string().trim().max(100).optional(),
   localPickupState: z.string().trim().max(2).optional(),
   localPickupPostalCode: z.string().trim().max(20).optional(),
+  // Package dimensions for live shipping rate calculation
+  weightOz: z.string().trim().optional(),
+  lengthIn: z.string().trim().optional(),
+  widthIn: z.string().trim().optional(),
+  heightIn: z.string().trim().optional(),
+  packageType: z.string().trim().optional(),
   // Category system
   categoryId: z.string().trim().optional(),
   subcategoryId: z.string().trim().optional(),
@@ -188,6 +198,23 @@ export async function POST(req: Request) {
       return jsonError('Please enter a valid shipping price.', 400);
     }
 
+    // Resolve shipping mode — defaults to CALCULATED for new listings with no explicit flat rate
+    const resolvedShippingMode: ShippingMode = (() => {
+      if (data.shippingMode && (SHIPPING_MODES as readonly string[]).includes(data.shippingMode)) {
+        return data.shippingMode as ShippingMode;
+      }
+      // Legacy: if a non-zero flat shipping price was supplied without mode, treat as FLAT
+      if (shippingValue > 0) return 'FLAT';
+      return 'CALCULATED';
+    })();
+
+    // Parse package dimensions (optional; not required to create a listing)
+    const weightOz = data.weightOz ? Number(data.weightOz) : null;
+    const lengthIn = data.lengthIn ? Number(data.lengthIn) : null;
+    const widthIn = data.widthIn ? Number(data.widthIn) : null;
+    const heightIn = data.heightIn ? Number(data.heightIn) : null;
+    const packageType = data.packageType?.trim() || null;
+
     const attributes = parseJsonOrNull(data.productAttributes);
     const normalizedAttributes: Record<string, unknown> =
       attributes && typeof attributes === 'object' && !Array.isArray(attributes)
@@ -287,7 +314,8 @@ export async function POST(req: Request) {
           mainImage,
           videoUrl,
           sellerId: session.user.id,
-          shippingCents: cents(shippingRaw),
+          shippingCents: resolvedShippingMode === 'FREE' ? 0 : cents(shippingRaw),
+          shippingMode: resolvedShippingMode,
           inventory: inventoryQty,
           status: 'PENDING',
           pickupAvailable,
@@ -297,6 +325,11 @@ export async function POST(req: Request) {
           categoryId: safeCategoryId,
           subcategoryId: safeSubcategoryId,
           productAttributes: productAttributesValue,
+          weightOz: weightOz && Number.isFinite(weightOz) && weightOz > 0 ? weightOz : null,
+          lengthIn: lengthIn && Number.isFinite(lengthIn) && lengthIn > 0 ? lengthIn : null,
+          widthIn: widthIn && Number.isFinite(widthIn) && widthIn > 0 ? widthIn : null,
+          heightIn: heightIn && Number.isFinite(heightIn) && heightIn > 0 ? heightIn : null,
+          packageType,
         },
       });
     } catch (dbError) {

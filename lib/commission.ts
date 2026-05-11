@@ -141,6 +141,8 @@ export function buildCheckoutCommissionItems<
   items: { productId: string; quantity: number }[],
   pickupItemIds: string[],
   defaultSellerCommissionBps: number,
+  /** Optional override map: productId → shippingCents. Used when live rates replace product.shippingCents. */
+  shippingOverrides?: Map<string, number>,
 ) {
   const pickupSet = new Set(pickupItemIds);
 
@@ -148,7 +150,12 @@ export function buildCheckoutCommissionItems<
     const quantity = items.find((item) => item.productId === product.id)?.quantity ?? 1;
     const lineSubtotalCents = product.priceCents * quantity;
     // Product.shippingCents is stored as the per-unit shipping amount.
-    const shippingCents = pickupSet.has(product.id) ? 0 : product.shippingCents;
+    let shippingCents = pickupSet.has(product.id) ? 0 : product.shippingCents;
+    // Apply live-rate override when present (sets shipping to 0 on the item;
+    // the actual shipping cost is charged as a separate Stripe line item).
+    if (shippingOverrides?.has(product.id)) {
+      shippingCents = shippingOverrides.get(product.id)!;
+    }
     const resolved = resolveCommissionForSeller({
       seller: product.seller,
       defaultSellerCommissionBps,

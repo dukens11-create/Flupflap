@@ -14,6 +14,8 @@ import {
 } from '@/lib/kyc/providers';
 import { isSellerVerificationApproved } from '@/lib/seller-verification';
 import { createNotification, createNotifications, type CreateNotificationInput } from '@/lib/notifications';
+import { purchaseShipmentRate, buildTrackingUrl } from '@/lib/shipping';
+import { sendEmail } from '@/lib/email';
 
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -445,12 +447,27 @@ export async function POST(req: Request) {
       };
     });
 
+    // Extract live shipping rate info stored during checkout
+    const shippingRateInfo = snapshot?.shippingRateInfo as {
+      shipmentGroups?: { sellerId: string; shipmentId: string; rateId: string; rateCents: number; carrier: string; service: string }[];
+      totalRateCents?: number;
+      buyerAddress?: { name?: string; street1: string; street2?: string; city: string; state: string; zip: string; country?: string };
+    } | null ?? null;
+
+    const liveShippingCents = shippingRateInfo?.totalRateCents ?? 0;
+
     const subtotalCents = orderItems.reduce((sum, item) => sum + item.lineSubtotalCents, 0);
-    const shippingTotalCents = orderItems.reduce((sum, item) => sum + item.shippingCents * item.quantity, 0);
+    // Use live shipping total if available, otherwise fall back to flat shipping on items
+    const shippingTotalCents = liveShippingCents > 0
+      ? liveShippingCents
+      : orderItems.reduce((sum, item) => sum + item.shippingCents * item.quantity, 0);
     const platformFeeCents = orderItems.reduce((sum, item) => sum + item.commissionFeeCents, 0);
     const totalCents = subtotalCents + shippingTotalCents;
 
     const shipping = cs.shipping_details ?? {};
+
+    // Use live buyer address if Stripe didn't collect one
+    const liveAddress = shippingRateInfo?.buyerAddress;
 
     // Gather pickup location from first pickup product for order record
     const firstPickupProduct = products.find(p => pickupSet.has(p.id));
@@ -470,13 +487,13 @@ export async function POST(req: Request) {
         pickupCode: isPickupOrder ? generatePickupCode() : null,
         pickupCity: isPickupOrder ? (firstPickupProduct?.pickupCity ?? null) : null,
         pickupState: isPickupOrder ? (firstPickupProduct?.pickupState ?? null) : null,
-        shippingName: shipping?.name ?? null,
-        shippingLine1: shipping?.address?.line1 ?? null,
-        shippingLine2: shipping?.address?.line2 ?? null,
-        shippingCity: shipping?.address?.city ?? null,
-        shippingState: shipping?.address?.state ?? null,
-        shippingPostalCode: shipping?.address?.postal_code ?? null,
-        shippingCountry: shipping?.address?.country ?? null,
+        shippingName: shipping?.name ?? liveAddress?.name ?? null,
+        shippingLine1: shipping?.address?.line1 ?? liveAddress?.street1 ?? null,
+        shippingLine2: shipping?.address?.line2 ?? liveAddress?.street2 ?? null,
+        shippingCity: shipping?.address?.city ?? liveAddress?.city ?? null,
+        shippingState: shipping?.address?.state ?? liveAddress?.state ?? null,
+        shippingPostalCode: shipping?.address?.postal_code ?? liveAddress?.zip ?? null,
+        shippingCountry: shipping?.address?.country ?? liveAddress?.country ?? null,
         items: {
           create: orderItems.map(item => ({
             productId: item.product.id,
@@ -660,6 +677,95 @@ export async function POST(req: Request) {
       await prisma.checkoutSessionSnapshot.delete({
         where: { stripeCheckoutId: snapshot.stripeCheckoutId },
       });
+    }
+
+    // Auto-purchase shipping labels when live rate info was captured at checkout
+    if (!isPickupOrder && shippingRateInfo?.shipmentGroups?.length) {
+      // Find the buyer's email for tracking notification
+      const buyer = await prisma.user.findUnique({
+        where: { id: buyerId },
+        select: { email: true, name: true },
+      });
+
+      // Collect all purchased label results; only persist the first valid one to the order record
+      // (the Order schema stores a single label/tracking for backward compatibility).
+      const purchasedLabels: Array<{ sellerId: string; result: Awaited<ReturnType<typeof purchaseShipmentRate>>; group: typeof shippingRateInfo.shipmentGroups[number] }> = [];
+
+      for (const group of shippingRateInfo.shipmentGroups) {
+        if (!group.shipmentId || !group.rateId) continue;
+        try {
+          const result = await purchaseShipmentRate({
+            shipmentId: group.shipmentId,
+            rateId: group.rateId,
+          });
+          purchasedLabels.push({ sellerId: group.sellerId, result, group });
+        } catch (labelErr: any) {
+          console.error('[webhook] auto-label purchase failed for shipment', group.shipmentId, labelErr?.message ?? labelErr);
+          // Non-fatal: the order is created; seller can still manually purchase a label
+        }
+      }
+
+      // Persist the first successfully purchased label to the order
+      if (purchasedLabels.length > 0) {
+        const primary = purchasedLabels[0];
+        await prisma.order.update({
+          where: { id: order.id },
+          data: {
+            labelUrl: primary.result.labelUrl ?? undefined,
+            trackingNumber: primary.result.trackingNumber ?? undefined,
+            carrier: primary.result.carrier ?? undefined,
+            shipmentId: primary.result.shipmentId ?? undefined,
+            status: 'SHIPPED',
+          },
+        });
+      }
+
+      // Send a single tracking notification/email aggregating all labels
+      if (purchasedLabels.length > 0) {
+        const trackingSummary = purchasedLabels
+          .map(l => `${l.result.carrier ?? l.group.carrier}: ${l.result.trackingNumber ?? 'N/A'}`)
+          .join('; ');
+
+        await createNotification({
+          userId: buyerId,
+          type: NotificationType.SHIPPING,
+          title: 'Your order has shipped!',
+          body: trackingSummary,
+          link: `/orders/${order.id}`,
+          data: { orderId: order.id, trackingSummary },
+        });
+
+        // Notify each seller with their label URL
+        for (const { sellerId, result, group } of purchasedLabels) {
+          await createNotification({
+            userId: sellerId,
+            type: NotificationType.SHIPPING,
+            title: 'Shipping label ready',
+            body: `Label created for order ${order.id}. Carrier: ${result.carrier ?? group.carrier}.`,
+            link: '/seller',
+            data: { orderId: order.id, labelUrl: result.labelUrl },
+          });
+        }
+
+        // Email tracking info to buyer
+        if (buyer?.email) {
+          const trackingLines = purchasedLabels.map(l => {
+            const trackingUrl = l.result.trackingUrl ?? buildTrackingUrl(l.result.carrier, l.result.trackingNumber);
+            return l.result.trackingNumber
+              ? `<li>${l.result.carrier ?? l.group.carrier}: <strong>${l.result.trackingNumber}</strong>${trackingUrl ? ` (<a href="${trackingUrl}">Track</a>)` : ''}</li>`
+              : `<li>${l.result.carrier ?? l.group.carrier}: label created</li>`;
+          }).join('\n');
+          await sendEmail(
+            buyer.email,
+            'Your FlupFlap order has shipped!',
+            `<p>Hi ${buyer.name ?? 'there'},</p>
+<p>Great news! Your order has been shipped.</p>
+<ul>${trackingLines}</ul>
+<p><a href="${process.env.NEXT_PUBLIC_APP_URL ?? ''}/orders/${order.id}">View your order</a></p>
+<p>— The FlupFlap team</p>`,
+          );
+        }
+      }
     }
   }
 

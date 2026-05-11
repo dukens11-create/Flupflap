@@ -7,6 +7,7 @@ type Item = {
   priceCents: number;
   imageUrl: string;
   shippingCents: number;
+  shippingMode?: string;
   quantity: number;
   inventoryQty: number;
   pickupAvailable?: boolean;
@@ -30,6 +31,7 @@ export default function AddToCartButton({ item }: { item: Omit<Item, 'quantity'>
       const wasCapped = clamped < newQty;
       existing.quantity = clamped;
       existing.inventoryQty = item.inventoryQty;
+      existing.shippingMode = item.shippingMode;
       if (wasCapped) setCapped(true);
     } else {
       cart.push({ ...item, quantity: qty });

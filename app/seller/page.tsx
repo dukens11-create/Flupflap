@@ -487,6 +487,13 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
             initialShopName={dbUser?.shopName ?? null}
             initialShopLogoUrl={dbUser?.shopLogoUrl ?? null}
             initialShopDescription={dbUser?.shopDescription ?? null}
+            initialShipFromName={dbUser?.shipFromName ?? null}
+            initialShipFromStreet={dbUser?.shipFromStreet ?? null}
+            initialShipFromCity={dbUser?.shipFromCity ?? null}
+            initialShipFromState={dbUser?.shipFromState ?? null}
+            initialShipFromZip={dbUser?.shipFromZip ?? null}
+            initialShipFromCountry={dbUser?.shipFromCountry ?? null}
+            initialShipFromPhone={dbUser?.shipFromPhone ?? null}
           />
         </section>
       )}

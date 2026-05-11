@@ -210,9 +210,24 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             <h1 className="text-2xl font-black mt-1">{product.title}</h1>
             <p className="text-3xl font-black text-blue-700 mt-2">{dollars(product.priceCents)}</p>
             {product.pickupAvailable ? (
-              <p className="text-sm text-slate-500">+ {dollars(product.shippingCents)} shipping <span className="text-green-700 font-medium">or free local pickup</span></p>
+              <p className="text-sm text-slate-500">
+                {product.shippingMode === 'FREE'
+                  ? <span className="text-green-700 font-medium">Free shipping</span>
+                  : product.shippingMode === 'CALCULATED' || (!product.shippingMode && product.shippingCents === 0)
+                    ? <><span>Shipping calculated at checkout</span></>
+                    : <><span>+ {dollars(product.shippingCents)} shipping</span></>
+                }
+                {' '}<span className="text-green-700 font-medium">or free local pickup</span>
+              </p>
             ) : (
-              <p className="text-sm text-slate-500">+ {dollars(product.shippingCents)} shipping</p>
+              <p className="text-sm text-slate-500">
+                {product.shippingMode === 'FREE'
+                  ? <span className="text-green-700 font-medium">Free shipping</span>
+                  : product.shippingMode === 'CALCULATED' || (!product.shippingMode && product.shippingCents === 0)
+                    ? 'Shipping calculated at checkout'
+                    : `+ ${dollars(product.shippingCents)} shipping`
+                }
+              </p>
             )}
             <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
               <p>Sold by {sellerPublicName}</p>
@@ -273,6 +288,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
                 priceCents: product.priceCents,
                 imageUrl: product.imageUrl,
                 shippingCents: product.shippingCents,
+                shippingMode: product.shippingMode ?? undefined,
                 pickupAvailable: product.pickupAvailable,
                 pickupCity: product.pickupCity ?? undefined,
                 pickupState: product.pickupState ?? undefined,

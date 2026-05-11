@@ -10,9 +10,20 @@ type Item = {
   priceCents: number;
   imageUrl: string;
   shippingCents: number;
+  shippingMode?: string;
   quantity: number;
   inventoryQty?: number;
 };
+
+function isCalculatedShipping(item: Item): boolean {
+  return item.shippingMode === 'CALCULATED' || (!item.shippingMode && item.shippingCents === 0);
+}
+
+function shippingLabel(item: Item): string {
+  if (item.shippingMode === 'FREE') return 'Free shipping';
+  if (isCalculatedShipping(item)) return 'Shipping calculated at checkout';
+  return `+ ${dollars(item.shippingCents)} shipping`;
+}
 
 export default function CartClient() {
   const [items, setItems] = useState<Item[]>([]);
@@ -29,9 +40,16 @@ export default function CartClient() {
   }
 
   const total = useMemo(
-    () => items.reduce((s, i) => s + (i.priceCents + i.shippingCents) * i.quantity, 0),
+    () => items.reduce((s, i) => {
+      const flatShipping = (i.shippingMode === 'FREE' || isCalculatedShipping(i))
+        ? 0
+        : i.shippingCents;
+      return s + (i.priceCents + flatShipping) * i.quantity;
+    }, 0),
     [items]
   );
+
+  const hasCalculatedShipping = items.some(isCalculatedShipping);
 
   if (!items.length) {
     return (
@@ -52,8 +70,8 @@ export default function CartClient() {
           </div>
           <div className="flex-1 min-w-0">
             <p className="font-semibold truncate">{i.title}</p>
-            <p className="text-sm text-slate-500">
-              {dollars(i.priceCents)} + {dollars(i.shippingCents)} shipping
+            <p className={`text-sm ${i.shippingMode === 'FREE' ? 'text-green-700' : 'text-slate-500'}`}>
+              {dollars(i.priceCents)} · {shippingLabel(i)}
             </p>
           </div>
           <div className="flex gap-2 items-center flex-shrink-0">
@@ -85,8 +103,14 @@ export default function CartClient() {
       ))}
       <div className="card p-6 flex flex-col sm:flex-row justify-between items-center gap-4">
         <div>
-          <p className="text-lg font-black">Total: {dollars(total)}</p>
-          <p className="text-xs text-slate-500">Includes item prices and shipping</p>
+          <p className="text-lg font-black">
+            {hasCalculatedShipping ? `Subtotal: ${dollars(total)}` : `Total: ${dollars(total)}`}
+          </p>
+          <p className="text-xs text-slate-500">
+            {hasCalculatedShipping
+              ? 'Shipping calculated at checkout'
+              : 'Includes item prices and shipping'}
+          </p>
         </div>
         <button onClick={() => router.push('/checkout')} className="btn-primary min-w-[140px]" aria-label="Review order and proceed to checkout">
           Review order →

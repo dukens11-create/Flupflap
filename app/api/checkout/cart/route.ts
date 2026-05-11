@@ -7,6 +7,29 @@ import { buildCheckoutCommissionItems, getMarketplaceSettings } from '@/lib/comm
 import { checkoutErrorResponse } from '@/lib/checkout-errors';
 import { isSellerVerificationApproved } from '@/lib/seller-verification';
 
+type ShipmentGroup = {
+  sellerId: string;
+  shipmentId: string;
+  rateId: string;
+  rateCents: number;
+  carrier: string;
+  service: string;
+};
+
+type ShippingRateInfo = {
+  shipmentGroups: ShipmentGroup[];
+  totalRateCents: number;
+  buyerAddress?: {
+    name?: string;
+    street1: string;
+    street2?: string;
+    city: string;
+    state: string;
+    zip: string;
+    country?: string;
+  };
+};
+
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions);
@@ -17,8 +40,10 @@ export async function POST(req: Request) {
     const body = await req.json() as {
       items: { productId: string; quantity: number }[];
       pickupItemIds?: string[];
+      shippingRateInfo?: ShippingRateInfo;
+      buyerAddress?: ShippingRateInfo['buyerAddress'];
     };
-    const { items, pickupItemIds = [] } = body;
+    const { items, pickupItemIds = [], shippingRateInfo } = body;
     if (!items?.length) return NextResponse.json({ error: 'Cart is empty.' }, { status: 400 });
 
     const [settings, products] = await Promise.all([
@@ -64,11 +89,26 @@ export async function POST(req: Request) {
     }
 
     const pickupSet = new Set(pickupItemIds);
+
+    // When live shipping rates are provided, override shippingCents per item to 0.
+    // The actual shipping cost is charged as a separate Stripe line item, so items
+    // must have shippingCents=0 to avoid double-billing the buyer for shipping.
+    const liveRatesByProductId = new Map<string, number>();
+    if (shippingRateInfo?.shipmentGroups?.length) {
+      // Build a Map from sellerId → group for O(1) lookup per product
+      const groupBySellerIdMap = new Map(shippingRateInfo.shipmentGroups.map(g => [g.sellerId, g]));
+      for (const product of products) {
+        if (pickupSet.has(product.id)) continue;
+        if (groupBySellerIdMap.has(product.sellerId)) liveRatesByProductId.set(product.id, 0);
+      }
+    }
+
     const { commissionItems, platformFeeCents } = buildCheckoutCommissionItems(
       products,
       items,
       pickupItemIds,
       settings.defaultSellerCommissionBps,
+      liveRatesByProductId.size > 0 ? liveRatesByProductId : undefined,
     );
     const commissionItemsById = new Map(commissionItems.map((item) => [item.productId, item]));
 
@@ -88,8 +128,22 @@ export async function POST(req: Request) {
       };
     });
 
+    // Add live shipping as a separate line item if selected
+    if (shippingRateInfo?.totalRateCents && shippingRateInfo.totalRateCents > 0) {
+      lineItems.push({
+        price_data: {
+          currency: 'usd',
+          product_data: { name: 'Shipping', images: [] },
+          unit_amount: shippingRateInfo.totalRateCents,
+        },
+        quantity: 1,
+      });
+    }
+
     // If ALL items are pickup, don't collect a shipping address from Stripe
     const allPickup = products.every(p => pickupSet.has(p.id));
+    // If live shipping address was provided by buyer, skip Stripe address collection
+    const hasLiveShippingAddress = !!(shippingRateInfo?.buyerAddress?.street1);
 
     // Wire funds to the seller's connected account only when the entire cart
     // belongs to a single, fully-onboarded seller. Multi-seller carts have no
@@ -143,7 +197,7 @@ export async function POST(req: Request) {
       line_items: lineItems,
       success_url: `${appUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${appUrl}/checkout/cancel`,
-      ...(allPickup
+      ...(allPickup || hasLiveShippingAddress
         ? {}
         : {
             shipping_address_collection: { allowed_countries: ['US', 'CA', 'GB', 'AU'] },
@@ -173,6 +227,7 @@ export async function POST(req: Request) {
         pickupItemIds,
         commissionItems,
         directToSellerId: sellerStripeId,
+        shippingRateInfo: shippingRateInfo ?? undefined,
       },
     });
 

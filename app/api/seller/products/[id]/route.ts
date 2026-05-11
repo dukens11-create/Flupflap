@@ -10,12 +10,14 @@ import {
   shouldRecommendFraudReview,
 } from '@/lib/fraud-detection';
 import { parseJsonOrNull } from '@/lib/parse-json';
+import { SHIPPING_MODES } from '@/app/api/seller/products/route';
 
 const updateSchema = z.object({
   title: z.string().min(3).optional(),
   description: z.string().min(10).optional(),
   price: z.string().optional(),
   shipping: z.string().optional(),
+  shippingMode: z.string().optional(), // 'FLAT' | 'FREE' | 'CALCULATED'
   category: z.string().min(1).optional(),
   condition: z.string().min(1).optional(),
   imageUrl: z.string().url().optional(),
@@ -26,6 +28,12 @@ const updateSchema = z.object({
   pickupCity: z.string().max(100).optional(),
   pickupState: z.string().max(2).optional(),
   pickupPostalCode: z.string().max(20).optional(),
+  // Package dimensions
+  weightOz: z.string().optional(),
+  lengthIn: z.string().optional(),
+  widthIn: z.string().optional(),
+  heightIn: z.string().optional(),
+  packageType: z.string().optional(),
   // Category system
   categoryId: z.string().optional(),
   subcategoryId: z.string().optional(),
@@ -146,18 +154,17 @@ export async function POST(
         ...(data.description && { description: data.description }),
         ...(data.price && { priceCents: cents(data.price) }),
         ...(data.shipping !== undefined && { shippingCents: cents(data.shipping || '0') }),
-        ...(data.category && { category: data.category }),
-        ...(data.condition && { condition: data.condition }),
-        imageUrl: mainImage,
-        images: resolvedImages,
-        mainImage,
-        videoUrl,
-        ...(data.inventory && { inventory: Number(data.inventory) }),
-        // Pickup fields — always written on form submit so we can clear them
+        ...(data.shippingMode && (SHIPPING_MODES as readonly string[]).includes(data.shippingMode) && { shippingMode: data.shippingMode }),
         pickupAvailable: data.pickupAvailable === 'true',
         pickupCity: data.pickupCity || null,
         pickupState: data.pickupState || null,
         pickupPostalCode: data.pickupPostalCode || null,
+        // Package dimensions
+        ...(data.weightOz !== undefined && { weightOz: data.weightOz ? Number(data.weightOz) : null }),
+        ...(data.lengthIn !== undefined && { lengthIn: data.lengthIn ? Number(data.lengthIn) : null }),
+        ...(data.widthIn !== undefined && { widthIn: data.widthIn ? Number(data.widthIn) : null }),
+        ...(data.heightIn !== undefined && { heightIn: data.heightIn ? Number(data.heightIn) : null }),
+        ...(data.packageType !== undefined && { packageType: data.packageType || null }),
         // Category system fields
         categoryId: data.categoryId || null,
         subcategoryId: data.subcategoryId || null,
@@ -240,6 +247,7 @@ export async function PATCH(
         ...(data.description && { description: data.description }),
         ...(data.price && { priceCents: cents(data.price) }),
         ...(data.shipping !== undefined && { shippingCents: cents(data.shipping || '0') }),
+        ...(data.shippingMode && (SHIPPING_MODES as readonly string[]).includes(data.shippingMode) && { shippingMode: data.shippingMode }),
         ...(data.category && { category: data.category }),
         ...(data.condition && { condition: data.condition }),
         imageUrl: mainImage,
@@ -251,6 +259,12 @@ export async function PATCH(
         ...(data.pickupCity !== undefined && { pickupCity: data.pickupCity || null }),
         ...(data.pickupState !== undefined && { pickupState: data.pickupState || null }),
         ...(data.pickupPostalCode !== undefined && { pickupPostalCode: data.pickupPostalCode || null }),
+        // Package dimensions
+        ...(data.weightOz !== undefined && { weightOz: data.weightOz ? Number(data.weightOz) : null }),
+        ...(data.lengthIn !== undefined && { lengthIn: data.lengthIn ? Number(data.lengthIn) : null }),
+        ...(data.widthIn !== undefined && { widthIn: data.widthIn ? Number(data.widthIn) : null }),
+        ...(data.heightIn !== undefined && { heightIn: data.heightIn ? Number(data.heightIn) : null }),
+        ...(data.packageType !== undefined && { packageType: data.packageType || null }),
         // Category system fields
         categoryId: data.categoryId || null,
         subcategoryId: data.subcategoryId || null,

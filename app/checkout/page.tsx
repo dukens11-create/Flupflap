@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
@@ -9,6 +9,7 @@ interface CartItem {
   title: string;
   priceCents: number;
   shippingCents: number;
+  shippingMode?: string;
   imageUrl: string;
   quantity: number;
   pickupAvailable?: boolean;
@@ -16,8 +17,53 @@ interface CartItem {
   pickupState?: string;
 }
 
+type RateQuote = {
+  id: string;
+  carrier: string;
+  service: string;
+  rate: string;
+  currency: string;
+  deliveryDays: number | null;
+};
+
+type ShipGroup = {
+  sellerId: string;
+  sellerName: string;
+  shipmentId: string;
+  rates: RateQuote[];
+  /** Precomputed minimum delivery days across rates (null if no rates have delivery days). */
+  minDeliveryDays: number | null;
+};
+
+type SelectedRate = {
+  sellerId: string;
+  shipmentId: string;
+  rateId: string;
+  rateCents: number;
+  carrier: string;
+  service: string;
+};
+
 function dollars(cents: number) {
   return `$${(cents / 100).toFixed(2)}`;
+}
+
+/** Safely converts a rate string (e.g. "8.50") to integer cents. Returns 0 for non-numeric inputs. */
+function convertRateToCents(rate: string | number): number {
+  const n = Number(rate);
+  return Number.isFinite(n) ? Math.round(n * 100) : 0;
+}
+
+function isCalculatedShipping(item: Pick<CartItem, 'shippingMode' | 'shippingCents'>): boolean {
+  return item.shippingMode === 'CALCULATED' || (!item.shippingMode && item.shippingCents === 0);
+}
+
+function itemShippingLabel(item: CartItem, isPickup: boolean): React.ReactNode {
+  if (isPickup) return <span className="text-green-700 font-medium"> · Free pickup</span>;
+  if (item.shippingMode === 'FREE') return <span className="text-green-700 font-medium"> · Free shipping</span>;
+  if (isCalculatedShipping(item)) return <span className="text-slate-400"> · Shipping calculated at checkout</span>;
+  if (item.shippingCents > 0) return <span> · {dollars(item.shippingCents)} shipping</span>;
+  return null;
 }
 
 export default function CheckoutPage() {
@@ -29,6 +75,20 @@ export default function CheckoutPage() {
   const [error, setError] = useState('');
   // Track which items the buyer chose pickup for (item id → true = pickup)
   const [pickupChoices, setPickupChoices] = useState<Record<string, boolean>>({});
+
+  // Live shipping rate state
+  const [buyerName, setBuyerName] = useState('');
+  const [buyerStreet1, setBuyerStreet1] = useState('');
+  const [buyerStreet2, setBuyerStreet2] = useState('');
+  const [buyerCity, setBuyerCity] = useState('');
+  const [buyerState, setBuyerState] = useState('');
+  const [buyerZip, setBuyerZip] = useState('');
+  const [buyerCountry, setBuyerCountry] = useState('US');
+  const [rateGroups, setRateGroups] = useState<ShipGroup[]>([]);
+  const [selectedRates, setSelectedRates] = useState<SelectedRate[]>([]);
+  const [fetchingRates, setFetchingRates] = useState(false);
+  const [rateError, setRateError] = useState('');
+  const [ratesFetched, setRatesFetched] = useState(false);
 
   useEffect(() => {
     try {
@@ -50,40 +110,190 @@ export default function CheckoutPage() {
     [pickupEligibleIds, pickupChoices],
   );
 
+  // Check if any non-pickup items need live shipping rates
+  const hasCalculatedShipping = useMemo(
+    () => items.some(i => !isPickup(i.id) && isCalculatedShipping(i)),
+    [items, isPickup],
+  );
+
+  const nonPickupItems = useMemo(
+    () => items.filter(i => !isPickup(i.id)),
+    [items, isPickup],
+  );
+
   const subtotal = useMemo(
     () => items.reduce((s, i) => s + i.priceCents * i.quantity, 0),
     [items],
   );
-  const shipping = useMemo(
+
+  // Shipping from selected live rates
+  const liveShippingCents = useMemo(
+    () => selectedRates.reduce((s, r) => s + r.rateCents, 0),
+    [selectedRates],
+  );
+
+  // Flat shipping from products that don't use live rates
+  const flatShipping = useMemo(
     () =>
       items.reduce((s, i) => {
-        // Skip shipping for items buyer chose to pick up
         if (isPickup(i.id)) return s;
+        if (isCalculatedShipping(i)) return s;
+        if (i.shippingMode === 'FREE') return s;
         return s + i.shippingCents * i.quantity;
       }, 0),
     [items, isPickup],
   );
-  const total = subtotal + shipping;
+
+  const totalShipping = hasCalculatedShipping ? liveShippingCents + flatShipping : flatShipping;
+  const total = subtotal + totalShipping;
 
   const pickupItemIds = useMemo(
     () => items.filter(i => isPickup(i.id)).map(i => i.id),
     [items, isPickup],
   );
 
+  const buyerAddressComplete = buyerStreet1.trim() && buyerCity.trim() && buyerState.trim() && buyerZip.trim();
+
+  async function handleFetchRates() {
+    if (!buyerAddressComplete) return;
+    setFetchingRates(true);
+    setRateError('');
+    setRateGroups([]);
+    setSelectedRates([]);
+    setRatesFetched(false);
+    try {
+      const res = await fetch('/api/checkout/rates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: nonPickupItems.map(i => ({ productId: i.id, quantity: i.quantity })),
+          buyerAddress: {
+            name: buyerName.trim() || session?.user?.name || 'Buyer',
+            street1: buyerStreet1.trim(),
+            street2: buyerStreet2.trim() || undefined,
+            city: buyerCity.trim(),
+            state: buyerState.trim(),
+            zip: buyerZip.trim(),
+            country: buyerCountry.trim() || 'US',
+          },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setRateError(data.error ?? 'Shipping rate unavailable. Please try again.');
+        setRatesFetched(true);
+        return;
+      }
+      const rawGroups: Omit<ShipGroup, 'minDeliveryDays'>[] = data.groups ?? [];
+      // Precompute minDeliveryDays per group to avoid recalculating on every render
+      const groups: ShipGroup[] = rawGroups.map(g => {
+        const ratesWithDays = g.rates.filter(r => r.deliveryDays !== null);
+        return {
+          ...g,
+          minDeliveryDays: ratesWithDays.length > 0
+            ? ratesWithDays.reduce((m, r) => Math.min(m, r.deliveryDays!), Infinity)
+            : null,
+        };
+      });
+      setRateGroups(groups);
+      // Auto-select cheapest rate per group
+      const autoSelected: SelectedRate[] = groups.map((group) => {
+        const cheapest = group.rates[0]; // already sorted by rate asc
+        return {
+          sellerId: group.sellerId,
+          shipmentId: group.shipmentId,
+          rateId: cheapest?.id ?? '',
+          rateCents: cheapest ? convertRateToCents(cheapest.rate) : 0,
+          carrier: cheapest?.carrier ?? '',
+          service: cheapest?.service ?? '',
+        };
+      });
+      setSelectedRates(autoSelected);
+      setRatesFetched(true);
+      if (data.warnings?.length) {
+        setRateError(data.warnings.join(' '));
+      }
+    } catch {
+      setRateError('Shipping rate unavailable. Please try again.');
+      setRatesFetched(true);
+    } finally {
+      setFetchingRates(false);
+    }
+  }
+
+  function handleSelectRate(sellerId: string, shipmentId: string, rate: RateQuote) {
+    setSelectedRates(prev => {
+      const next = prev.filter(r => r.sellerId !== sellerId);
+      next.push({
+        sellerId,
+        shipmentId,
+        rateId: rate.id,
+        rateCents: convertRateToCents(rate.rate),
+        carrier: rate.carrier,
+        service: rate.service,
+      });
+      return next;
+    });
+  }
+
   async function handleCheckout() {
     if (!session?.user) {
       router.push('/login?callbackUrl=/checkout');
       return;
     }
+
+    // If live shipping is needed, validate rates selected
+    if (hasCalculatedShipping && !ratesFetched) {
+      setError('Please calculate shipping rates before proceeding.');
+      return;
+    }
+
     setChecking(true);
     setError('');
     try {
+      const shippingRateInfo = hasCalculatedShipping && selectedRates.length > 0
+        ? {
+            shipmentGroups: selectedRates.map(r => ({
+              sellerId: r.sellerId,
+              shipmentId: r.shipmentId,
+              rateId: r.rateId,
+              rateCents: r.rateCents,
+              carrier: r.carrier,
+              service: r.service,
+            })),
+            totalRateCents: liveShippingCents,
+            buyerAddress: {
+              name: buyerName.trim() || session.user?.name || 'Buyer',
+              street1: buyerStreet1.trim(),
+              street2: buyerStreet2.trim() || undefined,
+              city: buyerCity.trim(),
+              state: buyerState.trim(),
+              zip: buyerZip.trim(),
+              country: buyerCountry.trim() || 'US',
+            },
+          }
+        : undefined;
+
       const res = await fetch('/api/checkout/cart', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           items: items.map(i => ({ productId: i.id, quantity: i.quantity })),
           pickupItemIds,
+          shippingRateInfo,
+          ...(hasCalculatedShipping && buyerAddressComplete
+            ? {
+                buyerAddress: {
+                  name: buyerName.trim() || session.user?.name || 'Buyer',
+                  street1: buyerStreet1.trim(),
+                  street2: buyerStreet2.trim() || undefined,
+                  city: buyerCity.trim(),
+                  state: buyerState.trim(),
+                  zip: buyerZip.trim(),
+                  country: buyerCountry.trim() || 'US',
+                },
+              }
+            : {}),
         }),
       });
       const data = await res.json();
@@ -123,6 +333,8 @@ export default function CheckoutPage() {
     );
   }
 
+  const allPickup = pickupItemIds.length > 0 && pickupItemIds.length === items.length;
+
   return (
     <main className="max-w-2xl mx-auto">
       <h1 className="text-3xl font-black mb-6">Review your order</h1>
@@ -149,16 +361,11 @@ export default function CheckoutPage() {
                 <p className="font-medium truncate">{item.title}</p>
                 <p className="text-sm text-slate-500">
                   {dollars(item.priceCents)} × {item.quantity}
-                  {!isPickup(item.id) && item.shippingCents > 0 && (
-                    <span> · {dollars(item.shippingCents)} shipping</span>
-                  )}
-                  {isPickup(item.id) && (
-                    <span className="text-green-700 font-medium"> · Free pickup</span>
-                  )}
+                  {itemShippingLabel(item, isPickup(item.id))}
                 </p>
               </div>
               <p className="font-semibold flex-shrink-0">
-                {dollars((item.priceCents + (isPickup(item.id) ? 0 : item.shippingCents)) * item.quantity)}
+                {dollars(item.priceCents * item.quantity)}
               </p>
             </div>
             {/* Pickup / delivery selector */}
@@ -191,6 +398,150 @@ export default function CheckoutPage() {
         ))}
       </div>
 
+      {/* Shipping address for live rate calculation */}
+      {!allPickup && hasCalculatedShipping && (
+        <div className="card p-5 mb-4 space-y-3">
+          <p className="font-semibold text-slate-900">📦 Shipping address</p>
+          <p className="text-xs text-slate-500">Enter your address to calculate live shipping rates.</p>
+
+          <div>
+            <label className="label text-xs">Full name</label>
+            <input
+              type="text"
+              value={buyerName}
+              onChange={e => setBuyerName(e.target.value)}
+              className="input"
+              placeholder="Jane Smith"
+            />
+          </div>
+          <div>
+            <label className="label text-xs">Street address</label>
+            <input
+              type="text"
+              value={buyerStreet1}
+              onChange={e => setBuyerStreet1(e.target.value)}
+              className="input"
+              placeholder="123 Main St"
+            />
+          </div>
+          <div>
+            <label className="label text-xs">Apt, suite, etc. (optional)</label>
+            <input
+              type="text"
+              value={buyerStreet2}
+              onChange={e => setBuyerStreet2(e.target.value)}
+              className="input"
+              placeholder="Apt 4B"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label text-xs">City</label>
+              <input
+                type="text"
+                value={buyerCity}
+                onChange={e => setBuyerCity(e.target.value)}
+                className="input"
+                placeholder="New York"
+              />
+            </div>
+            <div>
+              <label className="label text-xs">State</label>
+              <input
+                type="text"
+                value={buyerState}
+                onChange={e => setBuyerState(e.target.value)}
+                className="input"
+                placeholder="NY"
+                maxLength={2}
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label text-xs">ZIP code</label>
+              <input
+                type="text"
+                value={buyerZip}
+                onChange={e => setBuyerZip(e.target.value)}
+                className="input"
+                placeholder="10001"
+              />
+            </div>
+            <div>
+              <label className="label text-xs">Country</label>
+              <select
+                value={buyerCountry}
+                onChange={e => setBuyerCountry(e.target.value)}
+                className="input"
+              >
+                <option value="US">United States</option>
+                <option value="CA">Canada</option>
+                <option value="GB">United Kingdom</option>
+                <option value="AU">Australia</option>
+              </select>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleFetchRates}
+            disabled={!buyerAddressComplete || fetchingRates}
+            className="btn-outline text-sm disabled:opacity-50"
+          >
+            {fetchingRates ? 'Calculating rates…' : 'Calculate shipping rates'}
+          </button>
+
+          {rateError && (
+            <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              ⚠️ {rateError}
+            </p>
+          )}
+
+          {/* Rate options per seller group */}
+          {rateGroups.map(group => (
+            <div key={group.sellerId} className="rounded-xl border border-slate-200 p-3 space-y-2">
+              {rateGroups.length > 1 && (
+                <p className="text-xs font-semibold text-slate-600">Seller: {group.sellerName}</p>
+              )}
+              {group.rates.length === 0 && (
+                <p className="text-xs text-red-600">No rates available for this seller.</p>
+              )}
+              {group.rates.map(rate => {
+                const selected = selectedRates.find(
+                  r => r.sellerId === group.sellerId && r.rateId === rate.id,
+                );
+                const isCheapest = rate.id === group.rates[0]?.id;
+                const isFastest = rate.deliveryDays !== null && rate.deliveryDays === group.minDeliveryDays;
+                return (
+                  <label key={rate.id} className="flex items-center justify-between gap-3 text-sm cursor-pointer">
+                    <span className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name={`rate-${group.sellerId}`}
+                        checked={!!selected}
+                        onChange={() => handleSelectRate(group.sellerId, group.shipmentId, rate)}
+                      />
+                      <span>
+                        <span className="font-medium">{rate.carrier}</span>
+                        {' · '}
+                        {rate.service}
+                        {isCheapest && <span className="ml-1 text-[10px] bg-green-100 text-green-700 rounded-full px-1.5 py-0.5 font-semibold">Best price</span>}
+                        {isFastest && !isCheapest && <span className="ml-1 text-[10px] bg-blue-100 text-blue-700 rounded-full px-1.5 py-0.5 font-semibold">Fastest</span>}
+                      </span>
+                    </span>
+                    <span className="text-slate-600 text-right flex-shrink-0">
+                      ${rate.rate}
+                      {rate.deliveryDays !== null ? <span className="text-slate-400 text-xs ml-1">({rate.deliveryDays}d)</span> : null}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="card p-5 mb-4 space-y-2 text-sm">
         <div className="flex justify-between">
           <span className="text-slate-500">Subtotal</span>
@@ -198,17 +549,29 @@ export default function CheckoutPage() {
         </div>
         <div className="flex justify-between">
           <span className="text-slate-500">Shipping</span>
-          <span>{shipping > 0 ? dollars(shipping) : 'Free'}</span>
+          <span>
+            {allPickup
+              ? 'Free (pickup)'
+              : hasCalculatedShipping && !ratesFetched
+                ? 'Calculated after address entry'
+                : totalShipping === 0
+                  ? 'Free'
+                  : dollars(totalShipping)}
+          </span>
         </div>
         <div className="flex justify-between font-bold text-base border-t pt-2 mt-1">
           <span>Total</span>
-          <span>{dollars(total)}</span>
+          <span>{hasCalculatedShipping && !ratesFetched ? 'TBD' : dollars(total)}</span>
         </div>
       </div>
 
-      {pickupItemIds.length > 0 && pickupItemIds.length === items.length ? (
+      {allPickup ? (
         <p className="text-xs text-slate-500 mb-3">
           All items will be picked up in person. No shipping address needed. You will be redirected to Stripe to complete payment.
+        </p>
+      ) : hasCalculatedShipping ? (
+        <p className="text-xs text-slate-500 mb-3">
+          Enter your shipping address and calculate rates to see your final total before payment.
         </p>
       ) : (
         <p className="text-xs text-slate-500 mb-3">
@@ -226,10 +589,14 @@ export default function CheckoutPage() {
         </Link>
         <button
           onClick={handleCheckout}
-          disabled={checking}
-          className="btn-primary flex-1"
+          disabled={checking || (hasCalculatedShipping && !allPickup && !ratesFetched)}
+          className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {checking ? 'Redirecting to payment…' : 'Proceed to payment →'}
+          {checking
+            ? 'Redirecting to payment…'
+            : hasCalculatedShipping && !allPickup && !ratesFetched
+              ? 'Calculate shipping first'
+              : 'Proceed to payment →'}
         </button>
       </div>
     </main>
