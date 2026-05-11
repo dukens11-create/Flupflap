@@ -37,14 +37,16 @@ export function createPageMetadata({
   path,
   noIndex = false,
 }: MetadataOptions): Metadata {
+  const canonicalPath = noIndex ? undefined : path;
+
   return {
     title,
     description,
-    alternates: path ? { canonical: path } : undefined,
+    alternates: canonicalPath ? { canonical: canonicalPath } : undefined,
     openGraph: {
       title,
       description,
-      url: path,
+      url: canonicalPath,
       type: 'website',
       siteName: 'FlupFlap',
       images: [{ url: BRAND_LOGO_PATH }],

@@ -39,6 +39,12 @@ function summarizeDescription(description: string): string {
   return `${snippet.trim()}…`;
 }
 
+function centsToPriceString(cents: number): string {
+  const dollarsPortion = Math.floor(cents / 100);
+  const centsPortion = Math.abs(cents % 100).toString().padStart(2, '0');
+  return `${dollarsPortion}.${centsPortion}`;
+}
+
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   const product = await prisma.product.findUnique({
@@ -141,7 +147,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
       '@type': 'Offer',
       url: canonicalUrl,
       priceCurrency: MARKETPLACE_CURRENCY,
-      price: (product.priceCents / 100).toFixed(2),
+      price: centsToPriceString(product.priceCents),
       availability: product.inventory > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
       itemCondition: getSchemaItemCondition(product.condition),
     },
