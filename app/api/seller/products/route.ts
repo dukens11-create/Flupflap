@@ -21,7 +21,7 @@ const schema = z.object({
   condition: z.string().min(1),
   imageUrl: z.string().url().optional(),
   images: z.union([z.string().url(), z.array(z.string().url())]).optional(),
-  videoUrl: z.string().optional(),
+  videoUrl: z.string().url().optional().or(z.literal('')),
   inventory: z.string().optional(),
   pickupAvailable: z.string().optional(), // "true" when checkbox is checked
   pickupCity: z.string().max(100).optional(),
@@ -102,7 +102,8 @@ export async function POST(req: Request) {
         ? [data.imageUrl]
         : [];
     const mainImage = resolvedImages[0] ?? '';
-    const videoUrl = data.videoUrl && data.videoUrl.startsWith('http') ? data.videoUrl : null;
+    // videoUrl is validated as a URL by the Zod schema; empty string → null
+    const videoUrl = data.videoUrl || null;
 
     if (!mainImage) {
       return NextResponse.json({ error: 'At least one product image is required.' }, { status: 400 });

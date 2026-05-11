@@ -72,6 +72,12 @@ export default function MediaUpload({ defaultImages = [], defaultVideoUrl = '', 
   async function handleVideoFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    const MAX_VIDEO_BYTES = 200 * 1024 * 1024; // 200 MB
+    if (file.size > MAX_VIDEO_BYTES) {
+      setUploadError('Video is too large. Maximum size is 200 MB.');
+      if (videoInputRef.current) videoInputRef.current.value = '';
+      return;
+    }
     setUploading(true);
     setUploadError('');
     try {
@@ -184,8 +190,8 @@ export default function MediaUpload({ defaultImages = [], defaultVideoUrl = '', 
         )}
 
         {/* Hidden inputs for form submission */}
-        {images.map((url, i) => (
-          <input key={i} type="hidden" name="images" value={url} />
+        {images.map((url) => (
+          <input key={url} type="hidden" name="images" value={url} />
         ))}
         {/* Legacy single-image field — keeps existing API handlers working.
             When required, use a visually-hidden URL input so the browser

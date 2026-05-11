@@ -19,7 +19,7 @@ const updateSchema = z.object({
   condition: z.string().min(1).optional(),
   imageUrl: z.string().url().optional(),
   images: z.union([z.string().url(), z.array(z.string().url())]).optional(),
-  videoUrl: z.string().optional(),
+  videoUrl: z.string().url().optional().or(z.literal('')),
   inventory: z.string().optional(),
   pickupAvailable: z.string().optional(), // "true" when checkbox is checked
   pickupCity: z.string().max(100).optional(),
@@ -49,10 +49,11 @@ function resolveImages(submitted: string[] | null, existing: ExistingProduct): s
 /**
  * Resolve the video URL: if the caller provides a value, use it (empty string → null).
  * If the caller provides nothing (undefined), keep the existing value.
+ * Note: videoUrl is already validated as a URL by the Zod schema when non-empty.
  */
 function resolveVideoUrl(submitted: string | undefined, existing: ExistingProduct): string | null {
   if (submitted === undefined) return existing.videoUrl ?? null;
-  return submitted && submitted.startsWith('http') ? submitted : null;
+  return submitted || null;
 }
 
 function buildListingRiskCandidate(
@@ -231,7 +232,9 @@ export async function PATCH(
         ...(data.shipping !== undefined && { shippingCents: cents(data.shipping || '0') }),
         ...(data.category && { category: data.category }),
         ...(data.condition && { condition: data.condition }),
-        ...(imagesInput && { imageUrl: mainImage, images: resolvedImages, mainImage }),
+        imageUrl: mainImage,
+        images: resolvedImages,
+        mainImage,
         videoUrl,
         ...(data.inventory && { inventory: Number(data.inventory) }),
         ...(data.pickupAvailable !== undefined && { pickupAvailable: data.pickupAvailable === 'true' }),
