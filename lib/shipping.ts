@@ -83,7 +83,7 @@ function normalizeCarrier(value: unknown): string {
 function parseOptionalString(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
-  return trimmed ? trimmed : null;
+  return trimmed || null;
 }
 
 function parseDeliveryDays(value: unknown) {
@@ -132,7 +132,9 @@ export async function createShipmentRates(params: {
         return {
           id: String(rate?.object_id ?? ''),
           carrier,
-          service: String(rate?.servicelevel?.name ?? rate?.servicelevel?.token ?? ''),
+          service: parseOptionalString(rate?.servicelevel?.name)
+            ?? parseOptionalString(rate?.servicelevel?.token)
+            ?? '',
           rate: String(rate?.amount ?? ''),
           currency,
           deliveryDays: parseDeliveryDays(rate?.estimated_days),

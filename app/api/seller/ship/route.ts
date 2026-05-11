@@ -115,8 +115,13 @@ export async function POST(req: Request) {
         const fromPhone = (dbUser?.shipFromPhone ?? '').trim() || undefined;
 
         if (!fromStreet1 || !fromCity || !fromState || !fromZip) {
+          const missing: string[] = [];
+          if (!fromStreet1) missing.push('street');
+          if (!fromCity) missing.push('city');
+          if (!fromState) missing.push('state');
+          if (!fromZip) missing.push('ZIP');
           return NextResponse.json(
-            { error: 'Ship-from address is incomplete. Please complete all required fields in your seller profile.' },
+            { error: `Ship-from address is incomplete. Missing: ${missing.join(', ')}.` },
             { status: 503 },
           );
         }
