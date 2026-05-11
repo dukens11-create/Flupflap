@@ -19,12 +19,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const { id } = await params;
     const seller = await prisma.user.findUnique({
       where: { id, deletedAt: null, role: 'SELLER' },
-      select: { name: true },
+      select: { name: true, shopName: true },
     });
     if (!seller) return { title: 'Seller Store' };
+    const publicName = seller.shopName?.trim() || 'FlupFlap Seller';
     return {
-      title: `${seller.name}'s Store`,
-      description: `Browse products listed by ${seller.name} on FlupFlap Marketplace.`,
+      title: `${publicName}'s Store`,
+      description: `Browse products listed by ${publicName} on FlupFlap Marketplace.`,
     };
   } catch {
     return { title: 'Seller Store' };
@@ -48,6 +49,9 @@ export default async function SellerStorePage({ params }: Props) {
   type SellerRow = {
     id: string;
     name: string;
+    shopName: string | null;
+    shopLogoUrl: string | null;
+    shopDescription: string | null;
     verificationSubmission: { status: string | null } | null;
   };
 
@@ -71,6 +75,7 @@ export default async function SellerStorePage({ params }: Props) {
     seller: {
       id: string;
       name: string;
+      shopName: string | null;
       phoneVerified: boolean;
       verificationSubmission: {
         status: string | null;
@@ -89,6 +94,9 @@ export default async function SellerStorePage({ params }: Props) {
       select: {
         id: true,
         name: true,
+        shopName: true,
+        shopLogoUrl: true,
+        shopDescription: true,
         verificationSubmission: { select: { status: true } },
       },
     });
@@ -103,6 +111,7 @@ export default async function SellerStorePage({ params }: Props) {
           select: {
             id: true,
             name: true,
+            shopName: true,
             phoneVerified: true,
             verificationSubmission: {
               select: {
@@ -129,21 +138,33 @@ export default async function SellerStorePage({ params }: Props) {
   if (!seller) notFound();
 
   const isVerified = seller.verificationSubmission?.status === 'APPROVED';
+  const sellerPublicName = seller.shopName?.trim() || 'FlupFlap Seller';
 
   return (
     <main className="space-y-6 pb-6">
       <section className="rounded-[28px] border border-slate-200 bg-slate-50 px-5 py-6 shadow-sm sm:px-8 sm:py-8">
         <div className="flex items-center gap-4">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-200 text-slate-600">
-            <Store size={28} />
-          </div>
+          {seller.shopLogoUrl ? (
+            <img
+              src={seller.shopLogoUrl}
+              alt={`${sellerPublicName} logo`}
+              className="h-14 w-14 rounded-full object-cover"
+            />
+          ) : (
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-200 text-slate-600">
+              <Store size={28} />
+            </div>
+          )}
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-black tracking-tight text-slate-900">{seller.name}</h1>
+              <h1 className="text-2xl font-black tracking-tight text-slate-900">{sellerPublicName}</h1>
               {isVerified && (
                 <ShieldCheck size={20} className="text-emerald-600" aria-label="Verified seller" />
               )}
             </div>
+            {seller.shopDescription && (
+              <p className="text-sm text-slate-600 max-w-lg">{seller.shopDescription}</p>
+            )}
             <p className="text-sm text-slate-500">
               {products.length} {products.length === 1 ? 'item' : 'items'} listed
             </p>

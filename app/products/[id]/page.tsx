@@ -120,7 +120,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
     prisma.product.findUnique({
       where: { id },
       include: {
-        seller: { select: { id: true, name: true } },
+        seller: { select: { id: true, name: true, shopName: true } },
         promotions: {
           where: { status: 'ACTIVE', expiresAt: { gt: new Date() } },
           orderBy: { expiresAt: 'desc' },
@@ -142,6 +142,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
       data: { clickCount: { increment: 1 } },
     });
   }
+  const sellerPublicName = product.seller.shopName?.trim() || 'FlupFlap Seller';
   const sellerResponseStats = await getSellerResponseStats(product.seller.id);
   const canonicalUrl = absoluteUrl(`/products/${product.id}`);
   const imageCandidates = getProductImages(product.images, product.imageUrl);
@@ -162,8 +163,8 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
       itemCondition: getSchemaItemCondition(product.condition),
     },
     seller: {
-      '@type': inferSellerSchemaType(product.seller.name),
-      name: product.seller.name,
+      '@type': inferSellerSchemaType(sellerPublicName),
+      name: sellerPublicName,
     },
   };
 
@@ -209,7 +210,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
               <p className="text-sm text-slate-500">+ {dollars(product.shippingCents)} shipping</p>
             )}
             <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
-              <p>Sold by {product.seller.name}</p>
+              <p>Sold by {sellerPublicName}</p>
               {sellerResponseStats.responseRate !== null ? (
                 <span className="badge badge-green">
                   {sellerResponseStats.responseRate}% response rate
@@ -282,7 +283,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
           {/* Report item — hidden for the seller's own listing */}
           {!isOwnListing && (
             <div className="pt-1">
-              <ReportSellerButton sellerId={product.seller.id} sellerName={product.seller.name} />
+              <ReportSellerButton sellerId={product.seller.id} sellerName={sellerPublicName} />
             </div>
           )}
           {!isOwnListing && (

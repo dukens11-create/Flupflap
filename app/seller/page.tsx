@@ -25,6 +25,7 @@ import SellerShippingLabelForm from '@/components/SellerShippingLabelForm';
 import KycVerifyButton from '@/components/KycVerifyButton';
 import StripeConnectButton from '@/components/StripeConnectButton';
 import SellerStockEditor from '@/components/SellerStockEditor';
+import SellerShopProfileForm from '@/components/SellerShopProfileForm';
 
 export const dynamic = 'force-dynamic';
 
@@ -424,6 +425,23 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
               )}
             </div>
           </div>
+        </section>
+      )}
+
+      {/* ── Shop Profile ── */}
+      {!isRestricted && (
+        <section id="shop-profile" className="card p-6 mb-6">
+          <div className="mb-4">
+            <p className="text-lg font-semibold text-slate-900">Shop Profile</p>
+            <p className="text-sm text-slate-500 mt-1">
+              Your shop name and logo are shown to buyers on product listings instead of your personal name.
+            </p>
+          </div>
+          <SellerShopProfileForm
+            initialShopName={dbUser?.shopName ?? null}
+            initialShopLogoUrl={dbUser?.shopLogoUrl ?? null}
+            initialShopDescription={dbUser?.shopDescription ?? null}
+          />
         </section>
       )}
 
