@@ -17,7 +17,7 @@ import type { Metadata } from 'next';
 import { expirePromotions } from '@/lib/promotions';
 import { getSellerResponseStats, SELLER_RESPONSE_WINDOW_HOURS } from '@/lib/messages';
 import { conditionBadgeClass } from '@/lib/condition-badge';
-import { absoluteUrl, BRAND_LOGO_PATH, DEFAULT_SEO_DESCRIPTION } from '@/lib/seo';
+import { absoluteUrl, BRAND_LOGO_PATH, DEFAULT_SEO_DESCRIPTION, MARKETPLACE_CURRENCY } from '@/lib/seo';
 
 export const dynamic = 'force-dynamic';
 
@@ -140,7 +140,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
     offers: {
       '@type': 'Offer',
       url: canonicalUrl,
-      priceCurrency: 'USD',
+      priceCurrency: MARKETPLACE_CURRENCY,
       price: (product.priceCents / 100).toFixed(2),
       availability: product.inventory > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
       itemCondition: getSchemaItemCondition(product.condition),

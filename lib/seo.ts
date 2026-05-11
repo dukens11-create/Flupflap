@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 
 const FALLBACK_SITE_URL = 'https://www.flupflap.com';
 export const BRAND_LOGO_PATH = '/flupflap_logo_brand.png';
+export const MARKETPLACE_CURRENCY = process.env.NEXT_PUBLIC_MARKETPLACE_CURRENCY ?? 'USD';
 
 export const DEFAULT_SEO_DESCRIPTION =
   'Buy and sell everyday items on FlupFlap with verified sellers, low fees, and secure checkout.';

@@ -4,7 +4,7 @@ import { absoluteUrl } from '@/lib/seo';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticRoutes: MetadataRoute.Sitemap = [
-    { url: absoluteUrl('/'), changeFrequency: 'hourly', priority: 1 },
+    { url: absoluteUrl('/'), changeFrequency: 'daily', priority: 1 },
     { url: absoluteUrl('/login'), changeFrequency: 'monthly', priority: 0.3 },
     { url: absoluteUrl('/signup'), changeFrequency: 'monthly', priority: 0.6 },
     { url: absoluteUrl('/legal/terms'), changeFrequency: 'yearly', priority: 0.2 },
