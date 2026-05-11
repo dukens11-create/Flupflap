@@ -248,7 +248,7 @@ export default async function SellerEditPage({
             </div>
             <div>
               <label className="label">Dimension unit</label>
-              <input value="in" className="input bg-slate-50 text-slate-500" readOnly aria-readonly="true" />
+              <input value="in" className="input bg-slate-50 text-slate-500" readOnly />
             </div>
           </div>
         </fieldset>

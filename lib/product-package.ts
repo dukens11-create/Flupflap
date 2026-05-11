@@ -40,7 +40,10 @@ export function formatPackageNumber(value: number): string {
   if (Number.isInteger(value)) {
     return String(value);
   }
-  return value.toFixed(2).replace(/\.?0+$/, '');
+  const formatted = value.toFixed(2);
+  return formatted.includes('.')
+    ? formatted.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '')
+    : formatted;
 }
 
 export function hasStoredPackageDetails(product: PackageDetailsInput): boolean {

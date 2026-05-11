@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { cents } from '@/lib/money';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { isSellerVerificationApproved } from '@/lib/seller-verification';
 import {
@@ -261,6 +262,10 @@ export async function POST(
     const nextProductAttributes =
       setShippingClass(parseJsonOrNull(data.productAttributes), packageDetails.shippingClass)
       ?? setShippingClass(existing.productAttributes, packageDetails.shippingClass);
+    const nextProductAttributesValue =
+      nextProductAttributes === undefined
+        ? Prisma.JsonNull
+        : (nextProductAttributes as Prisma.InputJsonValue);
 
     const updated = await prisma.product.update({
       where: { id },
@@ -284,7 +289,7 @@ export async function POST(
         // Category system fields
         categoryId: data.categoryId || null,
         subcategoryId: data.subcategoryId || null,
-        productAttributes: nextProductAttributes as any,
+        productAttributes: nextProductAttributesValue,
         imageUrl: mainImage,
         images: resolvedImages,
         mainImage,
@@ -390,6 +395,10 @@ export async function PATCH(
       parsedAttributes,
       data.shippingClass !== undefined ? packageDetails.shippingClass : getShippingClass(parsedAttributes),
     );
+    const nextProductAttributesValue =
+      nextProductAttributes === undefined
+        ? Prisma.JsonNull
+        : (nextProductAttributes as Prisma.InputJsonValue);
 
     const updated = await prisma.product.update({
       where: { id },
@@ -423,7 +432,7 @@ export async function PATCH(
         // Category system fields
         categoryId: data.categoryId || null,
         subcategoryId: data.subcategoryId || null,
-        productAttributes: nextProductAttributes as any,
+        productAttributes: nextProductAttributesValue,
         status: 'PENDING',
       },
     });
