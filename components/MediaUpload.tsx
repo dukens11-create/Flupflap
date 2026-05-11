@@ -63,7 +63,7 @@ function getFileNameFromUrl(url: string) {
   }
 }
 
-function formatFileSizeOrStatus(bytes: number | null) {
+function getFileSizeDisplay(bytes: number | null) {
   if (bytes === null) return 'Uploaded';
   if (bytes < 1024) return `${bytes} B`;
 
@@ -461,7 +461,7 @@ export default function MediaUpload({
                 </div>
                 <div className="mt-3 space-y-1">
                   <p className="truncate text-sm font-medium text-slate-900">{image.fileName}</p>
-                  <p className="text-xs text-slate-500">{formatFileSizeOrStatus(image.fileSize)}</p>
+                  <p className="text-xs text-slate-500">{getFileSizeDisplay(image.fileSize)}</p>
                   {image.status === 'uploading' && (
                     <p className="text-xs font-medium text-blue-600">Uploading image…</p>
                   )}
@@ -586,7 +586,7 @@ export default function MediaUpload({
             )}
             <div className="space-y-1">
               <p className="truncate text-sm font-medium text-slate-900">{video.fileName}</p>
-              <p className="text-xs text-slate-500">{formatFileSizeOrStatus(video.fileSize)}</p>
+              <p className="text-xs text-slate-500">{getFileSizeDisplay(video.fileSize)}</p>
               {video.status === 'uploading' && (
                 <p className="text-xs font-medium text-blue-600">Uploading video…</p>
               )}

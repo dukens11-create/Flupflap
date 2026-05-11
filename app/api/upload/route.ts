@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { getCloudinary, isCloudinaryConfigured } from '@/lib/cloudinary';
 
-const UPLOAD_FOLDER = process.env.CLOUDINARY_UPLOAD_FOLDER ?? 'flupflap/products';
+const PRODUCT_MEDIA_UPLOAD_FOLDER = process.env.CLOUDINARY_UPLOAD_FOLDER ?? 'flupflap/products';
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const ALLOWED_VIDEO_TYPES = ['video/mp4', 'video/quicktime', 'video/webm'];
 const ALLOWED_TYPES = [...ALLOWED_IMAGE_TYPES, ...ALLOWED_VIDEO_TYPES];
@@ -59,7 +59,7 @@ export async function POST(req: Request) {
 
     const result = await new Promise<{ secure_url: string }>((resolve, reject) => {
       cloudinary.uploader
-        .upload_stream({ folder: UPLOAD_FOLDER, resource_type: 'auto' }, (err, res) => {
+        .upload_stream({ folder: PRODUCT_MEDIA_UPLOAD_FOLDER, resource_type: 'auto' }, (err, res) => {
           if (err || !res) reject(err ?? new Error('No result from Cloudinary'));
           else resolve(res as { secure_url: string });
         })
