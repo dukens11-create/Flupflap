@@ -8,6 +8,7 @@ interface CategoryNode {
   id: string;
   name: string;
   slug: string;
+  aliases?: string[];
   parentId: string | null;
   level: number;
   icon: string | null;
@@ -16,6 +17,15 @@ interface CategoryNode {
 }
 
 const CONDITIONS = ALL_CONDITIONS;
+
+function findNodeById(nodes: CategoryNode[], id: string): CategoryNode | null {
+  for (const node of nodes) {
+    if (node.id === id) return node;
+    const childMatch = findNodeById(node.children, id);
+    if (childMatch) return childMatch;
+  }
+  return null;
+}
 
 export default function BrowseFilters() {
   const { t } = useI18n();
@@ -45,12 +55,17 @@ export default function BrowseFilters() {
     [router, searchParams]
   );
 
+  useEffect(() => {
+    setSearchValue(searchParams.get('q') ?? '');
+  }, [searchParams]);
+
   // When main category changes, clear subcategory and attribute filters
   const handleCategoryChange = (value: string) => {
     const params = new URLSearchParams(searchParams.toString());
     if (value) params.set('category', value);
     else params.delete('category');
     params.delete('subcategory');
+    params.delete('refineCategory');
     params.delete('brand');
     params.delete('size');
     params.delete('color');
@@ -59,13 +74,23 @@ export default function BrowseFilters() {
     startTransition(() => router.push(`/?${params.toString()}`));
   };
 
-  // Debounced search: trigger navigation 350 ms after the user stops typing
-  useEffect(() => {
-    const id = setTimeout(() => {
-      updateSearchParam('q', searchValue);
-    }, 350);
-    return () => clearTimeout(id);
-  }, [searchValue, updateSearchParam]);
+  const handleSubcategoryChange = (value: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (value) params.set('subcategory', value);
+    else params.delete('subcategory');
+    params.delete('refineCategory');
+    params.delete('page');
+    startTransition(() => router.push(`/?${params.toString()}`));
+  };
+
+  const handleSearchChange = (value: string) => {
+    setSearchValue(value);
+    const params = new URLSearchParams(searchParams.toString());
+    if (value) params.set('q', value);
+    else params.delete('q');
+    params.delete('page');
+    startTransition(() => router.replace(`/?${params.toString()}`));
+  };
 
   const clear = () => {
     setSearchValue('');
@@ -75,25 +100,48 @@ export default function BrowseFilters() {
   const hasFilters = searchParams.toString().length > 0;
 
   const selectedCategoryId = searchParams.get('category') ?? '';
-  const selectedSubcategoryId = searchParams.get('subcategory') ?? '';
+  const rawSelectedSubcategoryId = searchParams.get('subcategory') ?? '';
+  const rawSelectedRefineCategoryId = searchParams.get('refineCategory') ?? '';
 
   // Find selected main category node
   const selectedMainNode = selectedCategoryId
     ? categories.find(c => c.id === selectedCategoryId) ?? null
     : null;
 
+  const rawSelectedSubcategoryNode = rawSelectedSubcategoryId
+    ? findNodeById(categories, rawSelectedSubcategoryId)
+    : null;
+  const usesLegacyLeafSubcategoryParam = Boolean(
+    selectedCategoryId &&
+    rawSelectedSubcategoryNode &&
+    !rawSelectedRefineCategoryId &&
+    rawSelectedSubcategoryNode.parentId &&
+    rawSelectedSubcategoryNode.parentId !== selectedCategoryId
+  );
+
+  const selectedSubcategoryId = usesLegacyLeafSubcategoryParam
+    ? rawSelectedSubcategoryNode?.parentId ?? ''
+    : rawSelectedSubcategoryId;
+  const selectedRefineCategoryId = usesLegacyLeafSubcategoryParam
+    ? rawSelectedSubcategoryId
+    : rawSelectedRefineCategoryId;
+
   const subcategories = selectedMainNode?.children ?? [];
+  const selectedSubcategoryNode = selectedSubcategoryId
+    ? findNodeById(categories, selectedSubcategoryId)
+    : null;
+  const refineCategories = selectedSubcategoryNode?.children ?? [];
 
   return (
     <div className={`mb-6 rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm transition-opacity sm:p-5${isPending ? ' opacity-60' : ''}`}>
       {/* Row 1: Search + Main filters */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-7">
         <div className="col-span-full lg:col-span-2">
           <input
             className="input"
             placeholder={t('filters.searchPlaceholder')}
             value={searchValue}
-            onChange={e => setSearchValue(e.target.value)}
+            onChange={e => handleSearchChange(e.target.value)}
           />
         </div>
         {/* Main category */}
@@ -114,7 +162,7 @@ export default function BrowseFilters() {
           <select
             className="input col-span-1"
             value={selectedSubcategoryId}
-            onChange={e => updateSearchParam('subcategory', e.target.value)}
+            onChange={e => handleSubcategoryChange(e.target.value)}
           >
             <option value="">All subcategories</option>
             {subcategories.map(c => (
@@ -122,6 +170,28 @@ export default function BrowseFilters() {
             ))}
           </select>
         ) : (
+          <select
+            className="input col-span-1"
+            value={searchParams.get('condition') ?? ''}
+            onChange={e => updateSearchParam('condition', e.target.value)}
+          >
+            <option value="">{t('filters.anyCondition')}</option>
+            {CONDITIONS.map(c => <option key={c} value={c}>{t(`filters.conditions.${c}`)}</option>)}
+          </select>
+        )}
+        {refineCategories.length > 0 && (
+          <select
+            className="input col-span-1"
+            value={selectedRefineCategoryId}
+            onChange={e => updateSearchParam('refineCategory', e.target.value)}
+          >
+            <option value="">All refine categories</option>
+            {refineCategories.map(c => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        )}
+        {subcategories.length > 0 && refineCategories.length === 0 && (
           <select
             className="input col-span-1"
             value={searchParams.get('condition') ?? ''}
@@ -153,7 +223,7 @@ export default function BrowseFilters() {
       {selectedCategoryId && (
         <div className="mt-3 grid grid-cols-2 gap-3 border-t border-slate-100 pt-3 sm:grid-cols-3 lg:grid-cols-6">
           {/* Condition filter (when row 1 subcategory slot is taken by subcategory picker) */}
-          {subcategories.length > 0 && (
+          {refineCategories.length > 0 && (
             <select
               className="input col-span-1"
               value={searchParams.get('condition') ?? ''}
@@ -229,4 +299,3 @@ export default function BrowseFilters() {
     </div>
   );
 }
-
