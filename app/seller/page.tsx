@@ -26,6 +26,11 @@ import KycVerifyButton from '@/components/KycVerifyButton';
 import StripeConnectButton from '@/components/StripeConnectButton';
 import SellerStockEditor from '@/components/SellerStockEditor';
 import SellerShopProfileForm from '@/components/SellerShopProfileForm';
+import {
+  formatPackageDisplay,
+  getEffectivePackageDetails,
+  hasStoredPackageDetails,
+} from '@/lib/product-package';
 
 export const dynamic = 'force-dynamic';
 
@@ -281,6 +286,8 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   } else if (subscriptionActive) {
     emptyListingsMessage = 'No listings yet. Complete seller verification to start selling.';
   }
+  const incompleteShippingProducts = products.filter((product) => !hasStoredPackageDetails(product));
+  const shippingReadyCount = products.length - incompleteShippingProducts.length;
 
   // Fetch Stripe onboarding state from DB (not the JWT, which is set only at
   // login and would be stale immediately after the seller returns from Stripe).
@@ -774,6 +781,28 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
         )}
       </section>
 
+      <section id="shipping-package-details" className="mb-8">
+        <h2 className="text-xl font-bold mb-3">Shipping & Package Details</h2>
+        <div className="card p-4 space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="font-semibold text-slate-900">Keep package details complete for reliable Shippo rates.</p>
+            <span className={`badge ${incompleteShippingProducts.length > 0 ? 'badge-yellow' : 'badge-green'}`}>
+              {shippingReadyCount}/{products.length} ready
+            </span>
+          </div>
+          {incompleteShippingProducts.length > 0 ? (
+            <p className="text-sm text-slate-600">
+              Shipping setup incomplete for {incompleteShippingProducts.length} listing{incompleteShippingProducts.length === 1 ? '' : 's'}.
+              Use each listing&apos;s Edit button to update package details.
+            </p>
+          ) : (
+            <p className="text-sm text-slate-600">
+              All current listings have shipping package details saved.
+            </p>
+          )}
+        </div>
+      </section>
+
       {/* ── My Listings ── */}
       <section id="my-listings" className="mb-8">
         <h2 className="text-xl font-bold mb-3">My Listings</h2>
@@ -790,6 +819,8 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
               const soldQty = p.soldQty ?? 0;
               const productOrders = orderCountByProductId.get(p.id)?.size ?? 0;
               const conversionRate = calcConversionRate(productOrders, viewCount);
+              const shippingSetupIncomplete = !hasStoredPackageDetails(p);
+              const packageDetails = getEffectivePackageDetails(p);
               return (
                 <div key={p.id} className="card p-4 flex items-center justify-between gap-4">
                   <div className="flex-1 min-w-0">
@@ -798,8 +829,16 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                       {activePromo && (
                         <span className="badge badge-blue flex-shrink-0">Promoted until {activePromo.expiresAt ? activePromo.expiresAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}</span>
                       )}
+                      {shippingSetupIncomplete && (
+                        <span className="badge badge-yellow flex-shrink-0">Shipping setup incomplete</span>
+                      )}
                     </div>
                     <p className="text-sm text-slate-500">{p.condition} · {p.category} · {dollars(p.priceCents)}</p>
+                    {packageDetails && (
+                      <p className="text-xs text-slate-500 mt-1">
+                        {formatPackageDisplay(packageDetails, shippingSetupIncomplete)}
+                      </p>
+                    )}
                     <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-0.5">
                       <p className="text-xs text-slate-500">
                         Stock: <span className="font-semibold text-slate-700">{p.inventory}</span>

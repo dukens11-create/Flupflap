@@ -13,6 +13,7 @@ type FormErrors = {
   category?: string;
   condition?: string;
   images?: string;
+  shippingPackage?: string;
   submit?: string;
 };
 
@@ -43,6 +44,7 @@ export default function NewListingForm() {
       return nextErrors;
     });
   }, []);
+  const shippingPackageInputClass = `input ${errors.shippingPackage ? 'border-red-300 ring-1 ring-red-100' : ''}`;
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -57,6 +59,11 @@ export default function NewListingForm() {
     const condition = String(formData.get('condition') ?? '').trim();
     const priceRaw = String(formData.get('price') ?? '').trim();
     const inventoryRaw = String(formData.get('inventoryQty') ?? '').trim();
+    const packageWeightRaw = String(formData.get('weight') ?? '').trim();
+    const packageLengthRaw = String(formData.get('length') ?? '').trim();
+    const packageWidthRaw = String(formData.get('width') ?? '').trim();
+    const packageHeightRaw = String(formData.get('height') ?? '').trim();
+    const packageInputs = [packageWeightRaw, packageLengthRaw, packageWidthRaw, packageHeightRaw];
     const images = formData.getAll('images').map(String).filter(Boolean);
     const fallbackImage = String(formData.get('imageUrl') ?? '').trim();
     const resolvedImages = images.length > 0 ? images : (fallbackImage ? [fallbackImage] : []);
@@ -73,6 +80,14 @@ export default function NewListingForm() {
     const inventoryQty = Number(inventoryRaw);
     if (!inventoryRaw || Number.isNaN(inventoryQty) || !Number.isInteger(inventoryQty) || inventoryQty < 1 || inventoryQty > 9999) {
       nextErrors.inventoryQty = 'Please enter an inventory quantity between 1 and 9999.';
+    }
+
+    const packageValues = packageInputs.map(Number);
+    if (
+      packageInputs.some((value) => !value)
+      || packageValues.some((value) => Number.isNaN(value) || value <= 0)
+    ) {
+      nextErrors.shippingPackage = 'Shipping package details are required.';
     }
 
     if (resolvedImages.length < 1) {
@@ -171,41 +186,70 @@ export default function NewListingForm() {
       </div>
 
       {/* Package Info for shipping calculation */}
-      <fieldset className="border border-slate-200 rounded-xl p-4 space-y-3">
-        <legend className="text-sm font-semibold text-slate-700 px-1">📦 Package Info (for shipping rates)</legend>
+      <fieldset className={`border rounded-xl p-4 space-y-3 ${errors.shippingPackage ? 'border-red-300 bg-red-50/40' : 'border-slate-200'}`}>
+        <legend className="text-sm font-semibold text-slate-700 px-1">Shipping & Package Details</legend>
         <p className="text-xs text-slate-500">
-          Required for automatic shipping rate calculation. Buyers will see live carrier rates at checkout.
+          Required for reliable Shippo rate calculation. Buyers will see live carrier rates at checkout.
         </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="label">Weight</label>
+            <div className="grid grid-cols-[minmax(0,1fr)_120px] gap-3">
+              <input
+                name="weight"
+                type="number"
+                step="0.01"
+                min="0.01"
+                className={shippingPackageInputClass}
+                placeholder="e.g. 1"
+                required
+              />
+              <select name="weightUnit" className={shippingPackageInputClass}>
+                <option value="lb">lb</option>
+                <option value="oz">oz</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="label">Package type</label>
+            <select name="packageType" className={shippingPackageInputClass} defaultValue="PACKAGE">
+              <option value="PACKAGE">Package / Parcel</option>
+              <option value="LETTER">Letter</option>
+              <option value="FLAT_RATE_ENVELOPE">Flat Rate Envelope</option>
+              <option value="FLAT_RATE_BOX">Flat Rate Box</option>
+              <option value="SMALL_FLAT_RATE_BOX">Small Flat Rate Box</option>
+              <option value="MEDIUM_FLAT_RATE_BOX">Medium Flat Rate Box</option>
+              <option value="LARGE_FLAT_RATE_BOX">Large Flat Rate Box</option>
+            </select>
+          </div>
+        </div>
         <div>
-          <label className="label">Package type</label>
-          <select name="packageType" className="input">
-            <option value="PACKAGE">Package / Parcel</option>
-            <option value="LETTER">Letter</option>
-            <option value="FLAT_RATE_ENVELOPE">Flat Rate Envelope</option>
-            <option value="FLAT_RATE_BOX">Flat Rate Box</option>
-            <option value="SMALL_FLAT_RATE_BOX">Small Flat Rate Box</option>
-            <option value="MEDIUM_FLAT_RATE_BOX">Medium Flat Rate Box</option>
-            <option value="LARGE_FLAT_RATE_BOX">Large Flat Rate Box</option>
-          </select>
+          <label className="label">Shipping class (optional)</label>
+          <input name="shippingClass" className={shippingPackageInputClass} placeholder="e.g. Standard parcel" />
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div>
-            <label className="label">Weight (oz)</label>
-            <input name="weightOz" type="number" step="0.1" min="0.1" className="input" placeholder="e.g. 16" />
-          </div>
-          <div>
             <label className="label">Length (in)</label>
-            <input name="lengthIn" type="number" step="0.1" min="0.1" className="input" placeholder="e.g. 10" />
+            <input name="length" type="number" step="0.01" min="0.01" className={shippingPackageInputClass} placeholder="e.g. 8" required />
           </div>
           <div>
             <label className="label">Width (in)</label>
-            <input name="widthIn" type="number" step="0.1" min="0.1" className="input" placeholder="e.g. 8" />
+            <input name="width" type="number" step="0.01" min="0.01" className={shippingPackageInputClass} placeholder="e.g. 6" required />
           </div>
           <div>
             <label className="label">Height (in)</label>
-            <input name="heightIn" type="number" step="0.1" min="0.1" className="input" placeholder="e.g. 4" />
+            <input name="height" type="number" step="0.01" min="0.01" className={shippingPackageInputClass} placeholder="e.g. 4" required />
+          </div>
+          <div>
+            <label className="label">Dimension unit</label>
+            <input value="in" className={`${shippingPackageInputClass} bg-slate-50 text-slate-500`} readOnly />
           </div>
         </div>
+        {errors.shippingPackage && (
+          <p className="text-xs text-red-600">
+            {errors.shippingPackage} Fill in weight, length, width, and height.
+          </p>
+        )}
       </fieldset>
 
       <fieldset className="border border-slate-200 rounded-xl p-4 space-y-3">

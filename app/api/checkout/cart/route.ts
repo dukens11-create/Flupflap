@@ -6,6 +6,7 @@ import { appUrl, classifyStripeError, getCurrentStripeMode, stripe } from '@/lib
 import { buildCheckoutCommissionItems, getMarketplaceSettings } from '@/lib/commission';
 import { checkoutErrorResponse } from '@/lib/checkout-errors';
 import { isSellerVerificationApproved } from '@/lib/seller-verification';
+import { getMissingPackageProductTitles } from '@/lib/product-package';
 
 const SHIPPING_LINE_ITEM_NAME = 'Shipping';
 
@@ -108,6 +109,13 @@ export async function POST(req: Request) {
       (product) => !pickupSet.has(product.id) && isCalculatedShippingProduct(product),
     );
     const requiresLiveShippingSelection = calculatedShippingProducts.length > 0;
+    const missingPackageTitles = getMissingPackageProductTitles(calculatedShippingProducts);
+    if (missingPackageTitles.length > 0) {
+      return NextResponse.json(
+        { error: `Shipping unavailable. The seller must add shipping package details for: ${missingPackageTitles.join(', ')}.` },
+        { status: 400 },
+      );
+    }
     const calculatedSellerIds = new Set(calculatedShippingProducts.map(product => product.sellerId));
     const selectedShipmentGroups = shippingRateInfo?.shipmentGroups ?? [];
 

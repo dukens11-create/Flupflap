@@ -281,8 +281,9 @@ export default function CheckoutPage() {
           return;
         }
 
-        if (data.warnings?.length) {
-          setRateError(data.warnings.join(' '));
+        const rateMessages = [...(data.errors ?? []), ...(data.warnings ?? [])];
+        if (rateMessages.length) {
+          setRateError(rateMessages.join(' '));
         }
       } catch {
         if (requestVersion !== rateRequestVersionRef.current) return;
