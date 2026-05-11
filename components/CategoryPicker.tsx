@@ -390,6 +390,7 @@ export default function CategoryPicker({ defaultCategoryId, defaultSubcategoryId
       slug: c.slug,
       aliases: resolveOptionAliases(c),
       icon: c.icon,
+      breadcrumb: undefined,
       selection: { mainId: c.id, subId: null, childId: null },
     })),
     [categories],
