@@ -163,8 +163,7 @@ export default function MediaUpload({
     defaultImages.map((url, index) => {
       const originalUrl = defaultOriginalImages[index] || url;
       const enhancedUrl = defaultEnhancedImages[index] || '';
-      const selectedVariant: 'original' | 'enhanced' =
-        enhancedUrl && (url === enhancedUrl || url !== originalUrl) ? 'enhanced' : 'original';
+      const selectedVariant: 'original' | 'enhanced' = enhancedUrl && url === enhancedUrl ? 'enhanced' : 'original';
       const selectedUrl = selectedVariant === 'enhanced' ? enhancedUrl : originalUrl;
       return {
         id: createItemId(),
@@ -683,7 +682,10 @@ export default function MediaUpload({
 
         {images.length > 0 && (
           <div className="mb-3 grid gap-3 sm:grid-cols-2">
-            {images.map((image, i) => (
+            {images.map((image, i) => {
+              const showRetryButton =
+                (image.enhancementStatus === 'error' || !image.enhancedUrl) && !!image.originalUrl;
+              return (
               <div
                 key={image.id}
                 draggable
@@ -761,7 +763,7 @@ export default function MediaUpload({
                     >
                       After (Enhanced)
                     </button>
-                    {(image.enhancementStatus === 'error' || !image.enhancedUrl) && image.originalUrl && (
+                    {showRetryButton && (
                       <button
                         type="button"
                         onClick={() => retryEnhancement(image.id)}
@@ -798,7 +800,8 @@ export default function MediaUpload({
                   </button>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
 

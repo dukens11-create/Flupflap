@@ -84,6 +84,20 @@ function toUrlArray(
   return fallback;
 }
 
+function resolveOriginalImagesForProduct(
+  submittedOriginalImages: string[] | null,
+  resolvedImages: string[],
+  existing: ExistingProduct,
+): string[] {
+  if (submittedOriginalImages?.length === resolvedImages.length) {
+    return submittedOriginalImages;
+  }
+  if (existing.originalImages?.length === resolvedImages.length) {
+    return existing.originalImages;
+  }
+  return resolvedImages;
+}
+
 function buildListingRiskCandidate(
   sellerId: string,
   existing: ExistingProduct,
@@ -172,12 +186,11 @@ export async function POST(
     const resolvedImages = resolveImages(submittedImages, existing);
     const mainImage = resolvedImages[0] ?? existing.imageUrl;
     const videoUrl = resolveVideoUrl(data.videoUrl, existing);
-    const resolvedOriginalImages =
-      originalImagesRaw.length === resolvedImages.length
-        ? originalImagesRaw
-        : existing.originalImages?.length === resolvedImages.length
-          ? existing.originalImages
-          : resolvedImages;
+    const resolvedOriginalImages = resolveOriginalImagesForProduct(
+      originalImagesRaw.length ? originalImagesRaw : null,
+      resolvedImages,
+      existing,
+    );
     const resolvedEnhancedImages =
       enhancedImagesRaw.length > 0 ? enhancedImagesRaw.slice(0, resolvedImages.length) : existing.enhancedImages ?? [];
     const resolvedImageThumbnails =
@@ -291,10 +304,8 @@ export async function PATCH(
     const resolvedImages = resolveImages(imagesInput, existing);
     const mainImage = resolvedImages[0] ?? existing.imageUrl;
     const videoUrl = resolveVideoUrl(data.videoUrl, existing);
-    const resolvedOriginalImages = toUrlArray(
-      data.originalImages,
-      existing.originalImages?.length === resolvedImages.length ? existing.originalImages : resolvedImages,
-    );
+    const originalImagesFallback = resolveOriginalImagesForProduct(null, resolvedImages, existing);
+    const resolvedOriginalImages = toUrlArray(data.originalImages, originalImagesFallback);
     const resolvedEnhancedImages = toUrlArray(data.enhancedImages, existing.enhancedImages ?? []).slice(
       0,
       resolvedImages.length,
