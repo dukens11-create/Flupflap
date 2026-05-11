@@ -79,7 +79,8 @@ In the **Environment** tab, add:
 | `CLOUDINARY_CLOUD_NAME` | From your Cloudinary dashboard — Settings → API Keys |
 | `CLOUDINARY_API_KEY` | From your Cloudinary dashboard — Settings → API Keys |
 | `CLOUDINARY_API_SECRET` | From your Cloudinary dashboard — Settings → API Keys |
-| `CLOUDINARY_PRODUCT_MEDIA_FOLDER` | Optional Cloudinary folder for seller product images/videos (defaults to `flupflap/products`) |
+| `CLOUDINARY_PRODUCT_MEDIA_FOLDER` | Optional Cloudinary folder for seller product images (defaults to `flupflap/products`) |
+| `CLOUDINARY_PRODUCT_VIDEO_FOLDER` | Optional Cloudinary folder for seller product videos (defaults to `flupflap/videos`) |
 | `TWILIO_ACCOUNT_SID` | From your Twilio Console — Account SID |
 | `TWILIO_AUTH_TOKEN` | From your Twilio Console — Auth Token |
 | `TWILIO_FROM_NUMBER` | Your Twilio phone number (e.g. `+15005550006`) |
@@ -117,7 +118,8 @@ Open the Cloudinary dashboard and go to **Settings → API Keys**. You need:
 | Cloud name | `CLOUDINARY_CLOUD_NAME` |
 | API key | `CLOUDINARY_API_KEY` |
 | API secret | `CLOUDINARY_API_SECRET` |
-| Product media folder (optional) | `CLOUDINARY_PRODUCT_MEDIA_FOLDER` |
+| Product image folder (optional) | `CLOUDINARY_PRODUCT_MEDIA_FOLDER` |
+| Product video folder (optional) | `CLOUDINARY_PRODUCT_VIDEO_FOLDER` |
 
 ### Step 3 — Add the variables to Render
 
@@ -138,8 +140,9 @@ original vs enhanced before submitting.
 
 - Accepted image formats: JPEG, PNG, WebP, GIF (1–6 images, up to 10 MB each)
 - Accepted video formats: MP4, MOV, WebM (optional, 1 video, up to 200 MB)
-- Product media is stored under `CLOUDINARY_PRODUCT_MEDIA_FOLDER` (defaults to
-  `flupflap/products`)
+- Product images are stored under `CLOUDINARY_PRODUCT_MEDIA_FOLDER` (defaults to
+  `flupflap/products`) and videos under `CLOUDINARY_PRODUCT_VIDEO_FOLDER`
+  (defaults to `flupflap/videos`)
 - This direct-to-Cloudinary flow avoids writing permanent files to
   `/public/uploads`, which is important for Vercel/serverless deployments
 

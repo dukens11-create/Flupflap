@@ -61,6 +61,7 @@ const schema = z.object({
   categoryId: z.string().trim().optional(),
   subcategoryId: z.string().trim().optional(),
   productAttributes: z.string().optional(), // JSON string
+  mediaEnhancements: z.string().optional(),
 });
 
 function jsonError(message: string, status: number) {
@@ -233,6 +234,7 @@ export async function POST(req: Request) {
     const packageType = data.packageType?.trim() || null;
 
     const attributes = parseJsonOrNull(data.productAttributes);
+    const mediaEnhancements = parseJsonOrNull(data.mediaEnhancements);
     const normalizedAttributes: Record<string, unknown> =
       attributes && typeof attributes === 'object' && !Array.isArray(attributes)
         ? { ...(attributes as Record<string, unknown>) }
@@ -245,6 +247,7 @@ export async function POST(req: Request) {
       normalizedAttributes.fragrance_type = data.fragranceType;
     }
     if (data.gender) normalizedAttributes.gender = data.gender;
+    if (mediaEnhancements) normalizedAttributes.mediaEnhancements = mediaEnhancements;
     const productAttributesValue: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput | undefined =
       Object.keys(normalizedAttributes).length > 0
         ? (normalizedAttributes as Prisma.InputJsonValue)
