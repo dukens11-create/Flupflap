@@ -7,21 +7,11 @@ import { formatCommissionPercent, getMarketplaceSettings } from '@/lib/commissio
 import { OrderStatus } from '@prisma/client';
 import type { Metadata } from 'next';
 import { getVisitorMetrics } from '@/lib/traffic';
+import AdminListingsTable from '@/components/AdminListingsTable';
 
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = { title: 'Admin Dashboard' };
-
-function statusBadge(status: string) {
-  const map: Record<string, string> = {
-    PENDING: 'badge-yellow',
-    APPROVED: 'badge-green',
-    REJECTED: 'badge-red',
-    SOLD: 'badge-slate',
-    HIDDEN: 'badge-red',
-  };
-  return map[status] ?? 'badge-slate';
-}
 
 const PAID_ORDER_STATUSES: OrderStatus[] = ['PAID', 'SHIPPED', 'DELIVERED', 'PICKED_UP'];
 
@@ -52,8 +42,20 @@ export default async function AdminPage({
     }),
     prisma.product.findMany({
       orderBy: { createdAt: 'desc' },
-      take: 20,
-      include: { seller: { select: { name: true } } },
+      select: {
+        id: true,
+        title: true,
+        imageUrl: true,
+        mainImage: true,
+        images: true,
+        priceCents: true,
+        inventory: true,
+        status: true,
+        condition: true,
+        category: true,
+        createdAt: true,
+        seller: { select: { id: true, name: true } },
+      },
     }),
     prisma.order.findMany({
       orderBy: { createdAt: 'desc' },
@@ -358,35 +360,52 @@ export default async function AdminPage({
         </section>
       )}
 
-      <section className="mb-8">
-        <h2 className="text-xl font-bold mb-3">All Listings</h2>
-        <div className="space-y-2">
-          {all.map((p: (typeof all)[number]) => (
-            <div key={p.id} className="card p-3 flex items-center justify-between gap-4">
-              <div className="flex-1 min-w-0">
-                <p className="font-medium truncate">{p.title}</p>
-                <p className="text-xs text-slate-500">{p.seller.name} · {p.condition} · {dollars(p.priceCents)}</p>
-                <p className="text-xs text-slate-500">Stock: <span className={`font-semibold ${p.inventory <= 0 ? 'text-red-600' : p.inventory <= 5 ? 'text-orange-600' : 'text-green-700'}`}>{p.inventory <= 0 ? 'Out of stock' : `${p.inventory}`}</span></p>
-              </div>
-              <span className={statusBadge(p.status)}>{p.status}</span>
-            </div>
-          ))}
-        </div>
-      </section>
+      <AdminListingsTable
+        listings={all.map((p) => ({
+          ...p,
+          status: p.status as string,
+          createdAt: p.createdAt.toISOString(),
+        }))}
+      />
 
-      <section id="orders-panel">
-        <h2 className="text-xl font-bold mb-3">Recent Orders</h2>
-        <div className="space-y-2">
-          {recentOrders.map((o: (typeof recentOrders)[number]) => (
-            <div key={o.id} className="card p-3 flex items-center justify-between gap-4">
-              <div>
-                <p className="font-mono text-xs text-slate-400">{o.id.slice(-10)}</p>
-                <p className="text-sm font-medium">{o.buyer.name} · {dollars(o.totalCents)}</p>
-              </div>
-              <span className={`badge ${o.status === 'PAID' || o.status === 'SHIPPED' || o.status === 'DELIVERED' ? 'badge-green' : 'badge-yellow'}`}>{o.status}</span>
+      <section id="orders-panel" className="mb-8">
+        <h2 className="text-xl font-bold mb-4">Recent Orders</h2>
+        <div className="card overflow-hidden">
+          {recentOrders.length === 0 ? (
+            <div className="p-6 text-slate-500 text-sm">No orders yet.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200">
+                    <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Order ID</th>
+                    <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Buyer</th>
+                    <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-500 uppercase tracking-wide">Total</th>
+                    <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Date</th>
+                    <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {recentOrders.map((o: (typeof recentOrders)[number]) => {
+                    const isPaid = o.status === 'PAID' || o.status === 'SHIPPED' || o.status === 'DELIVERED';
+                    return (
+                      <tr key={o.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-3 py-2.5 font-mono text-xs text-slate-400">{o.id.slice(-10)}</td>
+                        <td className="px-3 py-2.5 text-slate-700">{o.buyer.name}</td>
+                        <td className="px-3 py-2.5 text-right font-medium text-slate-900">{dollars(o.totalCents)}</td>
+                        <td className="px-3 py-2.5 text-xs text-slate-500">
+                          {o.createdAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <span className={`badge ${isPaid ? 'badge-green' : 'badge-yellow'}`}>{o.status}</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-          ))}
-          {recentOrders.length === 0 && <div className="card p-4 text-slate-500">No orders yet.</div>}
+          )}
         </div>
       </section>
     </main>
