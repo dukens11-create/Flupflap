@@ -87,7 +87,10 @@ async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?
       if (subcatRecord?.name) {
         catOrConditions.push({ category: { contains: subcatRecord.name, mode: 'insensitive' } });
       }
-    } catch { /* ignore lookup failure — ID filter still applies */ }
+    } catch (err) {
+      console.error('[ProductGrid] subcategory name lookup failed:', err);
+      // ID-based filter still applies even without the legacy fallback
+    }
     where.AND.push({ OR: catOrConditions });
   } else if (sp.category) {
     where.AND = where.AND ?? [];
@@ -100,7 +103,10 @@ async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?
       if (catRecord?.name) {
         catOrConditions.push({ category: { contains: catRecord.name, mode: 'insensitive' } });
       }
-    } catch { /* ignore lookup failure — ID filter still applies */ }
+    } catch (err) {
+      console.error('[ProductGrid] category name lookup failed:', err);
+      // ID-based filter still applies even without the legacy fallback
+    }
     where.AND.push({ OR: catOrConditions });
   }
 
