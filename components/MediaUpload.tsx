@@ -760,10 +760,10 @@ export default function MediaUpload({
                   <p className="truncate text-sm font-medium text-slate-900">{image.fileName}</p>
                   <p className="text-xs text-slate-500">{getFileSizeDisplay(image.fileSize)}</p>
                   {image.status === 'uploading' && (
-                    <p className="text-xs font-medium text-blue-600">Uploading image…</p>
+                    <p className="text-xs font-medium text-blue-600">Uploading image...</p>
                   )}
                   {image.status === 'processing' && (
-                    <p className="text-xs font-medium text-blue-600">Preparing AI preview…</p>
+                    <p className="text-xs font-medium text-blue-600">Preparing AI preview...</p>
                   )}
                   {image.status === 'uploaded' && (
                     <p className="text-xs font-medium text-emerald-600">Ready to submit</p>
@@ -930,7 +930,7 @@ export default function MediaUpload({
               <p className="truncate text-sm font-medium text-slate-900">{video.fileName}</p>
               <p className="text-xs text-slate-500">{getFileSizeDisplay(video.fileSize)}</p>
               {video.status === 'uploading' && (
-                <p className="text-xs font-medium text-blue-600">Uploading video…</p>
+                <p className="text-xs font-medium text-blue-600">Uploading video...</p>
               )}
               {video.status === 'uploaded' && (
                 <p className="text-xs font-medium text-emerald-600">Ready to submit</p>
@@ -980,7 +980,7 @@ export default function MediaUpload({
 
       {(imageUploadCount > 0 || imageProcessingCount > 0 || videoUploading) && (
         <p className="text-sm text-slate-500" aria-live="polite">
-          {imageProcessingCount > 0 ? 'Preparing enhanced image previews…' : 'Uploading media…'}
+          {imageProcessingCount > 0 ? 'Preparing enhanced image previews...' : 'Uploading media...'}
         </p>
       )}
       {uploadError && (
