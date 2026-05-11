@@ -63,7 +63,9 @@ export default async function SellerStorePage({ params }: Props) {
     pickupCity: string | null;
     pickupState: string | null;
     cartInterest: { totalAdds: number } | null;
-    // Fields expected by ProductCard that are not fetched from DB on this page
+    // activePromotion and sellerResponseRate are expected by ProductCard but are
+    // not relevant for the store page view (promotions are not displayed here;
+    // response rate is not computed per-product on this page).
     activePromotion: null;
     sellerResponseRate: null;
     seller: {

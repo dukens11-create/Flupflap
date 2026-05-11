@@ -48,6 +48,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       prisma.product.findMany({
         where: { status: 'APPROVED' },
         select: { id: true, updatedAt: true },
+        // Limit to a manageable page size; for very large catalogues a
+        // sitemap-index with multiple sitemap files should be used instead.
+        take: 50_000,
+        orderBy: { updatedAt: 'desc' },
       }),
       prisma.user.findMany({
         where: {
