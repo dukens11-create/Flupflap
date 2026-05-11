@@ -34,7 +34,7 @@ export default async function SellerPromotePage({
       freePromotionExpiresAt: true,
     },
   });
-  if (dbUser?.sellerStatus === 'SUSPENDED' || dbUser?.sellerStatus === 'BANNED') {
+  if (dbUser?.sellerStatus === 'SUSPENDED' || dbUser?.sellerStatus === 'BANNED' || dbUser?.sellerStatus === 'RESTRICTED') {
     redirect('/seller');
   }
 

@@ -15,8 +15,17 @@ enum Role {
 
 enum SellerStatus {
   ACTIVE
+  PENDING
+  RESTRICTED
   SUSPENDED
   BANNED
+}
+
+enum KycStatus {
+  NOT_SUBMITTED
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
 }
 
 enum SellerVerificationStatus {
@@ -106,6 +115,9 @@ model User {
   sellerStatus             SellerStatus              @default(ACTIVE)
   sellerStatusReason       String?
   sellerStatusNotes        String?
+  kycStatus                KycStatus                 @default(NOT_SUBMITTED)
+  verifiedSeller           Boolean                   @default(false)
+  approvedAt               DateTime?
   phoneVerified            Boolean                   @default(false)
   phoneVerifiedAt          DateTime?
   createdAt                DateTime                  @default(now())

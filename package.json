@@ -11,7 +11,8 @@
     "prisma:push": "prisma db push",
     "seed": "tsx prisma/seed.ts",
     "cleanup:profile-images": "tsx scripts/cleanup-profile-images.ts",
-    "repair:affected-accounts": "tsx scripts/repair-affected-accounts.ts"
+    "repair:affected-accounts": "tsx scripts/repair-affected-accounts.ts",
+    "sync:seller-statuses": "tsx scripts/sync-seller-statuses.ts"
   },
   "dependencies": {
     "@next-auth/prisma-adapter": "latest",

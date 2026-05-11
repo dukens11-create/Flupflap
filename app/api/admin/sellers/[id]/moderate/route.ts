@@ -17,7 +17,7 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { z } from 'zod';
 
-const VALID_ACTIONS = ['SUSPENDED', 'BANNED', 'REINSTATED'] as const;
+const VALID_ACTIONS = ['SUSPENDED', 'BANNED', 'RESTRICTED', 'REINSTATED'] as const;
 
 const VALID_REASON_CATEGORIES = [
   'misconduct_to_customer',

@@ -3,6 +3,7 @@ import {
   SellerKycProvider,
   SellerPhoneVerificationStatus,
   SellerVerificationStatus,
+  KycStatus,
 } from '@prisma/client';
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
@@ -79,6 +80,12 @@ export async function POST(req: Request) {
         adminFallbackStatus: SellerAdminFallbackStatus.PENDING_REVIEW,
         kycStartedAt: now,
       },
+    });
+
+    // Sync canonical kycStatus on the User record so dashboard counts are consistent.
+    await prisma.user.update({
+      where: { id: session.user.id },
+      data: { kycStatus: KycStatus.PENDING_REVIEW },
     });
 
     if (verificationUrl) {

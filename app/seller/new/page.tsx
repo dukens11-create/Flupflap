@@ -19,7 +19,7 @@ export default async function SellerNewPage() {
 
   // Block restricted sellers from creating new listings
   const dbUser = await prisma.user.findUnique({ where: { id: session.user.id } });
-  if (dbUser?.sellerStatus === 'SUSPENDED' || dbUser?.sellerStatus === 'BANNED') {
+  if (dbUser?.sellerStatus === 'SUSPENDED' || dbUser?.sellerStatus === 'BANNED' || dbUser?.sellerStatus === 'RESTRICTED') {
     redirect('/seller');
   }
 

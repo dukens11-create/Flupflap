@@ -2,6 +2,8 @@ import {
   SellerAdminFallbackStatus,
   SellerVerificationStatus,
   NotificationType,
+  KycStatus,
+  SellerStatus,
 } from '@prisma/client';
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
@@ -139,6 +141,24 @@ export async function POST(
         reviewedAt: new Date(),
         reviewedById: session.user.id,
       },
+    });
+
+    // Sync canonical kycStatus, sellerStatus, verifiedSeller, and approvedAt
+    // onto the User record so all dashboard counts use a single source of truth.
+    const now = new Date();
+    await prisma.user.update({
+      where: { id },
+      data:
+        data.status === SellerVerificationStatus.APPROVED
+          ? {
+              kycStatus: KycStatus.APPROVED,
+              sellerStatus: SellerStatus.ACTIVE,
+              verifiedSeller: true,
+              approvedAt: now,
+            }
+          : {
+              kycStatus: KycStatus.REJECTED,
+            },
     });
 
     // Notify the seller of the admin's decision. Admin review decisions always

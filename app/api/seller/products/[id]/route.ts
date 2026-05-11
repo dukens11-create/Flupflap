@@ -100,7 +100,7 @@ export async function POST(
 
     // Block restricted sellers from editing or deleting listings
     const dbUser = await prisma.user.findUnique({ where: { id: session.user.id } });
-    if (dbUser?.sellerStatus === 'SUSPENDED' || dbUser?.sellerStatus === 'BANNED') {
+    if (dbUser?.sellerStatus === 'SUSPENDED' || dbUser?.sellerStatus === 'BANNED' || dbUser?.sellerStatus === 'RESTRICTED') {
       return NextResponse.json({ error: 'Your seller account is currently restricted.' }, { status: 403 });
     }
 
@@ -198,7 +198,7 @@ export async function PATCH(
 
     // Block restricted sellers from editing or deleting listings
     const dbUser = await prisma.user.findUnique({ where: { id: session.user.id } });
-    if (dbUser?.sellerStatus === 'SUSPENDED' || dbUser?.sellerStatus === 'BANNED') {
+    if (dbUser?.sellerStatus === 'SUSPENDED' || dbUser?.sellerStatus === 'BANNED' || dbUser?.sellerStatus === 'RESTRICTED') {
       return NextResponse.json({ error: 'Your seller account is currently restricted.' }, { status: 403 });
     }
 

@@ -33,7 +33,7 @@ export default async function AdminPage({
 
   const suspiciousLoginSince = new Date(Date.now() - 1000 * 60 * 60 * 24 * 30);
 
-  const [settings, pending, all, recentOrders, restrictedSellersCount, buyerCount, sellerCount, totalUsersCount, totalOrdersCount, pendingSellerApprovalsCount, pendingKycReviewsCount, paidRevenueAgg, platformCommissionAgg, openReportsCount, openSellerReportsCount, suspiciousLoginCount, activePromotionsCount, productsThisWeek, productsThisMonth, activeListingsCount, soldItemsAgg, revenueThisWeekAgg, revenueThisMonthAgg, visitorMetrics] = await Promise.all([
+  const [settings, pending, all, recentOrders, restrictedSellersCount, buyerCount, sellerCount, totalUsersCount, totalOrdersCount, pendingSellerApprovalsCount, pendingKycReviewsCount, kycApprovedCount, kycRejectedCount, kycNotSubmittedCount, paidRevenueAgg, platformCommissionAgg, openReportsCount, openSellerReportsCount, suspiciousLoginCount, activePromotionsCount, productsThisWeek, productsThisMonth, activeListingsCount, soldItemsAgg, revenueThisWeekAgg, revenueThisMonthAgg, visitorMetrics] = await Promise.all([
     getMarketplaceSettings(),
     prisma.product.findMany({
       where: { status: 'PENDING' },
@@ -62,18 +62,33 @@ export default async function AdminPage({
       take: 10,
       include: { buyer: { select: { name: true, email: true } } },
     }),
+    // Sellers who are restricted (not active) — excludes PENDING which is its own category
     prisma.user.count({
-      where: { role: 'SELLER', sellerStatus: { not: 'ACTIVE' } },
+      where: { role: 'SELLER', sellerStatus: { in: ['SUSPENDED', 'BANNED', 'RESTRICTED'] } },
     }),
     prisma.user.count({ where: { role: 'CUSTOMER' } }),
     prisma.user.count({ where: { role: 'SELLER' } }),
     prisma.user.count(),
     prisma.order.count(),
-    prisma.sellerVerification.count({
-      where: { adminFallbackStatus: 'PENDING_REVIEW' },
+    // Pending Seller Approvals: seller accounts awaiting admin account approval
+    prisma.user.count({
+      where: { role: 'SELLER', sellerStatus: 'PENDING' },
     }),
-    prisma.sellerVerification.count({
-      where: { status: 'PENDING' },
+    // Pending KYC Reviews: sellers who have submitted KYC docs awaiting review
+    prisma.user.count({
+      where: { role: 'SELLER', kycStatus: 'PENDING_REVIEW' },
+    }),
+    // KYC Approved
+    prisma.user.count({
+      where: { role: 'SELLER', kycStatus: 'APPROVED' },
+    }),
+    // KYC Rejected
+    prisma.user.count({
+      where: { role: 'SELLER', kycStatus: 'REJECTED' },
+    }),
+    // KYC Not Submitted
+    prisma.user.count({
+      where: { role: 'SELLER', kycStatus: 'NOT_SUBMITTED' },
     }),
     prisma.order.aggregate({
       _sum: { totalCents: true },
@@ -176,7 +191,7 @@ export default async function AdminPage({
         </div>
         <a href="/admin/sellers" className="card p-4 text-center hover:bg-slate-50 transition-colors">
           <p className={`text-3xl font-black ${restrictedSellersCount > 0 ? 'text-red-600' : 'text-slate-600'}`}>{restrictedSellersCount}</p>
-          <p className="text-sm text-slate-500">Restricted sellers</p>
+          <p className="text-sm text-slate-500">Suspended/restricted</p>
         </a>
       </div>
 
@@ -187,8 +202,30 @@ export default async function AdminPage({
           <div className="rounded-xl bg-white/10 p-3"><p className="text-xs text-slate-200">Total Sellers</p><p className="text-2xl font-black">{sellerCount}</p></div>
           <div className="rounded-xl bg-white/10 p-3"><p className="text-xs text-slate-200">Total Orders</p><p className="text-2xl font-black">{totalOrdersCount}</p></div>
           <div className="rounded-xl bg-white/10 p-3"><p className="text-xs text-slate-200">Total Revenue</p><p className="text-2xl font-black">{dollars(totalRevenueCents)}</p></div>
-          <div className="rounded-xl bg-white/10 p-3"><p className="text-xs text-slate-200">Pending Seller Approvals</p><p className="text-2xl font-black">{pendingSellerApprovalsCount}</p></div>
-          <div className="rounded-xl bg-white/10 p-3"><p className="text-xs text-slate-200">Pending KYC Reviews</p><p className="text-2xl font-black">{pendingKycReviewsCount}</p></div>
+          <a href="/admin/sellers?status=PENDING" aria-label="View pending seller accounts" className="rounded-xl bg-white/10 p-3 hover:bg-white/20 transition-colors">
+            <p className="text-xs text-slate-200">Pending Seller Accounts</p>
+            <p className={`text-2xl font-black ${pendingSellerApprovalsCount > 0 ? 'text-yellow-300' : ''}`}>{pendingSellerApprovalsCount}</p>
+          </a>
+          <a href="/admin/sellers?kyc=PENDING_REVIEW" aria-label="View sellers with KYC pending review" className="rounded-xl bg-white/10 p-3 hover:bg-white/20 transition-colors">
+            <p className="text-xs text-slate-200">KYC Pending Review</p>
+            <p className={`text-2xl font-black ${pendingKycReviewsCount > 0 ? 'text-yellow-300' : ''}`}>{pendingKycReviewsCount}</p>
+          </a>
+          <a href="/admin/sellers?kyc=APPROVED" aria-label="View sellers with KYC approved" className="rounded-xl bg-white/10 p-3 hover:bg-white/20 transition-colors">
+            <p className="text-xs text-slate-200">KYC Approved</p>
+            <p className="text-2xl font-black text-green-300">{kycApprovedCount}</p>
+          </a>
+          <a href="/admin/sellers?kyc=REJECTED" aria-label="View sellers with KYC rejected" className="rounded-xl bg-white/10 p-3 hover:bg-white/20 transition-colors">
+            <p className="text-xs text-slate-200">KYC Rejected</p>
+            <p className={`text-2xl font-black ${kycRejectedCount > 0 ? 'text-red-300' : ''}`}>{kycRejectedCount}</p>
+          </a>
+          <a href="/admin/sellers?kyc=NOT_SUBMITTED" aria-label="View sellers with KYC not submitted" className="rounded-xl bg-white/10 p-3 hover:bg-white/20 transition-colors">
+            <p className="text-xs text-slate-200">KYC Not Submitted</p>
+            <p className="text-2xl font-black">{kycNotSubmittedCount}</p>
+          </a>
+          <a href="/admin/sellers" aria-label="View suspended or restricted sellers" className="rounded-xl bg-white/10 p-3 hover:bg-white/20 transition-colors">
+            <p className="text-xs text-slate-200">Suspended/Restricted Sellers</p>
+            <p className={`text-2xl font-black ${restrictedSellersCount > 0 ? 'text-red-300' : ''}`}>{restrictedSellersCount}</p>
+          </a>
           <div className="rounded-xl bg-white/10 p-3"><p className="text-xs text-slate-200">Reported Products</p><p className="text-2xl font-black">{openReportsCount}</p></div>
           <div className="rounded-xl bg-white/10 p-3"><p className="text-xs text-slate-200">Platform Commission Earned</p><p className="text-2xl font-black">{dollars(platformCommissionEarnedCents)}</p></div>
         </div>
