@@ -39,7 +39,18 @@ interface Props {
 
 const SEARCH_DEBOUNCE_MS = 140;
 const CLOSEST_MATCH_LIMIT = 6;
+const MIN_SINGULARIZE_LENGTH = 4;
+const EXACT_MATCH_SCORE = 120;
+const PREFIX_MATCH_BASE_SCORE = 105;
+const CONTAINS_MATCH_BASE_SCORE = 92;
+const FUZZY_MATCH_BASE_SCORE = 78;
+const FUZZY_MATCH_PENALTY = 8;
+const WEAK_MATCH_BASE_SCORE = 10;
+const FUZZY_MATCH_TOLERANCE_RATIO = 0.35;
+const STRONG_FUZZY_MATCH_RATIO = 0.25;
+const STRONG_MATCH_SCORE_THRESHOLD = 65;
 
+// Fallback aliases for older category rows that predate aliases[] migration.
 const STATIC_CATEGORY_ALIASES: Record<string, string[]> = {
   'fashion-women-perfume': ['perfume', 'perfum', 'fragrance', 'cologne', 'body mist', 'scent'],
   electronics: ['electronic', 'electr', 'tech', 'gadget'],
@@ -57,7 +68,7 @@ function normalizeSearchTerm(value: string): string {
 }
 
 function singularize(value: string): string {
-  if (value.length <= 3) return value;
+  if (value.length < MIN_SINGULARIZE_LENGTH) return value;
   if (value.endsWith('ies')) return `${value.slice(0, -3)}y`;
   if (value.endsWith('es')) return value.slice(0, -2);
   if (value.endsWith('s')) return value.slice(0, -1);
@@ -98,27 +109,27 @@ function levenshteinDistance(a: string, b: string): number {
 function scoreSearchTerm(query: string, term: string): { score: number; distance: number; strong: boolean } {
   if (!query || !term) return { score: 0, distance: Number.MAX_SAFE_INTEGER, strong: false };
 
-  if (query === term) return { score: 120, distance: 0, strong: true };
+  if (query === term) return { score: EXACT_MATCH_SCORE, distance: 0, strong: true };
 
   if (term.startsWith(query)) {
-    return { score: 105 - Math.max(0, term.length - query.length), distance: Math.max(0, term.length - query.length), strong: true };
+    return { score: PREFIX_MATCH_BASE_SCORE - Math.max(0, term.length - query.length), distance: Math.max(0, term.length - query.length), strong: true };
   }
 
   if (term.includes(query)) {
-    return { score: 92 - Math.max(0, term.length - query.length), distance: Math.max(0, term.length - query.length), strong: true };
+    return { score: CONTAINS_MATCH_BASE_SCORE - Math.max(0, term.length - query.length), distance: Math.max(0, term.length - query.length), strong: true };
   }
 
   const distance = levenshteinDistance(query, term);
-  const tolerance = Math.max(1, Math.floor(query.length * 0.35));
+  const tolerance = Math.max(1, Math.floor(query.length * FUZZY_MATCH_TOLERANCE_RATIO));
   if (distance <= tolerance) {
     return {
-      score: 78 - distance * 8,
+      score: FUZZY_MATCH_BASE_SCORE - distance * FUZZY_MATCH_PENALTY,
       distance,
-      strong: distance <= Math.max(1, Math.floor(query.length * 0.25)),
+      strong: distance <= Math.max(1, Math.floor(query.length * STRONG_FUZZY_MATCH_RATIO)),
     };
   }
 
-  return { score: 10 - distance, distance, strong: false };
+  return { score: WEAK_MATCH_BASE_SCORE - distance, distance, strong: false };
 }
 
 function rankPickerOptions(options: PickerOption[], query: string) {
@@ -164,7 +175,7 @@ function rankPickerOptions(options: PickerOption[], query: string) {
     return a.option.name.localeCompare(b.option.name);
   });
 
-  const strongMatches = ranked.filter(item => item.strong || item.score >= 65);
+  const strongMatches = ranked.filter(item => item.strong || item.score >= STRONG_MATCH_SCORE_THRESHOLD);
   if (strongMatches.length > 0) return strongMatches;
 
   return ranked.slice(0, CLOSEST_MATCH_LIMIT);
