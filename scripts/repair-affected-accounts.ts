@@ -3,6 +3,7 @@ import { prisma } from '../lib/db';
 import { looksLikeBcryptHash } from '../lib/password';
 import { sendEmail } from '../lib/email';
 import { passwordResetEmail } from '../lib/email-templates';
+import { getSiteUrl } from '../lib/seo';
 
 function parseTargetEmails(argv: string[]) {
   const arg = argv.find((entry) => entry.startsWith('--emails='));
@@ -105,15 +106,20 @@ async function run() {
     } else {
       console.log(`[repair-affected-accounts] Resetting passwords for ${brokenUsers.length} account(s) with invalid hashes:`, brokenUsers.map((u) => u.email).join(', '));
 
-      const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL;
-      if (!appUrl) {
+      const hasConfiguredPublicUrl = Boolean(
+        process.env.NEXT_PUBLIC_SITE_URL
+        ?? process.env.NEXT_PUBLIC_APP_URL
+        ?? process.env.NEXTAUTH_URL,
+      );
+      if (!hasConfiguredPublicUrl) {
         console.warn(
-          '[repair-affected-accounts] WARNING: Neither NEXTAUTH_URL nor NEXT_PUBLIC_APP_URL is set. ' +
-          'Password-reset links will contain localhost URLs and will not work in production. ' +
-          'Set the correct app URL before running this script.',
+          '[repair-affected-accounts] WARNING: No public app URL env var is set. ' +
+          'Password-reset links will fall back to the canonical site URL. ' +
+          'Set NEXT_PUBLIC_SITE_URL, NEXT_PUBLIC_APP_URL, or NEXTAUTH_URL before running this script ' +
+          'if the reset link should point somewhere else.',
         );
       }
-      const resolvedAppUrl = appUrl ?? 'http://localhost:3000';
+      const resolvedAppUrl = getSiteUrl();
 
       for (const user of brokenUsers) {
         // Replace the corrupt value with a sentinel that safeComparePassword
@@ -133,8 +139,11 @@ async function run() {
           data: { identifier, token, expires },
         });
 
-        const resetUrl = `${resolvedAppUrl}/reset-password?token=${token}&email=${encodeURIComponent(user.email)}`;
-        const { subject, html } = passwordResetEmail(resetUrl);
+        const resetUrl = new URL('/reset-password', resolvedAppUrl);
+        resetUrl.searchParams.set('token', token);
+        resetUrl.searchParams.set('email', user.email);
+
+        const { subject, html } = passwordResetEmail(resetUrl.toString());
         const sent = await sendEmail(user.email, subject, html);
 
         if (sent) {
@@ -144,7 +153,7 @@ async function run() {
           // operator can share it with the user out-of-band (e.g. via support chat).
           console.error(
             `[repair-affected-accounts] ${user.email}: password sentinel set but reset email FAILED to send ✗. ` +
-            `Share this link with the user manually (expires in 1 hour): ${resetUrl}`,
+            `Share this link with the user manually (expires in 1 hour): ${resetUrl.toString()}`,
           );
         }
       }
