@@ -6,7 +6,23 @@ import { cents } from '@/lib/money';
 import { logError } from '@/lib/logger';
 import { z } from 'zod';
 
-const schema = z.object({ title: z.string().min(3), description: z.string().min(10), price: z.string(), condition: z.string(), category: z.string(), imageUrl: z.string().url(), sellerEmail: z.string().email(), shipping: z.string().optional(), inventory: z.string().optional() });
+const schema = z.object({
+  title: z.string().min(3),
+  description: z.string().min(10),
+  price: z.coerce.number().finite().nonnegative(),
+  condition: z.string(),
+  category: z.string(),
+  imageUrl: z.string().url(),
+  sellerEmail: z.string().email(),
+  shipping: z.preprocess(
+    (value) => (value === '' || value == null ? undefined : Number(value)),
+    z.number().finite().nonnegative().optional(),
+  ),
+  inventory: z.preprocess(
+    (value) => (value === '' || value == null ? undefined : Number(value)),
+    z.number().int().min(1).optional(),
+  ),
+});
 
 export async function GET() {
   try {
@@ -40,8 +56,8 @@ export async function POST(req: Request) {
 
     const data = parsed.data;
     const priceCents = cents(data.price);
-    const shippingCents = cents(data.shipping || '0');
-    const inventory = Number(data.inventory || 1);
+    const shippingCents = cents(data.shipping ?? 0);
+    const inventory = data.inventory ?? 1;
     if (
       !Number.isFinite(priceCents) ||
       !Number.isFinite(shippingCents) ||

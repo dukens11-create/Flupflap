@@ -64,7 +64,12 @@ export async function POST(req: Request) {
 
     try {
       payload = JSON.parse(body);
-    } catch {
+    } catch (err) {
+      logError('Persona webhook JSON payload was invalid', err, {
+        tag: 'kyc/webhook/persona/POST',
+        action: 'parseWebhookPayload',
+        bodyLength: body.length,
+      });
       return new NextResponse('Invalid payload', { status: 400 });
     }
 
