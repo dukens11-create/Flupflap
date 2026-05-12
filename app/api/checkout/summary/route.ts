@@ -164,26 +164,44 @@ export async function POST(req: Request) {
       });
     }
 
-    const calculation = await stripe.tax.calculations.create({
-      currency: 'usd',
-      line_items: lineItems,
-      customer_details: {
-        address_source: 'shipping',
-        address: {
-          line1: shippingRateInfo?.buyerAddress?.street1,
-          line2: shippingRateInfo?.buyerAddress?.street2,
-          city: shippingRateInfo?.buyerAddress?.city,
-          state: shippingRateInfo?.buyerAddress?.state,
-          postal_code: shippingRateInfo?.buyerAddress?.zip,
-          country: shippingRateInfo?.buyerAddress?.country || 'US',
-        },
-      },
-    });
+    const subtotalCents = lineItems.reduce((sum, item) => sum + item.amount, 0);
 
-    return NextResponse.json({
-      taxCents: calculation.tax_amount_exclusive,
-      totalCents: calculation.amount_total,
-    });
+    try {
+      const calculation = await stripe.tax.calculations.create({
+        currency: 'usd',
+        line_items: lineItems,
+        customer_details: {
+          address_source: 'shipping',
+          address: {
+            line1: shippingRateInfo?.buyerAddress?.street1,
+            line2: shippingRateInfo?.buyerAddress?.street2,
+            city: shippingRateInfo?.buyerAddress?.city,
+            state: shippingRateInfo?.buyerAddress?.state,
+            postal_code: shippingRateInfo?.buyerAddress?.zip,
+            country: shippingRateInfo?.buyerAddress?.country || 'US',
+          },
+        },
+      });
+
+      return NextResponse.json({
+        taxCents: calculation.tax_amount_exclusive,
+        totalCents: calculation.amount_total,
+        taxFallbackApplied: false,
+      });
+    } catch (taxErr) {
+      console.warn('[checkout/summary] stripe tax unavailable, falling back to tax=0', {
+        reason: classifyStripeError(taxErr).reason,
+        statusCode: (taxErr as { statusCode?: unknown })?.statusCode,
+        type: (taxErr as { type?: unknown })?.type,
+        code: (taxErr as { code?: unknown })?.code,
+        message: taxErr instanceof Error ? taxErr.message : String(taxErr),
+      });
+      return NextResponse.json({
+        taxCents: 0,
+        totalCents: subtotalCents,
+        taxFallbackApplied: true,
+      });
+    }
   } catch (err) {
     console.error('[checkout/summary]', err);
     return NextResponse.json(
