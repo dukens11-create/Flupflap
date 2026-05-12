@@ -106,10 +106,12 @@ async function run() {
     } else {
       console.log(`[repair-affected-accounts] Resetting passwords for ${brokenUsers.length} account(s) with invalid hashes:`, brokenUsers.map((u) => u.email).join(', '));
 
-      const appUrl = process.env.NEXT_PUBLIC_SITE_URL
+      const hasConfiguredPublicUrl = Boolean(
+        process.env.NEXT_PUBLIC_SITE_URL
         ?? process.env.NEXT_PUBLIC_APP_URL
-        ?? process.env.NEXTAUTH_URL;
-      if (!appUrl) {
+        ?? process.env.NEXTAUTH_URL,
+      );
+      if (!hasConfiguredPublicUrl) {
         console.warn(
           '[repair-affected-accounts] WARNING: No public app URL env var is set. ' +
           'Password-reset links will fall back to the canonical site URL. ' +
