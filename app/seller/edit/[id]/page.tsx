@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import type { Metadata } from 'next';
-import { resolveLegacyCategorySelection, type CategoryHierarchyNode } from '@/lib/category-hierarchy';
+import { loadCategoryHierarchyNodes, resolveLegacyCategorySelection } from '@/lib/category-hierarchy';
 import { isSellerVerificationApproved } from '@/lib/seller-verification';
 import {
   formatPackageNumber,
@@ -46,10 +46,7 @@ export default async function SellerEditPage({
   if (!product) notFound();
   if (product.sellerId !== sellerId) forbidden();
 
-  const categories = await prisma.category.findMany({
-    orderBy: [{ level: 'asc' }, { sortOrder: 'asc' }],
-    select: { id: true, name: true, slug: true, aliases: true, parentId: true, level: true },
-  }) as CategoryHierarchyNode[];
+  const categories = await loadCategoryHierarchyNodes(prisma);
   const normalizedCategory = resolveLegacyCategorySelection(categories, {
     categoryId: product.categoryId,
     subcategoryId: product.subcategoryId,

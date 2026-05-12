@@ -1,4 +1,5 @@
 import { LEGACY_CATEGORY_ALIAS_FALLBACK } from '@/lib/category-aliases';
+import type { PrismaClient } from '@prisma/client';
 
 export interface CategoryHierarchyNode {
   id: string;
@@ -8,6 +9,8 @@ export interface CategoryHierarchyNode {
   parentId: string | null;
   level: number;
 }
+
+type CategoryHierarchyReader = Pick<PrismaClient, 'category'>;
 
 type NormalizedPath = {
   root: CategoryHierarchyNode;
@@ -40,6 +43,13 @@ export type LegacyCategoryResolution = {
   repaired: boolean;
   reason: string | null;
 };
+
+export async function loadCategoryHierarchyNodes(db: CategoryHierarchyReader) {
+  return db.category.findMany({
+    orderBy: [{ level: 'asc' }, { sortOrder: 'asc' }],
+    select: { id: true, name: true, slug: true, aliases: true, parentId: true, level: true },
+  }) as Promise<CategoryHierarchyNode[]>;
+}
 
 function normalizeTerm(value: string | null | undefined): string {
   if (typeof value !== 'string') return '';
@@ -85,7 +95,7 @@ function getPathToRoot(
   }
 
   path.reverse();
-  if (path.length === 0 || path[0].level !== 0) return null;
+  if (path[0]?.level !== 0) return null;
   for (let index = 1; index < path.length; index += 1) {
     if (path[index].parentId !== path[index - 1].id) return null;
   }
@@ -102,8 +112,6 @@ function getNormalizedPath(
   const root = path[0];
   const branch = path.find((entry) => entry.level === 1) ?? null;
   const leaf = path[path.length - 1];
-
-  if (!root || !leaf) return null;
 
   return { root, branch, leaf, path };
 }

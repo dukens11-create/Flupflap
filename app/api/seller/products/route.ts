@@ -13,7 +13,7 @@ import {
   shouldRecommendFraudReview,
 } from '@/lib/fraud-detection';
 import { parseJsonOrNull } from '@/lib/parse-json';
-import { validateCategorySelection, type CategoryHierarchyNode } from '@/lib/category-hierarchy';
+import { loadCategoryHierarchyNodes, validateCategorySelection } from '@/lib/category-hierarchy';
 import {
   convertWeightToOunces,
   normalizeWeightUnit,
@@ -294,10 +294,7 @@ export async function POST(req: Request) {
           ? undefined
           : (attributes as Prisma.InputJsonValue);
 
-    const categoryNodes = await prisma.category.findMany({
-      orderBy: [{ level: 'asc' }, { sortOrder: 'asc' }],
-      select: { id: true, name: true, slug: true, aliases: true, parentId: true, level: true },
-    }) as CategoryHierarchyNode[];
+    const categoryNodes = await loadCategoryHierarchyNodes(prisma);
     const validatedCategory = validateCategorySelection(categoryNodes, {
       categoryId: data.categoryId,
       subcategoryId: data.subcategoryId,

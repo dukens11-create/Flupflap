@@ -1,7 +1,7 @@
 import { isDatabaseConfigured, prisma } from '../lib/db';
 import {
+  loadCategoryHierarchyNodes,
   resolveLegacyCategorySelection,
-  type CategoryHierarchyNode,
 } from '../lib/category-hierarchy';
 
 async function run() {
@@ -12,10 +12,7 @@ async function run() {
     return;
   }
 
-  const categories = await prisma.category.findMany({
-    orderBy: [{ level: 'asc' }, { sortOrder: 'asc' }],
-    select: { id: true, name: true, slug: true, aliases: true, parentId: true, level: true },
-  }) as CategoryHierarchyNode[];
+  const categories = await loadCategoryHierarchyNodes(prisma);
   const products = await prisma.product.findMany({
     select: {
       id: true,

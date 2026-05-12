@@ -12,7 +12,7 @@ import {
 } from '@/lib/fraud-detection';
 import { parseJsonOrNull } from '@/lib/parse-json';
 import { SHIPPING_MODES } from '@/app/api/seller/products/route';
-import { validateCategorySelection, type CategoryHierarchyNode } from '@/lib/category-hierarchy';
+import { loadCategoryHierarchyNodes, validateCategorySelection } from '@/lib/category-hierarchy';
 import {
   convertWeightToOunces,
   getShippingClass,
@@ -149,13 +149,6 @@ function respondWithError(id: string, message: string, acceptsJson: boolean, sta
   return redirectToEditForm(id, message);
 }
 
-async function loadCategoryNodes() {
-  return prisma.category.findMany({
-    orderBy: [{ level: 'asc' }, { sortOrder: 'asc' }],
-    select: { id: true, name: true, slug: true, aliases: true, parentId: true, level: true },
-  }) as Promise<CategoryHierarchyNode[]>;
-}
-
 function hasSubmittedCategorySelection(data: ProductUpdateInput) {
   return Boolean(
     data.categoryId?.trim()
@@ -177,7 +170,7 @@ async function resolveSubmittedCategorySelection(data: ProductUpdateInput) {
 
   if (!submitted) return fallback;
 
-  const categoryNodes = await loadCategoryNodes();
+  const categoryNodes = await loadCategoryHierarchyNodes(prisma);
   const validatedCategory = validateCategorySelection(categoryNodes, {
     categoryId: data.categoryId,
     subcategoryId: data.subcategoryId,
