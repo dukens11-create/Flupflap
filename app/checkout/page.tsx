@@ -50,6 +50,24 @@ type AddressSuggestion = {
   country: string;
 };
 
+const US_STATE_NAME_TO_ABBR: Record<string, string> = {
+  'alabama': 'AL', 'alaska': 'AK', 'arizona': 'AZ', 'arkansas': 'AR',
+  'california': 'CA', 'colorado': 'CO', 'connecticut': 'CT', 'delaware': 'DE',
+  'florida': 'FL', 'georgia': 'GA', 'hawaii': 'HI', 'idaho': 'ID',
+  'illinois': 'IL', 'indiana': 'IN', 'iowa': 'IA', 'kansas': 'KS',
+  'kentucky': 'KY', 'louisiana': 'LA', 'maine': 'ME', 'maryland': 'MD',
+  'massachusetts': 'MA', 'michigan': 'MI', 'minnesota': 'MN', 'mississippi': 'MS',
+  'missouri': 'MO', 'montana': 'MT', 'nebraska': 'NE', 'nevada': 'NV',
+  'new hampshire': 'NH', 'new jersey': 'NJ', 'new mexico': 'NM', 'new york': 'NY',
+  'north carolina': 'NC', 'north dakota': 'ND', 'ohio': 'OH', 'oklahoma': 'OK',
+  'oregon': 'OR', 'pennsylvania': 'PA', 'rhode island': 'RI', 'south carolina': 'SC',
+  'south dakota': 'SD', 'tennessee': 'TN', 'texas': 'TX', 'utah': 'UT',
+  'vermont': 'VT', 'virginia': 'VA', 'washington': 'WA', 'west virginia': 'WV',
+  'wisconsin': 'WI', 'wyoming': 'WY', 'district of columbia': 'DC',
+  'puerto rico': 'PR', 'guam': 'GU', 'virgin islands': 'VI',
+  'american samoa': 'AS', 'northern mariana islands': 'MP',
+};
+
 type ShipGroup = {
   sellerId: string;
   sellerName: string;
@@ -91,7 +109,9 @@ function getMapboxStateCode(context: MapboxContextItem[] | undefined): string {
   const region = context?.find(item => item.id?.startsWith('region.'));
   const shortCode = region?.short_code?.split('-').pop()?.trim().toUpperCase();
   if (shortCode) return shortCode;
-  return region?.text?.trim().slice(0, 2).toUpperCase() || '';
+  const regionText = region?.text?.trim() || '';
+  if (regionText.length <= 2) return regionText.toUpperCase();
+  return US_STATE_NAME_TO_ABBR[regionText.toLowerCase()] || '';
 }
 
 function parseMapboxFeature(feature: MapboxFeature): AddressSuggestion | null {
@@ -153,6 +173,7 @@ export default function CheckoutPage() {
   const [addressDropdownOpen, setAddressDropdownOpen] = useState(false);
   const [fetchingAddressSuggestions, setFetchingAddressSuggestions] = useState(false);
   const [addressLookupError, setAddressLookupError] = useState('');
+  const [highlightedSuggestionIndex, setHighlightedSuggestionIndex] = useState(-1);
   const [rateGroups, setRateGroups] = useState<ShipGroup[]>([]);
   const [selectedRates, setSelectedRates] = useState<SelectedRate[]>([]);
   const [fetchingRates, setFetchingRates] = useState(false);
@@ -184,6 +205,7 @@ export default function CheckoutPage() {
     function handlePointerDown(event: MouseEvent | TouchEvent) {
       if (!addressAutocompleteRef.current?.contains(event.target as Node)) {
         setAddressDropdownOpen(false);
+        setHighlightedSuggestionIndex(-1);
       }
     }
 
@@ -318,6 +340,7 @@ export default function CheckoutPage() {
       setAddressSuggestions([]);
       setAddressDropdownOpen(false);
       setFetchingAddressSuggestions(false);
+      setHighlightedSuggestionIndex(-1);
       if (!query) {
         setAddressLookupError('');
       }
@@ -333,6 +356,7 @@ export default function CheckoutPage() {
       setAddressSuggestions([]);
       setAddressDropdownOpen(false);
       setFetchingAddressSuggestions(false);
+      setHighlightedSuggestionIndex(-1);
       return undefined;
     }
 
@@ -365,13 +389,16 @@ export default function CheckoutPage() {
 
         setAddressSuggestions(suggestions);
         setAddressDropdownOpen(suggestions.length > 0);
+        setHighlightedSuggestionIndex(suggestions.length > 0 ? 0 : -1);
         setAddressLookupError('');
-      } catch {
+      } catch (err) {
         if (controller.signal.aborted) {
           return;
         }
+        console.error('[checkout/address-autocomplete]', err);
         setAddressSuggestions([]);
         setAddressDropdownOpen(false);
+        setHighlightedSuggestionIndex(-1);
         setAddressLookupError('Address suggestions are unavailable right now. You can continue entering your address manually.');
       } finally {
         if (!controller.signal.aborted) {
@@ -556,6 +583,7 @@ export default function CheckoutPage() {
     selectedAutocompleteStreetRef.current = '';
     setBuyerStreet1(value);
     setAddressLookupError('');
+    setHighlightedSuggestionIndex(-1);
     setAddressDropdownOpen(value.trim().length >= 3);
   }
 
@@ -568,6 +596,7 @@ export default function CheckoutPage() {
     setBuyerCountry(suggestion.country);
     setAddressSuggestions([]);
     setAddressDropdownOpen(false);
+    setHighlightedSuggestionIndex(-1);
     setAddressLookupError('');
   }
 
@@ -737,17 +766,52 @@ export default function CheckoutPage() {
                 onFocus={() => {
                   if (addressSuggestions.length > 0) {
                     setAddressDropdownOpen(true);
+                    setHighlightedSuggestionIndex(prev => (prev >= 0 ? prev : 0));
                   }
                 }}
                 onKeyDown={(event) => {
                   if (event.key === 'Escape') {
                     setAddressDropdownOpen(false);
+                    setHighlightedSuggestionIndex(-1);
+                    return;
+                  }
+
+                  if (!addressSuggestions.length || fetchingAddressSuggestions) {
+                    return;
+                  }
+
+                  if (event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    setAddressDropdownOpen(true);
+                    setHighlightedSuggestionIndex(prev => (
+                      prev < addressSuggestions.length - 1 ? prev + 1 : 0
+                    ));
+                    return;
+                  }
+
+                  if (event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    setAddressDropdownOpen(true);
+                    setHighlightedSuggestionIndex(prev => (
+                      prev > 0 ? prev - 1 : addressSuggestions.length - 1
+                    ));
+                    return;
+                  }
+
+                  if (event.key === 'Enter' && addressDropdownOpen && highlightedSuggestionIndex >= 0) {
+                    event.preventDefault();
+                    handleSelectAddressSuggestion(addressSuggestions[highlightedSuggestionIndex]);
                   }
                 }}
                 className="input"
                 placeholder="123 Main St"
                 autoComplete="address-line1"
                 spellCheck={false}
+                role="combobox"
+                aria-autocomplete="list"
+                aria-expanded={addressDropdownOpen && addressSuggestions.length > 0}
+                aria-controls="checkout-address-suggestions"
+                aria-activedescendant={highlightedSuggestionIndex >= 0 ? `checkout-address-suggestion-${highlightedSuggestionIndex}` : undefined}
               />
 
               {(fetchingAddressSuggestions || (addressDropdownOpen && addressSuggestions.length > 0)) && (
@@ -755,13 +819,24 @@ export default function CheckoutPage() {
                   {fetchingAddressSuggestions ? (
                     <p className="px-4 py-3 text-sm text-slate-500">Searching addresses…</p>
                   ) : (
-                    <div role="listbox" className="max-h-72 overflow-y-auto overscroll-contain">
-                      {addressSuggestions.map((suggestion) => (
+                    <div
+                      id="checkout-address-suggestions"
+                      role="listbox"
+                      aria-label="Address suggestions"
+                      className="max-h-72 overflow-y-auto overscroll-contain"
+                    >
+                      {addressSuggestions.map((suggestion, index) => (
                         <button
                           key={suggestion.id}
+                          id={`checkout-address-suggestion-${index}`}
                           type="button"
+                          role="option"
+                          aria-selected={index === highlightedSuggestionIndex}
                           onClick={() => handleSelectAddressSuggestion(suggestion)}
-                          className="w-full border-b border-slate-100 px-4 py-3 text-left text-sm text-slate-700 last:border-b-0 hover:bg-slate-50 focus:bg-slate-50 focus:outline-none"
+                          onMouseEnter={() => setHighlightedSuggestionIndex(index)}
+                          className={`w-full border-b border-slate-100 px-4 py-3 text-left text-sm text-slate-700 last:border-b-0 focus:outline-none ${
+                            index === highlightedSuggestionIndex ? 'bg-slate-50' : 'hover:bg-slate-50 focus:bg-slate-50'
+                          }`}
                         >
                           {suggestion.label}
                         </button>
