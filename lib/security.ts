@@ -1,3 +1,5 @@
+import { createHash } from 'crypto';
+
 type RateLimitOptions = {
   request: Request;
   key: string;
@@ -96,4 +98,3 @@ export function sanitizeTextInput(input: string, maxLength = 200): string {
 export function hashForLogging(value: string): string {
   return createHash('sha256').update(value).digest('hex').slice(0, 12);
 }
-import { createHash } from 'crypto';
