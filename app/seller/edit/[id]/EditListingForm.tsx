@@ -100,6 +100,7 @@ export default function EditListingForm({
     const submittedCategoryId = String(formData.get('categoryId') ?? '').trim();
     const submittedSubcategoryId = String(formData.get('subcategoryId') ?? '').trim();
     const category = String(formData.get('category') ?? '').trim();
+    const isCategoryStale = formData.get('categoryStale') === 'true';
     const weight = String(formData.get('weight') ?? '').trim();
     const length = String(formData.get('length') ?? '').trim();
     const width = String(formData.get('width') ?? '').trim();
@@ -108,7 +109,7 @@ export default function EditListingForm({
     const imageUrl = String(formData.get('imageUrl') ?? '').trim();
     const resolvedImages = images.length > 0 ? images : (imageUrl ? [imageUrl] : []);
 
-    if (!category && !submittedCategoryId) {
+    if (!isCategoryStale && !category && !submittedCategoryId && !submittedSubcategoryId) {
       setSubmitError('Please select a category.');
       return;
     }

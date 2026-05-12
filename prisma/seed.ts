@@ -263,6 +263,57 @@ async function seedCategories() {
   console.log('Categories seeded.');
 }
 
+/**
+ * Ensures the Beauty &amp; Personal Care → Fragrance → Perfume category hierarchy
+ * exists. Uses upsert so this is safe to run against existing databases that
+ * were seeded before this hierarchy was added.
+ */
+async function ensureBeautyCategory() {
+  const beauty = await prisma.category.upsert({
+    where: { slug: 'beauty' },
+    update: {},
+    create: {
+      name: 'Beauty & Personal Care',
+      slug: 'beauty',
+      aliases: ['beauty', 'personal care', 'skincare', 'cosmetics', 'makeup', 'health beauty'],
+      level: 0,
+      icon: '💄',
+      sortOrder: 9,
+      attributeSchema: JSON.parse(PERFUME_FIELDS),
+    },
+  });
+
+  const fragrance = await prisma.category.upsert({
+    where: { slug: 'beauty-fragrance' },
+    update: {},
+    create: {
+      name: 'Fragrance',
+      slug: 'beauty-fragrance',
+      aliases: ['fragrance', 'perfume', 'cologne', 'scent', 'body mist'],
+      parentId: beauty.id,
+      level: 1,
+      sortOrder: 1,
+      attributeSchema: JSON.parse(PERFUME_FIELDS),
+    },
+  });
+
+  await prisma.category.upsert({
+    where: { slug: 'beauty-fragrance-perfume' },
+    update: {},
+    create: {
+      name: 'Perfume',
+      slug: 'beauty-fragrance-perfume',
+      aliases: ['perfume', 'parfum', 'eau de parfum', 'edp', 'eau de toilette', 'edt', 'fragrance', 'cologne', 'scent', 'body mist'],
+      parentId: fragrance.id,
+      level: 2,
+      sortOrder: 1,
+      attributeSchema: JSON.parse(PERFUME_FIELDS),
+    },
+  });
+
+  console.log('Beauty & Personal Care category hierarchy ensured.');
+}
+
 async function main(){
   const pass = await bcrypt.hash('password123', 10);
   await prisma.user.upsert({ where:{email:'guest@flupflap.local'}, update:{}, create:{name:'Guest Buyer',email:'guest@flupflap.local',password:'',role:Role.CUSTOMER} });
@@ -308,6 +359,8 @@ async function main(){
   });
   // Seed categories first so products can reference them
   await seedCategories();
+  // Always ensure new categories exist (safe upsert for existing databases)
+  await ensureBeautyCategory();
   const count = await prisma.product.count();
   if(count===0){ await prisma.product.createMany({ data:[
     {title:'Used iPhone 13',description:'Clean used phone, unlocked, good battery.',priceCents:32900,condition:'Used',category:'Phones',imageUrl:'https://images.unsplash.com/photo-1592750475338-74b7b21085ab',status:ProductStatus.APPROVED,sellerId:seller.id,shippingCents:1299,inventory:1},

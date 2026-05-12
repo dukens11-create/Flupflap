@@ -6,6 +6,9 @@ export const LEGACY_CATEGORY_ALIAS_FALLBACK: Record<string, string[]> = {
   electronics: ['electronic', 'electr', 'tech', 'gadgets'],
   'fashion-kids-clothing': ['clothing', 'cloth', 'clothes', 'apparel'],
   'sports-clothing': ['clothing', 'cloth', 'clothes', 'apparel'],
+  beauty: ['beauty', 'personal care', 'skincare', 'cosmetics', 'makeup', 'health beauty'],
+  'beauty-fragrance': ['fragrance', 'perfume', 'cologne', 'scent', 'body mist'],
+  'beauty-fragrance-perfume': ['perfume', 'parfum', 'eau de parfum', 'edp', 'eau de toilette', 'edt', 'fragrance', 'cologne', 'scent', 'body mist'],
 };
 
 export function normalizeCategoryAliases(aliases?: string[] | string | null): string[] {
