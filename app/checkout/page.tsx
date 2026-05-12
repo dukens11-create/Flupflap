@@ -541,7 +541,15 @@ export default function CheckoutPage() {
     const requestVersion = taxRequestVersionRef.current + 1;
     taxRequestVersionRef.current = requestVersion;
 
-    if (!hasCalculatedShipping || allPickup || !buyerAddressComplete || !hasCompleteShippingSelection || fetchingRates || !!rateError) return;
+    const shouldSkipTaxSummaryFetch = (
+      !hasCalculatedShipping
+      || allPickup
+      || !buyerAddressComplete
+      || !hasCompleteShippingSelection
+      || fetchingRates
+      || !!rateError
+    );
+    if (shouldSkipTaxSummaryFetch) return;
 
     if (status === 'unauthenticated') {
       setTaxError('Your session has expired. Please sign in again to continue checkout.');
