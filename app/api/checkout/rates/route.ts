@@ -167,7 +167,7 @@ export async function POST(req: Request) {
     for (const [sellerId, sellerProducts] of sellerGroups) {
       const seller = sellerProducts[0].seller;
       if (!seller) {
-        errors.push('Shipping unavailable. A seller record is missing for one or more items.');
+        errors.push('Shipping unavailable. Some items in your cart are temporarily unavailable for shipping.');
         continue;
       }
       const fromAddress = resolveFromAddress(seller);

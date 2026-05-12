@@ -197,8 +197,9 @@ export default function CheckoutPage() {
   const allPickup = pickupItemIds.length > 0 && pickupItemIds.length === items.length;
 
   const buyerAddressComplete = useMemo(() => !!(
-    // Recipient name is intentionally optional: buyers may leave it blank and we'll
-    // still allow checkout with a generic non-account fallback ("Buyer").
+    // Recipient name is intentionally optional to reduce checkout friction:
+    // buyers can clear/edit it freely without blocking rate/tax recalculation.
+    // We still pass a non-account fallback ("Buyer") downstream when blank.
     buyerStreet1.trim()
     && buyerCity.trim()
     && buyerState.trim()
