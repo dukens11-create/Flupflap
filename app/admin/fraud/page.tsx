@@ -7,6 +7,8 @@ import { prisma } from '@/lib/db';
 import { dollars } from '@/lib/money';
 import { getListingRiskAssessment, type ListingRiskAssessment } from '@/lib/fraud-detection';
 import { describeSuspiciousReason } from '@/lib/login-security';
+import FraudListingActions from '@/components/FraudListingActions';
+import FraudSellerReportForm from '@/components/FraudSellerReportForm';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,13 +23,6 @@ const SELLER_REPORT_REASON_LABELS: Record<string, string> = {
   other: 'Other',
 };
 
-const SELLER_REPORT_ACTIONS = [
-  { value: 'dismiss', label: 'Dismiss' },
-  { value: 'resolve', label: 'Resolve only' },
-  { value: 'warn_seller', label: 'Warn seller' },
-  { value: 'suspend_seller', label: 'Suspend seller' },
-  { value: 'ban_seller', label: 'Ban seller' },
-] as const;
 const SUSPICIOUS_LOGIN_LOOKBACK_DAYS = 30;
 const LISTING_LOOKBACK_DAYS = 45;
 
@@ -48,10 +43,16 @@ function sellerStatusBadge(status: string) {
   return map[status] ?? 'badge-slate';
 }
 
-export default async function AdminFraudPage() {
+export default async function AdminFraudPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string; success?: string }>;
+}) {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect('/login');
   if (session.user.role !== 'ADMIN') redirect('/');
+
+  const { error: errorParam, success: successParam } = await searchParams;
 
   const suspiciousSince = new Date(Date.now() - 1000 * 60 * 60 * 24 * SUSPICIOUS_LOGIN_LOOKBACK_DAYS);
   const listingLookback = new Date(Date.now() - 1000 * 60 * 60 * 24 * LISTING_LOOKBACK_DAYS);
@@ -168,6 +169,18 @@ export default async function AdminFraudPage() {
         </div>
       </div>
 
+      {successParam && (
+        <div className="card p-4 mb-6 bg-green-50 border-green-200 text-green-800 text-sm">
+          ✅ {successParam}
+        </div>
+      )}
+
+      {errorParam && (
+        <div className="card p-4 mb-6 bg-red-50 border-red-200 text-red-800 text-sm">
+          ⚠ {errorParam}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 mb-8">
         <div className="card p-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Flagged listings</p>
@@ -207,41 +220,16 @@ export default async function AdminFraudPage() {
                     <p className="text-sm text-slate-500 mt-1">
                       {listing.category} · {listing.condition} · {dollars(listing.priceCents)} · sold by{' '}
                       <Link href={`/admin/users/${listing.seller.id}`} className="font-medium hover:underline">
-                        {listing.seller.name}
+                        {listing.seller.name ?? 'Unknown seller'}
                       </Link>
-                      {' '}({listing.seller.email})
+                      {listing.seller.email ? ` (${listing.seller.email})` : ''}
                     </p>
                     <p className="text-xs text-slate-400 mt-1">
                       Created {listing.createdAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                      <span className={`ml-2 ${sellerStatusBadge(listing.seller.sellerStatus)}`}>{listing.seller.sellerStatus}</span>
+                      <span className={`ml-2 ${sellerStatusBadge(listing.seller.sellerStatus ?? 'ACTIVE')}`}>{listing.seller.sellerStatus ?? 'ACTIVE'}</span>
                     </p>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {listing.status === 'PENDING' && (
-                      <>
-                        <form action={`/api/admin/products/${listing.id}`} method="POST">
-                          <input type="hidden" name="_method" value="approve" />
-                          <input type="hidden" name="redirectTo" value="/admin/fraud" />
-                          <button type="submit" className="btn bg-green-600 hover:bg-green-700 text-white text-sm">Approve</button>
-                        </form>
-                        <form action={`/api/admin/products/${listing.id}`} method="POST">
-                          <input type="hidden" name="_method" value="reject" />
-                          <input type="hidden" name="redirectTo" value="/admin/fraud" />
-                          <button type="submit" className="btn bg-red-600 hover:bg-red-700 text-white text-sm">Reject</button>
-                        </form>
-                      </>
-                    )}
-                    <form action={`/api/admin/products/${listing.id}`} method="POST">
-                      <input type="hidden" name="_method" value="hide" />
-                      <input type="hidden" name="redirectTo" value="/admin/fraud" />
-                      <button type="submit" className="btn bg-slate-900 hover:bg-slate-800 text-white text-sm">Hide listing</button>
-                    </form>
-                    {listing.status === 'APPROVED' && (
-                      <Link href={`/products/${listing.id}`} target="_blank" className="btn-outline text-sm">
-                        View listing ↗
-                      </Link>
-                    )}
-                  </div>
+                  <FraudListingActions listingId={listing.id} listingStatus={listing.status} />
                 </div>
 
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
@@ -291,46 +279,26 @@ export default async function AdminFraudPage() {
                     <p className="mt-2 text-sm text-slate-700">
                       Seller{' '}
                       <Link href={`/admin/users/${report.seller.id}`} className="font-medium hover:underline">
-                        {report.seller.name}
+                        {report.seller.name ?? 'Unknown seller'}
                       </Link>
-                      {' '}({report.seller.email})
+                      {report.seller.email ? ` (${report.seller.email})` : ''}
                     </p>
                     <p className="text-xs text-slate-500">
                       Reported by{' '}
                       <Link href={`/admin/users/${report.reporter.id}`} className="font-medium hover:underline">
-                        {report.reporter.name}
+                        {report.reporter.name ?? 'Unknown user'}
                       </Link>
-                      {' '}({report.reporter.email})
+                      {report.reporter.email ? ` (${report.reporter.email})` : ''}
                     </p>
                     {report.notes && (
                       <p className="mt-2 text-sm text-slate-600 italic">"{report.notes}"</p>
                     )}
                   </div>
-                  <span className={`self-start ${sellerStatusBadge(report.seller.sellerStatus)}`}>
-                    {report.seller.sellerStatus}
+                  <span className={`self-start ${sellerStatusBadge(report.seller.sellerStatus ?? 'ACTIVE')}`}>
+                    {report.seller.sellerStatus ?? 'ACTIVE'}
                   </span>
                 </div>
-                <form
-                  action={`/api/admin/seller-reports/${report.id}/moderate`}
-                  method="POST"
-                  className="mt-4 grid gap-3 md:grid-cols-[220px_1fr_auto]"
-                >
-                  <select name="action" className="input text-sm" required defaultValue="">
-                    <option value="" disabled>Select action…</option>
-                    {SELLER_REPORT_ACTIONS.map((action) => (
-                      <option key={action.value} value={action.value}>{action.label}</option>
-                    ))}
-                  </select>
-                  <textarea
-                    name="adminNotes"
-                    className="input h-24 resize-none"
-                    placeholder="Internal notes for trust & safety review"
-                    maxLength={2000}
-                  />
-                  <button type="submit" className="btn-primary text-sm h-fit">
-                    Apply
-                  </button>
-                </form>
+                <FraudSellerReportForm reportId={report.id} sellerName={report.seller.name ?? 'this seller'} />
               </div>
             ))}
           </div>
@@ -351,9 +319,9 @@ export default async function AdminFraudPage() {
                 <div>
                   <p className="font-medium text-slate-900">
                     <Link href={`/admin/users/${login.user.id}`} className="hover:underline">
-                      {login.user.name}
+                      {login.user.name ?? 'Unknown user'}
                     </Link>
-                    {' '}({login.user.email})
+                    {login.user.email ? ` (${login.user.email})` : ''}
                   </p>
                   <p className="text-xs text-slate-500 mt-1">
                     {login.deviceLabel ?? 'Unknown device'} · {login.ipLabel ?? 'Unknown network'} ·{' '}

@@ -181,16 +181,14 @@ export async function POST(
     return NextResponse.redirect(new URL('/admin/sellers?verification=updated', req.url));
   } catch (err: any) {
     if (err?.name === 'ZodError') {
-      return NextResponse.json(
-        { error: err.errors[0]?.message ?? 'Invalid input.' },
-        { status: 400 },
-      );
+      const errUrl = new URL('/admin/sellers', req.url);
+      errUrl.searchParams.set('error', err.errors[0]?.message ?? 'Invalid input.');
+      return NextResponse.redirect(errUrl, 302);
     }
 
     console.error('[admin/sellers/verification POST]', err);
-    return NextResponse.json(
-      { error: 'Failed to update seller verification.' },
-      { status: 500 },
-    );
+    const errUrl = new URL('/admin/sellers', req.url);
+    errUrl.searchParams.set('error', 'Failed to update seller verification. Please try again.');
+    return NextResponse.redirect(errUrl, 302);
   }
 }
