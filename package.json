@@ -11,7 +11,7 @@
     "start": "next start",
     "lint": "next lint",
     "prisma:generate": "prisma generate",
-    "prisma:push": "node -e \"if (process.env.DATABASE_URL) { require('child_process').execSync('npx prisma db push', { stdio: 'inherit' }); } else { console.log('Skipping Prisma db push (DATABASE_URL is not set).'); }\"",
+    "prisma:push": "node scripts/conditional-prisma-push.js",
     "seed": "tsx prisma/seed.ts",
     "backfill:product-categories": "tsx scripts/backfill-product-categories.ts",
     "cleanup:profile-images": "tsx scripts/cleanup-profile-images.ts",
