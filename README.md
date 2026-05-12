@@ -40,6 +40,8 @@ npm run seed
 npm run dev
 ```
 
+`npm run prisma:push` only runs schema push when `DATABASE_URL` is set; otherwise it skips with a message.
+
 Open: http://localhost:3000
 
 ## Language support

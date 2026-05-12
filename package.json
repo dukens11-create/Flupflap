@@ -11,7 +11,7 @@
     "start": "next start",
     "lint": "next lint",
     "prisma:generate": "prisma generate",
-    "prisma:push": "prisma db push",
+    "prisma:push": "if [ -n \"$DATABASE_URL\" ]; then npx prisma db push; else echo \"Skipping Prisma db push (DATABASE_URL is not set).\"; fi",
     "seed": "tsx prisma/seed.ts",
     "backfill:product-categories": "tsx scripts/backfill-product-categories.ts",
     "cleanup:profile-images": "tsx scripts/cleanup-profile-images.ts",
