@@ -199,7 +199,7 @@ export default function CheckoutPage() {
   ), [buyerCity, buyerCountry, buyerState, buyerStreet1, buyerZip]);
 
   const buyerAddress = useMemo(() => ({
-    name: buyerName.trim() || undefined,
+    name: buyerName.trim() || 'Buyer',
     street1: buyerStreet1.trim(),
     street2: buyerStreet2.trim() || undefined,
     city: buyerCity.trim(),

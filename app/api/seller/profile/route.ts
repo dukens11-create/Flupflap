@@ -13,7 +13,7 @@ const schema = z.object({
   shipFromName: z.string().trim().max(100).optional().or(z.literal('')),
   shipFromStreet: z.string().trim().max(200).optional().or(z.literal('')),
   shipFromCity: z.string().trim().max(100).optional().or(z.literal('')),
-  shipFromState: z.string().trim().max(2).optional().or(z.literal('')),
+  shipFromState: z.string().trim().length(2).optional().or(z.literal('')),
   shipFromZip: z.string().trim().max(20).optional().or(z.literal('')),
   shipFromCountry: z.string().trim().length(2).optional().or(z.literal('')),
   shipFromPhone: z.string().trim().max(30).optional().or(z.literal('')),
