@@ -9,6 +9,7 @@ import { readApiMessage } from '@/lib/read-api-message';
 
 interface EditListingFormProps {
   id: string;
+  canDelete: boolean;
   // Basic fields
   defaultTitle: string;
   defaultDescription: string;
@@ -45,6 +46,7 @@ interface EditListingFormProps {
 
 export default function EditListingForm({
   id,
+  canDelete,
   defaultTitle,
   defaultDescription,
   defaultPriceDollars,
@@ -76,6 +78,7 @@ export default function EditListingForm({
   const router = useRouter();
   const [submitError, setSubmitError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [mediaState, setMediaState] = useState<MediaUploadState>({
     imageCount: defaultImages.length,
     uploadedImageCount: defaultImages.length,
@@ -177,6 +180,38 @@ export default function EditListingForm({
       console.error('[EditListingForm] network error:', err);
       setSubmitError('Network error. Please check your connection and try again.');
       setSubmitting(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!canDelete || submitting || deleting) return;
+    const confirmed = window.confirm('Delete this listing permanently? This cannot be undone.');
+    if (!confirmed) return;
+
+    setSubmitError('');
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/seller/products/${id}`, {
+        method: 'DELETE',
+        headers: { Accept: 'application/json' },
+      });
+      let data: { error?: string; message?: string } = {};
+      try {
+        data = await res.json();
+      } catch (parseErr) {
+        console.error('[EditListingForm] delete response parse error:', parseErr);
+      }
+      if (!res.ok) {
+        const errorMessage = data?.error ?? data?.message ?? 'Unable to delete this listing right now.';
+        setSubmitError(errorMessage);
+        setDeleting(false);
+        return;
+      }
+      router.push('/seller?deleted=1');
+    } catch (err) {
+      console.error('[EditListingForm] delete network error:', err);
+      setSubmitError('Network error. Please check your connection and try again.');
+      setDeleting(false);
     }
   }
 
@@ -426,10 +461,26 @@ export default function EditListingForm({
         <a href="/seller" className="btn-outline flex-1 text-center">
           Cancel
         </a>
-        <button className="btn-primary flex-1" type="submit" disabled={submitting}>
+        <button className="btn-primary flex-1" type="submit" disabled={submitting || deleting}>
           {submitting ? 'Saving…' : 'Save changes'}
         </button>
       </div>
+      {canDelete && (
+        <div className="rounded-xl border border-red-200 bg-red-50/40 p-4 space-y-2">
+          <h2 className="font-semibold text-red-700">Danger zone</h2>
+          <p className="text-sm text-slate-600">
+            Permanently delete this listing. This cannot be undone.
+          </p>
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={submitting || deleting}
+            className="btn bg-red-600 hover:bg-red-700 text-white text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {deleting ? 'Processing…' : 'Delete listing'}
+          </button>
+        </div>
+      )}
       <p className="text-xs text-slate-500 text-center">
         Your listing will return to &quot;Pending&quot; status and be re-reviewed by an admin.
       </p>
