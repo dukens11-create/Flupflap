@@ -53,6 +53,12 @@ const PERFUME_FIELDS = fields(
   { name: 'fragrance_type', label: 'Fragrance Type', type: 'select', options: ['Floral', 'Woody', 'Fresh', 'Oriental', 'Citrus', 'Gourmand'] },
   { name: 'gender', label: 'Gender', type: 'select', options: ['Men', 'Women', 'Unisex'] },
 );
+const BEAUTY_SKINCARE_FIELDS = fields(
+  { name: 'brand', label: 'Brand', type: 'text' },
+  { name: 'skin_type', label: 'Skin Type', type: 'select', options: ['All Skin Types', 'Dry', 'Oily', 'Combination', 'Sensitive'] },
+  { name: 'concern', label: 'Primary Concern', type: 'select', options: ['Hydration', 'Brightening', 'Acne', 'Anti-Aging', 'Soothing', 'Sun Care'] },
+  { name: 'size_ml', label: 'Size (ml)', type: 'select', options: [...PERFUME_SIZE_OPTIONS] },
+);
 const CAR_FIELDS = fields(
   { name: 'brand', label: 'Brand / Make', type: 'text' },
   { name: 'year', label: 'Year', type: 'number' },
@@ -68,7 +74,7 @@ const FURNITURE_FIELDS = fields(
 
 const ASIAN_SUBCATEGORY_DEFINITIONS = [
   { name: 'Asian Fashion', slug: 'asian-fashion', sortOrder: 1, schemaKey: 'clothing' },
-  { name: 'Asian Beauty & Skincare', slug: 'asian-beauty-skincare', sortOrder: 2, schemaKey: 'perfume' },
+  { name: 'Asian Beauty & Skincare', slug: 'asian-beauty-skincare', sortOrder: 2, schemaKey: 'beauty' },
   { name: 'Asian Food & Snacks', slug: 'asian-food-snacks', sortOrder: 3, schemaKey: null },
   { name: 'Asian Home Decor', slug: 'asian-home-decor', sortOrder: 4, schemaKey: 'furniture' },
   { name: 'Asian Electronics & Gadgets', slug: 'asian-electronics-gadgets', sortOrder: 5, schemaKey: 'electronics' },
@@ -88,7 +94,7 @@ function resolveAsianAttributeSchema(
   schemaKey: (typeof ASIAN_SUBCATEGORY_DEFINITIONS)[number]['schemaKey'],
 ) {
   if (schemaKey === 'clothing') return CLOTHING_FIELDS;
-  if (schemaKey === 'perfume') return PERFUME_FIELDS;
+  if (schemaKey === 'beauty') return BEAUTY_SKINCARE_FIELDS;
   if (schemaKey === 'furniture') return FURNITURE_FIELDS;
   if (schemaKey === 'electronics') return ELECTRONICS_FIELDS;
   return undefined;

@@ -54,6 +54,12 @@ const PERFUME_FIELDS: FieldDef[] = [
   { name: 'fragrance_type', label: 'Fragrance Type', type: 'select', options: ['Floral', 'Woody', 'Fresh', 'Oriental', 'Citrus', 'Gourmand'] },
   { name: 'gender', label: 'Gender', type: 'select', options: ['Men', 'Women', 'Unisex'] },
 ];
+const BEAUTY_SKINCARE_FIELDS: FieldDef[] = [
+  { name: 'brand', label: 'Brand', type: 'text' },
+  { name: 'skin_type', label: 'Skin Type', type: 'select', options: ['All Skin Types', 'Dry', 'Oily', 'Combination', 'Sensitive'] },
+  { name: 'concern', label: 'Primary Concern', type: 'select', options: ['Hydration', 'Brightening', 'Acne', 'Anti-Aging', 'Soothing', 'Sun Care'] },
+  { name: 'size_ml', label: 'Size (ml)', type: 'select', options: [...PERFUME_SIZE_OPTIONS] },
+];
 const CAR_FIELDS: FieldDef[] = [
   { name: 'brand', label: 'Brand / Make', type: 'text' },
   { name: 'year', label: 'Year', type: 'number' },
@@ -169,7 +175,7 @@ export const DEFAULT_CATEGORY_TREE: DefaultCategoryNode[] = [
   ] }),
   node({ id: 'asian-products', name: 'Asian Products', slug: 'asian-products', aliases: [...ASIAN_PRODUCTS_ALIASES], parentId: null, level: 0, icon: '🌏', sortOrder: 10, attributeSchema: null, children: [
     node({ id: 'asian-fashion', name: 'Asian Fashion', slug: 'asian-fashion', aliases: [], parentId: 'asian-products', level: 1, icon: null, sortOrder: 1, attributeSchema: CLOTHING_FIELDS }),
-    node({ id: 'asian-beauty-skincare', name: 'Asian Beauty & Skincare', slug: 'asian-beauty-skincare', aliases: [], parentId: 'asian-products', level: 1, icon: null, sortOrder: 2, attributeSchema: PERFUME_FIELDS }),
+    node({ id: 'asian-beauty-skincare', name: 'Asian Beauty & Skincare', slug: 'asian-beauty-skincare', aliases: [], parentId: 'asian-products', level: 1, icon: null, sortOrder: 2, attributeSchema: BEAUTY_SKINCARE_FIELDS }),
     node({ id: 'asian-food-snacks', name: 'Asian Food & Snacks', slug: 'asian-food-snacks', aliases: [], parentId: 'asian-products', level: 1, icon: null, sortOrder: 3, attributeSchema: null }),
     node({ id: 'asian-home-decor', name: 'Asian Home Decor', slug: 'asian-home-decor', aliases: [], parentId: 'asian-products', level: 1, icon: null, sortOrder: 4, attributeSchema: FURNITURE_FIELDS }),
     node({ id: 'asian-electronics-gadgets', name: 'Asian Electronics & Gadgets', slug: 'asian-electronics-gadgets', aliases: [], parentId: 'asian-products', level: 1, icon: null, sortOrder: 5, attributeSchema: ELECTRONICS_FIELDS }),
