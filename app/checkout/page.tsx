@@ -26,6 +26,30 @@ type RateQuote = {
   deliveryDays: number | null;
 };
 
+type MapboxContextItem = {
+  id?: string;
+  text?: string;
+  short_code?: string;
+};
+
+type MapboxFeature = {
+  id: string;
+  address?: string;
+  text?: string;
+  place_name?: string;
+  context?: MapboxContextItem[];
+};
+
+type AddressSuggestion = {
+  id: string;
+  label: string;
+  street1: string;
+  city: string;
+  state: string;
+  zip: string;
+  country: string;
+};
+
 type ShipGroup = {
   sellerId: string;
   sellerName: string;
@@ -59,6 +83,41 @@ function isCalculatedShipping(item: Pick<CartItem, 'shippingMode' | 'shippingCen
   return item.shippingMode === 'CALCULATED' || (!item.shippingMode && item.shippingCents === 0);
 }
 
+function getMapboxContextValue(context: MapboxContextItem[] | undefined, prefix: string): string {
+  return context?.find(item => item.id?.startsWith(`${prefix}.`))?.text?.trim() || '';
+}
+
+function getMapboxStateCode(context: MapboxContextItem[] | undefined): string {
+  const region = context?.find(item => item.id?.startsWith('region.'));
+  const shortCode = region?.short_code?.split('-').pop()?.trim().toUpperCase();
+  if (shortCode) return shortCode;
+  return region?.text?.trim().slice(0, 2).toUpperCase() || '';
+}
+
+function parseMapboxFeature(feature: MapboxFeature): AddressSuggestion | null {
+  const houseNumber = feature.address?.trim() || '';
+  const streetName = feature.text?.trim() || '';
+  const street1 = [houseNumber, streetName].filter(Boolean).join(' ').trim();
+  const city = getMapboxContextValue(feature.context, 'place');
+  const state = getMapboxStateCode(feature.context);
+  const zip = getMapboxContextValue(feature.context, 'postcode');
+  const country = feature.context?.find(item => item.id?.startsWith('country.'))?.short_code?.trim().toUpperCase() || 'US';
+
+  if (!street1 || !city || !state || !zip) {
+    return null;
+  }
+
+  return {
+    id: feature.id,
+    label: feature.place_name?.trim() || street1,
+    street1,
+    city,
+    state,
+    zip,
+    country,
+  };
+}
+
 function itemShippingLabel(item: CartItem, isPickup: boolean): React.ReactNode {
   if (isPickup) return <span className="text-green-700 font-medium"> · Free pickup</span>;
   if (item.shippingMode === 'FREE') return <span className="text-green-700 font-medium"> · Free shipping</span>;
@@ -70,6 +129,9 @@ function itemShippingLabel(item: CartItem, isPickup: boolean): React.ReactNode {
 export default function CheckoutPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const mapboxToken = (process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? '').trim();
+  const addressAutocompleteRef = useRef<HTMLDivElement | null>(null);
+  const selectedAutocompleteStreetRef = useRef('');
   const rateRequestVersionRef = useRef(0);
   const taxRequestVersionRef = useRef(0);
   const [items, setItems] = useState<CartItem[]>([]);
@@ -87,6 +149,10 @@ export default function CheckoutPage() {
   const [buyerState, setBuyerState] = useState('');
   const [buyerZip, setBuyerZip] = useState('');
   const [buyerCountry, setBuyerCountry] = useState('US');
+  const [addressSuggestions, setAddressSuggestions] = useState<AddressSuggestion[]>([]);
+  const [addressDropdownOpen, setAddressDropdownOpen] = useState(false);
+  const [fetchingAddressSuggestions, setFetchingAddressSuggestions] = useState(false);
+  const [addressLookupError, setAddressLookupError] = useState('');
   const [rateGroups, setRateGroups] = useState<ShipGroup[]>([]);
   const [selectedRates, setSelectedRates] = useState<SelectedRate[]>([]);
   const [fetchingRates, setFetchingRates] = useState(false);
@@ -113,6 +179,22 @@ export default function CheckoutPage() {
       setBuyerName(session.user.name);
     }
   }, [buyerName, session?.user?.name]);
+
+  useEffect(() => {
+    function handlePointerDown(event: MouseEvent | TouchEvent) {
+      if (!addressAutocompleteRef.current?.contains(event.target as Node)) {
+        setAddressDropdownOpen(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('touchstart', handlePointerDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('touchstart', handlePointerDown);
+    };
+  }, []);
 
   // Items that support pickup
   const pickupEligibleIds = useMemo(
@@ -228,6 +310,81 @@ export default function CheckoutPage() {
     rateError,
     selectedRates,
   ]);
+
+  useEffect(() => {
+    const query = buyerStreet1.trim();
+
+    if (!mapboxToken || !query || query.length < 3) {
+      setAddressSuggestions([]);
+      setAddressDropdownOpen(false);
+      setFetchingAddressSuggestions(false);
+      if (!query) {
+        setAddressLookupError('');
+      }
+      return undefined;
+    }
+
+    if (
+      query === selectedAutocompleteStreetRef.current
+      && buyerCity.trim()
+      && buyerState.trim()
+      && buyerZip.trim()
+    ) {
+      setAddressSuggestions([]);
+      setAddressDropdownOpen(false);
+      setFetchingAddressSuggestions(false);
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setFetchingAddressSuggestions(true);
+
+      try {
+        const params = new URLSearchParams({
+          autocomplete: 'true',
+          access_token: mapboxToken,
+          country: (buyerCountry.trim() || 'US').toUpperCase(),
+          limit: '5',
+          types: 'address',
+        });
+
+        const res = await fetch(
+          `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?${params.toString()}`,
+          { signal: controller.signal },
+        );
+
+        if (!res.ok) {
+          throw new Error(`Mapbox request failed with status ${res.status}`);
+        }
+
+        const data = await res.json() as { features?: MapboxFeature[] };
+        const suggestions = (data.features ?? [])
+          .map(parseMapboxFeature)
+          .filter((suggestion): suggestion is AddressSuggestion => !!suggestion);
+
+        setAddressSuggestions(suggestions);
+        setAddressDropdownOpen(suggestions.length > 0);
+        setAddressLookupError('');
+      } catch {
+        if (controller.signal.aborted) {
+          return;
+        }
+        setAddressSuggestions([]);
+        setAddressDropdownOpen(false);
+        setAddressLookupError('Address suggestions are unavailable right now. You can continue entering your address manually.');
+      } finally {
+        if (!controller.signal.aborted) {
+          setFetchingAddressSuggestions(false);
+        }
+      }
+    }, 300);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [buyerCity, buyerCountry, buyerState, buyerStreet1, buyerZip, mapboxToken]);
 
   useEffect(() => {
     const requestVersion = rateRequestVersionRef.current + 1;
@@ -395,6 +552,25 @@ export default function CheckoutPage() {
     });
   }
 
+  function handleStreetAddressChange(value: string) {
+    selectedAutocompleteStreetRef.current = '';
+    setBuyerStreet1(value);
+    setAddressLookupError('');
+    setAddressDropdownOpen(value.trim().length >= 3);
+  }
+
+  function handleSelectAddressSuggestion(suggestion: AddressSuggestion) {
+    selectedAutocompleteStreetRef.current = suggestion.street1;
+    setBuyerStreet1(suggestion.street1);
+    setBuyerCity(suggestion.city);
+    setBuyerState(suggestion.state);
+    setBuyerZip(suggestion.zip);
+    setBuyerCountry(suggestion.country);
+    setAddressSuggestions([]);
+    setAddressDropdownOpen(false);
+    setAddressLookupError('');
+  }
+
   async function handleCheckout() {
     if (!session?.user) {
       router.push('/login?callbackUrl=/checkout');
@@ -553,13 +729,56 @@ export default function CheckoutPage() {
           </div>
           <div>
             <label className="label text-xs">Street address</label>
-            <input
-              type="text"
-              value={buyerStreet1}
-              onChange={e => setBuyerStreet1(e.target.value)}
-              className="input"
-              placeholder="123 Main St"
-            />
+            <div ref={addressAutocompleteRef} className="relative">
+              <input
+                type="text"
+                value={buyerStreet1}
+                onChange={e => handleStreetAddressChange(e.target.value)}
+                onFocus={() => {
+                  if (addressSuggestions.length > 0) {
+                    setAddressDropdownOpen(true);
+                  }
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') {
+                    setAddressDropdownOpen(false);
+                  }
+                }}
+                className="input"
+                placeholder="123 Main St"
+                autoComplete="address-line1"
+                spellCheck={false}
+              />
+
+              {(fetchingAddressSuggestions || (addressDropdownOpen && addressSuggestions.length > 0)) && (
+                <div className="absolute inset-x-0 top-full z-20 mt-2 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
+                  {fetchingAddressSuggestions ? (
+                    <p className="px-4 py-3 text-sm text-slate-500">Searching addresses…</p>
+                  ) : (
+                    <div role="listbox" className="max-h-72 overflow-y-auto overscroll-contain">
+                      {addressSuggestions.map((suggestion) => (
+                        <button
+                          key={suggestion.id}
+                          type="button"
+                          onClick={() => handleSelectAddressSuggestion(suggestion)}
+                          className="w-full border-b border-slate-100 px-4 py-3 text-left text-sm text-slate-700 last:border-b-0 hover:bg-slate-50 focus:bg-slate-50 focus:outline-none"
+                        >
+                          {suggestion.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <p className="mt-1 text-xs text-slate-500">
+              Start with your street number and name to autofill city, state, ZIP, and country.
+            </p>
+            {addressLookupError && (
+              <p className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                ⚠️ {addressLookupError}
+              </p>
+            )}
           </div>
           <div>
             <label className="label text-xs">Apt, suite, etc. (optional)</label>
@@ -569,9 +788,10 @@ export default function CheckoutPage() {
               onChange={e => setBuyerStreet2(e.target.value)}
               className="input"
               placeholder="Apt 4B"
+              autoComplete="address-line2"
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="label text-xs">City</label>
               <input
@@ -580,6 +800,7 @@ export default function CheckoutPage() {
                 onChange={e => setBuyerCity(e.target.value)}
                 className="input"
                 placeholder="New York"
+                autoComplete="address-level2"
               />
             </div>
             <div>
@@ -591,10 +812,11 @@ export default function CheckoutPage() {
                 className="input"
                 placeholder="NY"
                 maxLength={2}
+                autoComplete="address-level1"
               />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="label text-xs">ZIP code</label>
               <input
@@ -603,14 +825,19 @@ export default function CheckoutPage() {
                 onChange={e => setBuyerZip(e.target.value)}
                 className="input"
                 placeholder="10001"
+                autoComplete="postal-code"
               />
             </div>
             <div>
               <label className="label text-xs">Country</label>
               <select
                 value={buyerCountry}
-                onChange={e => setBuyerCountry(e.target.value)}
+                onChange={(e) => {
+                  selectedAutocompleteStreetRef.current = '';
+                  setBuyerCountry(e.target.value);
+                }}
                 className="input"
+                autoComplete="country-name"
               >
                 <option value="US">United States</option>
                 <option value="CA">Canada</option>
