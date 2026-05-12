@@ -102,6 +102,16 @@ async function seedCategories() {
   const collectibles = await prisma.category.create({
     data: { name: 'Collectibles', slug: 'collectibles', level: 0, icon: '🏆', sortOrder: 8 },
   });
+  const asianProducts = await prisma.category.create({
+    data: {
+      name: 'Asian Products',
+      slug: 'asian-products',
+      aliases: ['asian products', 'asian marketplace', 'east asian', 'south asian', 'southeast asian', 'middle eastern', 'western asian'],
+      level: 0,
+      icon: '🌏',
+      sortOrder: 10,
+    },
+  });
 
   // Electronics subcategories
   const phones = await prisma.category.create({
@@ -256,6 +266,25 @@ async function seedCategories() {
     { name: 'Trading Cards', slug: 'collectibles-cards', parentId: collectibles.id, level: 1, sortOrder: 4 },
   ]});
 
+  // Asian Products subcategories
+  await prisma.category.createMany({ data: [
+    { name: 'Asian Fashion', slug: 'asian-fashion', parentId: asianProducts.id, level: 1, sortOrder: 1, attributeSchema: CLOTHING_FIELDS },
+    { name: 'Asian Beauty & Skincare', slug: 'asian-beauty-skincare', parentId: asianProducts.id, level: 1, sortOrder: 2, attributeSchema: PERFUME_FIELDS },
+    { name: 'Asian Food & Snacks', slug: 'asian-food-snacks', parentId: asianProducts.id, level: 1, sortOrder: 3 },
+    { name: 'Asian Home Decor', slug: 'asian-home-decor', parentId: asianProducts.id, level: 1, sortOrder: 4, attributeSchema: FURNITURE_FIELDS },
+    { name: 'Asian Electronics & Gadgets', slug: 'asian-electronics-gadgets', parentId: asianProducts.id, level: 1, sortOrder: 5, attributeSchema: ELECTRONICS_FIELDS },
+    { name: 'Asian Art & Crafts', slug: 'asian-art-crafts', parentId: asianProducts.id, level: 1, sortOrder: 6 },
+    { name: 'Asian Jewelry & Accessories', slug: 'asian-jewelry-accessories', parentId: asianProducts.id, level: 1, sortOrder: 7, attributeSchema: CLOTHING_FIELDS },
+    { name: 'Asian Anime & Collectibles', slug: 'asian-anime-collectibles', parentId: asianProducts.id, level: 1, sortOrder: 8 },
+    { name: 'Asian Books & Media', slug: 'asian-books-media', parentId: asianProducts.id, level: 1, sortOrder: 9 },
+    { name: 'Asian Cultural Products', slug: 'asian-cultural-products', parentId: asianProducts.id, level: 1, sortOrder: 10 },
+    { name: 'East Asian Products', slug: 'east-asian-products', parentId: asianProducts.id, level: 1, sortOrder: 11 },
+    { name: 'South Asian Products', slug: 'south-asian-products', parentId: asianProducts.id, level: 1, sortOrder: 12 },
+    { name: 'Southeast Asian Products', slug: 'southeast-asian-products', parentId: asianProducts.id, level: 1, sortOrder: 13 },
+    { name: 'Central Asian Products', slug: 'central-asian-products', parentId: asianProducts.id, level: 1, sortOrder: 14 },
+    { name: 'Middle Eastern & Western Asian Products', slug: 'middle-eastern-western-asian-products', parentId: asianProducts.id, level: 1, sortOrder: 15 },
+  ]});
+
   // Silence TypeScript "unused variable" warnings for categories only used
   // as implicit references (their IDs are not used as parent for children)
   void phones; void cameras; void audio;
@@ -314,6 +343,60 @@ async function ensureBeautyCategory() {
   console.log('Beauty & Personal Care category hierarchy ensured.');
 }
 
+/**
+ * Ensures the Asian Products category branch exists on existing databases.
+ * Uses upsert so this can be safely re-run.
+ */
+async function ensureAsianCategory() {
+  const asianProducts = await prisma.category.upsert({
+    where: { slug: 'asian-products' },
+    update: {},
+    create: {
+      name: 'Asian Products',
+      slug: 'asian-products',
+      aliases: ['asian products', 'asian marketplace', 'east asian', 'south asian', 'southeast asian', 'middle eastern', 'western asian'],
+      level: 0,
+      icon: '🌏',
+      sortOrder: 10,
+    },
+  });
+
+  const asianSubcategories = [
+    { name: 'Asian Fashion', slug: 'asian-fashion', sortOrder: 1, attributeSchema: CLOTHING_FIELDS },
+    { name: 'Asian Beauty & Skincare', slug: 'asian-beauty-skincare', sortOrder: 2, attributeSchema: PERFUME_FIELDS },
+    { name: 'Asian Food & Snacks', slug: 'asian-food-snacks', sortOrder: 3, attributeSchema: null },
+    { name: 'Asian Home Decor', slug: 'asian-home-decor', sortOrder: 4, attributeSchema: FURNITURE_FIELDS },
+    { name: 'Asian Electronics & Gadgets', slug: 'asian-electronics-gadgets', sortOrder: 5, attributeSchema: ELECTRONICS_FIELDS },
+    { name: 'Asian Art & Crafts', slug: 'asian-art-crafts', sortOrder: 6, attributeSchema: null },
+    { name: 'Asian Jewelry & Accessories', slug: 'asian-jewelry-accessories', sortOrder: 7, attributeSchema: CLOTHING_FIELDS },
+    { name: 'Asian Anime & Collectibles', slug: 'asian-anime-collectibles', sortOrder: 8, attributeSchema: null },
+    { name: 'Asian Books & Media', slug: 'asian-books-media', sortOrder: 9, attributeSchema: null },
+    { name: 'Asian Cultural Products', slug: 'asian-cultural-products', sortOrder: 10, attributeSchema: null },
+    { name: 'East Asian Products', slug: 'east-asian-products', sortOrder: 11, attributeSchema: null },
+    { name: 'South Asian Products', slug: 'south-asian-products', sortOrder: 12, attributeSchema: null },
+    { name: 'Southeast Asian Products', slug: 'southeast-asian-products', sortOrder: 13, attributeSchema: null },
+    { name: 'Central Asian Products', slug: 'central-asian-products', sortOrder: 14, attributeSchema: null },
+    { name: 'Middle Eastern & Western Asian Products', slug: 'middle-eastern-western-asian-products', sortOrder: 15, attributeSchema: null },
+  ] as const;
+
+  for (const category of asianSubcategories) {
+    await prisma.category.upsert({
+      where: { slug: category.slug },
+      update: {},
+      create: {
+        name: category.name,
+        slug: category.slug,
+        parentId: asianProducts.id,
+        level: 1,
+        sortOrder: category.sortOrder,
+        attributeSchema: category.attributeSchema ?? undefined,
+      },
+    });
+  }
+
+  console.log('Asian Products category hierarchy ensured.');
+}
+
 async function main(){
   const pass = await bcrypt.hash('password123', 10);
   await prisma.user.upsert({ where:{email:'guest@flupflap.local'}, update:{}, create:{name:'Guest Buyer',email:'guest@flupflap.local',password:'',role:Role.CUSTOMER} });
@@ -361,6 +444,7 @@ async function main(){
   await seedCategories();
   // Always ensure new categories exist (safe upsert for existing databases)
   await ensureBeautyCategory();
+  await ensureAsianCategory();
   const count = await prisma.product.count();
   if(count===0){ await prisma.product.createMany({ data:[
     {title:'Used iPhone 13',description:'Clean used phone, unlocked, good battery.',priceCents:32900,condition:'Used',category:'Phones',imageUrl:'https://images.unsplash.com/photo-1592750475338-74b7b21085ab',status:ProductStatus.APPROVED,sellerId:seller.id,shippingCents:1299,inventory:1},

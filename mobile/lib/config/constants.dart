@@ -16,6 +16,7 @@ class AppConstants {
     'Toys',
     'Sports',
     'Collectibles',
+    'Asian Products',
     'Other',
   ];
 
