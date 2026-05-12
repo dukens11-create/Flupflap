@@ -5,6 +5,8 @@ import { prisma } from '@/lib/db';
 import { z } from 'zod';
 import { apiError } from '@/lib/api-response';
 
+const optionalTwoLetterCode = z.string().trim().length(2).or(z.literal('')).optional();
+
 const schema = z.object({
   shopName: z.string().trim().min(2).max(80),
   shopLogoUrl: z.string().url().max(2000).optional().or(z.literal('')),
@@ -13,9 +15,9 @@ const schema = z.object({
   shipFromName: z.string().trim().max(100).optional().or(z.literal('')),
   shipFromStreet: z.string().trim().max(200).optional().or(z.literal('')),
   shipFromCity: z.string().trim().max(100).optional().or(z.literal('')),
-  shipFromState: z.string().trim().length(2).optional().or(z.literal('')),
+  shipFromState: optionalTwoLetterCode,
   shipFromZip: z.string().trim().max(20).optional().or(z.literal('')),
-  shipFromCountry: z.string().trim().length(2).optional().or(z.literal('')),
+  shipFromCountry: optionalTwoLetterCode,
   shipFromPhone: z.string().trim().max(30).optional().or(z.literal('')),
 }).superRefine((data, ctx) => {
   const hasAnyShipFrom = [
