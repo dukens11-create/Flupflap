@@ -41,7 +41,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     url: absoluteUrl(`/category/${entry.slug}`),
     lastModified: now,
     changeFrequency: 'daily' as const,
-    priority: 0.75,
+    priority: 0.6,
   }));
 
   if (!isDatabaseConfigured()) {

@@ -445,7 +445,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
                     {category.children.slice(0, 6).map((subcategory) => (
                       <Link
                         key={subcategory.id}
-                        href={`/?category=${category.id}&subcategory=${subcategory.id}`}
+                        href={`/category/${subcategory.slug}`}
                         className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-100"
                       >
                         {subcategory.name}
