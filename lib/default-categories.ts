@@ -161,4 +161,9 @@ export const DEFAULT_CATEGORY_TREE: DefaultCategoryNode[] = [
     node({ id: 'collectibles-antiques', name: 'Antiques', slug: 'collectibles-antiques', aliases: [], parentId: 'collectibles', level: 1, icon: null, sortOrder: 3, attributeSchema: null }),
     node({ id: 'collectibles-cards', name: 'Trading Cards', slug: 'collectibles-cards', aliases: [], parentId: 'collectibles', level: 1, icon: null, sortOrder: 4, attributeSchema: null }),
   ] }),
+  node({ id: 'beauty', name: 'Beauty & Personal Care', slug: 'beauty', aliases: ['beauty', 'personal care', 'skincare', 'cosmetics', 'makeup', 'health beauty'], parentId: null, level: 0, icon: '💄', sortOrder: 9, attributeSchema: PERFUME_FIELDS, children: [
+    node({ id: 'beauty-fragrance', name: 'Fragrance', slug: 'beauty-fragrance', aliases: ['fragrance', 'perfume', 'cologne', 'scent', 'body mist'], parentId: 'beauty', level: 1, icon: null, sortOrder: 1, attributeSchema: PERFUME_FIELDS, children: [
+      node({ id: 'beauty-fragrance-perfume', name: 'Perfume', slug: 'beauty-fragrance-perfume', aliases: ['perfume', 'parfum', 'eau de parfum', 'edp', 'eau de toilette', 'edt', 'fragrance', 'cologne', 'scent', 'body mist'], parentId: 'beauty-fragrance', level: 2, icon: null, sortOrder: 1, attributeSchema: PERFUME_FIELDS }),
+    ] }),
+  ] }),
 ];

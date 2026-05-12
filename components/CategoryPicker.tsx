@@ -375,6 +375,7 @@ export default function CategoryPicker({
   const [searchInputValue, setSearchInputValue] = useState('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [categoryError, setCategoryError] = useState('');
+  const [categoryStale, setCategoryStale] = useState(false);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const triggerRefs = useRef<{
     main: HTMLButtonElement | null;
@@ -415,11 +416,13 @@ export default function CategoryPicker({
           setMainId(null);
           setSubId(null);
           setChildId(null);
-          setCategoryError('The selected category has been removed or reorganized. Please select a valid category and try again.');
+          setCategoryStale(true);
+          setCategoryError('');
         } else if (nextPath.mainId || nextPath.subId || nextPath.childId) {
           setMainId(nextPath.mainId);
           setSubId(nextPath.subId);
           setChildId(nextPath.childId);
+          setCategoryStale(false);
           setCategoryError('');
         }
       } catch {
@@ -571,7 +574,10 @@ export default function CategoryPicker({
     if (!form) return;
 
     function handleSubmit(event: Event) {
-      if (!mainId) {
+      // Only block submission if no category is selected AND it's not a
+      // stale-category situation (stale allows submit without category so
+      // unrelated edits like shipping updates are not blocked).
+      if (!mainId && !categoryStale) {
         event.preventDefault();
         setCategoryError('Please select a category.');
       }
@@ -579,13 +585,14 @@ export default function CategoryPicker({
 
     form.addEventListener('submit', handleSubmit);
     return () => form.removeEventListener('submit', handleSubmit);
-  }, [mainId]);
+  }, [mainId, categoryStale]);
 
   function handleMainChange(id: string) {
     setMainId(id || null);
     setSubId(null);
     setChildId(null);
     setAttrs({});
+    setCategoryStale(false);
     setCategoryError('');
   }
 
@@ -593,12 +600,14 @@ export default function CategoryPicker({
     setSubId(id || null);
     setChildId(null);
     setAttrs({});
+    setCategoryStale(false);
     setCategoryError('');
   }
 
   function handleChildChange(id: string) {
     setChildId(id || null);
     setAttrs({});
+    setCategoryStale(false);
     setCategoryError('');
   }
 
@@ -607,6 +616,7 @@ export default function CategoryPicker({
     setSubId(option.selection.subId);
     setChildId(option.selection.childId);
     setAttrs({});
+    setCategoryStale(false);
     setCategoryError('');
   }
 
@@ -749,6 +759,14 @@ export default function CategoryPicker({
       <input type="hidden" name="parentCategoryId" value={parentCategoryId ?? ''} />
       <input type="hidden" name="category" value={leafName} />
       <input type="hidden" name="productAttributes" value={JSON.stringify(attrs)} />
+      <input type="hidden" name="categoryStale" value={categoryStale ? 'true' : ''} />
+
+      {/* Warning shown when the stored category no longer maps to the current category tree */}
+      {categoryStale && (
+        <p className="rounded-xl border border-yellow-300 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
+          ⚠️ The previously selected category is no longer available. You can save unrelated changes now, or select a new category below.
+        </p>
+      )}
 
       {/* Main category */}
       {renderPickerTrigger({

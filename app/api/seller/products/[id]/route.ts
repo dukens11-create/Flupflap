@@ -12,7 +12,7 @@ import {
 } from '@/lib/fraud-detection';
 import { parseJsonOrNull } from '@/lib/parse-json';
 import { SHIPPING_MODES } from '@/app/api/seller/products/route';
-import { loadCategoryHierarchyNodes, validateCategorySelection } from '@/lib/category-hierarchy';
+import { loadCategoryHierarchyNodes, validateCategorySelection, resolveLegacyCategorySelection } from '@/lib/category-hierarchy';
 import {
   convertWeightToOunces,
   getShippingClass,
@@ -177,15 +177,53 @@ async function resolveSubmittedCategorySelection(data: ProductUpdateInput) {
     parentCategoryId: data.parentCategoryId,
     categoryLabel: data.category,
   });
-  if (!validatedCategory.ok) {
-    return { ...fallback, error: validatedCategory.message };
+  if (validatedCategory.ok) {
+    return {
+      submitted: true,
+      categoryId: validatedCategory.categoryId,
+      subcategoryId: validatedCategory.subcategoryId,
+      categoryName: validatedCategory.displayName,
+      error: null,
+    };
   }
 
+  // Validation failed — attempt legacy resolution before blocking the save.
+  // This allows stale/reorganised category IDs to be repaired progressively
+  // without hard-blocking unrelated edits (e.g. shipping updates).
+  const legacyResolution = resolveLegacyCategorySelection(categoryNodes, {
+    categoryId: data.categoryId,
+    subcategoryId: data.subcategoryId,
+    categoryLabel: data.category,
+  });
+
+  // resolveLegacyCategorySelection returns categoryId=null when it cannot find a
+  // valid path (stale=true); it returns a non-null categoryId only when it
+  // successfully repaired the selection. Checking categoryId alone is sufficient.
+  if (legacyResolution.categoryId) {
+    console.warn('[resolveSubmittedCategorySelection] repaired stale category selection via legacy resolution', {
+      original: { categoryId: data.categoryId ?? null, subcategoryId: data.subcategoryId ?? null, label: data.category ?? null },
+      repaired: { categoryId: legacyResolution.categoryId, subcategoryId: legacyResolution.subcategoryId ?? null, displayName: legacyResolution.displayName ?? null },
+    });
+    return {
+      submitted: true,
+      categoryId: legacyResolution.categoryId,
+      subcategoryId: legacyResolution.subcategoryId,
+      categoryName: legacyResolution.displayName ?? data.category?.trim() ?? '',
+      error: null,
+    };
+  }
+
+  // Legacy resolution also failed. Return with submitted=false so the caller
+  // preserves the existing product category rather than hard-blocking the save.
+  console.warn('[resolveSubmittedCategorySelection] could not resolve submitted category — preserving existing', {
+    categoryId: data.categoryId ?? null,
+    subcategoryId: data.subcategoryId ?? null,
+    label: data.category ?? null,
+    validationMessage: validatedCategory.message,
+  });
   return {
-    submitted: true,
-    categoryId: validatedCategory.categoryId,
-    subcategoryId: validatedCategory.subcategoryId,
-    categoryName: validatedCategory.displayName,
+    ...fallback,
+    submitted: false,
     error: null,
   };
 }
