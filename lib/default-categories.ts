@@ -1,4 +1,5 @@
 import { PERFUME_SIZE_OPTIONS } from '@/lib/category-attribute-schema';
+import { ASIAN_PRODUCTS_ALIASES } from '@/lib/marketplace-categories';
 
 type FieldDef = {
   name: string;
@@ -166,7 +167,7 @@ export const DEFAULT_CATEGORY_TREE: DefaultCategoryNode[] = [
       node({ id: 'beauty-fragrance-perfume', name: 'Perfume', slug: 'beauty-fragrance-perfume', aliases: ['perfume', 'parfum', 'eau de parfum', 'edp', 'eau de toilette', 'edt', 'fragrance', 'cologne', 'scent', 'body mist'], parentId: 'beauty-fragrance', level: 2, icon: null, sortOrder: 1, attributeSchema: PERFUME_FIELDS }),
     ] }),
   ] }),
-  node({ id: 'asian-products', name: 'Asian Products', slug: 'asian-products', aliases: ['asian products', 'asian marketplace', 'east asian', 'south asian', 'southeast asian', 'middle eastern', 'western asian'], parentId: null, level: 0, icon: '🌏', sortOrder: 10, attributeSchema: null, children: [
+  node({ id: 'asian-products', name: 'Asian Products', slug: 'asian-products', aliases: [...ASIAN_PRODUCTS_ALIASES], parentId: null, level: 0, icon: '🌏', sortOrder: 10, attributeSchema: null, children: [
     node({ id: 'asian-fashion', name: 'Asian Fashion', slug: 'asian-fashion', aliases: [], parentId: 'asian-products', level: 1, icon: null, sortOrder: 1, attributeSchema: CLOTHING_FIELDS }),
     node({ id: 'asian-beauty-skincare', name: 'Asian Beauty & Skincare', slug: 'asian-beauty-skincare', aliases: [], parentId: 'asian-products', level: 1, icon: null, sortOrder: 2, attributeSchema: PERFUME_FIELDS }),
     node({ id: 'asian-food-snacks', name: 'Asian Food & Snacks', slug: 'asian-food-snacks', aliases: [], parentId: 'asian-products', level: 1, icon: null, sortOrder: 3, attributeSchema: null }),

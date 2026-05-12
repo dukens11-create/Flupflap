@@ -13,6 +13,7 @@ import { getSellerResponseStatsForSellers } from '@/lib/messages';
 import { authOptions } from '@/lib/auth-options';
 import { getRoleDefaultPath, normalizeExperienceRole } from '@/lib/role-experience';
 import { DEFAULT_CATEGORY_TREE, type DefaultCategoryNode } from '@/lib/default-categories';
+import { FEATURED_MARKETPLACE_CATEGORY_SLUGS } from '@/lib/marketplace-categories';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,7 +53,6 @@ interface SearchParams {
   pickup?: string;
 }
 
-const FEATURED_MARKETPLACE_CATEGORY_SLUGS = ['asian-products'] as const;
 const MAX_FEATURED_SUBCATEGORIES = 6;
 
 function findCategoryBySlug(

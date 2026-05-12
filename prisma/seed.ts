@@ -8,6 +8,7 @@ import {
 import { PrismaPg } from '@prisma/adapter-pg';
 import bcrypt from 'bcryptjs';
 import { PERFUME_SIZE_OPTIONS } from '@/lib/category-attribute-schema';
+import { ASIAN_PRODUCTS_ALIASES } from '@/lib/marketplace-categories';
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL ?? '' });
 const prisma = new PrismaClient({ adapter });
@@ -65,6 +66,34 @@ const FURNITURE_FIELDS = fields(
   { name: 'brand', label: 'Brand', type: 'text' },
 );
 
+const ASIAN_SUBCATEGORY_DEFINITIONS = [
+  { name: 'Asian Fashion', slug: 'asian-fashion', sortOrder: 1, schemaKey: 'clothing' },
+  { name: 'Asian Beauty & Skincare', slug: 'asian-beauty-skincare', sortOrder: 2, schemaKey: 'perfume' },
+  { name: 'Asian Food & Snacks', slug: 'asian-food-snacks', sortOrder: 3, schemaKey: null },
+  { name: 'Asian Home Decor', slug: 'asian-home-decor', sortOrder: 4, schemaKey: 'furniture' },
+  { name: 'Asian Electronics & Gadgets', slug: 'asian-electronics-gadgets', sortOrder: 5, schemaKey: 'electronics' },
+  { name: 'Asian Art & Crafts', slug: 'asian-art-crafts', sortOrder: 6, schemaKey: null },
+  { name: 'Asian Jewelry & Accessories', slug: 'asian-jewelry-accessories', sortOrder: 7, schemaKey: 'clothing' },
+  { name: 'Asian Anime & Collectibles', slug: 'asian-anime-collectibles', sortOrder: 8, schemaKey: null },
+  { name: 'Asian Books & Media', slug: 'asian-books-media', sortOrder: 9, schemaKey: null },
+  { name: 'Asian Cultural Products', slug: 'asian-cultural-products', sortOrder: 10, schemaKey: null },
+  { name: 'East Asian Products', slug: 'east-asian-products', sortOrder: 11, schemaKey: null },
+  { name: 'South Asian Products', slug: 'south-asian-products', sortOrder: 12, schemaKey: null },
+  { name: 'Southeast Asian Products', slug: 'southeast-asian-products', sortOrder: 13, schemaKey: null },
+  { name: 'Central Asian Products', slug: 'central-asian-products', sortOrder: 14, schemaKey: null },
+  { name: 'Middle Eastern & Western Asian Products', slug: 'middle-eastern-western-asian-products', sortOrder: 15, schemaKey: null },
+] as const;
+
+function resolveAsianAttributeSchema(
+  schemaKey: (typeof ASIAN_SUBCATEGORY_DEFINITIONS)[number]['schemaKey'],
+) {
+  if (schemaKey === 'clothing') return CLOTHING_FIELDS;
+  if (schemaKey === 'perfume') return PERFUME_FIELDS;
+  if (schemaKey === 'furniture') return FURNITURE_FIELDS;
+  if (schemaKey === 'electronics') return ELECTRONICS_FIELDS;
+  return undefined;
+}
+
 async function seedCategories() {
   const categoryCount = await prisma.category.count();
   if (categoryCount > 0) return; // Already seeded
@@ -106,7 +135,7 @@ async function seedCategories() {
     data: {
       name: 'Asian Products',
       slug: 'asian-products',
-      aliases: ['asian products', 'asian marketplace', 'east asian', 'south asian', 'southeast asian', 'middle eastern', 'western asian'],
+      aliases: [...ASIAN_PRODUCTS_ALIASES],
       level: 0,
       icon: '🌏',
       sortOrder: 10,
@@ -267,23 +296,16 @@ async function seedCategories() {
   ]});
 
   // Asian Products subcategories
-  await prisma.category.createMany({ data: [
-    { name: 'Asian Fashion', slug: 'asian-fashion', parentId: asianProducts.id, level: 1, sortOrder: 1, attributeSchema: CLOTHING_FIELDS },
-    { name: 'Asian Beauty & Skincare', slug: 'asian-beauty-skincare', parentId: asianProducts.id, level: 1, sortOrder: 2, attributeSchema: PERFUME_FIELDS },
-    { name: 'Asian Food & Snacks', slug: 'asian-food-snacks', parentId: asianProducts.id, level: 1, sortOrder: 3 },
-    { name: 'Asian Home Decor', slug: 'asian-home-decor', parentId: asianProducts.id, level: 1, sortOrder: 4, attributeSchema: FURNITURE_FIELDS },
-    { name: 'Asian Electronics & Gadgets', slug: 'asian-electronics-gadgets', parentId: asianProducts.id, level: 1, sortOrder: 5, attributeSchema: ELECTRONICS_FIELDS },
-    { name: 'Asian Art & Crafts', slug: 'asian-art-crafts', parentId: asianProducts.id, level: 1, sortOrder: 6 },
-    { name: 'Asian Jewelry & Accessories', slug: 'asian-jewelry-accessories', parentId: asianProducts.id, level: 1, sortOrder: 7, attributeSchema: CLOTHING_FIELDS },
-    { name: 'Asian Anime & Collectibles', slug: 'asian-anime-collectibles', parentId: asianProducts.id, level: 1, sortOrder: 8 },
-    { name: 'Asian Books & Media', slug: 'asian-books-media', parentId: asianProducts.id, level: 1, sortOrder: 9 },
-    { name: 'Asian Cultural Products', slug: 'asian-cultural-products', parentId: asianProducts.id, level: 1, sortOrder: 10 },
-    { name: 'East Asian Products', slug: 'east-asian-products', parentId: asianProducts.id, level: 1, sortOrder: 11 },
-    { name: 'South Asian Products', slug: 'south-asian-products', parentId: asianProducts.id, level: 1, sortOrder: 12 },
-    { name: 'Southeast Asian Products', slug: 'southeast-asian-products', parentId: asianProducts.id, level: 1, sortOrder: 13 },
-    { name: 'Central Asian Products', slug: 'central-asian-products', parentId: asianProducts.id, level: 1, sortOrder: 14 },
-    { name: 'Middle Eastern & Western Asian Products', slug: 'middle-eastern-western-asian-products', parentId: asianProducts.id, level: 1, sortOrder: 15 },
-  ]});
+  await prisma.category.createMany({
+    data: ASIAN_SUBCATEGORY_DEFINITIONS.map((category) => ({
+      name: category.name,
+      slug: category.slug,
+      parentId: asianProducts.id,
+      level: 1,
+      sortOrder: category.sortOrder,
+      attributeSchema: resolveAsianAttributeSchema(category.schemaKey),
+    })),
+  });
 
   // Silence TypeScript "unused variable" warnings for categories only used
   // as implicit references (their IDs are not used as parent for children)
@@ -354,32 +376,14 @@ async function ensureAsianCategory() {
     create: {
       name: 'Asian Products',
       slug: 'asian-products',
-      aliases: ['asian products', 'asian marketplace', 'east asian', 'south asian', 'southeast asian', 'middle eastern', 'western asian'],
+      aliases: [...ASIAN_PRODUCTS_ALIASES],
       level: 0,
       icon: '🌏',
       sortOrder: 10,
     },
   });
 
-  const asianSubcategories = [
-    { name: 'Asian Fashion', slug: 'asian-fashion', sortOrder: 1, attributeSchema: CLOTHING_FIELDS },
-    { name: 'Asian Beauty & Skincare', slug: 'asian-beauty-skincare', sortOrder: 2, attributeSchema: PERFUME_FIELDS },
-    { name: 'Asian Food & Snacks', slug: 'asian-food-snacks', sortOrder: 3 },
-    { name: 'Asian Home Decor', slug: 'asian-home-decor', sortOrder: 4, attributeSchema: FURNITURE_FIELDS },
-    { name: 'Asian Electronics & Gadgets', slug: 'asian-electronics-gadgets', sortOrder: 5, attributeSchema: ELECTRONICS_FIELDS },
-    { name: 'Asian Art & Crafts', slug: 'asian-art-crafts', sortOrder: 6 },
-    { name: 'Asian Jewelry & Accessories', slug: 'asian-jewelry-accessories', sortOrder: 7, attributeSchema: CLOTHING_FIELDS },
-    { name: 'Asian Anime & Collectibles', slug: 'asian-anime-collectibles', sortOrder: 8 },
-    { name: 'Asian Books & Media', slug: 'asian-books-media', sortOrder: 9 },
-    { name: 'Asian Cultural Products', slug: 'asian-cultural-products', sortOrder: 10 },
-    { name: 'East Asian Products', slug: 'east-asian-products', sortOrder: 11 },
-    { name: 'South Asian Products', slug: 'south-asian-products', sortOrder: 12 },
-    { name: 'Southeast Asian Products', slug: 'southeast-asian-products', sortOrder: 13 },
-    { name: 'Central Asian Products', slug: 'central-asian-products', sortOrder: 14 },
-    { name: 'Middle Eastern & Western Asian Products', slug: 'middle-eastern-western-asian-products', sortOrder: 15 },
-  ] as const;
-
-  for (const category of asianSubcategories) {
+  for (const category of ASIAN_SUBCATEGORY_DEFINITIONS) {
     await prisma.category.upsert({
       where: { slug: category.slug },
       update: {},
@@ -389,7 +393,7 @@ async function ensureAsianCategory() {
         parentId: asianProducts.id,
         level: 1,
         sortOrder: category.sortOrder,
-        attributeSchema: 'attributeSchema' in category ? category.attributeSchema : undefined,
+        attributeSchema: resolveAsianAttributeSchema(category.schemaKey),
       },
     });
   }
