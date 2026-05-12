@@ -202,7 +202,7 @@ export default function CheckoutPage() {
   }, [buyerName, session?.user?.name]);
 
   useEffect(() => {
-    if (!mapboxToken && process.env.NODE_ENV !== 'production') {
+    if (!mapboxToken && process.env.NODE_ENV === 'development') {
       console.warn('[checkout/address-autocomplete] NEXT_PUBLIC_MAPBOX_TOKEN is not set; falling back to manual address entry.');
     }
   }, [mapboxToken]);
@@ -395,7 +395,10 @@ export default function CheckoutPage() {
 
         setAddressSuggestions(suggestions);
         setAddressDropdownOpen(suggestions.length > 0);
-        setHighlightedSuggestionIndex(suggestions.length > 0 ? 0 : -1);
+        setHighlightedSuggestionIndex((prev) => {
+          if (!suggestions.length) return -1;
+          return prev >= 0 && prev < suggestions.length ? prev : 0;
+        });
         setAddressLookupError('');
       } catch (err) {
         if (controller.signal.aborted) {
@@ -831,6 +834,7 @@ export default function CheckoutPage() {
                       id="checkout-address-suggestions"
                       role="listbox"
                       aria-label="Address suggestions"
+                      aria-live="polite"
                       className="max-h-72 overflow-y-auto overscroll-contain"
                     >
                       {addressSuggestions.map((suggestion, index) => (
@@ -860,7 +864,11 @@ export default function CheckoutPage() {
                 : 'Enter your street address manually to continue checkout.'}
             </p>
             {addressLookupError && (
-              <p className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              <p
+                role="alert"
+                aria-live="assertive"
+                className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2"
+              >
                 ⚠️ {addressLookupError}
               </p>
             )}
