@@ -321,8 +321,11 @@ export async function POST(req: Request) {
     const pickupPostalCode = data.pickupPostalCode || data.localPickupPostalCode || null;
     const safeCategoryId = validatedCategory.categoryId;
     const safeSubcategoryId = validatedCategory.subcategoryId;
-    const subcategoryName = validatedCategory.path[validatedCategory.path.length - 1]?.name ?? null;
-    const refineCategoryName = data.refineCategory ?? null;
+    const subcategoryName = validatedCategory.path.find((node) => node.level === 1)?.name ?? null;
+    const refineCategoryName =
+      validatedCategory.path.find((node) => node.level >= 2)?.name
+      ?? data.refineCategory
+      ?? null;
 
     const loggingPayload = {
       title,

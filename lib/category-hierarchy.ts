@@ -79,7 +79,11 @@ function getPathToRoot(
 
   while (current) {
     if (seen.has(current.id)) {
-      console.warn('[category-hierarchy] Detected circular category reference.', { categoryId: current.id });
+      console.warn('[category-hierarchy] Detected circular category reference.', {
+        categoryId: current.id,
+        parentId: current.parentId,
+        traversedIds: path.map((entry) => entry.id),
+      });
       return null;
     }
     seen.add(current.id);

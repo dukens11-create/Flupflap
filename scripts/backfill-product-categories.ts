@@ -90,11 +90,11 @@ async function run() {
     console.table(repairs.map((repair) => ({
       productId: repair.productId,
       title: repair.title.slice(0, 40),
-      currentCategoryId: repair.current.categoryId ?? '',
-      currentSubcategoryId: repair.current.subcategoryId ?? '',
-      nextCategoryId: repair.next.categoryId ?? '',
-      nextSubcategoryId: repair.next.subcategoryId ?? '',
-      nextCategory: repair.next.category ?? '',
+      currentCategoryId: repair.current.categoryId ?? '(none)',
+      currentSubcategoryId: repair.current.subcategoryId ?? '(none)',
+      nextCategoryId: repair.next.categoryId ?? '(none)',
+      nextSubcategoryId: repair.next.subcategoryId ?? '(none)',
+      nextCategory: repair.next.category ?? '(none)',
       path: repair.next.path,
       reason: repair.reason,
     })));
@@ -104,9 +104,9 @@ async function run() {
     console.table(skipped.map((item) => ({
       productId: item.productId,
       title: item.title.slice(0, 40),
-      category: item.category,
-      categoryId: item.categoryId,
-      subcategoryId: item.subcategoryId,
+      category: item.category || '(none)',
+      categoryId: item.categoryId || '(none)',
+      subcategoryId: item.subcategoryId || '(none)',
       reason: item.reason,
     })));
   }
