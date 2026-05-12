@@ -1,6 +1,7 @@
 "use client";
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import * as Sentry from '@sentry/nextjs';
 
 type BuyNowCartItem = {
   id: string;
@@ -21,6 +22,7 @@ interface Props {
   checkoutItem?: Omit<BuyNowCartItem, 'quantity'>;
   isPickup?: boolean;
 }
+type CheckoutResponse = { url?: string; error?: string };
 
 function requiresLiveShipping(item?: Omit<BuyNowCartItem, 'quantity'>, isPickup?: boolean) {
   if (!item || isPickup) return false;
@@ -51,12 +53,21 @@ export default function BuyNowButton({ productId, checkoutItem, isPickup = false
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ productId, isPickup }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && typeof (data as { url?: unknown }).url === 'string') {
-        location.href = (data as { url: string }).url;
+      let data: CheckoutResponse = {};
+      try {
+        data = await res.json();
+      } catch (parseErr) {
+        console.warn('[buy-now] Unable to parse checkout response JSON', parseErr);
+        Sentry.captureException(parseErr, {
+          tags: { area: 'checkout', action: 'buynow_response_parse' },
+          extra: { productId, isPickup, status: res.status },
+        });
+      }
+      if (res.ok && typeof data.url === 'string') {
+        location.href = data.url;
         return;
       }
-      setError((data as { error?: string }).error || 'Checkout failed. Please try again.');
+      setError(data.error || 'Checkout failed. Please try again.');
     } catch {
       setError('Network error. Please try again.');
     } finally {

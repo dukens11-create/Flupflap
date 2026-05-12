@@ -113,6 +113,6 @@ export async function POST(req: Request) {
       tag: 'api/upload',
       action: 'post',
     });
-    return NextResponse.json({ error: 'Upload failed. Please try again.' }, { status: 500 });
+    return NextResponse.json({ error: 'Unable to process upload request. Please try again.' }, { status: 500 });
   }
 }

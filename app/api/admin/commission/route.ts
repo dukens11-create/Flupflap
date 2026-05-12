@@ -4,6 +4,8 @@ import { authOptions } from '@/lib/auth-options';
 import { getMarketplaceSettings } from '@/lib/commission';
 import { logError } from '@/lib/logger';
 
+const COMMISSION_SUCCESS_QUERY = 'commission=fixed';
+
 function isJsonRequest(req: Request) {
   return (req.headers.get('accept') ?? '').includes('application/json');
 }
@@ -19,7 +21,7 @@ export async function POST(req: Request) {
     if (isJsonRequest(req)) {
       return NextResponse.json({ ok: true, message: 'Commission settings validated.' });
     }
-    return NextResponse.redirect(new URL('/admin?commission=fixed', req.url), 303);
+    return NextResponse.redirect(new URL(`/admin?${COMMISSION_SUCCESS_QUERY}`, req.url), 303);
   } catch (err) {
     logError('Failed to validate commission settings', err, {
       tag: 'admin/commission',

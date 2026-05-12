@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useI18n } from '@/components/I18nProvider';
 import { resolveRoleLoginDestination } from '@/lib/role-experience';
+import * as Sentry from '@sentry/nextjs';
 
 export default function SignupPage() {
   const { t } = useI18n();
@@ -38,8 +39,17 @@ export default function SignupPage() {
         body: JSON.stringify(payload),
       });
       if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        setError((errorData as { error?: string }).error || t('signup.signupFailed'));
+        let errorData: { error?: string } = {};
+        try {
+          errorData = await res.json();
+        } catch (parseErr) {
+          console.warn('[signup] Unable to parse signup error response', parseErr);
+          Sentry.captureException(parseErr, {
+            tags: { area: 'auth', action: 'signup_error_response_parse' },
+            extra: { status: res.status, role: payload.role },
+          });
+        }
+        setError(errorData.error || t('signup.signupFailed'));
         setLoading(false);
         return;
       }
