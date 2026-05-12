@@ -66,7 +66,7 @@ export default async function SellerEditPage({
   const defaultOriginalImages = product.originalImages?.length ? product.originalImages : defaultImages;
   const defaultEnhancedImages = product.enhancedImages?.length ? product.enhancedImages : [];
   const defaultImageThumbnails = product.imageThumbnails?.length ? product.imageThumbnails : [];
-  const defaultCategorySlug = normalizedCategory.path[normalizedCategory.path.length - 1]?.slug;
+  const defaultCategorySlug = normalizedCategory.path.at(-1)?.slug;
   const packageDetails = getEffectivePackageDetails(product);
   const shippingClass = getShippingClass(product.productAttributes) ?? '';
   const shippingSetupIncomplete = !hasStoredPackageDetails(product);

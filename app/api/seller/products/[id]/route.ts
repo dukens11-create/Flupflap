@@ -157,10 +157,12 @@ async function loadCategoryNodes() {
 }
 
 function hasSubmittedCategorySelection(data: ProductUpdateInput) {
-  return data.categoryId !== undefined
-    || data.subcategoryId !== undefined
-    || data.parentCategoryId !== undefined
-    || data.category !== undefined;
+  return Boolean(
+    data.categoryId?.trim()
+    || data.subcategoryId?.trim()
+    || data.parentCategoryId?.trim()
+    || data.category?.trim(),
+  );
 }
 
 async function resolveSubmittedCategorySelection(data: ProductUpdateInput) {

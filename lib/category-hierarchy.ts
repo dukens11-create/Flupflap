@@ -78,14 +78,7 @@ function getPathToRoot(
   let current: CategoryHierarchyNode | null = node;
 
   while (current) {
-    if (seen.has(current.id)) {
-      console.warn('[category-hierarchy] Detected circular category reference.', {
-        categoryId: current.id,
-        parentId: current.parentId,
-        traversedIds: path.map((entry) => entry.id),
-      });
-      return null;
-    }
+    if (seen.has(current.id)) return null;
     seen.add(current.id);
     path.push(current);
     current = current.parentId ? (lookup.get(current.parentId) ?? null) : null;
