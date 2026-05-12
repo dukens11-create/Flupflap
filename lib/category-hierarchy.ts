@@ -85,9 +85,9 @@ function getPathToRoot(
   }
 
   path.reverse();
-  if (path.length === 0 || path[0]?.level !== 0) return null;
+  if (path.length === 0 || path[0].level !== 0) return null;
   for (let index = 1; index < path.length; index += 1) {
-    if (path[index]?.parentId !== path[index - 1]?.id) return null;
+    if (path[index].parentId !== path[index - 1].id) return null;
   }
   return path;
 }
@@ -227,7 +227,7 @@ export function validateCategorySelection(
       };
     }
 
-    const immediateParent = normalizedLeaf.path[normalizedLeaf.path.length - 2] ?? null;
+    const immediateParent = normalizedLeaf.path.at(-2) ?? null;
     if (!immediateParent || immediateParent.id !== parent.id) {
       return {
         ok: false,

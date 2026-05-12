@@ -110,7 +110,12 @@ async function run() {
     })));
   }
 
-  if (!confirm || repairs.length === 0) {
+  if (repairs.length === 0) {
+    console.log('[backfill-product-categories] No automatic repairs were found.');
+    return;
+  }
+
+  if (!confirm) {
     console.log('[backfill-product-categories] Dry run only. Re-run with --confirm to apply repairs.');
     return;
   }
