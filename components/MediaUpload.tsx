@@ -107,11 +107,12 @@ function getSafePreviewUrl(url: string) {
 }
 
 function getSkippedUploadMessage(skippedCount: number, uploadableCount: number) {
+  const maxImageMb = Math.round(MAX_PRODUCT_IMAGE_BYTES / (1024 * 1024));
   if (!skippedCount) return '';
   if (!uploadableCount) {
     return skippedCount === 1
-      ? 'The selected file could not be uploaded. Please choose a valid image under 10 MB.'
-      : `${skippedCount} files could not be uploaded. Please choose valid images under 10 MB.`;
+      ? `The selected file could not be uploaded. Please choose a valid image under ${maxImageMb} MB.`
+      : `${skippedCount} files could not be uploaded. Please choose valid images under ${maxImageMb} MB.`;
   }
   return skippedCount === 1
     ? '1 file was skipped because it is invalid or too large.'
@@ -882,7 +883,11 @@ export default function MediaUpload({
 
         {images.length < MAX_PRODUCT_IMAGES && (
           <div>
-            <label className="inline-flex min-h-[44px] items-center gap-2 cursor-pointer btn-outline px-4 py-2 text-sm">
+            <label
+              className={`inline-flex min-h-[44px] items-center gap-2 btn-outline px-4 py-2 text-sm ${
+                imageUploadCount > 0 ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+              }`}
+            >
               {images.length === 0 ? 'Choose images' : 'Add more images'}
               <input
                 ref={imageInputRef}
@@ -984,7 +989,11 @@ export default function MediaUpload({
               )}
             </div>
             <div className="flex flex-wrap gap-2">
-              <label className="inline-flex min-h-[44px] cursor-pointer items-center gap-2 rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700">
+              <label
+                className={`inline-flex min-h-[44px] items-center gap-2 rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 ${
+                  videoUploading ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+                }`}
+              >
                 Replace video
                 <input
                   ref={videoInputRef}
@@ -1015,7 +1024,11 @@ export default function MediaUpload({
           </div>
         ) : (
           <div>
-            <label className="inline-flex min-h-[44px] items-center gap-2 cursor-pointer btn-outline px-4 py-2 text-sm">
+            <label
+              className={`inline-flex min-h-[44px] items-center gap-2 btn-outline px-4 py-2 text-sm ${
+                videoUploading ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+              }`}
+            >
               Choose video
               <input
                 ref={videoInputRef}
