@@ -12,6 +12,7 @@ import {
 } from '@/lib/fraud-detection';
 import { parseJsonOrNull } from '@/lib/parse-json';
 import { SHIPPING_MODES } from '@/app/api/seller/products/route';
+import { validateCategorySelection, type CategoryHierarchyNode } from '@/lib/category-hierarchy';
 import {
   convertWeightToOunces,
   getShippingClass,
@@ -68,6 +69,7 @@ const updateSchema = z.object({
   // Category system
   categoryId: z.string().optional(),
   subcategoryId: z.string().optional(),
+  parentCategoryId: z.string().optional(),
   productAttributes: z.string().optional(), // JSON string
 });
 
@@ -145,6 +147,13 @@ function respondWithError(id: string, message: string, acceptsJson: boolean, sta
     return NextResponse.json({ error: message }, { status });
   }
   return redirectToEditForm(id, message);
+}
+
+async function loadCategoryNodes() {
+  return prisma.category.findMany({
+    orderBy: [{ level: 'asc' }, { sortOrder: 'asc' }],
+    select: { id: true, name: true, slug: true, aliases: true, parentId: true, level: true },
+  }) as Promise<CategoryHierarchyNode[]>;
 }
 
 function resolveSubmittedPackageDetails(data: ProductUpdateInput) {
@@ -300,6 +309,7 @@ export async function POST(
       productId: id,
       categoryId: data.categoryId,
       subcategoryId: data.subcategoryId,
+      parentCategoryId: data.parentCategoryId,
       condition: data.condition,
       weight: data.weight,
       packageType: data.packageType,
@@ -311,40 +321,36 @@ export async function POST(
       return respondWithError(id, getPackageDetailsErrorMessage(data), acceptsJson);
     }
 
-    // Validate categoryId before attempting the DB update to avoid FK constraint errors.
-    const resolvedCategoryId = resolveOptionalId(data.categoryId);
-    if (resolvedCategoryId) {
-      const categoryCheck = await prisma.category.findUnique({
-        where: { id: resolvedCategoryId },
-        select: { id: true },
-      });
-      if (!categoryCheck) {
-        console.warn('[seller/products/[id] POST] invalid categoryId', { categoryId: resolvedCategoryId, productId: id });
-        return respondWithError(
-          id,
-          'The selected category is no longer valid. Please select a valid category and try again.',
-          acceptsJson,
-          400,
-        );
-      }
-    }
+    const hasSubmittedCategorySelection =
+      data.categoryId !== undefined
+      || data.subcategoryId !== undefined
+      || data.parentCategoryId !== undefined
+      || data.category !== undefined;
+    let resolvedCategoryId = resolveOptionalId(data.categoryId);
+    let resolvedSubcategoryId = resolveOptionalId(data.subcategoryId);
+    let resolvedCategoryName = data.category?.trim() || '';
 
-    // Validate subcategoryId if provided
-    const resolvedSubcategoryId = resolveOptionalId(data.subcategoryId);
-    if (resolvedSubcategoryId) {
-      const subCategoryCheck = await prisma.category.findUnique({
-        where: { id: resolvedSubcategoryId },
-        select: { id: true },
+    if (hasSubmittedCategorySelection) {
+      const categoryNodes = await loadCategoryNodes();
+      const validatedCategory = validateCategorySelection(categoryNodes, {
+        categoryId: data.categoryId,
+        subcategoryId: data.subcategoryId,
+        parentCategoryId: data.parentCategoryId,
+        categoryLabel: data.category,
       });
-      if (!subCategoryCheck) {
-        console.warn('[seller/products/[id] POST] invalid subcategoryId', { subcategoryId: resolvedSubcategoryId, productId: id });
-        return respondWithError(
-          id,
-          'The selected subcategory is no longer valid. Please re-select your category and try again.',
-          acceptsJson,
-          400,
-        );
+      if (!validatedCategory.ok) {
+        console.warn('[seller/products/[id] POST] invalid category selection', {
+          productId: id,
+          categoryId: data.categoryId,
+          subcategoryId: data.subcategoryId,
+          parentCategoryId: data.parentCategoryId,
+          message: validatedCategory.message,
+        });
+        return respondWithError(id, validatedCategory.message, acceptsJson, 400);
       }
+      resolvedCategoryId = validatedCategory.categoryId;
+      resolvedSubcategoryId = validatedCategory.subcategoryId;
+      resolvedCategoryName = validatedCategory.displayName;
     }
 
     const submittedImages = imagesRaw.length ? imagesRaw : data.imageUrl ? [data.imageUrl] : null;
@@ -386,7 +392,7 @@ export async function POST(
           ...(data.price && { priceCents: cents(data.price) }),
           ...(data.shipping !== undefined && { shippingCents: cents(data.shipping || '0') }),
           ...(data.shippingMode && (SHIPPING_MODES as readonly string[]).includes(data.shippingMode) && { shippingMode: data.shippingMode }),
-          ...(data.category && { category: data.category }),
+          ...(hasSubmittedCategorySelection && resolvedCategoryName && { category: resolvedCategoryName }),
           ...(data.condition && { condition: data.condition }),
           ...(data.inventory && { inventory: Number(data.inventory) }),
           pickupAvailable: data.pickupAvailable === 'true',
@@ -401,8 +407,10 @@ export async function POST(
           heightIn: packageDetails.heightIn,
           packageType: packageDetails.packageType,
           // Category system fields (pre-validated above)
-          categoryId: resolvedCategoryId,
-          subcategoryId: resolvedSubcategoryId,
+          ...(hasSubmittedCategorySelection && {
+            categoryId: resolvedCategoryId,
+            subcategoryId: resolvedSubcategoryId,
+          }),
           productAttributes: nextProductAttributesValue,
           imageUrl: mainImage,
           images: resolvedImages,
@@ -493,6 +501,7 @@ export async function PATCH(
       productId: id,
       categoryId: data.categoryId,
       subcategoryId: data.subcategoryId,
+      parentCategoryId: data.parentCategoryId,
       condition: data.condition,
       weight: data.weight,
       packageType: data.packageType,
@@ -504,36 +513,36 @@ export async function PATCH(
       return NextResponse.json({ error: getPackageDetailsErrorMessage(data) }, { status: 400 });
     }
 
-    // Validate categoryId before attempting the DB update to avoid FK constraint errors.
-    const resolvedCategoryId = resolveOptionalId(data.categoryId);
-    if (resolvedCategoryId) {
-      const categoryCheck = await prisma.category.findUnique({
-        where: { id: resolvedCategoryId },
-        select: { id: true },
-      });
-      if (!categoryCheck) {
-        console.warn('[seller/products/[id] PATCH] invalid categoryId', { categoryId: resolvedCategoryId, productId: id });
-        return NextResponse.json(
-          { error: 'The selected category is no longer valid. Please select a valid category and try again.' },
-          { status: 400 },
-        );
-      }
-    }
+    const hasSubmittedCategorySelection =
+      data.categoryId !== undefined
+      || data.subcategoryId !== undefined
+      || data.parentCategoryId !== undefined
+      || data.category !== undefined;
+    let resolvedCategoryId = resolveOptionalId(data.categoryId);
+    let resolvedSubcategoryId = resolveOptionalId(data.subcategoryId);
+    let resolvedCategoryName = data.category?.trim() || '';
 
-    // Validate subcategoryId if provided
-    const resolvedSubcategoryId = resolveOptionalId(data.subcategoryId);
-    if (resolvedSubcategoryId) {
-      const subCategoryCheck = await prisma.category.findUnique({
-        where: { id: resolvedSubcategoryId },
-        select: { id: true },
+    if (hasSubmittedCategorySelection) {
+      const categoryNodes = await loadCategoryNodes();
+      const validatedCategory = validateCategorySelection(categoryNodes, {
+        categoryId: data.categoryId,
+        subcategoryId: data.subcategoryId,
+        parentCategoryId: data.parentCategoryId,
+        categoryLabel: data.category,
       });
-      if (!subCategoryCheck) {
-        console.warn('[seller/products/[id] PATCH] invalid subcategoryId', { subcategoryId: resolvedSubcategoryId, productId: id });
-        return NextResponse.json(
-          { error: 'The selected subcategory is no longer valid. Please re-select your category and try again.' },
-          { status: 400 },
-        );
+      if (!validatedCategory.ok) {
+        console.warn('[seller/products/[id] PATCH] invalid category selection', {
+          productId: id,
+          categoryId: data.categoryId,
+          subcategoryId: data.subcategoryId,
+          parentCategoryId: data.parentCategoryId,
+          message: validatedCategory.message,
+        });
+        return NextResponse.json({ error: validatedCategory.message }, { status: 400 });
       }
+      resolvedCategoryId = validatedCategory.categoryId;
+      resolvedSubcategoryId = validatedCategory.subcategoryId;
+      resolvedCategoryName = validatedCategory.displayName;
     }
 
     // Resolve images for PATCH (JSON body): prefer explicit images list, then legacy imageUrl
@@ -585,7 +594,7 @@ export async function PATCH(
           ...(data.price && { priceCents: cents(data.price) }),
           ...(data.shipping !== undefined && { shippingCents: cents(data.shipping || '0') }),
           ...(data.shippingMode && (SHIPPING_MODES as readonly string[]).includes(data.shippingMode) && { shippingMode: data.shippingMode }),
-          ...(data.category && { category: data.category }),
+          ...(hasSubmittedCategorySelection && resolvedCategoryName && { category: resolvedCategoryName }),
           ...(data.condition && { condition: data.condition }),
           imageUrl: mainImage,
           images: resolvedImages,
@@ -607,8 +616,10 @@ export async function PATCH(
           heightIn: packageDetails.heightIn,
           packageType: packageDetails.packageType,
           // Category system fields (pre-validated above)
-          categoryId: resolvedCategoryId,
-          subcategoryId: resolvedSubcategoryId,
+          ...(hasSubmittedCategorySelection && {
+            categoryId: resolvedCategoryId,
+            subcategoryId: resolvedSubcategoryId,
+          }),
           productAttributes: nextProductAttributesValue,
           status: 'PENDING',
         },

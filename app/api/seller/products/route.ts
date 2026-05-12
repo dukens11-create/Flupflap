@@ -13,6 +13,7 @@ import {
   shouldRecommendFraudReview,
 } from '@/lib/fraud-detection';
 import { parseJsonOrNull } from '@/lib/parse-json';
+import { validateCategorySelection, type CategoryHierarchyNode } from '@/lib/category-hierarchy';
 import {
   convertWeightToOunces,
   normalizeWeightUnit,
@@ -72,6 +73,7 @@ const schema = z.object({
   // Category system
   categoryId: z.string().trim().optional(),
   subcategoryId: z.string().trim().optional(),
+  parentCategoryId: z.string().trim().optional(),
   productAttributes: z.string().optional(), // JSON string
   mediaEnhancements: z.string().optional(),
 });
@@ -292,17 +294,20 @@ export async function POST(req: Request) {
           ? undefined
           : (attributes as Prisma.InputJsonValue);
 
-    let category = data.category ?? data.refineCategory ?? data.subcategory ?? '';
-    if (!category && data.categoryId) {
-      const categoryRecord = await prisma.category.findUnique({
-        where: { id: data.categoryId },
-        select: { name: true },
-      });
-      category = categoryRecord?.name ?? '';
+    const categoryNodes = await prisma.category.findMany({
+      orderBy: [{ level: 'asc' }, { sortOrder: 'asc' }],
+      select: { id: true, name: true, slug: true, aliases: true, parentId: true, level: true },
+    }) as CategoryHierarchyNode[];
+    const validatedCategory = validateCategorySelection(categoryNodes, {
+      categoryId: data.categoryId,
+      subcategoryId: data.subcategoryId,
+      parentCategoryId: data.parentCategoryId,
+      categoryLabel: data.category ?? data.refineCategory ?? data.subcategory ?? '',
+    });
+    if (!validatedCategory.ok) {
+      return jsonError(validatedCategory.message, 400);
     }
-    if (!category) {
-      return jsonError('Please select a category.', 400);
-    }
+    const category = validatedCategory.displayName;
 
     const mainImage = resolvedImages[0] ?? '';
     const resolvedOriginalImages =
@@ -314,21 +319,9 @@ export async function POST(req: Request) {
     const pickupCity = data.pickupCity || data.localPickupCity || null;
     const pickupState = data.pickupState || data.localPickupState || null;
     const pickupPostalCode = data.pickupPostalCode || data.localPickupPostalCode || null;
-    const categoryRef = data.categoryId
-      ? await prisma.category.findUnique({ where: { id: data.categoryId }, select: { id: true, name: true } })
-      : null;
-    const subcategoryRef = data.subcategoryId
-      ? await prisma.category.findUnique({
-          where: { id: data.subcategoryId },
-          select: { id: true, name: true, parentId: true },
-        })
-      : null;
-    const safeCategoryId = categoryRef?.id ?? null;
-    const safeSubcategoryId =
-      subcategoryRef?.id && (!safeCategoryId || subcategoryRef.parentId === safeCategoryId)
-        ? subcategoryRef.id
-        : null;
-    const subcategoryName = subcategoryRef?.name ?? data.subcategory ?? null;
+    const safeCategoryId = validatedCategory.categoryId;
+    const safeSubcategoryId = validatedCategory.subcategoryId;
+    const subcategoryName = validatedCategory.path[validatedCategory.path.length - 1]?.name ?? null;
     const refineCategoryName = data.refineCategory ?? null;
 
     const loggingPayload = {
@@ -339,6 +332,7 @@ export async function POST(req: Request) {
       category,
       subcategory: subcategoryName,
       refineCategory: refineCategoryName,
+      categoryPath: validatedCategory.path.map((node) => node.name).join(' > '),
       condition: data.condition,
       brand: (normalizedAttributes.brand as string | undefined) ?? null,
       sizeMl: (normalizedAttributes.size_ml as string | undefined) ?? null,

@@ -98,9 +98,7 @@ export default function EditListingForm({
     // Client-side validation
     const condition = String(formData.get('condition') ?? '').trim();
     const submittedCategoryId = String(formData.get('categoryId') ?? '').trim();
-    const leafCategoryId = String(formData.get('leafCategoryId') ?? '').trim();
-    const parentCategoryId = String(formData.get('parentCategoryId') ?? '').trim();
-    const effectiveCategoryId = leafCategoryId || submittedCategoryId;
+    const submittedSubcategoryId = String(formData.get('subcategoryId') ?? '').trim();
     const category = String(formData.get('category') ?? '').trim();
     const weight = String(formData.get('weight') ?? '').trim();
     const length = String(formData.get('length') ?? '').trim();
@@ -110,7 +108,7 @@ export default function EditListingForm({
     const imageUrl = String(formData.get('imageUrl') ?? '').trim();
     const resolvedImages = images.length > 0 ? images : (imageUrl ? [imageUrl] : []);
 
-    if (!category && !effectiveCategoryId) {
+    if (!category && !submittedCategoryId) {
       setSubmitError('Please select a category.');
       return;
     }
@@ -135,11 +133,9 @@ export default function EditListingForm({
     setSubmitting(true);
 
     try {
-      formData.set('categoryId', effectiveCategoryId);
-      formData.set('subcategoryId', parentCategoryId);
       console.log('[EditListingForm] submitting update', {
-        categoryId: effectiveCategoryId,
-        subcategoryId: parentCategoryId,
+        categoryId: submittedCategoryId,
+        subcategoryId: submittedSubcategoryId,
         category,
         condition,
       });
@@ -228,7 +224,6 @@ export default function EditListingForm({
             defaultCategoryId={defaultCategoryId}
             defaultSubcategoryId={defaultSubcategoryId}
             defaultAttributes={defaultAttributes}
-            submitLeafCategoryId
           />
         </div>
         <div className="flex-1">
