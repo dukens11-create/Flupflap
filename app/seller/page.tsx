@@ -79,9 +79,10 @@ function orderStatusBadge(status: string) {
 }
 
 function sellerVerificationStatusLabel(status?: string | null) {
+  if (!status) return 'not started';
   if (status === 'APPROVED') return 'verified';
   if (status === 'REJECTED') return 'rejected';
-  return 'pending';
+  return 'pending review';
 }
 
 function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
@@ -458,12 +459,22 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
               <p className="mt-3 text-sm text-slate-600 max-w-2xl">
                 To sell on FlupFlap, verify your identity with a government ID and selfie.
               </p>
+              {!verificationSubmission && (
+                <p className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                  You haven&apos;t started identity verification yet. Click <span className="font-semibold">Verify Identity</span> to begin.
+                </p>
+              )}
               {verificationSubmission?.status === 'REJECTED' && verificationSubmission.rejectionReason && (
                 <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
                   <p className="font-semibold mb-1">Verification was rejected:</p>
                   <p>{verificationSubmission.rejectionReason}</p>
                   <p className="mt-2 text-xs text-red-700">Please re-submit your documents to proceed.</p>
                 </div>
+              )}
+              {verificationSubmission?.status === 'REJECTED' && !verificationSubmission.rejectionReason && (
+                <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+                  Verification was rejected. Please re-submit your verification details to continue.
+                </p>
               )}
               {verificationSubmission?.status === 'APPROVED' && (
                 <div className="mt-3 flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2">

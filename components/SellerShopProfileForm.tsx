@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 const INPUT_CLASS = 'w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500';
 
@@ -15,6 +15,19 @@ interface Props {
   initialShipFromCountry: string | null;
   initialShipFromPhone: string | null;
 }
+
+type FieldErrors = Partial<Record<
+  | 'shopName'
+  | 'shopLogoUrl'
+  | 'shipFromName'
+  | 'shipFromStreet'
+  | 'shipFromCity'
+  | 'shipFromState'
+  | 'shipFromZip'
+  | 'shipFromCountry'
+  | 'shipFromPhone',
+string
+>>;
 
 export default function SellerShopProfileForm({
   initialShopName,
@@ -40,37 +53,124 @@ export default function SellerShopProfileForm({
   const [shipFromPhone, setShipFromPhone] = useState(initialShipFromPhone ?? '');
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
   const trimmedShopName = shopName.trim();
+  const trimmedShopLogoUrl = shopLogoUrl.trim();
+  const trimmedShipFromName = shipFromName.trim();
+  const trimmedShipFromStreet = shipFromStreet.trim();
+  const trimmedShipFromCity = shipFromCity.trim();
+  const trimmedShipFromState = shipFromState.trim().toUpperCase();
+  const trimmedShipFromZip = shipFromZip.trim();
+  const trimmedShipFromCountry = shipFromCountry.trim().toUpperCase();
+  const trimmedShipFromPhone = shipFromPhone.trim();
+
+  const hasAnyShipFromField = useMemo(
+    () =>
+      Boolean(
+        trimmedShipFromName
+        || trimmedShipFromStreet
+        || trimmedShipFromCity
+        || trimmedShipFromState
+        || trimmedShipFromZip
+        || trimmedShipFromCountry
+        || trimmedShipFromPhone,
+      ),
+    [
+      trimmedShipFromName,
+      trimmedShipFromStreet,
+      trimmedShipFromCity,
+      trimmedShipFromState,
+      trimmedShipFromZip,
+      trimmedShipFromCountry,
+      trimmedShipFromPhone,
+    ],
+  );
+
+  const validateForm = useCallback((): FieldErrors => {
+    const nextErrors: FieldErrors = {};
+    if (trimmedShopName.length < 2) {
+      nextErrors.shopName = 'Shop / Business name must be at least 2 characters.';
+    }
+    if (trimmedShopLogoUrl && !/^https?:\/\//i.test(trimmedShopLogoUrl)) {
+      nextErrors.shopLogoUrl = 'Use a full image URL that starts with http:// or https://.';
+    }
+    if (hasAnyShipFromField) {
+      if (!trimmedShipFromName) nextErrors.shipFromName = 'Enter the ship-from full name or business name.';
+      if (!trimmedShipFromStreet) nextErrors.shipFromStreet = 'Enter the ship-from street address.';
+      if (!trimmedShipFromCity) nextErrors.shipFromCity = 'Enter the ship-from city.';
+      if (!trimmedShipFromState) nextErrors.shipFromState = 'Enter the 2-letter ship-from state code.';
+      if (!trimmedShipFromZip) nextErrors.shipFromZip = 'Enter the ship-from ZIP/postal code.';
+      if (!trimmedShipFromCountry) nextErrors.shipFromCountry = 'Enter the 2-letter ship-from country code.';
+    }
+    if (trimmedShipFromState && trimmedShipFromState.length !== 2) {
+      nextErrors.shipFromState = 'Use a 2-letter state code (for example: NY).';
+    }
+    if (trimmedShipFromCountry && trimmedShipFromCountry.length !== 2) {
+      nextErrors.shipFromCountry = 'Use a 2-letter country code (for example: US).';
+    }
+    return nextErrors;
+  }, [
+    trimmedShopName,
+    trimmedShopLogoUrl,
+    hasAnyShipFromField,
+    trimmedShipFromName,
+    trimmedShipFromStreet,
+    trimmedShipFromCity,
+    trimmedShipFromState,
+    trimmedShipFromZip,
+    trimmedShipFromCountry,
+  ]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const validationErrors = validateForm();
+    setFieldErrors(validationErrors);
+    if (Object.keys(validationErrors).length > 0) {
+      setStatus('error');
+      setErrorMsg('Please fix the highlighted fields and try again.');
+      return;
+    }
+
     setStatus('saving');
     setErrorMsg('');
+    setFieldErrors({});
     try {
       const res = await fetch('/api/seller/profile', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           shopName: trimmedShopName,
-          shopLogoUrl: shopLogoUrl.trim(),
+          shopLogoUrl: trimmedShopLogoUrl,
           shopDescription: shopDescription.trim(),
-          shipFromName: shipFromName.trim(),
-          shipFromStreet: shipFromStreet.trim(),
-          shipFromCity: shipFromCity.trim(),
-          shipFromState: shipFromState.trim(),
-          shipFromZip: shipFromZip.trim(),
-          shipFromCountry: shipFromCountry.trim(),
-          shipFromPhone: shipFromPhone.trim(),
+          shipFromName: trimmedShipFromName,
+          shipFromStreet: trimmedShipFromStreet,
+          shipFromCity: trimmedShipFromCity,
+          shipFromState: trimmedShipFromState,
+          shipFromZip: trimmedShipFromZip,
+          shipFromCountry: trimmedShipFromCountry,
+          shipFromPhone: trimmedShipFromPhone,
         }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => null);
       if (!res.ok) {
         setStatus('error');
+        const serverFieldErrors = (data?.fieldErrors ?? {}) as Record<string, string[]>;
+        const nextFieldErrors: FieldErrors = {};
+        for (const [key, messages] of Object.entries(serverFieldErrors)) {
+          if (!Array.isArray(messages) || messages.length === 0) continue;
+          const first = messages.find((msg) => typeof msg === 'string' && msg.trim().length > 0);
+          if (!first) continue;
+          nextFieldErrors[key as keyof FieldErrors] = first;
+        }
+        if (Object.keys(nextFieldErrors).length > 0) {
+          setFieldErrors(nextFieldErrors);
+        }
         setErrorMsg(data?.error ?? 'Failed to save shop profile.');
         return;
       }
       setStatus('saved');
+      setFieldErrors({});
       setTimeout(() => setStatus('idle'), 3000);
     } catch {
       setStatus('error');
@@ -93,10 +193,14 @@ export default function SellerShopProfileForm({
           required
           placeholder="e.g. Cool Finds Store"
           className={INPUT_CLASS}
+          aria-invalid={fieldErrors.shopName ? true : undefined}
         />
         <p className="mt-1 text-xs text-slate-400">
           This is the name buyers will see on product listings instead of your personal name.
         </p>
+        {fieldErrors.shopName && (
+          <p className="mt-1 text-xs text-red-700">{fieldErrors.shopName}</p>
+        )}
       </div>
 
       <div>
@@ -111,10 +215,14 @@ export default function SellerShopProfileForm({
           maxLength={2000}
           placeholder="https://example.com/logo.png"
           className={INPUT_CLASS}
+          aria-invalid={fieldErrors.shopLogoUrl ? true : undefined}
         />
         <p className="mt-1 text-xs text-slate-400">
           Paste the URL of an image to use as your shop logo.
         </p>
+        {fieldErrors.shopLogoUrl && (
+          <p className="mt-1 text-xs text-red-700">{fieldErrors.shopLogoUrl}</p>
+        )}
       </div>
 
       <div>
@@ -152,7 +260,11 @@ export default function SellerShopProfileForm({
             maxLength={100}
             placeholder="e.g. Jane Smith or Cool Finds Store"
             className={INPUT_CLASS}
+            aria-invalid={fieldErrors.shipFromName ? true : undefined}
           />
+          {fieldErrors.shipFromName && (
+            <p className="mt-1 text-xs text-red-700">{fieldErrors.shipFromName}</p>
+          )}
         </div>
 
         <div>
@@ -167,7 +279,11 @@ export default function SellerShopProfileForm({
             maxLength={200}
             placeholder="e.g. 123 Main St"
             className={INPUT_CLASS}
+            aria-invalid={fieldErrors.shipFromStreet ? true : undefined}
           />
+          {fieldErrors.shipFromStreet && (
+            <p className="mt-1 text-xs text-red-700">{fieldErrors.shipFromStreet}</p>
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-3">
@@ -183,7 +299,11 @@ export default function SellerShopProfileForm({
               maxLength={100}
               placeholder="e.g. New York"
               className={INPUT_CLASS}
+              aria-invalid={fieldErrors.shipFromCity ? true : undefined}
             />
+            {fieldErrors.shipFromCity && (
+              <p className="mt-1 text-xs text-red-700">{fieldErrors.shipFromCity}</p>
+            )}
           </div>
           <div>
             <label className="block text-xs font-semibold text-slate-600 mb-1" htmlFor="shipFromState">
@@ -197,7 +317,11 @@ export default function SellerShopProfileForm({
               maxLength={2}
               placeholder="e.g. NY"
               className={INPUT_CLASS}
+              aria-invalid={fieldErrors.shipFromState ? true : undefined}
             />
+            {fieldErrors.shipFromState && (
+              <p className="mt-1 text-xs text-red-700">{fieldErrors.shipFromState}</p>
+            )}
           </div>
         </div>
 
@@ -214,7 +338,11 @@ export default function SellerShopProfileForm({
               maxLength={20}
               placeholder="e.g. 10001"
               className={INPUT_CLASS}
+              aria-invalid={fieldErrors.shipFromZip ? true : undefined}
             />
+            {fieldErrors.shipFromZip && (
+              <p className="mt-1 text-xs text-red-700">{fieldErrors.shipFromZip}</p>
+            )}
           </div>
           <div>
             <label className="block text-xs font-semibold text-slate-600 mb-1" htmlFor="shipFromCountry">
@@ -223,14 +351,18 @@ export default function SellerShopProfileForm({
             <select
               id="shipFromCountry"
               value={shipFromCountry}
-              onChange={(e) => setShipFromCountry(e.target.value)}
+              onChange={(e) => setShipFromCountry(e.target.value.toUpperCase())}
               className={INPUT_CLASS}
+              aria-invalid={fieldErrors.shipFromCountry ? true : undefined}
             >
               <option value="US">United States (US)</option>
               <option value="CA">Canada (CA)</option>
               <option value="GB">United Kingdom (GB)</option>
               <option value="AU">Australia (AU)</option>
             </select>
+            {fieldErrors.shipFromCountry && (
+              <p className="mt-1 text-xs text-red-700">{fieldErrors.shipFromCountry}</p>
+            )}
           </div>
         </div>
 
@@ -246,7 +378,11 @@ export default function SellerShopProfileForm({
             maxLength={30}
             placeholder="e.g. +12125550100"
             className={INPUT_CLASS}
+            aria-invalid={fieldErrors.shipFromPhone ? true : undefined}
           />
+          {fieldErrors.shipFromPhone && (
+            <p className="mt-1 text-xs text-red-700">{fieldErrors.shipFromPhone}</p>
+          )}
         </div>
       </fieldset>
 
