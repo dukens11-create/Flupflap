@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
+import { applyRateLimit } from '@/lib/security';
+import { logError } from '@/lib/logger';
 
 const schema = z.object({
   email: z.string().email(),
@@ -11,6 +13,19 @@ const schema = z.object({
 
 export async function POST(req: Request) {
   try {
+    const limit = applyRateLimit({
+      request: req,
+      key: 'auth:reset-password',
+      windowMs: 10 * 60 * 1000,
+      max: 20,
+    });
+    if (limit.limited) {
+      return NextResponse.json(
+        { error: 'Too many reset attempts. Please wait and try again.' },
+        { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } },
+      );
+    }
+
     const body = await req.json();
     const { email, token, password } = schema.parse(body);
 
@@ -30,7 +45,7 @@ export async function POST(req: Request) {
 
     const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
     if (!user) {
-      return NextResponse.json({ error: 'User not found.' }, { status: 404 });
+      return NextResponse.json({ error: 'Invalid or expired reset link.' }, { status: 400 });
     }
 
     const hashed = await bcrypt.hash(password, 12);
@@ -44,7 +59,7 @@ export async function POST(req: Request) {
     if (err?.name === 'ZodError') {
       return NextResponse.json({ error: err.errors[0]?.message || 'Invalid input.' }, { status: 400 });
     }
-    console.error('[reset-password]', err);
+    logError('Reset password failed', err, { tag: 'api/auth/reset-password' });
     return NextResponse.json({ error: 'Something went wrong.' }, { status: 500 });
   }
 }

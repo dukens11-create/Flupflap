@@ -25,6 +25,8 @@ import { prisma } from '@/lib/db';
 import { createAndSendOtp } from '@/lib/otp';
 import { isSmsOtpEnabled, SELLER_OTP_FORCE_DISABLED } from '@/lib/feature-flags';
 import { safeComparePassword } from '@/lib/password';
+import { applyRateLimit } from '@/lib/security';
+import { logError, logInfo, logWarn } from '@/lib/logger';
 
 const schema = z.object({
   email: z.string().email(),
@@ -33,6 +35,19 @@ const schema = z.object({
 
 export async function POST(req: Request) {
   try {
+    const limit = applyRateLimit({
+      request: req,
+      key: 'auth:otp-send',
+      windowMs: 10 * 60 * 1000,
+      max: 25,
+    });
+    if (limit.limited) {
+      return NextResponse.json(
+        { error: 'Too many requests. Please wait before trying again.' },
+        { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } },
+      );
+    }
+
     const body = await req.json();
     const { email, password } = schema.parse(body);
 
@@ -56,7 +71,8 @@ export async function POST(req: Request) {
     }
 
     if (user.role !== 'SELLER') {
-      console.info('[otp/send] OTP skipped: non-seller role', {
+      logInfo('OTP skipped for non-seller role', {
+        tag: 'api/auth/otp/send',
         userId: user.id,
         role: user.role,
       });
@@ -64,7 +80,8 @@ export async function POST(req: Request) {
     }
 
     if (SELLER_OTP_FORCE_DISABLED || !isSmsOtpEnabled()) {
-      console.warn('[otp/send] Seller OTP forcibly bypassed: pending Twilio A2P 10DLC approval', {
+      logWarn('Seller OTP bypassed due to feature flags', {
+        tag: 'api/auth/otp/send',
         userId: user.id,
         role: user.role,
         reason: SELLER_OTP_FORCE_DISABLED
@@ -76,7 +93,8 @@ export async function POST(req: Request) {
 
     // Seller but no phone registered — route to phone setup flow.
     if (!user.phone) {
-      console.info('[otp/send] Seller requires phone setup before OTP', {
+      logInfo('Seller requires phone setup before OTP', {
+        tag: 'api/auth/otp/send',
         userId: user.id,
         role: user.role,
       });
@@ -87,27 +105,31 @@ export async function POST(req: Request) {
 
     if (!result.ok) {
       if (result.error === 'rate_limited') {
-        console.info('[otp/send] OTP blocked by resend cooldown', { userId: user.id });
+        logInfo('OTP blocked by resend cooldown', { tag: 'api/auth/otp/send', userId: user.id });
         return NextResponse.json(
           { error: 'Please wait 60 seconds before requesting another code.' },
           { status: 429 },
         );
       }
       if (result.error === 'invalid_phone') {
-        console.warn('[otp/send] OTP blocked: invalid normalized phone', { userId: user.id });
+        logWarn('OTP blocked due to invalid normalized phone', { tag: 'api/auth/otp/send', userId: user.id });
         return NextResponse.json(
           { error: 'Your phone number on file appears to be invalid. Please update it in account settings.' },
           { status: 400 },
         );
       }
-      console.error('[otp/send] OTP send failed after Twilio attempt', { userId: user.id });
+      logError('OTP send failed after provider attempt', new Error('otp_send_failed'), {
+        tag: 'api/auth/otp/send',
+        userId: user.id,
+      });
       return NextResponse.json(
         { error: 'Failed to send verification code. Please check your phone number or contact support.' },
         { status: 500 },
       );
     }
 
-    console.info('[otp/send] OTP send succeeded', {
+    logInfo('OTP send succeeded', {
+      tag: 'api/auth/otp/send',
       userId: user.id,
       maskedPhone: result.maskedPhone,
     });
@@ -116,8 +138,8 @@ export async function POST(req: Request) {
     if (err?.name === 'ZodError') {
       return NextResponse.json({ error: 'Invalid input.' }, { status: 400 });
     }
-    console.error('[otp/send] Unexpected server error', {
-      error: err?.message ?? 'unknown_error',
+    logError('Unexpected OTP send failure', err, {
+      tag: 'api/auth/otp/send',
     });
     return NextResponse.json({ error: 'Server error.' }, { status: 500 });
   }

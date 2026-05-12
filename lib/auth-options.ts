@@ -7,6 +7,7 @@ import { recordLoginActivity } from './login-security';
 import { safeComparePassword } from './password';
 import type { NextAuthOptions } from 'next-auth';
 import type { Role } from '@prisma/client';
+import { getSiteUrl } from './seo';
 
 type AuthSessionUser = {
   id: string;
@@ -112,6 +113,25 @@ export const authOptions: NextAuthOptions = {
     })
   ],
   callbacks: {
+    async redirect({ url, baseUrl }) {
+      if (url.startsWith('/')) return `${baseUrl}${url}`;
+
+      const allowedOrigins = new Set([
+        new URL(baseUrl).origin,
+        getSiteUrl().origin,
+      ]);
+
+      try {
+        const redirectUrl = new URL(url);
+        if (allowedOrigins.has(redirectUrl.origin)) {
+          return redirectUrl.toString();
+        }
+      } catch {
+        return baseUrl;
+      }
+
+      return baseUrl;
+    },
     async jwt({ token, user, trigger }) {
       stripImageFields(token);
       if (user && isAuthSessionUser(user)) {

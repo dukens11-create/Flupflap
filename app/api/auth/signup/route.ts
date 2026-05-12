@@ -4,21 +4,42 @@ import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { getMarketplaceSettings } from '@/lib/commission';
 import { SellerStatus } from '@prisma/client';
+import { applyRateLimit, sanitizeTextInput } from '@/lib/security';
+import { logError } from '@/lib/logger';
 
 const schema = z.object({
-  name: z.string().min(1),
+  name: z.string().min(1).max(80),
   email: z.string().email(),
   password: z.string().min(8),
   role: z.enum(['CUSTOMER', 'SELLER']).default('CUSTOMER'),
-  phone: z.string().optional(),
+  phone: z.string().max(20).optional(),
 });
 
 export async function POST(req: Request) {
   try {
+    const limit = applyRateLimit({
+      request: req,
+      key: 'auth:signup',
+      windowMs: 10 * 60 * 1000,
+      max: 12,
+    });
+    if (limit.limited) {
+      return NextResponse.json(
+        { error: 'Too many signup attempts. Please try again shortly.' },
+        { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } },
+      );
+    }
+
     const body = await req.json();
     const data = schema.parse(body);
+    const sanitizedName = sanitizeTextInput(data.name, 80);
+    const sanitizedPhone = data.phone ? sanitizeTextInput(data.phone, 20) : undefined;
 
-    if (data.role === 'SELLER' && !data.phone?.trim()) {
+    if (!sanitizedName) {
+      return NextResponse.json({ error: 'Name is required.' }, { status: 400 });
+    }
+
+    if (data.role === 'SELLER' && !sanitizedPhone?.trim()) {
       return NextResponse.json(
         { error: 'A mobile phone number is required for seller accounts.' },
         { status: 400 },
@@ -39,11 +60,11 @@ export async function POST(req: Request) {
 
     await prisma.user.create({
       data: {
-        name: data.name,
+        name: sanitizedName,
         email: data.email.toLowerCase(),
         password,
         role: data.role,
-        phone: data.role === 'SELLER' ? (data.phone?.trim() ?? null) : null,
+        phone: data.role === 'SELLER' ? (sanitizedPhone?.trim() ?? null) : null,
         ...(data.role === 'SELLER'
           ? {
           sellerStatus: SellerStatus.PENDING,
@@ -62,6 +83,7 @@ export async function POST(req: Request) {
     if (err?.name === 'ZodError') {
       return NextResponse.json({ error: 'Invalid input.' }, { status: 400 });
     }
+    logError('Signup failed', err, { tag: 'api/auth/signup' });
     return NextResponse.json({ error: 'Signup failed.' }, { status: 500 });
   }
 }
