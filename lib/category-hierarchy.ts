@@ -140,7 +140,7 @@ function resolveLabelMatch(
   return null;
 }
 
-function pickLeafFromIds(
+function pickDeepestCommonNode(
   nodes: CategoryHierarchyNode[],
   lookup: Map<string, CategoryHierarchyNode>,
 ): CategoryHierarchyNode | null {
@@ -260,7 +260,7 @@ export function resolveLegacyCategorySelection(
     .map((id) => lookup.get(id))
     .filter((node): node is CategoryHierarchyNode => Boolean(node));
 
-  const leafFromIds = pickLeafFromIds(resolvedNodes, lookup);
+  const leafFromIds = pickDeepestCommonNode(resolvedNodes, lookup);
   const normalizedFromIds = getNormalizedPath(leafFromIds, lookup);
 
   let leaf = normalizedFromIds?.leaf ?? null;

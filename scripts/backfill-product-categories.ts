@@ -27,16 +27,17 @@ async function run() {
     orderBy: { updatedAt: 'desc' },
   });
 
-  const repairs = products.flatMap((product) => {
+  const analyzed = products.map((product) => {
     const resolved = resolveLegacyCategorySelection(categories, {
       categoryId: product.categoryId,
       subcategoryId: product.subcategoryId,
       categoryLabel: product.category,
     });
+    return { product, resolved };
+  });
+
+  const repairs = analyzed.flatMap(({ product, resolved }) => {
     if (resolved.stale) {
-      // Skip rows we cannot confidently map back onto the current hierarchy.
-      // These need manual review because neither the stored IDs nor the saved label
-      // provide an unambiguous repair target.
       return [];
     }
 
@@ -65,16 +66,14 @@ async function run() {
       reason: resolved.reason ?? 'Normalized stored category IDs to the current hierarchy.',
     }];
   });
-  const skipped = products.flatMap((product) => {
-    const resolved = resolveLegacyCategorySelection(categories, {
-      categoryId: product.categoryId,
-      subcategoryId: product.subcategoryId,
-      categoryLabel: product.category,
-    });
+  const skipped = analyzed.flatMap(({ product, resolved }) => {
     if (!resolved.stale) {
       return [];
     }
 
+    // Skip rows we cannot confidently map back onto the current hierarchy.
+    // These need manual review because neither the stored IDs nor the saved label
+    // provide an unambiguous repair target.
     return [{
       productId: product.id,
       title: product.title,
