@@ -196,7 +196,10 @@ async function resolveSubmittedCategorySelection(data: ProductUpdateInput) {
     categoryLabel: data.category,
   });
 
-  if (!legacyResolution.stale && legacyResolution.categoryId) {
+  // resolveLegacyCategorySelection returns categoryId=null when it cannot find a
+  // valid path (stale=true); it returns a non-null categoryId only when it
+  // successfully repaired the selection. Checking categoryId alone is sufficient.
+  if (legacyResolution.categoryId) {
     console.warn('[resolveSubmittedCategorySelection] repaired stale category selection via legacy resolution', {
       original: { categoryId: data.categoryId, subcategoryId: data.subcategoryId, label: data.category },
       repaired: { categoryId: legacyResolution.categoryId, subcategoryId: legacyResolution.subcategoryId, displayName: legacyResolution.displayName },

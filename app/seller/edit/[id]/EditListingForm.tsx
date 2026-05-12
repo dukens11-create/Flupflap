@@ -109,7 +109,7 @@ export default function EditListingForm({
     const imageUrl = String(formData.get('imageUrl') ?? '').trim();
     const resolvedImages = images.length > 0 ? images : (imageUrl ? [imageUrl] : []);
 
-    if (!isCategoryStale && !category && !submittedCategoryId && !submittedSubcategoryId) {
+    if (!isCategoryStale && !category && !submittedCategoryId) {
       setSubmitError('Please select a category.');
       return;
     }

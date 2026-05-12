@@ -264,7 +264,7 @@ async function seedCategories() {
 }
 
 /**
- * Ensures the Beauty &amp; Personal Care → Fragrance → Perfume category hierarchy
+ * Ensures the Beauty & Personal Care → Fragrance → Perfume category hierarchy
  * exists. Uses upsert so this is safe to run against existing databases that
  * were seeded before this hierarchy was added.
  */
