@@ -131,7 +131,7 @@ function getErrorMessage(err: unknown): string {
 /** Returns the trimmed string if non-empty, otherwise null. */
 function resolveOptionalId(value?: string): string | null {
   const trimmed = value?.trim();
-  return trimmed && trimmed.length > 0 ? trimmed : null;
+  return trimmed || null;
 }
 
 function redirectToEditForm(id: string, message: string) {

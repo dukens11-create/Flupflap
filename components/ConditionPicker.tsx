@@ -61,7 +61,11 @@ export default function ConditionPicker({ defaultCondition, defaultSlug, require
 
       setConditions(next);
       // Keep the selected value only if it is still in the new list.
-      setValue(prev => (next.includes(prev) ? prev : ''));
+      setValue(prev => {
+        const newVal = next.includes(prev) ? prev : '';
+        valueRef.current = newVal;
+        return newVal;
+      });
     }
 
     window.addEventListener('ff:category-change', handleCategoryChange);
