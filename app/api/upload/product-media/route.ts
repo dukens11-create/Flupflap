@@ -45,12 +45,26 @@ export async function POST(req: Request) {
 
   const contentType =
     body && typeof body === 'object' && 'contentType' in body && typeof body.contentType === 'string'
-      ? body.contentType
+      ? body.contentType.trim()
       : '';
   const fileSize =
     body && typeof body === 'object' && 'fileSize' in body && typeof body.fileSize === 'number'
       ? body.fileSize
-      : 0;
+      : Number.NaN;
+
+  if (!contentType) {
+    return NextResponse.json(
+      { success: false, message: 'Missing file metadata. Please choose your file again and retry.' },
+      { status: 400 },
+    );
+  }
+
+  if (!Number.isFinite(fileSize) || fileSize <= 0) {
+    return NextResponse.json(
+      { success: false, message: 'Invalid file size. Please choose your file again and retry.' },
+      { status: 400 },
+    );
+  }
 
   const mediaKind = getProductMediaKind(contentType);
   if (!mediaKind) {
