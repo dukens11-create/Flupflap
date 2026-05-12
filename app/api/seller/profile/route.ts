@@ -112,6 +112,10 @@ export async function PATCH(req: Request) {
     if (session.user.role !== 'SELLER') {
       return apiError('Forbidden', 403);
     }
+    const sellerId = session.user.id;
+    if (!sellerId) {
+      return apiError('Session expired. Please sign in again.', 401);
+    }
 
     let body: unknown;
     try {
@@ -131,22 +135,30 @@ export async function PATCH(req: Request) {
       shipFromName, shipFromStreet, shipFromCity, shipFromState, shipFromZip, shipFromCountry, shipFromPhone,
     } = parsed.data;
 
-    const updated = await prisma.user.update({
-      where: { id: session.user.id },
-      data: {
-        shopName,
-        shopLogoUrl: shopLogoUrl || null,
-        shopDescription: shopDescription || null,
-        shipFromName: shipFromName || null,
-        shipFromStreet: shipFromStreet || null,
-        shipFromCity: shipFromCity || null,
-        shipFromState: shipFromState || null,
-        shipFromZip: shipFromZip || null,
-        shipFromCountry: shipFromCountry || null,
-        shipFromPhone: shipFromPhone || null,
-      },
-      select: PROFILE_SELECT,
-    });
+    let updated;
+    try {
+      updated = await prisma.user.update({
+        where: { id: sellerId },
+        data: {
+          shopName,
+          shopLogoUrl: shopLogoUrl || null,
+          shopDescription: shopDescription || null,
+          shipFromName: shipFromName || null,
+          shipFromStreet: shipFromStreet || null,
+          shipFromCity: shipFromCity || null,
+          shipFromState: shipFromState || null,
+          shipFromZip: shipFromZip || null,
+          shipFromCountry: shipFromCountry || null,
+          shipFromPhone: shipFromPhone || null,
+        },
+        select: PROFILE_SELECT,
+      });
+    } catch (error) {
+      if ((error as { code?: string })?.code === 'P2025') {
+        return apiError('Seller account not found.', 404);
+      }
+      throw error;
+    }
 
     return NextResponse.json({ success: true, profile: updated });
   } catch (error) {
@@ -164,9 +176,13 @@ export async function GET(_req: Request) {
     if (session.user.role !== 'SELLER') {
       return apiError('Forbidden', 403);
     }
+    const sellerId = session.user.id;
+    if (!sellerId) {
+      return apiError('Session expired. Please sign in again.', 401);
+    }
 
     const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
+      where: { id: sellerId },
       select: PROFILE_SELECT,
     });
 

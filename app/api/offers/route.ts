@@ -18,10 +18,14 @@ export async function GET() {
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const userId = session.user.id;
+    if (!userId) {
+      return NextResponse.json({ error: 'Session expired. Please sign in again.' }, { status: 401 });
+    }
 
     const [received, sent] = await Promise.all([
       prisma.offer.findMany({
-        where: { sellerId: session.user.id },
+        where: { sellerId: userId },
         include: {
           product: { select: { id: true, title: true, imageUrl: true, priceCents: true, status: true } },
           buyer: { select: { id: true, name: true } },
@@ -29,7 +33,7 @@ export async function GET() {
         orderBy: { createdAt: 'desc' },
       }),
       prisma.offer.findMany({
-        where: { buyerId: session.user.id },
+        where: { buyerId: userId },
         include: {
           product: { select: { id: true, title: true, imageUrl: true, priceCents: true, status: true } },
           seller: { select: { id: true, name: true } },
@@ -39,8 +43,8 @@ export async function GET() {
     ]);
 
     return NextResponse.json({ received, sent });
-  } catch (err) {
-    console.error('[offers GET]', err);
+  } catch (error) {
+    console.error('[offers GET]', error);
     return NextResponse.json({ error: 'Failed to load offers.' }, { status: 500 });
   }
 }
@@ -50,6 +54,10 @@ export async function POST(req: Request) {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const buyerId = session.user.id;
+    if (!buyerId) {
+      return NextResponse.json({ error: 'Session expired. Please sign in again.' }, { status: 401 });
     }
 
     let parsed: z.infer<typeof createSchema>;
@@ -75,7 +83,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'This listing is not accepting offers.' }, { status: 400 });
     }
 
-    if (product.sellerId === session.user.id) {
+    if (product.sellerId === buyerId) {
       return NextResponse.json({ error: 'You cannot send an offer to yourself.' }, { status: 400 });
     }
 
@@ -86,7 +94,7 @@ export async function POST(req: Request) {
     const existingPendingOffer = await prisma.offer.findFirst({
       where: {
         productId: product.id,
-        buyerId: session.user.id,
+        buyerId,
         status: 'PENDING',
       },
     });
@@ -98,7 +106,7 @@ export async function POST(req: Request) {
     const offer = await prisma.offer.create({
       data: {
         productId: product.id,
-        buyerId: session.user.id,
+        buyerId,
         sellerId: product.sellerId,
         amountCents: parsed.amountCents,
         message: parsed.message || null,
@@ -118,7 +126,7 @@ export async function POST(req: Request) {
         data: { offerId: offer.id, productId: product.id },
       },
       {
-        userId: session.user.id,
+        userId: buyerId,
         type: NotificationType.OFFER,
         title: `Offer sent for ${product.title}`,
         body: `Your $${offerAmount} offer is waiting for the seller.`,
@@ -128,8 +136,8 @@ export async function POST(req: Request) {
     ]);
 
     return NextResponse.json({ offerId: offer.id }, { status: 201 });
-  } catch (err) {
-    console.error('[offers POST]', err);
+  } catch (error) {
+    console.error('[offers POST]', error);
     return NextResponse.json({ error: 'Failed to submit offer. Please try again.' }, { status: 500 });
   }
 }
