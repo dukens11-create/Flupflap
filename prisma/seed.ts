@@ -8,6 +8,7 @@ import {
 import { PrismaPg } from '@prisma/adapter-pg';
 import bcrypt from 'bcryptjs';
 import { PERFUME_SIZE_OPTIONS } from '@/lib/category-attribute-schema';
+import { CULTURAL_MARKETPLACES } from '@/lib/cultural-marketplaces';
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL ?? '' });
 const prisma = new PrismaClient({ adapter });
@@ -102,6 +103,30 @@ async function seedCategories() {
   const collectibles = await prisma.category.create({
     data: { name: 'Collectibles', slug: 'collectibles', level: 0, icon: '🏆', sortOrder: 8 },
   });
+
+  for (const marketplace of CULTURAL_MARKETPLACES) {
+    const root = await prisma.category.create({
+      data: {
+        name: marketplace.name,
+        slug: marketplace.slug,
+        aliases: marketplace.aliases,
+        level: 0,
+        icon: marketplace.icon,
+        sortOrder: marketplace.sortOrder,
+      },
+    });
+
+    await prisma.category.createMany({
+      data: marketplace.subcategories.map((subcategory, index) => ({
+        name: subcategory.name,
+        slug: subcategory.slug,
+        aliases: subcategory.aliases ?? [],
+        parentId: root.id,
+        level: 1,
+        sortOrder: index + 1,
+      })),
+    });
+  }
 
   // Electronics subcategories
   const phones = await prisma.category.create({
@@ -314,6 +339,51 @@ async function ensureBeautyCategory() {
   console.log('Beauty & Personal Care category hierarchy ensured.');
 }
 
+async function ensureCulturalMarketplaceCategories() {
+  for (const marketplace of CULTURAL_MARKETPLACES) {
+    const root = await prisma.category.upsert({
+      where: { slug: marketplace.slug },
+      update: {
+        name: marketplace.name,
+        aliases: marketplace.aliases,
+        icon: marketplace.icon,
+        sortOrder: marketplace.sortOrder,
+      },
+      create: {
+        name: marketplace.name,
+        slug: marketplace.slug,
+        aliases: marketplace.aliases,
+        level: 0,
+        icon: marketplace.icon,
+        sortOrder: marketplace.sortOrder,
+      },
+    });
+
+    for (const [index, subcategory] of marketplace.subcategories.entries()) {
+      await prisma.category.upsert({
+        where: { slug: subcategory.slug },
+        update: {
+          name: subcategory.name,
+          aliases: subcategory.aliases ?? [],
+          parentId: root.id,
+          level: 1,
+          sortOrder: index + 1,
+        },
+        create: {
+          name: subcategory.name,
+          slug: subcategory.slug,
+          aliases: subcategory.aliases ?? [],
+          parentId: root.id,
+          level: 1,
+          sortOrder: index + 1,
+        },
+      });
+    }
+  }
+
+  console.log('Cultural marketplace categories ensured.');
+}
+
 async function main(){
   const pass = await bcrypt.hash('password123', 10);
   await prisma.user.upsert({ where:{email:'guest@flupflap.local'}, update:{}, create:{name:'Guest Buyer',email:'guest@flupflap.local',password:'',role:Role.CUSTOMER} });
@@ -361,6 +431,7 @@ async function main(){
   await seedCategories();
   // Always ensure new categories exist (safe upsert for existing databases)
   await ensureBeautyCategory();
+  await ensureCulturalMarketplaceCategories();
   const count = await prisma.product.count();
   if(count===0){ await prisma.product.createMany({ data:[
     {title:'Used iPhone 13',description:'Clean used phone, unlocked, good battery.',priceCents:32900,condition:'Used',category:'Phones',imageUrl:'https://images.unsplash.com/photo-1592750475338-74b7b21085ab',status:ProductStatus.APPROVED,sellerId:seller.id,shippingCents:1299,inventory:1},

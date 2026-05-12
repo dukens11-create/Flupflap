@@ -2,6 +2,7 @@ import type { MetadataRoute } from 'next';
 import { isDatabaseConfigured, prisma } from '@/lib/db';
 import { absoluteUrl } from '@/lib/seo';
 import { DEFAULT_CATEGORY_TREE, DefaultCategoryNode } from '@/lib/default-categories';
+import { CULTURAL_MARKETPLACES } from '@/lib/cultural-marketplaces';
 
 /** Flatten a category tree into a list of category ids. */
 function flattenCategoryIds(nodes: DefaultCategoryNode[]): string[] {
@@ -37,9 +38,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     changeFrequency: 'daily' as const,
     priority: 0.8,
   }));
+  const categoryLandingRoutes: MetadataRoute.Sitemap = CULTURAL_MARKETPLACES.map((marketplace) => ({
+    url: absoluteUrl(`/category/${marketplace.slug}`),
+    lastModified: now,
+    changeFrequency: 'daily' as const,
+    priority: 0.85,
+  }));
 
   if (!isDatabaseConfigured()) {
-    return [...staticRoutes, ...categoryRoutes];
+    return [...staticRoutes, ...categoryRoutes, ...categoryLandingRoutes];
   }
 
   // ── Dynamic product and seller pages ──────────────────────────────────────
@@ -84,5 +91,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // Database unavailable at sitemap generation time — skip dynamic routes.
   }
 
-  return [...staticRoutes, ...categoryRoutes, ...productRoutes, ...sellerRoutes];
+  return [...staticRoutes, ...categoryRoutes, ...categoryLandingRoutes, ...productRoutes, ...sellerRoutes];
 }

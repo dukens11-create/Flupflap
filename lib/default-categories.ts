@@ -1,4 +1,5 @@
 import { PERFUME_SIZE_OPTIONS } from '@/lib/category-attribute-schema';
+import { CULTURAL_MARKETPLACES } from '@/lib/cultural-marketplaces';
 
 type FieldDef = {
   name: string;
@@ -166,4 +167,26 @@ export const DEFAULT_CATEGORY_TREE: DefaultCategoryNode[] = [
       node({ id: 'beauty-fragrance-perfume', name: 'Perfume', slug: 'beauty-fragrance-perfume', aliases: ['perfume', 'parfum', 'eau de parfum', 'edp', 'eau de toilette', 'edt', 'fragrance', 'cologne', 'scent', 'body mist'], parentId: 'beauty-fragrance', level: 2, icon: null, sortOrder: 1, attributeSchema: PERFUME_FIELDS }),
     ] }),
   ] }),
+  ...CULTURAL_MARKETPLACES.map((marketplace) => node({
+    id: marketplace.id,
+    name: marketplace.name,
+    slug: marketplace.slug,
+    aliases: marketplace.aliases,
+    parentId: null,
+    level: 0,
+    icon: marketplace.icon,
+    sortOrder: marketplace.sortOrder,
+    attributeSchema: null,
+    children: marketplace.subcategories.map((subcategory, index) => node({
+      id: subcategory.id,
+      name: subcategory.name,
+      slug: subcategory.slug,
+      aliases: subcategory.aliases ?? [],
+      parentId: marketplace.id,
+      level: 1,
+      icon: null,
+      sortOrder: index + 1,
+      attributeSchema: null,
+    })),
+  })),
 ];

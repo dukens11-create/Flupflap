@@ -12,6 +12,7 @@ import { ArrowRight } from 'lucide-react';
 import { getSellerResponseStatsForSellers } from '@/lib/messages';
 import { authOptions } from '@/lib/auth-options';
 import { getRoleDefaultPath, normalizeExperienceRole } from '@/lib/role-experience';
+import { CULTURAL_MARKETPLACES } from '@/lib/cultural-marketplaces';
 
 export const dynamic = 'force-dynamic';
 
@@ -115,6 +116,118 @@ function productMatchesSearch(product: SearchableProduct, query?: string) {
   collectStringValues(product.productAttributes, searchableValues);
 
   return searchableValues.some((value) => value.toLocaleLowerCase().includes(normalizedQuery));
+}
+
+async function CulturalMarketplaceHighlights() {
+  if (!isDatabaseConfigured()) return null;
+
+  try {
+    const categories = await prisma.category.findMany({
+      where: { slug: { in: CULTURAL_MARKETPLACES.map((marketplace) => marketplace.slug) } },
+      select: { id: true, slug: true },
+    });
+
+    if (categories.length === 0) return null;
+
+    const categoryBySlug = new Map(categories.map((category) => [category.slug, category.id]));
+    const sections = await Promise.all(
+      CULTURAL_MARKETPLACES.map(async (marketplace) => {
+        const categoryId = categoryBySlug.get(marketplace.slug);
+        if (!categoryId) return null;
+
+        const products = await prisma.product.findMany({
+          where: {
+            status: 'APPROVED',
+            inventory: { gt: 0 },
+            categoryId,
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 4,
+          include: {
+            seller: {
+              select: {
+                id: true,
+                name: true,
+                shopName: true,
+                phoneVerified: true,
+                verificationSubmission: {
+                  select: {
+                    status: true,
+                    eligibleToListAt: true,
+                    adminFallbackStatus: true,
+                  },
+                },
+              },
+            },
+            promotions: {
+              where: { status: 'ACTIVE', expiresAt: { gt: new Date() } },
+              orderBy: { expiresAt: 'desc' },
+              take: 1,
+            },
+            cartInterest: {
+              select: { totalAdds: true },
+            },
+          },
+        });
+
+        if (products.length === 0) return null;
+
+        const sellerResponseRates = await getSellerResponseStatsForSellers(getUniqueSellerIds(products));
+
+        return {
+          marketplace,
+          products: products.map((product) => ({
+            ...product,
+            activePromotion: product.promotions[0] ?? null,
+            sellerResponseRate: sellerResponseRates.get(product.sellerId)?.responseRate ?? null,
+          })),
+        };
+      }),
+    );
+
+    const visibleSections = sections.filter(Boolean) as Array<{
+      marketplace: (typeof CULTURAL_MARKETPLACES)[number];
+      products: any[];
+    }>;
+
+    if (visibleSections.length === 0) return null;
+
+    return (
+      <section className="space-y-5">
+        {visibleSections.map((section) => (
+          <div
+            key={section.marketplace.slug}
+            className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6"
+          >
+            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-amber-700">
+                  {section.marketplace.name}
+                </p>
+                <h2 className="mt-1 text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">
+                  {section.marketplace.featuredTitle}
+                </h2>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+                  {section.marketplace.featuredSubtitle}
+                </p>
+              </div>
+              <Link href={`/category/${section.marketplace.slug}`} className="btn-brand-outline">
+                Explore {section.marketplace.name}
+              </Link>
+            </div>
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+              {section.products.map((product) => (
+                <ProductCard key={product.id} p={product} />
+              ))}
+            </div>
+          </div>
+        ))}
+      </section>
+    );
+  } catch (err) {
+    console.error('[HomePage] failed to load cultural marketplace highlights', err);
+    return null;
+  }
 }
 
 async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?: Record<string, string | number>) => string }) {
@@ -370,6 +483,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   if (experienceRole === 'admin') {
     redirect(getRoleDefaultPath(session?.user?.role));
   }
+  const culturalHighlights = await CulturalMarketplaceHighlights();
 
   return (
     <main className="space-y-6 pb-6">
@@ -409,6 +523,8 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
           <ProductGrid sp={sp} t={t} />
         </Suspense>
       </section>
+
+      {culturalHighlights}
 
       <p className="text-center text-xs text-slate-500 sm:text-sm">
         Verified sellers. Secure payments. Buyer protection.
