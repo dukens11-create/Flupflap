@@ -201,8 +201,8 @@ async function resolveSubmittedCategorySelection(data: ProductUpdateInput) {
   // successfully repaired the selection. Checking categoryId alone is sufficient.
   if (legacyResolution.categoryId) {
     console.warn('[resolveSubmittedCategorySelection] repaired stale category selection via legacy resolution', {
-      original: { categoryId: data.categoryId, subcategoryId: data.subcategoryId, label: data.category },
-      repaired: { categoryId: legacyResolution.categoryId, subcategoryId: legacyResolution.subcategoryId, displayName: legacyResolution.displayName },
+      original: { categoryId: data.categoryId ?? null, subcategoryId: data.subcategoryId ?? null, label: data.category ?? null },
+      repaired: { categoryId: legacyResolution.categoryId, subcategoryId: legacyResolution.subcategoryId ?? null, displayName: legacyResolution.displayName ?? null },
     });
     return {
       submitted: true,
@@ -216,9 +216,9 @@ async function resolveSubmittedCategorySelection(data: ProductUpdateInput) {
   // Legacy resolution also failed. Return with submitted=false so the caller
   // preserves the existing product category rather than hard-blocking the save.
   console.warn('[resolveSubmittedCategorySelection] could not resolve submitted category — preserving existing', {
-    categoryId: data.categoryId,
-    subcategoryId: data.subcategoryId,
-    label: data.category,
+    categoryId: data.categoryId ?? null,
+    subcategoryId: data.subcategoryId ?? null,
+    label: data.category ?? null,
     validationMessage: validatedCategory.message,
   });
   return {
