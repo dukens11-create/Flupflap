@@ -34,9 +34,19 @@ Sentry.init({
   // Strip sensitive query params from breadcrumbs/URLs automatically.
   beforeBreadcrumb(breadcrumb) {
     if (breadcrumb.category === 'xhr' || breadcrumb.category === 'fetch') {
-      const url: string = breadcrumb.data?.url ?? '';
-      // Never record auth or Stripe callback URLs.
-      if (url.includes('/api/auth') || url.includes('stripe.com')) {
+      const urlStr: string = breadcrumb.data?.url ?? '';
+      // Never record auth API calls or external Stripe requests in breadcrumbs.
+      try {
+        const parsed = new URL(urlStr, 'https://placeholder.invalid');
+        if (
+          parsed.pathname.startsWith('/api/auth') ||
+          parsed.hostname === 'api.stripe.com' ||
+          parsed.hostname.endsWith('.stripe.com')
+        ) {
+          return null;
+        }
+      } catch {
+        // If the URL is unparseable, drop it to be safe.
         return null;
       }
     }
