@@ -128,6 +128,12 @@ function getErrorMessage(err: unknown): string {
   return 'Unknown error.';
 }
 
+/** Returns the trimmed string if non-empty, otherwise null. */
+function resolveOptionalId(value?: string): string | null {
+  const trimmed = value?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : null;
+}
+
 function redirectToEditForm(id: string, message: string) {
   const url = new URL(`/seller/edit/${id}`, getSiteUrl());
   url.searchParams.set('error', message);
@@ -306,8 +312,7 @@ export async function POST(
     }
 
     // Validate categoryId before attempting the DB update to avoid FK constraint errors.
-    const categoryIdTrimmed = data.categoryId?.trim();
-    const resolvedCategoryId = categoryIdTrimmed && categoryIdTrimmed.length > 0 ? categoryIdTrimmed : null;
+    const resolvedCategoryId = resolveOptionalId(data.categoryId);
     if (resolvedCategoryId) {
       const categoryCheck = await prisma.category.findUnique({
         where: { id: resolvedCategoryId },
@@ -325,8 +330,7 @@ export async function POST(
     }
 
     // Validate subcategoryId if provided
-    const subcategoryIdTrimmed = data.subcategoryId?.trim();
-    const resolvedSubcategoryId = subcategoryIdTrimmed && subcategoryIdTrimmed.length > 0 ? subcategoryIdTrimmed : null;
+    const resolvedSubcategoryId = resolveOptionalId(data.subcategoryId);
     if (resolvedSubcategoryId) {
       const subCategoryCheck = await prisma.category.findUnique({
         where: { id: resolvedSubcategoryId },
@@ -501,8 +505,7 @@ export async function PATCH(
     }
 
     // Validate categoryId before attempting the DB update to avoid FK constraint errors.
-    const patchCategoryIdTrimmed = data.categoryId?.trim();
-    const resolvedCategoryId = patchCategoryIdTrimmed && patchCategoryIdTrimmed.length > 0 ? patchCategoryIdTrimmed : null;
+    const resolvedCategoryId = resolveOptionalId(data.categoryId);
     if (resolvedCategoryId) {
       const categoryCheck = await prisma.category.findUnique({
         where: { id: resolvedCategoryId },
@@ -518,8 +521,7 @@ export async function PATCH(
     }
 
     // Validate subcategoryId if provided
-    const patchSubcategoryIdTrimmed = data.subcategoryId?.trim();
-    const resolvedSubcategoryId = patchSubcategoryIdTrimmed && patchSubcategoryIdTrimmed.length > 0 ? patchSubcategoryIdTrimmed : null;
+    const resolvedSubcategoryId = resolveOptionalId(data.subcategoryId);
     if (resolvedSubcategoryId) {
       const subCategoryCheck = await prisma.category.findUnique({
         where: { id: resolvedSubcategoryId },

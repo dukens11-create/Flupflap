@@ -34,9 +34,6 @@ export default function ConditionPicker({ defaultCondition, defaultSlug, require
   // Keep a ref to the current value so the event handler can read it without
   // needing to be re-registered on every value change.
   const valueRef = useRef(value);
-  useEffect(() => {
-    valueRef.current = value;
-  }, [value]);
   // Track whether the initial category-load event has been handled yet.
   // CategoryPicker fires ff:category-change once after async category data loads.
   // We preserve the server-saved condition on that first event so it does not
@@ -80,7 +77,11 @@ export default function ConditionPicker({ defaultCondition, defaultSlug, require
         name="condition"
         className="input"
         value={value}
-        onChange={e => setValue(e.target.value)}
+        onChange={e => {
+          const next = e.target.value;
+          valueRef.current = next;
+          setValue(next);
+        }}
         required={required}
       >
         <option value="">Select…</option>
