@@ -727,3 +727,58 @@ From the **Admin Dashboard** (`/admin`):
 - Click **"View →"** next to any user to open their detail page.
 - From a seller's detail page, click **"Seller Moderation →"** to go directly
   to the moderation panel for that seller.
+
+---
+
+## Error monitoring with Sentry
+
+FlupFlap supports [Sentry](https://sentry.io) for production error monitoring. Sentry captures:
+- Unhandled exceptions in Next.js Server Components and API routes
+- Client-side JavaScript errors caught by the global `error.tsx` boundary
+- Errors in edge middleware
+
+### Setting up Sentry
+
+1. Create a free Sentry project at [sentry.io](https://sentry.io).
+2. In **Settings → Client Keys (DSN)**, copy the DSN.
+3. Add these environment variables in Render → Environment:
+
+| Variable | Description |
+|---|---|
+| `SENTRY_DSN` | Server-side DSN (used by API routes and Server Components) |
+| `NEXT_PUBLIC_SENTRY_DSN` | Client-side DSN (same value; safe to expose to browsers) |
+| `SENTRY_ENVIRONMENT` | Environment label, e.g. `production` or `staging` |
+| `NEXT_PUBLIC_SENTRY_ENVIRONMENT` | Same value for the browser SDK |
+| `SENTRY_ORG` | Your Sentry organization slug (required for source-map upload) |
+| `SENTRY_PROJECT` | Your Sentry project slug (required for source-map upload) |
+| `SENTRY_AUTH_TOKEN` | Auth token from **Settings → Auth Tokens** (required for source-map upload) |
+
+4. Redeploy the service. Sentry will start capturing errors immediately.
+
+> **Note:** The app runs normally without Sentry configured — all errors continue to appear in Render logs. Sentry is a supplementary observability layer, not a hard dependency.
+
+### Structured server logs
+
+All critical server errors (checkout, webhooks, shipping, etc.) are emitted as structured JSON log lines via `lib/logger.ts`. Lines follow this format:
+
+```
+[ERROR] [checkout/cart] Stripe cart checkout session failed {"errName":"Error","errMessage":"...","action":"createCheckoutSession"}
+[WARN]  [stripe/webhook] Stripe webhook signature verification failed {"message":"No signatures found..."}
+```
+
+Use Render's **Logs** tab and filter by `[ERROR]` or a specific tag (e.g. `[checkout`) to quickly isolate failures.
+
+---
+
+## Pre-deploy QA checklist
+
+Before every production deploy, run through the checklist in [`docs/QA_CHECKLIST.md`](docs/QA_CHECKLIST.md). It covers:
+
+- Login / logout (buyer, seller OTP, admin)
+- Buyer checkout (cart + buy-now)
+- Seller listing create / edit / delete
+- Image upload
+- Shipping rate calculation
+- Stripe checkout and webhooks
+- Admin approve / reject (KYC and listings)
+- Error monitoring and observability

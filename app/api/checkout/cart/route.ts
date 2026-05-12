@@ -7,6 +7,7 @@ import { buildCheckoutCommissionItems, getMarketplaceSettings } from '@/lib/comm
 import { checkoutErrorResponse } from '@/lib/checkout-errors';
 import { isSellerVerificationApproved } from '@/lib/seller-verification';
 import { getMissingPackageProductTitles } from '@/lib/product-package';
+import { logError } from '@/lib/logger';
 
 const SHIPPING_LINE_ITEM_NAME = 'Shipping';
 
@@ -434,7 +435,7 @@ export async function POST(req: Request) {
       warningCode: sellerReconnectRequired ? 'seller_reconnect_required' : null,
     });
   } catch (err: any) {
-    console.error('[checkout/cart]', err);
+    logError('Stripe cart checkout session failed', err, { tag: 'checkout/cart', action: 'createCheckoutSession' });
     const reason = classifyStripeError(err).reason;
     return checkoutErrorResponse(reason);
   }

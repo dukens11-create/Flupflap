@@ -436,11 +436,22 @@ export default function CheckoutPage() {
     rateRequestVersionRef.current = requestVersion;
     setFetchingRates(false);
     setRateError('');
-    setRateGroups([]);
+    // Preserve existing rateGroups for visual continuity while the new fetch is
+    // pending. They will be replaced (or cleared) once the debounced request
+    // completes. Clearing selectedRates immediately is intentional: a stale
+    // rate selection is unsafe to carry forward to a different address.
     setSelectedRates([]);
     setRatesFetched(false);
 
-    if (!hasCalculatedShipping || allPickup || !buyerAddressComplete) {
+    if (!hasCalculatedShipping || allPickup) {
+      // Shipping is not needed – clear any leftover groups.
+      setRateGroups([]);
+      return undefined;
+    }
+
+    if (!buyerAddressComplete) {
+      // Address is incomplete; leave stale groups visible for reference but do
+      // not start a new fetch until the address is complete.
       return undefined;
     }
 
@@ -462,6 +473,7 @@ export default function CheckoutPage() {
 
         if (!res.ok) {
           setRateError(data.error ?? 'Shipping rate unavailable. Please check address or package details.');
+          setRateGroups([]);
           setRatesFetched(true);
           return;
         }
@@ -492,6 +504,7 @@ export default function CheckoutPage() {
       } catch {
         if (requestVersion !== rateRequestVersionRef.current) return;
         setRateError('Shipping rate unavailable. Please check address or package details.');
+        setRateGroups([]);
         setRatesFetched(true);
       } finally {
         if (requestVersion === rateRequestVersionRef.current) {
@@ -967,7 +980,7 @@ export default function CheckoutPage() {
             </div>
           </div>
 
-          {fetchingRates && (
+          {fetchingRates && rateGroups.length === 0 && (
             <p className="text-sm text-slate-600 font-medium">Calculating shipping…</p>
           )}
 
@@ -977,47 +990,58 @@ export default function CheckoutPage() {
             </p>
           )}
 
-          {/* Rate options per seller group */}
-          {rateGroups.map(group => (
-            <div key={group.sellerId} className="rounded-xl border border-slate-200 p-3 space-y-2">
-              {rateGroups.length > 1 && (
-                <p className="text-xs font-semibold text-slate-600">Seller: {group.sellerName}</p>
+          {/* Rate options per seller group; dimmed while stale rates are being refreshed */}
+          {rateGroups.length > 0 && (
+            <div
+              className={fetchingRates ? 'opacity-50 pointer-events-none' : undefined}
+              aria-disabled={fetchingRates || undefined}
+              {...(fetchingRates ? { inert: true } : {})}
+            >
+              {fetchingRates && (
+                <p className="text-xs text-slate-500 mb-2">Refreshing shipping rates…</p>
               )}
-              {group.rates.length === 0 && (
-                <p className="text-xs text-red-600">No rates available for this seller.</p>
-              )}
-              {group.rates.map(rate => {
-                const selected = selectedRates.find(
-                  r => r.sellerId === group.sellerId && r.rateId === rate.id,
-                );
-                const isCheapest = rate.id === group.rates[0]?.id;
-                const isFastest = rate.deliveryDays !== null && rate.deliveryDays === group.minDeliveryDays;
-                return (
-                  <label key={rate.id} className="flex items-center justify-between gap-3 text-sm cursor-pointer">
-                    <span className="flex items-center gap-2">
-                      <input
-                        type="radio"
-                        name={`rate-${group.sellerId}`}
-                        checked={!!selected}
-                        onChange={() => handleSelectRate(group.sellerId, group.shipmentId, rate)}
-                      />
-                      <span>
-                        <span className="font-medium">{rate.carrier}</span>
-                        {' · '}
-                        {rate.service}
-                        {isCheapest && <span className="ml-1 text-[10px] bg-green-100 text-green-700 rounded-full px-1.5 py-0.5 font-semibold">Best price</span>}
-                        {isFastest && !isCheapest && <span className="ml-1 text-[10px] bg-blue-100 text-blue-700 rounded-full px-1.5 py-0.5 font-semibold">Fastest</span>}
-                      </span>
-                    </span>
-                    <span className="text-slate-600 text-right flex-shrink-0">
-                      ${rate.rate}
-                      {rate.deliveryDays !== null ? <span className="text-slate-400 text-xs ml-1">(Est. {rate.deliveryDays} day{rate.deliveryDays === 1 ? '' : 's'})</span> : null}
-                    </span>
-                  </label>
-                );
-              })}
+              {rateGroups.map(group => (
+                <div key={group.sellerId} className="rounded-xl border border-slate-200 p-3 space-y-2 mb-2 last:mb-0">
+                  {rateGroups.length > 1 && (
+                    <p className="text-xs font-semibold text-slate-600">Seller: {group.sellerName}</p>
+                  )}
+                  {group.rates.length === 0 && (
+                    <p className="text-xs text-red-600">No rates available for this seller.</p>
+                  )}
+                  {group.rates.map(rate => {
+                    const selected = selectedRates.find(
+                      r => r.sellerId === group.sellerId && r.rateId === rate.id,
+                    );
+                    const isCheapest = rate.id === group.rates[0]?.id;
+                    const isFastest = rate.deliveryDays !== null && rate.deliveryDays === group.minDeliveryDays;
+                    return (
+                      <label key={rate.id} className="flex items-center justify-between gap-3 text-sm cursor-pointer">
+                        <span className="flex items-center gap-2">
+                          <input
+                            type="radio"
+                            name={`rate-${group.sellerId}`}
+                            checked={!!selected}
+                            onChange={() => handleSelectRate(group.sellerId, group.shipmentId, rate)}
+                          />
+                          <span>
+                            <span className="font-medium">{rate.carrier}</span>
+                            {' · '}
+                            {rate.service}
+                            {isCheapest && <span className="ml-1 text-[10px] bg-green-100 text-green-700 rounded-full px-1.5 py-0.5 font-semibold">Best price</span>}
+                            {isFastest && !isCheapest && <span className="ml-1 text-[10px] bg-blue-100 text-blue-700 rounded-full px-1.5 py-0.5 font-semibold">Fastest</span>}
+                          </span>
+                        </span>
+                        <span className="text-slate-600 text-right flex-shrink-0">
+                          ${rate.rate}
+                          {rate.deliveryDays !== null ? <span className="text-slate-400 text-xs ml-1">(Est. {rate.deliveryDays} day{rate.deliveryDays === 1 ? '' : 's'})</span> : null}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              ))}
             </div>
-          ))}
+          )}
 
           {selectedRates.length > 0 && (
             <div className="rounded-xl border border-slate-200 p-3 space-y-2">

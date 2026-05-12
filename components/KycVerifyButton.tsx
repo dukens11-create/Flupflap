@@ -1,45 +1,56 @@
 'use client';
 
 import { useState } from 'react';
-import { readApiMessage } from '@/lib/read-api-message';
 
 export default function KycVerifyButton({ isRejected = false }: { isRejected?: boolean }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   async function handleVerify() {
+    if (loading) return;
     setLoading(true);
     setError(null);
+    setStatusMessage('Redirecting to secure identity verification...');
     try {
       const res = await fetch('/api/seller/verification/initiate', {
         method: 'POST',
       });
+      const data = await res.json().catch(() => null);
       if (!res.ok) {
-        setError(await readApiMessage(res, 'Unable to start verification. Please try again.'));
+        const fallbackMessage =
+          res.status === 409
+            ? 'Your identity is already verified.'
+            : res.status === 401 || res.status === 403
+              ? 'Your session expired. Please sign in again and retry.'
+              : 'Unable to start verification. Please try again.';
+        setError(data?.error ?? fallbackMessage);
+        setStatusMessage(null);
         setLoading(false);
         return;
       }
-      const data = await res.json();
       if (!data?.sessionUrl) {
         setError('Stripe did not return a verification URL. Please try again.');
+        setStatusMessage(null);
         setLoading(false);
         return;
       }
       window.location.href = data.sessionUrl;
     } catch {
       setError('Network error. Please check your connection and try again.');
+      setStatusMessage(null);
       setLoading(false);
     }
   }
 
   return (
     <div className="mt-6">
-      {loading ? (
+      {statusMessage ? (
         <p className="text-sm text-slate-600 animate-pulse">
-          Redirecting to secure identity verification...
+          {statusMessage}
         </p>
       ) : (
-        <button className="btn-primary" onClick={handleVerify} disabled={loading}>
+        <button type="button" className="btn-primary" onClick={handleVerify} disabled={loading}>
           {isRejected ? 'Re-submit Verification' : 'Verify Identity'}
         </button>
       )}

@@ -5,45 +5,87 @@ import { prisma } from '@/lib/db';
 import { z } from 'zod';
 import { apiError } from '@/lib/api-response';
 
-const twoLetterCodeOrEmpty = z.union([z.literal(''), z.string().trim().min(2).max(2)]).optional();
-
 const schema = z.object({
   shopName: z.string().trim().min(2).max(80),
-  shopLogoUrl: z.string().url().max(2000).optional().or(z.literal('')),
+  shopLogoUrl: z.string().trim().url().max(2000).optional().or(z.literal('')),
   shopDescription: z.string().trim().max(500).optional().or(z.literal('')),
   // Ship-from address for live shipping rate calculation
   shipFromName: z.string().trim().max(100).optional().or(z.literal('')),
   shipFromStreet: z.string().trim().max(200).optional().or(z.literal('')),
   shipFromCity: z.string().trim().max(100).optional().or(z.literal('')),
-  shipFromState: twoLetterCodeOrEmpty,
+  shipFromState: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .refine((value) => value === '' || /^[A-Z]{2}$/.test(value), {
+      message: 'Use a 2-letter state code.',
+    })
+    .optional()
+    .or(z.literal('')),
   shipFromZip: z.string().trim().max(20).optional().or(z.literal('')),
-  shipFromCountry: twoLetterCodeOrEmpty,
+  shipFromCountry: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .refine((value) => value === '' || /^[A-Z]{2}$/.test(value), {
+      message: 'Use a 2-letter country code.',
+    })
+    .optional()
+    .or(z.literal('')),
   shipFromPhone: z.string().trim().max(30).optional().or(z.literal('')),
-}).superRefine((data, ctx) => {
-  const hasAnyShipFrom = [
-    data.shipFromStreet,
-    data.shipFromCity,
-    data.shipFromState,
-    data.shipFromZip,
-    data.shipFromCountry,
-  ].some((value) => !!value?.trim());
+}).superRefine((value, ctx) => {
+  const hasAnyShipFromField = Boolean(
+    value.shipFromName
+    || value.shipFromStreet
+    || value.shipFromCity
+    || value.shipFromState
+    || value.shipFromZip
+    || value.shipFromCountry
+    || value.shipFromPhone,
+  );
+  if (!hasAnyShipFromField) return;
 
-  if (!hasAnyShipFrom) return;
-
-  if (!data.shipFromStreet?.trim()) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['shipFromStreet'], message: 'Street is required when ship-from address is provided.' });
+  if (!value.shipFromName) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['shipFromName'],
+      message: 'Add a ship-from full name or business name.',
+    });
   }
-  if (!data.shipFromCity?.trim()) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['shipFromCity'], message: 'City is required when ship-from address is provided.' });
+  if (!value.shipFromStreet) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['shipFromStreet'],
+      message: 'Add a ship-from street address.',
+    });
   }
-  if (!data.shipFromState?.trim()) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['shipFromState'], message: 'State is required when ship-from address is provided.' });
+  if (!value.shipFromCity) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['shipFromCity'],
+      message: 'Add a ship-from city.',
+    });
   }
-  if (!data.shipFromZip?.trim()) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['shipFromZip'], message: 'ZIP code is required when ship-from address is provided.' });
+  if (!value.shipFromState) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['shipFromState'],
+      message: 'Add a 2-letter ship-from state code.',
+    });
   }
-  if (!data.shipFromCountry?.trim()) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['shipFromCountry'], message: 'Country is required when ship-from address is provided.' });
+  if (!value.shipFromZip) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['shipFromZip'],
+      message: 'Add a ship-from ZIP or postal code.',
+    });
+  }
+  if (!value.shipFromCountry) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['shipFromCountry'],
+      message: 'Add a 2-letter ship-from country code.',
+    });
   }
 });
 

@@ -103,14 +103,14 @@ export async function POST(req: Request) {
       return apiError('Please provide a complete shipping address.', 400);
     }
 
-    console.log("Shippo token exists:", !!process.env.SHIPPO_API_TOKEN);
+    console.log('Shippo token exists:', !!process.env.SHIPPO_API_TOKEN);
     const buyerAddressForLog = {
       ...buyerAddress,
       street1: '[redacted]',
       street2: buyerAddress.street2 ? '[redacted]' : '[not provided]',
       zip: '[redacted]',
     };
-    console.log("Ship-to address:", buyerAddressForLog);
+    console.log('Ship-to address:', buyerAddressForLog);
 
     // Load products with their seller shipping profile and dimensions
     const products = await prisma.product.findMany({
@@ -171,12 +171,6 @@ export async function POST(req: Request) {
         continue;
       }
       const fromAddress = resolveFromAddress(seller);
-      const sellerAddress = {
-        ...fromAddress,
-        street1: '[redacted]',
-        zip: '[redacted]',
-      };
-      console.log("Ship-from address:", sellerAddress);
 
       // Validate that we have a ship-from address
       if (!fromAddress.street1 || !fromAddress.city || !fromAddress.state || !fromAddress.zip) {
@@ -204,14 +198,6 @@ export async function POST(req: Request) {
       const maxWidth = sellerProducts.reduce((m, p) => Math.max(m, p.widthIn ?? 0), 0);
       const maxHeight = sellerProducts.reduce((m, p) => Math.max(m, p.heightIn ?? 0), 0);
 
-      const parcel = {
-        weightOz: totalWeightOz,
-        lengthIn: maxLength,
-        widthIn: maxWidth,
-        heightIn: maxHeight,
-      };
-      console.log("Package:", parcel);
-
       // Skip if no package dimensions available
       if (!totalWeightOz || !maxLength || !maxWidth || !maxHeight) {
         errors.push(
@@ -219,6 +205,14 @@ export async function POST(req: Request) {
         );
         continue;
       }
+
+      const parcel = {
+        weightValue: totalWeightOz,
+        weightUnit: 'oz' as const,
+        lengthIn: maxLength,
+        widthIn: maxWidth,
+        heightIn: maxHeight,
+      };
 
       try {
         const result = await createShipmentRates({
@@ -232,11 +226,7 @@ export async function POST(req: Request) {
             country: buyerAddress.country || 'US',
           },
           fromAddress,
-          weightValue: totalWeightOz,
-          weightUnit: 'oz',
-          lengthIn: maxLength,
-          widthIn: maxWidth,
-          heightIn: maxHeight,
+          ...parcel,
         });
         const rates = result.rates.map((rate) => ({
           id: rate.id,
@@ -245,7 +235,6 @@ export async function POST(req: Request) {
           rate: rate.rate,
           deliveryDays: rate.deliveryDays,
         }));
-        console.log("Shippo rates:", rates);
         if (!rates.length) {
           throw new Error('No supported shipping rates returned.');
         }

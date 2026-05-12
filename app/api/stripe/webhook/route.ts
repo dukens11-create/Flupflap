@@ -16,6 +16,7 @@ import { isSellerVerificationApproved } from '@/lib/seller-verification';
 import { createNotification, createNotifications, type CreateNotificationInput } from '@/lib/notifications';
 import { purchaseShipmentRate, buildTrackingUrl } from '@/lib/shipping';
 import { sendEmail } from '@/lib/email';
+import { logError, logWarn } from '@/lib/logger';
 
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -37,6 +38,7 @@ export async function POST(req: Request) {
     event = stripe.webhooks.constructEvent(body, sig, secret);
   } catch (err: any) {
     console.error('[webhook] signature error:', err.message);
+    logWarn('Stripe webhook signature verification failed', { tag: 'stripe/webhook', message: err.message });
     return new NextResponse(`Webhook error: ${err.message}`, { status: 400 });
   }
 
@@ -648,6 +650,7 @@ export async function POST(req: Request) {
         }
       } catch (err) {
         console.error('[webhook] transfer creation failed:', err);
+        logError('Stripe transfer creation failed', err, { tag: 'stripe/webhook', action: 'createTransfer' });
       }
     }
 
@@ -708,6 +711,7 @@ export async function POST(req: Request) {
           purchasedLabels.push({ sellerId: group.sellerId, result, group });
         } catch (labelErr: any) {
           console.error('[webhook] auto-label purchase failed for shipment', group.shipmentId, labelErr?.message ?? labelErr);
+          logError('Auto-label purchase failed', labelErr, { tag: 'stripe/webhook', action: 'autoLabelPurchase', shipmentId: group.shipmentId });
           // Non-fatal: the order is created; seller can still manually purchase a label
         }
       }

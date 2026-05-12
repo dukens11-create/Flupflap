@@ -185,3 +185,5 @@ A placeholder `taxCents` field exists. For launch, connect Stripe Tax or TaxJar/
 - Add rate limiting and bot protection
 - Have an attorney review all legal pages
 - Test Stripe webhooks before accepting real payments
+- Configure Sentry for production error monitoring (see `DEPLOYMENT.md` → *Error monitoring with Sentry*)
+- Run through the full [pre-deploy QA checklist](docs/QA_CHECKLIST.md) before every release

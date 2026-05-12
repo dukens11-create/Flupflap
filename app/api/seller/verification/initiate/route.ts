@@ -14,29 +14,52 @@ import {
 } from '@/lib/kyc/providers';
 import { classifyStripeError } from '@/lib/stripe';
 
-export async function POST(req: Request) {
+export async function POST() {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== 'SELLER') {
+    if (!session?.user || session.user.role !== 'SELLER' || !session.user.id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     if (!session.user.id) {
       return NextResponse.json({ error: 'Seller account is invalid.' }, { status: 400 });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: {
-        id: true,
-        phone: true,
-        stripeAccountId: true,
-      },
-    });
+    const [user, existingVerification] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: {
+          id: true,
+          phone: true,
+          stripeAccountId: true,
+        },
+      }),
+      prisma.sellerVerification.findUnique({
+        where: { sellerId: session.user.id },
+        select: {
+          status: true,
+          eligibleToListAt: true,
+          adminFallbackStatus: true,
+          kycStartedAt: true,
+        },
+      }),
+    ]);
     if (!user) {
       return NextResponse.json({ error: 'Seller not found.' }, { status: 404 });
     }
+    if (
+      existingVerification?.status === SellerVerificationStatus.APPROVED
+      && (existingVerification.eligibleToListAt || existingVerification.adminFallbackStatus === SellerAdminFallbackStatus.APPROVED)
+    ) {
+      return NextResponse.json(
+        {
+          error: 'Your identity is already verified. No additional submission is needed.',
+          code: 'SELLER_ALREADY_VERIFIED',
+        },
+        { status: 409 },
+      );
+    }
 
-    const now = new Date();
+    const kycStartedAt = existingVerification?.kycStartedAt ?? new Date();
     const identitySession = await createStripeIdentitySession(session.user.id);
     const providerVerificationId = identitySession.id;
     const verificationUrl = identitySession.url ?? null;
@@ -47,14 +70,14 @@ export async function POST(req: Request) {
       update: {
         provider: SellerKycProvider.STRIPE,
         providerStatus: 'pending',
-        providerAccountId: providerAccountId ?? undefined,
+        providerAccountId,
         providerVerificationId,
         status: SellerVerificationStatus.PENDING,
         rejectionReason: null,
         adminFallbackStatus: SellerAdminFallbackStatus.PENDING_REVIEW,
         adminFallbackReason: null,
         eligibleToListAt: null,
-        kycStartedAt: now,
+        kycStartedAt,
         phoneNumber: user.phone ?? '',
         phoneVerificationStatus: user.phone
           ? SellerPhoneVerificationStatus.PENDING
@@ -81,7 +104,7 @@ export async function POST(req: Request) {
         selfieImagePublicId: '',
         rejectionReason: null,
         adminFallbackStatus: SellerAdminFallbackStatus.PENDING_REVIEW,
-        kycStartedAt: now,
+        kycStartedAt,
       },
     });
 
@@ -120,13 +143,16 @@ export async function POST(req: Request) {
       code: classified.code,
       statusCode: classified.statusCode,
     });
+    const statusCode = typeof classified.statusCode === 'number'
+      ? classified.statusCode
+      : 500;
     return NextResponse.json(
       {
         error: 'Unable to start seller verification right now.',
         code: 'STRIPE_IDENTITY_SESSION_FAILED',
         reason: classified.reason,
       },
-      { status: 500 },
+      { status: statusCode },
     );
   }
 }
