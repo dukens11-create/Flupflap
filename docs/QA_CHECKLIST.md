@@ -42,6 +42,8 @@ Use this checklist before every production deploy (or after a significant code c
 - [ ] Order appears in `/orders` for the buyer
 - [ ] Seller receives an order notification
 - [ ] Stripe webhook (`checkout.session.completed`) is received and logged without error — check Render logs and Sentry
+- [ ] Failed checkout path: simulate Stripe/session/API failure and confirm inline error appears with retry (no blank page or raw JSON route)
+- [ ] Stripe success/cancel redirects handle missing/invalid `session_id` safely and still render friendly UI
 
 ### Buy-now
 - [ ] Click **Buy Now** on a product page
@@ -67,6 +69,7 @@ Use this checklist before every production deploy (or after a significant code c
 - [ ] Upload progress indicator is shown; image preview appears after upload
 - [ ] Uploaded image URL resolves (no broken image icon on product page)
 - [ ] Uploading an invalid file type (e.g. `.txt`) shows an error without crashing the form
+- [ ] Upload failure path: force Cloudinary/storage error and confirm create/edit pages stay usable with clear retry messaging
 - [ ] Check Render logs — no `[cloudinary]` errors; confirm `Cloudinary config exists` log line shows all fields `true`
 
 ---
@@ -100,6 +103,7 @@ Use this checklist before every production deploy (or after a significant code c
 - [ ] **Reject** — seller `kycStatus` changes to `REJECTED`; seller receives a notification
 - [ ] Admin product moderation — approve or reject a flagged listing; status updates correctly
 - [ ] No server errors in Render logs during these actions
+- [ ] Admin moderation failure path: invalid/missing record or permission issue shows operator-facing error and keeps admin page functional
 
 ---
 
@@ -120,6 +124,7 @@ Use this checklist before every production deploy (or after a significant code c
 - [ ] Submit the checkout form with a missing required field — validation error is shown inline; no page crash
 - [ ] Rate-limit check: rapid clicks on a submit button do not create duplicate orders (button disables after first click)
 - [ ] Mobile responsive check: key pages (home, product, cart, checkout) display correctly on a 375 px viewport
+- [ ] Session expiry check: expired/invalid session redirects safely to login (or friendly auth state) without runtime crashes
 
 ---
 

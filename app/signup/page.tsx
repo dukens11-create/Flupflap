@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useI18n } from '@/components/I18nProvider';
 import { resolveRoleLoginDestination } from '@/lib/role-experience';
+import * as Sentry from '@sentry/nextjs';
 
 export default function SignupPage() {
   const { t } = useI18n();
@@ -19,6 +20,7 @@ export default function SignupPage() {
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (loading) return;
     setError('');
     setLoading(true);
     const form = new FormData(e.currentTarget);
@@ -30,33 +32,47 @@ export default function SignupPage() {
       phone: form.get('phone') ? String(form.get('phone')) : undefined,
     };
 
-    const res = await fetch('/api/auth/signup', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
+    try {
+      const res = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        let errorData: { error?: string } = {};
+        try {
+          errorData = await res.json();
+        } catch (parseErr) {
+          console.warn('[signup] Unable to parse signup error response', parseErr);
+          Sentry.captureException(parseErr, {
+            tags: { area: 'auth', action: 'signup_error_response_parse' },
+            extra: { status: res.status, role: payload.role },
+          });
+        }
+        setError(errorData.error || t('signup.signupFailed'));
+        setLoading(false);
+        return;
+      }
 
-    if (!res.ok) {
-      setError((await res.json()).error || t('signup.signupFailed'));
+      const signInResult = await signIn('credentials', {
+        email: payload.email,
+        password: payload.password,
+        redirect: false,
+      });
+
+      if (signInResult?.error) {
+        setError(t('login.invalidCredentials'));
+        setLoading(false);
+        return;
+      }
+
+      setRedirecting(true);
+      router.push(resolveRoleLoginDestination(payload.role, callbackUrl));
+      router.refresh();
+    } catch {
+      setError(t('signup.signupFailed'));
       setLoading(false);
-      return;
     }
-
-    const signInResult = await signIn('credentials', {
-      email: payload.email,
-      password: payload.password,
-      redirect: false,
-    });
-
-    if (signInResult?.error) {
-      setError(t('login.invalidCredentials'));
-      setLoading(false);
-      return;
-    }
-
-    setRedirecting(true);
-    router.push(resolveRoleLoginDestination(payload.role, callbackUrl));
-    router.refresh();
   }
 
   if (redirecting) {
