@@ -154,8 +154,8 @@ export async function PATCH(req: Request) {
         select: PROFILE_SELECT,
       });
     } catch (error) {
-      if ((error as { code?: string } | null)?.code === 'P2025') {
-        return apiError('Seller account not found. Please sign in again.', 404);
+      if ((error as { code?: string })?.code === 'P2025') {
+        return apiError('Seller account not found.', 404);
       }
       throw error;
     }

@@ -150,7 +150,7 @@ function itemShippingLabel(item: CartItem, isPickup: boolean): React.ReactNode {
 export default function CheckoutPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const sessionExpired = status === 'unauthenticated' || !session?.user;
+  const shouldShowSignInPrompt = status === 'unauthenticated' || !session?.user;
   const mapboxToken = (process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? '').trim();
   const addressAutocompleteRef = useRef<HTMLDivElement | null>(null);
   const selectedAutocompleteStreetRef = useRef('');
@@ -541,13 +541,11 @@ export default function CheckoutPage() {
     const requestVersion = taxRequestVersionRef.current + 1;
     taxRequestVersionRef.current = requestVersion;
 
-    if (!hasCalculatedShipping || allPickup || !buyerAddressComplete || !hasCompleteShippingSelection || fetchingRates || !!rateError) {
-      return undefined;
-    }
+    if (!hasCalculatedShipping || allPickup || !buyerAddressComplete || !hasCompleteShippingSelection || fetchingRates || !!rateError) return;
 
     if (status === 'unauthenticated') {
       setTaxError('Your session has expired. Please sign in again to continue checkout.');
-      return undefined;
+      return;
     }
 
     async function fetchCheckoutSummary() {
@@ -658,7 +656,6 @@ export default function CheckoutPage() {
 
   async function handleCheckout() {
     if (!session?.user) {
-      setError('Your session has expired. Please sign in again to continue checkout.');
       router.push('/login?callbackUrl=/checkout');
       return;
     }
@@ -707,7 +704,6 @@ export default function CheckoutPage() {
       });
       if (!res.ok) {
         if (res.status === 401 || res.status === 403) {
-          setError('Your session has expired. Please sign in again to continue checkout.');
           router.push('/login?callbackUrl=/checkout');
           return;
         }
@@ -754,9 +750,9 @@ export default function CheckoutPage() {
     <main className="max-w-2xl mx-auto">
       <h1 className="text-3xl font-black mb-6">Review your order</h1>
 
-      {sessionExpired && (
+      {shouldShowSignInPrompt && (
         <div className="card p-4 mb-4 bg-yellow-50 border-yellow-200 text-yellow-800 text-sm">
-          <span>Your session has expired. Please </span>
+          <span>You need to </span>
           <Link href="/login?callbackUrl=/checkout" className="font-semibold underline">sign in</Link>
           <span> to continue checkout.</span>
         </div>

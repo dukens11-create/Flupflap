@@ -71,15 +71,13 @@ export default function AccountPage() {
     if (status !== 'authenticated' || !sessionUser?.id) {
       return;
     }
-    if (sessionUser.id) {
-      fetch('/api/account/phone/info')
-        .then(r => r.json())
-        .then(d => {
-          if (d.phone !== undefined) setDbPhone(d.phone);
-          if (d.phoneVerified !== undefined) setDbPhoneVerified(d.phoneVerified);
-        })
-        .catch(() => null);
-    }
+    fetch('/api/account/phone/info')
+      .then(r => r.json())
+      .then(d => {
+        if (d.phone !== undefined) setDbPhone(d.phone);
+        if (d.phoneVerified !== undefined) setDbPhoneVerified(d.phoneVerified);
+      })
+      .catch(() => null);
   }, [phoneSuccess, sessionUser?.id, status]);
 
   useEffect(() => {
@@ -93,14 +91,12 @@ export default function AccountPage() {
     if (status !== 'authenticated' || !sessionUser?.id || sessionUser.role !== 'SELLER') {
       return;
     }
-    if (sessionUser.id && sessionUser.role === 'SELLER') {
-      fetch('/api/account/stripe-status')
-        .then(r => r.json())
-        .then(d => {
-          if (d.stripeStatus) setStripeStatus(d.stripeStatus);
-        })
-        .catch(() => null);
-    }
+    fetch('/api/account/stripe-status')
+      .then(r => r.json())
+      .then(d => {
+        if (d.stripeStatus) setStripeStatus(d.stripeStatus);
+      })
+      .catch(() => null);
   }, [sessionUser?.id, sessionUser?.role, status]);
 
   useEffect(() => {
