@@ -32,7 +32,10 @@ export async function GET(
   if (session.user.role === 'ADMIN' && !sellerIdParam) {
     return NextResponse.json({ error: 'Seller ID is required.' }, { status: 400 });
   }
-  const sellerId = sellerIdParam as string;
+  const sellerId = (sellerIdParam ?? '').trim();
+  if (!sellerId) {
+    return NextResponse.json({ error: 'Seller ID is required.' }, { status: 400 });
+  }
 
   if (session.user.role === 'ADMIN') {
     const seller = await prisma.user.findUnique({
@@ -91,7 +94,19 @@ export async function GET(
     });
   }
 
-  return NextResponse.redirect(
-    getSignedSellerVerificationDocumentUrl(document.publicId, document.format),
-  );
+  try {
+    return NextResponse.redirect(
+      getSignedSellerVerificationDocumentUrl(document.publicId, document.format),
+    );
+  } catch (err) {
+    console.error('[seller/verification/documents GET] Failed to sign document URL', {
+      sellerId,
+      kind,
+      message: err instanceof Error ? err.message : String(err),
+    });
+    return NextResponse.json(
+      { error: 'Unable to open this verification document right now. Please try again.' },
+      { status: 500 },
+    );
+  }
 }

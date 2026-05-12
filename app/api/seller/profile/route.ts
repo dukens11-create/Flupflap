@@ -6,16 +6,70 @@ import { z } from 'zod';
 
 const schema = z.object({
   shopName: z.string().trim().min(2).max(80),
-  shopLogoUrl: z.string().url().max(2000).optional().or(z.literal('')),
+  shopLogoUrl: z.string().trim().url().max(2000).optional().or(z.literal('')),
   shopDescription: z.string().trim().max(500).optional().or(z.literal('')),
   // Ship-from address for live shipping rate calculation
   shipFromName: z.string().trim().max(100).optional().or(z.literal('')),
   shipFromStreet: z.string().trim().max(200).optional().or(z.literal('')),
   shipFromCity: z.string().trim().max(100).optional().or(z.literal('')),
-  shipFromState: z.string().trim().max(50).optional().or(z.literal('')),
+  shipFromState: z.string().trim().toUpperCase().max(2).optional().or(z.literal('')),
   shipFromZip: z.string().trim().max(20).optional().or(z.literal('')),
-  shipFromCountry: z.string().trim().max(2).optional().or(z.literal('')),
+  shipFromCountry: z.string().trim().toUpperCase().max(2).optional().or(z.literal('')),
   shipFromPhone: z.string().trim().max(30).optional().or(z.literal('')),
+}).superRefine((value, ctx) => {
+  const hasAnyShipFromField = Boolean(
+    value.shipFromName
+    || value.shipFromStreet
+    || value.shipFromCity
+    || value.shipFromState
+    || value.shipFromZip
+    || value.shipFromCountry
+    || value.shipFromPhone,
+  );
+  if (!hasAnyShipFromField) return;
+
+  if (!value.shipFromName) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['shipFromName'],
+      message: 'Add a ship-from full name or business name.',
+    });
+  }
+  if (!value.shipFromStreet) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['shipFromStreet'],
+      message: 'Add a ship-from street address.',
+    });
+  }
+  if (!value.shipFromCity) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['shipFromCity'],
+      message: 'Add a ship-from city.',
+    });
+  }
+  if (!value.shipFromState) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['shipFromState'],
+      message: 'Add a 2-letter ship-from state code.',
+    });
+  }
+  if (!value.shipFromZip) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['shipFromZip'],
+      message: 'Add a ship-from ZIP or postal code.',
+    });
+  }
+  if (!value.shipFromCountry) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['shipFromCountry'],
+      message: 'Add a 2-letter ship-from country code.',
+    });
+  }
 });
 
 const PROFILE_SELECT = {
@@ -50,8 +104,13 @@ export async function PATCH(req: Request) {
 
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
+    const flattened = parsed.error.flatten();
     return NextResponse.json(
-      { error: 'Validation failed', details: parsed.error.flatten() },
+      {
+        error: 'Please correct the highlighted fields and try again.',
+        details: flattened,
+        fieldErrors: flattened.fieldErrors,
+      },
       { status: 422 },
     );
   }
