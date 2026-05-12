@@ -303,9 +303,10 @@ function resolveSelectionPath(
   defaultCategoryId?: string | null,
   defaultSubcategoryId?: string | null,
 ) {
-  const providedIds = [defaultCategoryId, defaultSubcategoryId]
-    .map(id => id?.trim())
-    .filter((id): id is string => Boolean(id));
+  const providedIds = [defaultCategoryId, defaultSubcategoryId].flatMap((id) => {
+    const trimmed = id?.trim();
+    return trimmed ? [trimmed] : [];
+  });
   if (providedIds.length === 0) {
     return { mainId: null, subId: null, childId: null, stale: false };
   }
@@ -327,12 +328,16 @@ function resolveSelectionPath(
   const deepest = foundNodes.reduce((best, node) => (
     node.level > best.level ? node : best
   ));
-  const main = deepest.level === 0 ? deepest : deepest.parentId ? findNodeById(categories, deepest.parentId) : null;
-  const sub = deepest.level === 1
-    ? deepest
-    : deepest.level >= 2 && deepest.parentId
-      ? findNodeById(categories, deepest.parentId)
-      : null;
+  let main: CategoryNode | null = null;
+  let sub: CategoryNode | null = null;
+  if (deepest.level === 0) {
+    main = deepest;
+  } else if (deepest.level === 1) {
+    sub = deepest;
+    main = deepest.parentId ? findNodeById(categories, deepest.parentId) : null;
+  } else {
+    sub = deepest.parentId ? findNodeById(categories, deepest.parentId) : null;
+  }
   const root = sub?.parentId ? findNodeById(categories, sub.parentId) : main;
   const pathMainId = root?.level === 0 ? root.id : (main?.level === 0 ? main.id : null);
   const pathSubId = sub?.level === 1 ? sub.id : null;
@@ -410,7 +415,7 @@ export default function CategoryPicker({
           setMainId(null);
           setSubId(null);
           setChildId(null);
-          setCategoryError('The selected category is no longer valid. Please select a valid category and try again.');
+          setCategoryError('The selected category has been removed or reorganized. Please select a valid category and try again.');
         } else if (nextPath.mainId || nextPath.subId || nextPath.childId) {
           setMainId(nextPath.mainId);
           setSubId(nextPath.subId);
