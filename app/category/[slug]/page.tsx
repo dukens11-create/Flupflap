@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import HomePage from '@/app/page';
+import { renderHomePage, type SearchParams } from '@/app/page';
 import { CULTURAL_MARKETPLACES } from '@/lib/cultural-marketplaces';
 import { isDatabaseConfigured, prisma } from '@/lib/db';
 import { DEFAULT_CATEGORY_TREE } from '@/lib/default-categories';
@@ -65,10 +65,8 @@ export default async function CategoryPage({
     normalizedSearchParams[key] = Array.isArray(value) ? value[0] : value;
   }
 
-  return HomePage({
-    searchParams: {
-      ...normalizedSearchParams,
-      category: categoryId,
-    },
+  return renderHomePage({
+    ...(normalizedSearchParams as SearchParams),
+    category: categoryId,
   });
 }

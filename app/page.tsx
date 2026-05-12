@@ -36,7 +36,7 @@ function isSchemaNotInitializedError(err: unknown): boolean {
   return /relation .+ does not exist/i.test(msg) || /table .+ does not exist/i.test(msg);
 }
 
-interface SearchParams {
+export interface SearchParams {
   q?: string;
   category?: string;
   subcategory?: string;
@@ -472,8 +472,7 @@ async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?
   );
 }
 
-export default async function HomePage({ searchParams }: { searchParams: SearchParams | Promise<SearchParams> }) {
-  const sp = await searchParams;
+export async function renderHomePage(sp: SearchParams) {
   const { t } = await getServerTranslations();
   const session = await getServerSession(authOptions);
   const experienceRole = normalizeExperienceRole(session?.user?.role);
@@ -528,4 +527,9 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
       </p>
     </main>
   );
+}
+
+export default async function HomePage({ searchParams }: { searchParams: Promise<SearchParams> }) {
+  const sp = await searchParams;
+  return renderHomePage(sp);
 }
