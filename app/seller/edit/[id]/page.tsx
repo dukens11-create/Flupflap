@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import type { Metadata } from 'next';
+import { loadCategoryHierarchyNodes, resolveLegacyCategorySelection } from '@/lib/category-hierarchy';
 import { isSellerVerificationApproved } from '@/lib/seller-verification';
 import {
   formatPackageNumber,
@@ -40,16 +41,17 @@ export default async function SellerEditPage({
   }
 
   const { id } = await params;
-  const product = await prisma.product.findUnique({
-    where: { id },
-    include: {
-      subcategoryRef: { select: { slug: true } },
-      categoryRef: { select: { slug: true } },
-    },
-  });
+  const product = await prisma.product.findUnique({ where: { id } });
 
   if (!product) notFound();
   if (product.sellerId !== sellerId) forbidden();
+
+  const categories = await loadCategoryHierarchyNodes(prisma);
+  const normalizedCategory = resolveLegacyCategorySelection(categories, {
+    categoryId: product.categoryId,
+    subcategoryId: product.subcategoryId,
+    categoryLabel: product.category,
+  });
 
   const priceDollars = (product.priceCents / 100).toFixed(2);
   const shippingDollars = (product.shippingCents / 100).toFixed(2);
@@ -61,9 +63,7 @@ export default async function SellerEditPage({
   const defaultOriginalImages = product.originalImages?.length ? product.originalImages : defaultImages;
   const defaultEnhancedImages = product.enhancedImages?.length ? product.enhancedImages : [];
   const defaultImageThumbnails = product.imageThumbnails?.length ? product.imageThumbnails : [];
-  // Edit flow stores the deepest selected category in categoryId; fall back to subcategoryId for older rows.
-  const defaultCategorySlug =
-    product.categoryRef?.slug ?? product.subcategoryRef?.slug ?? undefined;
+  const defaultCategorySlug = normalizedCategory.path.at(-1)?.slug;
   const packageDetails = getEffectivePackageDetails(product);
   const shippingClass = getShippingClass(product.productAttributes) ?? '';
   const shippingSetupIncomplete = !hasStoredPackageDetails(product);
@@ -81,8 +81,8 @@ export default async function SellerEditPage({
         defaultPriceDollars={priceDollars}
         defaultShippingDollars={shippingDollars}
         defaultInventory={product.inventory}
-        defaultCategoryId={product.categoryId}
-        defaultSubcategoryId={product.subcategoryId}
+        defaultCategoryId={normalizedCategory.categoryId}
+        defaultSubcategoryId={normalizedCategory.subcategoryId}
         defaultAttributes={(product.productAttributes as Record<string, string> | null) ?? undefined}
         defaultCondition={product.condition}
         defaultCategorySlug={defaultCategorySlug}
