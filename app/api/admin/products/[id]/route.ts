@@ -9,15 +9,21 @@ import {
 
 /**
  * Sanitise the redirectTo value coming from form input.
- * Only allow simple relative paths that start with /admin to prevent open redirects.
+ * Only allow simple relative paths under /admin to prevent open redirects and path traversal.
  */
 function safeAdminRedirect(raw: string | null, fallback = '/admin'): string {
   if (!raw) return fallback;
   // Reject protocol-relative (//evil.com) and absolute URLs (https://...)
   if (raw.startsWith('//') || raw.includes('://')) return fallback;
-  // Must be a relative path under /admin
-  if (!raw.startsWith('/admin')) return fallback;
-  return raw;
+  // Normalise the path to resolve any traversal sequences like ../
+  // new URL resolves /admin/../../etc to /etc so we re-check after normalisation.
+  try {
+    const normalized = new URL(raw, 'https://placeholder.invalid').pathname;
+    if (!normalized.startsWith('/admin')) return fallback;
+    return normalized;
+  } catch {
+    return fallback;
+  }
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {

@@ -39,7 +39,12 @@ export default function SellerModerationForm({ sellerId, sellerName }: Props) {
 
     const form = e.currentTarget;
     const data = new FormData(form);
-    const action = data.get('action') as string;
+    const action = data.get('action');
+
+    if (!action || typeof action !== 'string') {
+      setError('Please select an action.');
+      return;
+    }
 
     if (DESTRUCTIVE_ACTIONS.includes(action)) {
       const label = ACTION_LABELS[action] ?? action;

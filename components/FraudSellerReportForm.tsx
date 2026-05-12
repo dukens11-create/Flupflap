@@ -28,7 +28,12 @@ export default function FraudSellerReportForm({ reportId, sellerName }: Props) {
 
     const form = e.currentTarget;
     const data = new FormData(form);
-    const action = data.get('action') as string;
+    const action = data.get('action');
+
+    if (!action || typeof action !== 'string') {
+      setError('Please select an action.');
+      return;
+    }
 
     if (DESTRUCTIVE_ACTIONS.includes(action)) {
       const label = SELLER_REPORT_ACTIONS.find(a => a.value === action)?.label ?? action;
