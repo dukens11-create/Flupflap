@@ -4,7 +4,7 @@ import crypto from 'crypto';
 import { sendEmail } from '@/lib/email';
 import { passwordResetEmail } from '@/lib/email-templates';
 import { getSiteUrl } from '@/lib/seo';
-import { applyRateLimit } from '@/lib/security';
+import { applyRateLimit, hashForLogging } from '@/lib/security';
 import { logError, logWarn } from '@/lib/logger';
 import { z } from 'zod';
 
@@ -61,10 +61,9 @@ export async function POST(req: Request) {
     const { subject, html } = passwordResetEmail(resetUrl.toString());
     const sent = await sendEmail(normalizedEmail, subject, html);
     if (!sent) {
-      const emailHash = crypto.createHash('sha256').update(normalizedEmail).digest('hex').slice(0, 12);
       logWarn('Password reset email delivery failed', {
         tag: 'api/auth/forgot-password',
-        emailHash,
+        emailHash: hashForLogging(normalizedEmail),
       });
       return NextResponse.json(
         { error: 'Unable to send reset email right now. Please try again shortly.' },

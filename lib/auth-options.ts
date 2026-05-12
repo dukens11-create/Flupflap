@@ -35,8 +35,6 @@ function stripImageFields(target: unknown) {
   Reflect.deleteProperty(target, 'picture');
 }
 
-const siteOrigin = getSiteUrl().origin;
-
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   session: { strategy: 'jwt' },
@@ -120,6 +118,7 @@ export const authOptions: NextAuthOptions = {
 
       try {
         const baseOrigin = new URL(baseUrl).origin;
+        const siteOrigin = getSiteUrl().origin;
         const redirectUrl = new URL(url);
         if (redirectUrl.origin === baseOrigin || redirectUrl.origin === siteOrigin) {
           return redirectUrl.toString();

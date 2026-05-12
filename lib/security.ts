@@ -17,6 +17,7 @@ type RateLimitBucket = {
 };
 
 const RATE_LIMIT_STORE_KEY = '__flupflap_rate_limit_store__';
+let lastStoreCleanupAt = 0;
 
 function getRateLimitStore() {
   const globalScope = globalThis as typeof globalThis & {
@@ -68,11 +69,15 @@ export function applyRateLimit({
   const retryAfterSeconds = Math.max(1, Math.ceil((existing.resetAt - now) / 1000));
   const remaining = Math.max(0, max - existing.count);
 
-  if (store.size > 5000) {
+  if (store.size > 5000 && now - lastStoreCleanupAt > 60_000) {
+    lastStoreCleanupAt = now;
+    let scanned = 0;
     for (const [storeKey, bucket] of store.entries()) {
       if (bucket.resetAt <= now) {
         store.delete(storeKey);
       }
+      scanned += 1;
+      if (scanned >= 250) break;
     }
   }
 
@@ -87,3 +92,8 @@ export function sanitizeTextInput(input: string, maxLength = 200): string {
     .trim()
     .slice(0, maxLength);
 }
+
+export function hashForLogging(value: string): string {
+  return createHash('sha256').update(value).digest('hex').slice(0, 12);
+}
+import { createHash } from 'crypto';
