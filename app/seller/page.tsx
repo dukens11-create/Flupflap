@@ -1000,6 +1000,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                       existingLabelUrl={o.labelUrl}
                       existingTrackingNumber={o.trackingNumber}
                       existingCarrier={orderCarrier}
+                      existingService={o.shippingService}
                       existingTrackingUrl={o.trackingUrl ?? buildTrackingUrl(orderCarrier, o.trackingNumber)}
                     />
                   )}
