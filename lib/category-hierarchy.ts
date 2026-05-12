@@ -41,7 +41,8 @@ export type LegacyCategoryResolution = {
   reason: string | null;
 };
 
-function normalizeTerm(value: string): string {
+function normalizeTerm(value: string | null | undefined): string {
+  if (typeof value !== 'string') return '';
   return value
     .toLowerCase()
     .normalize('NFD')
@@ -77,7 +78,10 @@ function getPathToRoot(
   let current: CategoryHierarchyNode | null = node;
 
   while (current) {
-    if (seen.has(current.id)) return null;
+    if (seen.has(current.id)) {
+      console.warn('[category-hierarchy] Detected circular category reference.', { categoryId: current.id });
+      return null;
+    }
     seen.add(current.id);
     path.push(current);
     current = current.parentId ? (lookup.get(current.parentId) ?? null) : null;

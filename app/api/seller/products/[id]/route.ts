@@ -156,6 +156,45 @@ async function loadCategoryNodes() {
   }) as Promise<CategoryHierarchyNode[]>;
 }
 
+function hasSubmittedCategorySelection(data: ProductUpdateInput) {
+  return data.categoryId !== undefined
+    || data.subcategoryId !== undefined
+    || data.parentCategoryId !== undefined
+    || data.category !== undefined;
+}
+
+async function resolveSubmittedCategorySelection(data: ProductUpdateInput) {
+  const submitted = hasSubmittedCategorySelection(data);
+  const fallback = {
+    submitted,
+    categoryId: resolveOptionalId(data.categoryId),
+    subcategoryId: resolveOptionalId(data.subcategoryId),
+    categoryName: data.category?.trim() || '',
+    error: null as string | null,
+  };
+
+  if (!submitted) return fallback;
+
+  const categoryNodes = await loadCategoryNodes();
+  const validatedCategory = validateCategorySelection(categoryNodes, {
+    categoryId: data.categoryId,
+    subcategoryId: data.subcategoryId,
+    parentCategoryId: data.parentCategoryId,
+    categoryLabel: data.category,
+  });
+  if (!validatedCategory.ok) {
+    return { ...fallback, error: validatedCategory.message };
+  }
+
+  return {
+    submitted: true,
+    categoryId: validatedCategory.categoryId,
+    subcategoryId: validatedCategory.subcategoryId,
+    categoryName: validatedCategory.displayName,
+    error: null,
+  };
+}
+
 function resolveSubmittedPackageDetails(data: ProductUpdateInput) {
   const weightValue = getFirstNonEmptyString(data.weight, data.packageWeight, data.weightOz);
   const hasLegacyWeightInput = !getFirstNonEmptyString(data.weight, data.packageWeight) && !!data.weightOz?.trim();
@@ -321,36 +360,16 @@ export async function POST(
       return respondWithError(id, getPackageDetailsErrorMessage(data), acceptsJson);
     }
 
-    const hasSubmittedCategorySelection =
-      data.categoryId !== undefined
-      || data.subcategoryId !== undefined
-      || data.parentCategoryId !== undefined
-      || data.category !== undefined;
-    let resolvedCategoryId = resolveOptionalId(data.categoryId);
-    let resolvedSubcategoryId = resolveOptionalId(data.subcategoryId);
-    let resolvedCategoryName = data.category?.trim() || '';
-
-    if (hasSubmittedCategorySelection) {
-      const categoryNodes = await loadCategoryNodes();
-      const validatedCategory = validateCategorySelection(categoryNodes, {
+    const resolvedCategorySelection = await resolveSubmittedCategorySelection(data);
+    if (resolvedCategorySelection.error) {
+      console.warn('[seller/products/[id] POST] invalid category selection', {
+        productId: id,
         categoryId: data.categoryId,
         subcategoryId: data.subcategoryId,
         parentCategoryId: data.parentCategoryId,
-        categoryLabel: data.category,
+        message: resolvedCategorySelection.error,
       });
-      if (!validatedCategory.ok) {
-        console.warn('[seller/products/[id] POST] invalid category selection', {
-          productId: id,
-          categoryId: data.categoryId,
-          subcategoryId: data.subcategoryId,
-          parentCategoryId: data.parentCategoryId,
-          message: validatedCategory.message,
-        });
-        return respondWithError(id, validatedCategory.message, acceptsJson, 400);
-      }
-      resolvedCategoryId = validatedCategory.categoryId;
-      resolvedSubcategoryId = validatedCategory.subcategoryId;
-      resolvedCategoryName = validatedCategory.displayName;
+      return respondWithError(id, resolvedCategorySelection.error, acceptsJson, 400);
     }
 
     const submittedImages = imagesRaw.length ? imagesRaw : data.imageUrl ? [data.imageUrl] : null;
@@ -392,7 +411,9 @@ export async function POST(
           ...(data.price && { priceCents: cents(data.price) }),
           ...(data.shipping !== undefined && { shippingCents: cents(data.shipping || '0') }),
           ...(data.shippingMode && (SHIPPING_MODES as readonly string[]).includes(data.shippingMode) && { shippingMode: data.shippingMode }),
-          ...(hasSubmittedCategorySelection && resolvedCategoryName && { category: resolvedCategoryName }),
+          ...(resolvedCategorySelection.submitted && resolvedCategorySelection.categoryName && {
+            category: resolvedCategorySelection.categoryName,
+          }),
           ...(data.condition && { condition: data.condition }),
           ...(data.inventory && { inventory: Number(data.inventory) }),
           pickupAvailable: data.pickupAvailable === 'true',
@@ -407,9 +428,9 @@ export async function POST(
           heightIn: packageDetails.heightIn,
           packageType: packageDetails.packageType,
           // Category system fields (pre-validated above)
-          ...(hasSubmittedCategorySelection && {
-            categoryId: resolvedCategoryId,
-            subcategoryId: resolvedSubcategoryId,
+          ...(resolvedCategorySelection.submitted && {
+            categoryId: resolvedCategorySelection.categoryId,
+            subcategoryId: resolvedCategorySelection.subcategoryId,
           }),
           productAttributes: nextProductAttributesValue,
           imageUrl: mainImage,
@@ -513,36 +534,16 @@ export async function PATCH(
       return NextResponse.json({ error: getPackageDetailsErrorMessage(data) }, { status: 400 });
     }
 
-    const hasSubmittedCategorySelection =
-      data.categoryId !== undefined
-      || data.subcategoryId !== undefined
-      || data.parentCategoryId !== undefined
-      || data.category !== undefined;
-    let resolvedCategoryId = resolveOptionalId(data.categoryId);
-    let resolvedSubcategoryId = resolveOptionalId(data.subcategoryId);
-    let resolvedCategoryName = data.category?.trim() || '';
-
-    if (hasSubmittedCategorySelection) {
-      const categoryNodes = await loadCategoryNodes();
-      const validatedCategory = validateCategorySelection(categoryNodes, {
+    const resolvedCategorySelection = await resolveSubmittedCategorySelection(data);
+    if (resolvedCategorySelection.error) {
+      console.warn('[seller/products/[id] PATCH] invalid category selection', {
+        productId: id,
         categoryId: data.categoryId,
         subcategoryId: data.subcategoryId,
         parentCategoryId: data.parentCategoryId,
-        categoryLabel: data.category,
+        message: resolvedCategorySelection.error,
       });
-      if (!validatedCategory.ok) {
-        console.warn('[seller/products/[id] PATCH] invalid category selection', {
-          productId: id,
-          categoryId: data.categoryId,
-          subcategoryId: data.subcategoryId,
-          parentCategoryId: data.parentCategoryId,
-          message: validatedCategory.message,
-        });
-        return NextResponse.json({ error: validatedCategory.message }, { status: 400 });
-      }
-      resolvedCategoryId = validatedCategory.categoryId;
-      resolvedSubcategoryId = validatedCategory.subcategoryId;
-      resolvedCategoryName = validatedCategory.displayName;
+      return NextResponse.json({ error: resolvedCategorySelection.error }, { status: 400 });
     }
 
     // Resolve images for PATCH (JSON body): prefer explicit images list, then legacy imageUrl
@@ -594,7 +595,9 @@ export async function PATCH(
           ...(data.price && { priceCents: cents(data.price) }),
           ...(data.shipping !== undefined && { shippingCents: cents(data.shipping || '0') }),
           ...(data.shippingMode && (SHIPPING_MODES as readonly string[]).includes(data.shippingMode) && { shippingMode: data.shippingMode }),
-          ...(hasSubmittedCategorySelection && resolvedCategoryName && { category: resolvedCategoryName }),
+          ...(resolvedCategorySelection.submitted && resolvedCategorySelection.categoryName && {
+            category: resolvedCategorySelection.categoryName,
+          }),
           ...(data.condition && { condition: data.condition }),
           imageUrl: mainImage,
           images: resolvedImages,
@@ -616,9 +619,9 @@ export async function PATCH(
           heightIn: packageDetails.heightIn,
           packageType: packageDetails.packageType,
           // Category system fields (pre-validated above)
-          ...(hasSubmittedCategorySelection && {
-            categoryId: resolvedCategoryId,
-            subcategoryId: resolvedSubcategoryId,
+          ...(resolvedCategorySelection.submitted && {
+            categoryId: resolvedCategorySelection.categoryId,
+            subcategoryId: resolvedCategorySelection.subcategoryId,
           }),
           productAttributes: nextProductAttributesValue,
           status: 'PENDING',

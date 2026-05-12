@@ -133,13 +133,6 @@ export default function EditListingForm({
     setSubmitting(true);
 
     try {
-      console.log('[EditListingForm] submitting update', {
-        categoryId: submittedCategoryId,
-        subcategoryId: submittedSubcategoryId,
-        category,
-        condition,
-      });
-
       const res = await fetch(`/api/seller/products/${id}`, {
         method: 'POST',
         headers: { Accept: 'application/json' },
@@ -147,7 +140,6 @@ export default function EditListingForm({
       });
 
       const data = await res.json();
-      console.log('[EditListingForm] API response:', { status: res.status, ok: res.ok, data });
 
       if (!res.ok) {
         const errorMessage =
