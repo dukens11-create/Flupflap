@@ -34,7 +34,7 @@ export async function POST(req: Request) {
         where: { id: settings.id },
         data: { freePromotionEnabled, freePromotionDurationDays },
       });
-      return NextResponse.redirect(new URL('/admin/promotions', req.url));
+      return NextResponse.redirect(new URL('/admin/promotions?success=Free+promotion+settings+updated.', req.url));
     }
 
     if (action === 'grant_credits') {
@@ -54,7 +54,7 @@ export async function POST(req: Request) {
       if (updated.count === 0) {
         return NextResponse.json({ error: 'Seller not found.' }, { status: 404 });
       }
-      return NextResponse.redirect(new URL('/admin/promotions', req.url));
+      return NextResponse.redirect(new URL('/admin/promotions?success=Credits+granted.', req.url));
     }
 
     for (const plan of DEFAULT_PROMOTION_PLANS) {
@@ -68,7 +68,7 @@ export async function POST(req: Request) {
       });
     }
 
-    return NextResponse.redirect(new URL('/admin/promotions', req.url));
+    return NextResponse.redirect(new URL('/admin/promotions?success=Promotion+pricing+saved.', req.url));
   } catch (err) {
     console.error('[admin/promotions/pricing POST]', err);
     return NextResponse.json({ error: 'Failed to save promotion settings.' }, { status: 500 });

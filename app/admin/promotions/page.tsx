@@ -22,11 +22,16 @@ function statusBadge(status: string) {
   return map[status] ?? 'badge-slate';
 }
 
-export default async function AdminPromotionsPage() {
+export default async function AdminPromotionsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ success?: string; error?: string }>;
+}) {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect('/login');
   if (session.user.role !== 'ADMIN') redirect('/');
 
+  const { success: successParam, error: errorParam } = await searchParams;
   await expirePromotions();
   const now = new Date();
 
@@ -79,6 +84,18 @@ export default async function AdminPromotionsPage() {
         </div>
         <Link href="/admin" className="btn-outline text-sm">← Admin</Link>
       </div>
+
+      {successParam && (
+        <div className="card p-4 mb-6 bg-green-50 border-green-200 text-green-800 text-sm">
+          ✅ {successParam}
+        </div>
+      )}
+
+      {errorParam && (
+        <div className="card p-4 mb-6 bg-red-50 border-red-200 text-red-800 text-sm">
+          ⚠ {errorParam}
+        </div>
+      )}
 
       <section className="card p-5 mb-8">
         <div className="mb-4">
@@ -178,7 +195,7 @@ export default async function AdminPromotionsPage() {
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={promo.product.imageUrl} alt={promo.product.title ?? 'Listing'} className="w-12 h-12 object-cover rounded-lg flex-shrink-0" />
                 ) : (
-                  <div className="w-12 h-12 rounded-lg bg-slate-100 flex-shrink-0 flex items-center justify-center text-slate-300 text-xs">img</div>
+                  <div className="w-12 h-12 rounded-lg bg-slate-100 flex-shrink-0" aria-hidden="true" />
                 )}
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold truncate">{promo.product.title}</p>

@@ -173,18 +173,15 @@ export default async function AdminReportsPage({
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={report.product.imageUrl}
-                    alt={report.product.title ?? 'Listing'}
+                    alt={report.product.title ?? 'Untitled listing'}
                     className="w-16 h-16 object-cover rounded-lg flex-shrink-0"
                   />
                 ) : (
-                  <div className="w-16 h-16 rounded-lg bg-slate-200 flex-shrink-0 flex items-center justify-center text-slate-400 text-xs">
-                    No img
-                  </div>
+                  <div className="w-16 h-16 rounded-lg bg-slate-200 flex-shrink-0" aria-hidden="true" />
                 )}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-semibold text-slate-900 truncate">{report.product.title ?? 'Untitled listing'}</p>
-                    <span className={productStatusBadge(report.product.status)}>{report.product.status}</span>
+                    <p className="font-semibold text-slate-900 truncate">{report.product.title ?? 'Untitled listing'}</p>                    <span className={productStatusBadge(report.product.status)}>{report.product.status}</span>
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5">
                     Sold by{' '}
