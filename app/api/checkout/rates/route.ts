@@ -75,7 +75,7 @@ export async function POST(req: Request) {
     // Validate item quantities are positive integers.
     for (const item of items) {
       const qty = Number(item.quantity);
-      if (!Number.isInteger(qty) || qty < 1) {
+      if (!Number.isInteger(qty) || qty <= 0) {
         return NextResponse.json({ error: 'Invalid item quantity.' }, { status: 400 });
       }
     }

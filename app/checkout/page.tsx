@@ -662,7 +662,11 @@ export default function CheckoutPage() {
 
           {/* Rate options per seller group; dimmed while stale rates are being refreshed */}
           {rateGroups.length > 0 && (
-            <div className={fetchingRates ? 'opacity-50 pointer-events-none' : undefined}>
+            <div
+              className={fetchingRates ? 'opacity-50 pointer-events-none' : undefined}
+              aria-disabled={fetchingRates || undefined}
+              {...(fetchingRates ? { inert: '' } : {})}
+            >
               {fetchingRates && (
                 <p className="text-xs text-slate-500 mb-2">Refreshing shipping rates…</p>
               )}
