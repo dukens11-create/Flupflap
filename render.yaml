@@ -20,6 +20,8 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: NODE_VERSION
+        value: "20"    # Prisma 7 requires Node ^20.19 || ^22.12; use Node 20 LTS
       - key: DATABASE_URL
         sync: false
       - key: NEXTAUTH_SECRET

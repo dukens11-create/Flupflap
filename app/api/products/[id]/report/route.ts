@@ -17,7 +17,7 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { z } from 'zod';
 
-export const VALID_REASONS = [
+const VALID_REASONS = [
   'fake_counterfeit',
   'misleading_description',
   'misleading_photos',
