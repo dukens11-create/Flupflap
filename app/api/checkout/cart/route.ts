@@ -315,18 +315,51 @@ export async function POST(req: Request) {
       }
     }
 
-    const stripeSession = await stripe.checkout.sessions.create({
+    let checkoutCustomerId: string | undefined;
+    if (hasLiveShippingAddress && validatedShippingRateInfo?.buyerAddress) {
+      try {
+        const address = validatedShippingRateInfo.buyerAddress;
+        const customer = await stripe.customers.create({
+          name: address.name || session.user.name || undefined,
+          email: session.user.email || undefined,
+          address: {
+            line1: address.street1,
+            line2: address.street2 || undefined,
+            city: address.city,
+            state: address.state,
+            postal_code: address.zip,
+            country: address.country || 'US',
+          },
+          shipping: {
+            name: address.name || session.user.name || 'Buyer',
+            address: {
+              line1: address.street1,
+              line2: address.street2 || undefined,
+              city: address.city,
+              state: address.state,
+              postal_code: address.zip,
+              country: address.country || 'US',
+            },
+          },
+        });
+        checkoutCustomerId = customer.id;
+      } catch (err) {
+        console.warn('[checkout/cart] unable to create Stripe customer from live shipping address', err);
+      }
+    }
+
+    const shouldCollectStripeShippingAddress = !allPickup && !checkoutCustomerId;
+    const createCheckoutSession = async (enableAutomaticTax: boolean) => stripe.checkout.sessions.create({
       mode: 'payment',
       payment_method_types: ['card'],
       line_items: lineItems,
-      automatic_tax: { enabled: true },
+      automatic_tax: { enabled: enableAutomaticTax },
       success_url: `${appUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${appUrl}/checkout/cancel`,
-      ...(allPickup || hasLiveShippingAddress
-        ? {}
-        : {
-            shipping_address_collection: { allowed_countries: ['US', 'CA', 'GB', 'AU'] },
-          }),
+      ...(shouldCollectStripeShippingAddress
+        ? { shipping_address_collection: { allowed_countries: ['US', 'CA', 'GB', 'AU'] } }
+        : {}),
+      ...(checkoutCustomerId ? { customer: checkoutCustomerId } : {}),
       // Split the payment: platform keeps the fee, seller receives the rest.
       ...(sellerStripeId
         ? {
@@ -343,6 +376,20 @@ export async function POST(req: Request) {
         isPickup: allPickup ? 'true' : 'false',
       },
     });
+
+    const stripeSession = await (async () => {
+      try {
+        return await createCheckoutSession(true);
+      } catch (err) {
+        const classified = classifyStripeError(err);
+        const message = classified.message.toLowerCase();
+        const isTaxFailure = classified.reason === 'stripe_error'
+          && (message.includes('tax') || message.includes('automatic_tax'));
+        if (!isTaxFailure) throw err;
+        console.warn('[checkout/cart] automatic tax unavailable, retrying with tax disabled', err);
+        return createCheckoutSession(false);
+      }
+    })();
 
     await prisma.checkoutSessionSnapshot.create({
       data: {

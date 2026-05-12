@@ -96,6 +96,7 @@ export default function CheckoutPage() {
   const [taxCalculating, setTaxCalculating] = useState(false);
   const [taxCalculated, setTaxCalculated] = useState(false);
   const [taxError, setTaxError] = useState('');
+  const [taxFallbackApplied, setTaxFallbackApplied] = useState(false);
   const [finalTotalCents, setFinalTotalCents] = useState(0);
 
   useEffect(() => {
@@ -217,6 +218,7 @@ export default function CheckoutPage() {
     setTaxCalculated(false);
     setTaxCalculating(false);
     setTaxError('');
+    setTaxFallbackApplied(false);
     setFinalTotalCents(0);
   }, [
     buyerAddress,
@@ -346,6 +348,7 @@ export default function CheckoutPage() {
 
         setTaxCents(data.taxCents ?? 0);
         setFinalTotalCents(data.totalCents ?? (total + (data.taxCents ?? 0)));
+        setTaxFallbackApplied(!!data.taxFallbackApplied);
         setTaxCalculated(true);
       } catch {
         if (requestVersion !== taxRequestVersionRef.current) return;
@@ -715,13 +718,16 @@ export default function CheckoutPage() {
           </span>
         </div>
         <div className="flex justify-between font-bold text-base border-t pt-2 mt-1">
-          <span>Total</span>
+          <span>Grand total</span>
           <span>
             {taxNotReady
               ? 'TBD'
               : dollars(hasCalculatedShipping ? finalTotalCents : total + taxCents)}
           </span>
         </div>
+        {taxFallbackApplied && (
+          <p className="text-xs text-slate-500">Tax is temporarily unavailable and has been set to $0.00.</p>
+        )}
         {taxError && (
           <p className="text-xs text-amber-700">{taxError}</p>
         )}
