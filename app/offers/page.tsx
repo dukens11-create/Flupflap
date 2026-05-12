@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { dollars } from '@/lib/money';
 
@@ -114,7 +113,6 @@ function OfferCard({
 
 export default function OffersPage() {
   const { data: session, status } = useSession();
-  const router = useRouter();
   const [received, setReceived] = useState<OfferRecord[]>([]);
   const [sent, setSent] = useState<OfferRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -125,7 +123,9 @@ export default function OffersPage() {
     try {
       const res = await fetch('/api/offers');
       if (res.status === 401) {
-        router.push('/login');
+        setError('Your session has expired. Please sign in again to view offers.');
+        setReceived([]);
+        setSent([]);
         return;
       }
       if (!res.ok) {
@@ -140,17 +140,17 @@ export default function OffersPage() {
     } finally {
       setLoading(false);
     }
-  }, [router]);
+  }, []);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
-      router.push('/login');
+      setLoading(false);
       return;
     }
     if (status === 'authenticated') {
       load();
     }
-  }, [load, router, status]);
+  }, [load, status]);
 
   async function handleRespond(offerId: string, action: 'accept' | 'reject') {
     setRespondingId(offerId);
@@ -163,10 +163,13 @@ export default function OffersPage() {
       });
       const data = await res.json();
       if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          setError('Your session has expired. Please sign in again to respond to offers.');
+          return;
+        }
         setError(data.error || 'Failed to update offer.');
       } else {
         await load();
-        router.refresh();
       }
     } catch {
       setError('Failed to update offer.');
@@ -183,7 +186,17 @@ export default function OffersPage() {
     );
   }
 
-  if (!session?.user) return null;
+  if (!session?.user) {
+    return (
+      <main className="max-w-4xl mx-auto">
+        <div className="card p-6 text-center text-slate-600">
+          <p className="font-medium mb-2">You&apos;re signed out.</p>
+          <p className="text-sm mb-4">Please sign in to view and manage offers.</p>
+          <Link href="/login?callbackUrl=/offers" className="btn-primary">Sign in</Link>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="max-w-4xl mx-auto space-y-8">

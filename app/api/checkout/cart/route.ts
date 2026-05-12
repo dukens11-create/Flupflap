@@ -58,6 +58,10 @@ export async function POST(req: Request) {
     if (!session?.user) {
       return NextResponse.json({ error: 'Please sign in to checkout.' }, { status: 401 });
     }
+    const buyerId = session.user.id;
+    if (!buyerId) {
+      return NextResponse.json({ error: 'Session expired. Please sign in again to checkout.' }, { status: 401 });
+    }
 
     const body = await req.json() as {
       items: { productId: string; quantity: number }[];
@@ -377,7 +381,7 @@ export async function POST(req: Request) {
           }
         : {}),
       metadata: {
-        buyerId: session.user.id,
+        buyerId,
         items: JSON.stringify(items),
         pickupItemIds: JSON.stringify(pickupItemIds),
         isPickup: allPickup ? 'true' : 'false',
@@ -421,7 +425,7 @@ export async function POST(req: Request) {
     await prisma.checkoutSessionSnapshot.create({
       data: {
         stripeCheckoutId: stripeSession.id,
-        buyerId: session.user.id,
+        buyerId,
         items,
         pickupItemIds,
         commissionItems,

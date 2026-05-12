@@ -74,6 +74,9 @@ export async function POST(req: Request) {
     if (!session?.user) {
       return apiError('Please sign in to calculate shipping.', 401);
     }
+    if (!session.user.id) {
+      return apiError('Session expired. Please sign in again to calculate shipping.', 401);
+    }
 
     const body = await req.json() as {
       items: CartItem[];

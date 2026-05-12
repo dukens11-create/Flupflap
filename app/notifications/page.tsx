@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 
 type NotificationItem = {
@@ -37,7 +36,6 @@ const TYPE_LABELS: Record<NotificationItem['type'], string> = {
 
 export default function NotificationsPage() {
   const { data: session, status } = useSession();
-  const router = useRouter();
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -51,7 +49,8 @@ export default function NotificationsPage() {
     try {
       const res = await fetch('/api/notifications');
       if (res.status === 401) {
-        router.push('/login');
+        setError('Your session has expired. Please sign in again to view notifications.');
+        setItems([]);
         return;
       }
       if (!res.ok) {
@@ -80,17 +79,17 @@ export default function NotificationsPage() {
     } finally {
       setLoading(false);
     }
-  }, [router]);
+  }, []);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
-      router.push('/login');
+      setLoading(false);
       return;
     }
     if (status === 'authenticated') {
       load();
     }
-  }, [load, router, status]);
+  }, [load, status]);
 
   if (status === 'loading' || loading) {
     return (
@@ -100,7 +99,17 @@ export default function NotificationsPage() {
     );
   }
 
-  if (!session?.user) return null;
+  if (!session?.user) {
+    return (
+      <main className="max-w-3xl mx-auto">
+        <div className="card p-6 text-center text-slate-600">
+          <p className="font-medium mb-2">You&apos;re signed out.</p>
+          <p className="text-sm mb-4">Please sign in to view your notifications.</p>
+          <Link href="/login?callbackUrl=/notifications" className="btn-primary">Sign in</Link>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="max-w-3xl mx-auto">

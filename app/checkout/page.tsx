@@ -150,6 +150,7 @@ function itemShippingLabel(item: CartItem, isPickup: boolean): React.ReactNode {
 export default function CheckoutPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const sessionExpired = status === 'unauthenticated' || !session?.user;
   const mapboxToken = (process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? '').trim();
   const addressAutocompleteRef = useRef<HTMLDivElement | null>(null);
   const selectedAutocompleteStreetRef = useRef('');
@@ -450,6 +451,13 @@ export default function CheckoutPage() {
       return undefined;
     }
 
+    if (status === 'unauthenticated') {
+      setRateError('Your session has expired. Please sign in again to recalculate shipping.');
+      setRateGroups([]);
+      setRatesFetched(true);
+      return undefined;
+    }
+
     if (!buyerAddressComplete) {
       // Address is incomplete; leave stale groups visible for reference but do
       // not start a new fetch until the address is complete.
@@ -473,6 +481,12 @@ export default function CheckoutPage() {
         if (requestVersion !== rateRequestVersionRef.current) return;
 
         if (!res.ok) {
+          if (res.status === 401 || res.status === 403) {
+            setRateError('Your session has expired. Please sign in again to recalculate shipping.');
+            setRateGroups([]);
+            setRatesFetched(true);
+            return;
+          }
           setRateError(data.error ?? 'Shipping rate unavailable. Please check address or package details.');
           setRateGroups([]);
           setRatesFetched(true);
@@ -521,13 +535,18 @@ export default function CheckoutPage() {
     return () => {
       window.clearTimeout(timer);
     };
-  }, [allPickup, buyerAddress, buyerAddressComplete, calculatedShippingItems, hasCalculatedShipping, rateRetryKey]);
+  }, [allPickup, buyerAddress, buyerAddressComplete, calculatedShippingItems, hasCalculatedShipping, rateRetryKey, status]);
 
   useEffect(() => {
     const requestVersion = taxRequestVersionRef.current + 1;
     taxRequestVersionRef.current = requestVersion;
 
     if (!hasCalculatedShipping || allPickup || !buyerAddressComplete || !hasCompleteShippingSelection || fetchingRates || !!rateError) {
+      return undefined;
+    }
+
+    if (status === 'unauthenticated') {
+      setTaxError('Your session has expired. Please sign in again to continue checkout.');
       return undefined;
     }
 
@@ -558,6 +577,10 @@ export default function CheckoutPage() {
         if (requestVersion !== taxRequestVersionRef.current) return;
 
         if (!res.ok) {
+          if (res.status === 401 || res.status === 403) {
+            setTaxError('Your session has expired. Please sign in again to continue checkout.');
+            return;
+          }
           setTaxError(data.error || 'Unable to calculate the final total.');
           return;
         }
@@ -591,6 +614,7 @@ export default function CheckoutPage() {
     pickupItemIds,
     rateError,
     selectedRates,
+    status,
     total,
   ]);
 
@@ -634,6 +658,7 @@ export default function CheckoutPage() {
 
   async function handleCheckout() {
     if (!session?.user) {
+      setError('Your session has expired. Please sign in again to continue checkout.');
       router.push('/login?callbackUrl=/checkout');
       return;
     }
@@ -681,7 +706,8 @@ export default function CheckoutPage() {
         }),
       });
       if (!res.ok) {
-        if (res.status === 401) {
+        if (res.status === 401 || res.status === 403) {
+          setError('Your session has expired. Please sign in again to continue checkout.');
           router.push('/login?callbackUrl=/checkout');
           return;
         }
@@ -728,11 +754,11 @@ export default function CheckoutPage() {
     <main className="max-w-2xl mx-auto">
       <h1 className="text-3xl font-black mb-6">Review your order</h1>
 
-      {!session?.user && (
+      {sessionExpired && (
         <div className="card p-4 mb-4 bg-yellow-50 border-yellow-200 text-yellow-800 text-sm">
-          <span>You&apos;ll need to </span>
+          <span>Your session has expired. Please </span>
           <Link href="/login?callbackUrl=/checkout" className="font-semibold underline">sign in</Link>
-          <span> before completing your purchase.</span>
+          <span> to continue checkout.</span>
         </div>
       )}
 

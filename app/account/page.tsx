@@ -19,6 +19,7 @@ type SecurityLoginEntry = {
 export default function AccountPage() {
   const { data: session, status, update } = useSession();
   const router = useRouter();
+  const sessionUser = session?.user;
   const [stripeState, setStripeState] = useState<string | null>(null);
   const [stripeReason, setStripeReason] = useState<string | null>(null);
   const hasKnownStripeReason = stripeReason
@@ -67,7 +68,10 @@ export default function AccountPage() {
 
   // Load current phone info from server
   useEffect(() => {
-    if (session?.user?.id) {
+    if (status !== 'authenticated' || !sessionUser?.id) {
+      return;
+    }
+    if (sessionUser.id) {
       fetch('/api/account/phone/info')
         .then(r => r.json())
         .then(d => {
@@ -76,7 +80,7 @@ export default function AccountPage() {
         })
         .catch(() => null);
     }
-  }, [session?.user?.id, phoneSuccess]);
+  }, [phoneSuccess, sessionUser?.id, status]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -86,7 +90,10 @@ export default function AccountPage() {
 
   // Load fresh Stripe onboarding status from the server (not the JWT)
   useEffect(() => {
-    if (session?.user?.id && session.user.role === 'SELLER') {
+    if (status !== 'authenticated' || !sessionUser?.id || sessionUser.role !== 'SELLER') {
+      return;
+    }
+    if (sessionUser.id && sessionUser.role === 'SELLER') {
       fetch('/api/account/stripe-status')
         .then(r => r.json())
         .then(d => {
@@ -94,10 +101,10 @@ export default function AccountPage() {
         })
         .catch(() => null);
     }
-  }, [session?.user?.id, session?.user?.role]);
+  }, [sessionUser?.id, sessionUser?.role, status]);
 
   useEffect(() => {
-    if (!session?.user?.id) return;
+    if (status !== 'authenticated' || !sessionUser?.id) return;
 
     setSecurityLoading(true);
     fetch('/api/account/security-alerts')
@@ -111,7 +118,7 @@ export default function AccountPage() {
         setSuspiciousLogins([]);
       })
       .finally(() => setSecurityLoading(false));
-  }, [session?.user?.id]);
+  }, [sessionUser?.id, status]);
 
   if (status === 'loading') {
     return (
@@ -121,12 +128,19 @@ export default function AccountPage() {
     );
   }
 
-  if (!session?.user) {
-    router.push('/login');
-    return null;
+  if (!sessionUser) {
+    return (
+      <main className="max-w-md mx-auto">
+        <div className="card p-6 text-center text-slate-600">
+          <p className="font-medium mb-2">Your session has expired.</p>
+          <p className="text-sm mb-4">Please sign in again to manage your account.</p>
+          <Link href="/login?callbackUrl=/account" className="btn-primary">Sign in</Link>
+        </div>
+      </main>
+    );
   }
 
-  const { email, role } = session.user;
+  const { email, role } = sessionUser;
 
   async function saveName(e: React.FormEvent) {
     e.preventDefault();
@@ -337,7 +351,7 @@ export default function AccountPage() {
         </div>
       </section>
 
-      {session.user.role === 'SELLER' && stripeState === 'error' && (
+      {role === 'SELLER' && stripeState === 'error' && (
         <div className="card p-4 mb-6 bg-red-50 border-red-200 text-red-800 text-sm">
           {stripeReason === 'stale_account' && '❌ Your connected Stripe account is outdated for the current mode. Reconnect payouts below.'}
           {stripeReason === 'invalid_key' && '❌ Platform Stripe credentials are invalid. Please contact support/admin.'}
@@ -372,7 +386,7 @@ export default function AccountPage() {
             </form>
           ) : (
             <div className="flex items-center gap-2">
-              <p className="font-medium">{session.user.name}</p>
+              <p className="font-medium">{sessionUser.name}</p>
               <button
                 onClick={handleEditName}
                 className="text-xs text-blue-600 hover:underline"
