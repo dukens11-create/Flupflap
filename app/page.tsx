@@ -324,14 +324,10 @@ async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?
           <p className="font-semibold text-slate-700 mb-1">Database schema not yet initialized</p>
           <p className="text-sm">
             The database is connected but the tables have not been created.{' '}
-            If you deployed via Render, trigger a new deploy — the build command applies committed
-            migrations automatically when available. If you set up the service manually, make sure
-            your build command includes{' '}
-            <code className="font-mono text-xs bg-slate-100 px-1 rounded">
-              {'if [ -n "$DATABASE_URL" ] && [ -d prisma/migrations ]; then npx prisma migrate deploy; else echo "Skipping Prisma migrate deploy (DATABASE_URL missing or prisma/migrations not found)."; fi'}
-            </code>{' '}
-            after{' '}
-            <code className="font-mono text-xs bg-slate-100 px-1 rounded">npm run build</code>.
+            If you deployed via Render, trigger a new deploy — the pre-deploy command applies committed
+            migrations automatically when available. If you set up the service manually, set your
+            Pre-Deploy Command to the guarded command from <code className="font-mono text-xs bg-slate-100 px-1 rounded">render.yaml</code>{' '}
+            (see DEPLOYMENT.md for the full command and migration setup instructions).
           </p>
         </div>
       );

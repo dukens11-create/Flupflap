@@ -12,7 +12,13 @@ services:
   - type: web           # Web Service — runs a Node server, not a static CDN
     name: flupflap
     runtime: node
-    buildCommand: "npm install && npm run build && if [ -n \"$DATABASE_URL\" ] && [ -d prisma/migrations ]; then npx prisma migrate deploy; else echo \"Skipping Prisma migrate deploy (DATABASE_URL missing or prisma/migrations not found).\"; fi"  # installs deps, builds, then applies committed Prisma migrations when available
+    buildCommand: "npm install && npm run build"  # installs deps and builds the Next.js app
+    # NOTE: Prisma migrations are not yet initialized in this repo (no prisma/migrations directory).
+    # The preDeployCommand below is intentionally guarded: it only runs `prisma migrate deploy`
+    # when both DATABASE_URL is set AND prisma/migrations exists. Until a baseline migration
+    # is committed, this step will safely print a skip message and exit 0.
+    # TODO: once a proper baseline migration is created and committed, this guard can be removed.
+    preDeployCommand: "if [ -n \"$DATABASE_URL\" ] && [ -d prisma/migrations ]; then npx prisma migrate deploy; else echo \"Skipping prisma migrate deploy — prisma/migrations not yet initialized (P3005 prevention). See DEPLOYMENT.md.\"; fi"
     startCommand: npm run start                  # runs: next start (Node HTTP server on $PORT)
     # NOTE: there is no publishDir / publish directory. This is intentional.
     # Setting publishDir to "dist" or any other path will cause deployment to fail
