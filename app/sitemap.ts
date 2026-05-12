@@ -3,16 +3,16 @@ import { isDatabaseConfigured, prisma } from '@/lib/db';
 import { absoluteUrl } from '@/lib/seo';
 import { DEFAULT_CATEGORY_TREE, DefaultCategoryNode } from '@/lib/default-categories';
 
-/** Flatten a category tree into a list of category ids. */
-function flattenCategoryIds(nodes: DefaultCategoryNode[]): string[] {
-  const ids: string[] = [];
+/** Flatten a category tree into a list of category ids/slugs. */
+function flattenCategories(nodes: DefaultCategoryNode[]): Array<{ id: string; slug: string }> {
+  const categories: Array<{ id: string; slug: string }> = [];
   for (const node of nodes) {
-    ids.push(node.id);
+    categories.push({ id: node.id, slug: node.slug });
     if (node.children.length > 0) {
-      ids.push(...flattenCategoryIds(node.children));
+      categories.push(...flattenCategories(node.children));
     }
   }
-  return ids;
+  return categories;
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
@@ -30,16 +30,22 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ];
 
   // ── Category pages (homepage query-param URLs) ─────────────────────────────
-  const categoryIds = flattenCategoryIds(DEFAULT_CATEGORY_TREE);
-  const categoryRoutes: MetadataRoute.Sitemap = categoryIds.map((id) => ({
-    url: absoluteUrl(`/?category=${id}`),
+  const categories = flattenCategories(DEFAULT_CATEGORY_TREE);
+  const categoryRoutes: MetadataRoute.Sitemap = categories.map((category) => ({
+    url: absoluteUrl(`/?category=${category.id}`),
+    lastModified: now,
+    changeFrequency: 'daily' as const,
+    priority: 0.8,
+  }));
+  const categorySlugRoutes: MetadataRoute.Sitemap = categories.map((category) => ({
+    url: absoluteUrl(`/category/${category.slug}`),
     lastModified: now,
     changeFrequency: 'daily' as const,
     priority: 0.8,
   }));
 
   if (!isDatabaseConfigured()) {
-    return [...staticRoutes, ...categoryRoutes];
+    return [...staticRoutes, ...categoryRoutes, ...categorySlugRoutes];
   }
 
   // ── Dynamic product and seller pages ──────────────────────────────────────
@@ -84,5 +90,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // Database unavailable at sitemap generation time — skip dynamic routes.
   }
 
-  return [...staticRoutes, ...categoryRoutes, ...productRoutes, ...sellerRoutes];
+  return [...staticRoutes, ...categoryRoutes, ...categorySlugRoutes, ...productRoutes, ...sellerRoutes];
 }

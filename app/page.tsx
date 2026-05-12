@@ -12,6 +12,8 @@ import { ArrowRight } from 'lucide-react';
 import { getSellerResponseStatsForSellers } from '@/lib/messages';
 import { authOptions } from '@/lib/auth-options';
 import { getRoleDefaultPath, normalizeExperienceRole } from '@/lib/role-experience';
+import { DEFAULT_CATEGORY_TREE } from '@/lib/default-categories';
+import { REGIONAL_MARKETPLACES } from '@/lib/regional-marketplaces';
 
 export const dynamic = 'force-dynamic';
 
@@ -115,6 +117,51 @@ function productMatchesSearch(product: SearchableProduct, query?: string) {
   collectStringValues(product.productAttributes, searchableValues);
 
   return searchableValues.some((value) => value.toLocaleLowerCase().includes(normalizedQuery));
+}
+
+async function getFeaturedRegionalProducts(categoryId: string, fallbackTerms: string[]) {
+  if (!isDatabaseConfigured()) return [];
+
+  const categoryTextFallback = fallbackTerms.map((term) => ({
+    category: { contains: term, mode: 'insensitive' as const },
+  }));
+
+  const products = await prisma.product.findMany({
+    where: {
+      status: 'APPROVED',
+      inventory: { gt: 0 },
+      OR: [{ categoryId }, ...categoryTextFallback],
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 8,
+    include: {
+      seller: {
+        select: {
+          id: true,
+          name: true,
+          shopName: true,
+          phoneVerified: true,
+          verificationSubmission: {
+            select: {
+              status: true,
+              eligibleToListAt: true,
+              adminFallbackStatus: true,
+            },
+          },
+        },
+      },
+      cartInterest: {
+        select: { totalAdds: true },
+      },
+    },
+  });
+
+  const sellerIds = getUniqueSellerIds(products);
+  const sellerResponseRates = await getSellerResponseStatsForSellers(sellerIds);
+  return products.map((product) => ({
+    ...product,
+    sellerResponseRate: sellerResponseRates.get(product.sellerId)?.responseRate ?? null,
+  }));
 }
 
 async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?: Record<string, string | number>) => string }) {
@@ -367,6 +414,12 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const { t } = await getServerTranslations();
   const session = await getServerSession(authOptions);
   const experienceRole = normalizeExperienceRole(session?.user?.role);
+  const caribbeanMarketplace = REGIONAL_MARKETPLACES.find((marketplace) => marketplace.slug === 'caribbean-products');
+  const featuredCaribbeanProducts = caribbeanMarketplace
+    ? await getFeaturedRegionalProducts(caribbeanMarketplace.categoryId, ['caribbean', 'haitian', 'jamaican', 'dominican', 'trinidad', 'tobago'])
+    : [];
+  const homepageCategories = [...DEFAULT_CATEGORY_TREE].sort((a, b) => a.sortOrder - b.sortOrder);
+
   if (experienceRole === 'admin') {
     redirect(getRoleDefaultPath(session?.user?.role));
   }
@@ -409,6 +462,60 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
           <ProductGrid sp={sp} t={t} />
         </Suspense>
       </section>
+
+      <section className="space-y-4">
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Shop by category</p>
+          <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-900">Marketplace categories</h2>
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          {homepageCategories.map((category) => (
+            <Link
+              key={`homepage-category-${category.id}`}
+              href={`/category/${category.slug}`}
+              className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
+            >
+              <span className="mr-2">{category.icon ?? '🛍️'}</span>
+              {category.name}
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      {caribbeanMarketplace && (
+        <section className="space-y-4 rounded-[28px] border border-teal-100 bg-gradient-to-br from-teal-50 via-cyan-50 to-white p-5 sm:p-6">
+          <div className="space-y-2">
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal-700">Regional marketplace spotlight</p>
+            <h2 className="text-2xl font-black tracking-tight text-slate-900">{caribbeanMarketplace.icon} Featured Caribbean sellers & products</h2>
+            <p className="max-w-3xl text-sm text-slate-600">{caribbeanMarketplace.description}</p>
+            <div className="flex flex-wrap gap-2 pt-1">
+              {caribbeanMarketplace.subcategories.map((subcategory) => (
+                <span key={`caribbean-subcategory-${subcategory}`} className="rounded-full border border-teal-200 bg-white px-3 py-1 text-xs font-medium text-teal-700">
+                  {subcategory}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {featuredCaribbeanProducts.length > 0 ? (
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+              {featuredCaribbeanProducts.map((product: any) => (
+                <ProductCard key={`caribbean-product-${product.id}`} p={product} />
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-teal-200 bg-white/80 p-6 text-center text-sm text-slate-600">
+              No featured Caribbean listings yet. <Link href="/seller/new" className="font-semibold text-teal-700 underline">Be the first seller to list one</Link>.
+            </div>
+          )}
+
+          <div>
+            <Link href="/category/caribbean-products" className="btn-brand-outline">
+              Explore Caribbean Products
+            </Link>
+          </div>
+        </section>
+      )}
 
       <p className="text-center text-xs text-slate-500 sm:text-sm">
         Verified sellers. Secure payments. Buyer protection.

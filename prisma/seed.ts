@@ -314,6 +314,74 @@ async function ensureBeautyCategory() {
   console.log('Beauty & Personal Care category hierarchy ensured.');
 }
 
+async function ensureCaribbeanCategory() {
+  const caribbean = await prisma.category.upsert({
+    where: { slug: 'caribbean-products' },
+    update: {},
+    create: {
+      name: 'Caribbean Products',
+      slug: 'caribbean-products',
+      aliases: ['caribbean', 'caribbean products', 'island products', 'west indies'],
+      level: 0,
+      icon: '🏝️',
+      sortOrder: 10,
+    },
+  });
+
+  await prisma.category.upsert({
+    where: { slug: 'caribbean-products-haitian' },
+    update: {},
+    create: { name: 'Haitian Products', slug: 'caribbean-products-haitian', aliases: ['haitian', 'haiti', 'haitian products'], parentId: caribbean.id, level: 1, sortOrder: 1 },
+  });
+  await prisma.category.upsert({
+    where: { slug: 'caribbean-products-jamaican' },
+    update: {},
+    create: { name: 'Jamaican Products', slug: 'caribbean-products-jamaican', aliases: ['jamaican', 'jamaica', 'jamaican products'], parentId: caribbean.id, level: 1, sortOrder: 2 },
+  });
+  await prisma.category.upsert({
+    where: { slug: 'caribbean-products-dominican' },
+    update: {},
+    create: { name: 'Dominican Products', slug: 'caribbean-products-dominican', aliases: ['dominican', 'dominican republic', 'dominican products'], parentId: caribbean.id, level: 1, sortOrder: 3 },
+  });
+  await prisma.category.upsert({
+    where: { slug: 'caribbean-products-trinidad-tobago' },
+    update: {},
+    create: { name: 'Trinidad & Tobago Products', slug: 'caribbean-products-trinidad-tobago', aliases: ['trinidad', 'tobago', 'trinidad and tobago', 'trinidad & tobago'], parentId: caribbean.id, level: 1, sortOrder: 4 },
+  });
+  await prisma.category.upsert({
+    where: { slug: 'caribbean-products-fashion' },
+    update: {},
+    create: { name: 'Caribbean Fashion', slug: 'caribbean-products-fashion', aliases: ['caribbean fashion', 'island fashion'], parentId: caribbean.id, level: 1, sortOrder: 5, attributeSchema: CLOTHING_FIELDS },
+  });
+  await prisma.category.upsert({
+    where: { slug: 'caribbean-products-food-snacks' },
+    update: {},
+    create: { name: 'Caribbean Food & Snacks', slug: 'caribbean-products-food-snacks', aliases: ['caribbean food', 'caribbean snacks', 'island food'], parentId: caribbean.id, level: 1, sortOrder: 6 },
+  });
+  await prisma.category.upsert({
+    where: { slug: 'caribbean-products-beauty-hair' },
+    update: {},
+    create: { name: 'Caribbean Beauty & Hair', slug: 'caribbean-products-beauty-hair', aliases: ['caribbean beauty', 'caribbean hair', 'island beauty'], parentId: caribbean.id, level: 1, sortOrder: 7, attributeSchema: PERFUME_FIELDS },
+  });
+  await prisma.category.upsert({
+    where: { slug: 'caribbean-products-art-crafts' },
+    update: {},
+    create: { name: 'Caribbean Art & Crafts', slug: 'caribbean-products-art-crafts', aliases: ['caribbean art', 'caribbean crafts', 'island crafts'], parentId: caribbean.id, level: 1, sortOrder: 8 },
+  });
+  await prisma.category.upsert({
+    where: { slug: 'caribbean-products-flags-accessories' },
+    update: {},
+    create: { name: 'Caribbean Flags & Accessories', slug: 'caribbean-products-flags-accessories', aliases: ['caribbean flags', 'flags', 'caribbean accessories'], parentId: caribbean.id, level: 1, sortOrder: 9, attributeSchema: CLOTHING_FIELDS },
+  });
+  await prisma.category.upsert({
+    where: { slug: 'caribbean-products-music-culture' },
+    update: {},
+    create: { name: 'Caribbean Music & Culture', slug: 'caribbean-products-music-culture', aliases: ['caribbean music', 'caribbean culture', 'island culture'], parentId: caribbean.id, level: 1, sortOrder: 10 },
+  });
+
+  console.log('Caribbean Products category hierarchy ensured.');
+}
+
 async function main(){
   const pass = await bcrypt.hash('password123', 10);
   await prisma.user.upsert({ where:{email:'guest@flupflap.local'}, update:{}, create:{name:'Guest Buyer',email:'guest@flupflap.local',password:'',role:Role.CUSTOMER} });
@@ -361,6 +429,7 @@ async function main(){
   await seedCategories();
   // Always ensure new categories exist (safe upsert for existing databases)
   await ensureBeautyCategory();
+  await ensureCaribbeanCategory();
   const count = await prisma.product.count();
   if(count===0){ await prisma.product.createMany({ data:[
     {title:'Used iPhone 13',description:'Clean used phone, unlocked, good battery.',priceCents:32900,condition:'Used',category:'Phones',imageUrl:'https://images.unsplash.com/photo-1592750475338-74b7b21085ab',status:ProductStatus.APPROVED,sellerId:seller.id,shippingCents:1299,inventory:1},
