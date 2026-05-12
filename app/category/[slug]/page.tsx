@@ -66,9 +66,9 @@ export default async function CategoryPage({
   }
 
   return HomePage({
-    searchParams: Promise.resolve({
+    searchParams: {
       ...normalizedSearchParams,
       category: categoryId,
-    }),
+    },
   });
 }

@@ -472,7 +472,7 @@ async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?
   );
 }
 
-export default async function HomePage({ searchParams }: { searchParams: Promise<SearchParams> }) {
+export default async function HomePage({ searchParams }: { searchParams: SearchParams | Promise<SearchParams> }) {
   const sp = await searchParams;
   const { t } = await getServerTranslations();
   const session = await getServerSession(authOptions);
@@ -480,7 +480,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   if (experienceRole === 'admin') {
     redirect(getRoleDefaultPath(session?.user?.role));
   }
-  const culturalHighlights = await CulturalMarketplaceHighlights();
+  const culturalMarketplaceHighlights = await CulturalMarketplaceHighlights();
 
   return (
     <main className="space-y-6 pb-6">
@@ -521,7 +521,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
         </Suspense>
       </section>
 
-      {culturalHighlights}
+      {culturalMarketplaceHighlights}
 
       <p className="text-center text-xs text-slate-500 sm:text-sm">
         Verified sellers. Secure payments. Buyer protection.
