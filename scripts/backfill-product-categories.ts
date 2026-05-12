@@ -103,5 +103,7 @@ run()
     process.exit(1);
   })
   .finally(async () => {
-    await prisma.$disconnect();
+    if (isDatabaseConfigured()) {
+      await prisma.$disconnect();
+    }
   });
