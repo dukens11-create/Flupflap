@@ -3,9 +3,14 @@ import { isDatabaseConfigured, prisma } from '@/lib/db';
 import { absoluteUrl } from '@/lib/seo';
 import { DEFAULT_CATEGORY_TREE, DefaultCategoryNode } from '@/lib/default-categories';
 
+type CategoryReference = {
+  id: string;
+  slug: string;
+};
+
 /** Flatten a category tree into a list of category ids/slugs. */
-function flattenCategories(nodes: DefaultCategoryNode[]): Array<{ id: string; slug: string }> {
-  const categories: Array<{ id: string; slug: string }> = [];
+function flattenCategories(nodes: DefaultCategoryNode[]): CategoryReference[] {
+  const categories: CategoryReference[] = [];
   for (const node of nodes) {
     categories.push({ id: node.id, slug: node.slug });
     if (node.children.length > 0) {

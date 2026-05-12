@@ -119,7 +119,7 @@ function productMatchesSearch(product: SearchableProduct, query?: string) {
   return searchableValues.some((value) => value.toLocaleLowerCase().includes(normalizedQuery));
 }
 
-async function getFeaturedRegionalProducts(categoryId: string, fallbackTerms: string[]) {
+async function getFeaturedProductsByCategoryId(categoryId: string, fallbackTerms: string[]) {
   if (!isDatabaseConfigured()) return [];
 
   const categoryTextFallback = fallbackTerms.map((term) => ({
@@ -163,6 +163,8 @@ async function getFeaturedRegionalProducts(categoryId: string, fallbackTerms: st
     sellerResponseRate: sellerResponseRates.get(product.sellerId)?.responseRate ?? null,
   }));
 }
+
+type FeaturedRegionalProduct = Awaited<ReturnType<typeof getFeaturedProductsByCategoryId>>[number];
 
 async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?: Record<string, string | number>) => string }) {
   const where: any = { status: 'APPROVED', inventory: { gt: 0 } };
@@ -416,7 +418,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const experienceRole = normalizeExperienceRole(session?.user?.role);
   const caribbeanMarketplace = REGIONAL_MARKETPLACES.find((marketplace) => marketplace.slug === 'caribbean-products');
   const featuredCaribbeanProducts = caribbeanMarketplace
-    ? await getFeaturedRegionalProducts(caribbeanMarketplace.categoryId, ['caribbean', 'haitian', 'jamaican', 'dominican', 'trinidad', 'tobago'])
+    ? await getFeaturedProductsByCategoryId(caribbeanMarketplace.slug, caribbeanMarketplace.searchTerms)
     : [];
   const homepageCategories = [...DEFAULT_CATEGORY_TREE].sort((a, b) => a.sortOrder - b.sortOrder);
 
@@ -499,7 +501,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
 
           {featuredCaribbeanProducts.length > 0 ? (
             <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
-              {featuredCaribbeanProducts.map((product: any) => (
+              {featuredCaribbeanProducts.map((product: FeaturedRegionalProduct) => (
                 <ProductCard key={`caribbean-product-${product.id}`} p={product} />
               ))}
             </div>
@@ -510,7 +512,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
           )}
 
           <div>
-            <Link href="/category/caribbean-products" className="btn-brand-outline">
+            <Link href={`/category/${caribbeanMarketplace.slug}`} className="btn-brand-outline">
               Explore Caribbean Products
             </Link>
           </div>

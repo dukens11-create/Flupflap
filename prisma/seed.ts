@@ -361,7 +361,7 @@ async function ensureCaribbeanCategory() {
   await prisma.category.upsert({
     where: { slug: 'caribbean-products-beauty-hair' },
     update: {},
-    create: { name: 'Caribbean Beauty & Hair', slug: 'caribbean-products-beauty-hair', aliases: ['caribbean beauty', 'caribbean hair', 'island beauty'], parentId: caribbean.id, level: 1, sortOrder: 7, attributeSchema: PERFUME_FIELDS },
+    create: { name: 'Caribbean Beauty & Hair', slug: 'caribbean-products-beauty-hair', aliases: ['caribbean beauty', 'caribbean hair', 'island beauty'], parentId: caribbean.id, level: 1, sortOrder: 7 },
   });
   await prisma.category.upsert({
     where: { slug: 'caribbean-products-art-crafts' },

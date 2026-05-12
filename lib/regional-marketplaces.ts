@@ -1,19 +1,19 @@
 export type RegionalMarketplace = {
-  categoryId: string;
   slug: string;
   name: string;
   icon: string;
   description: string;
+  searchTerms: string[];
   subcategories: string[];
 };
 
 export const REGIONAL_MARKETPLACES: RegionalMarketplace[] = [
   {
-    categoryId: 'caribbean-products',
     slug: 'caribbean-products',
     name: 'Caribbean Products',
     icon: '🏝️',
     description: 'Shop Caribbean culture, fashion, food, beauty, music, and more from trusted sellers.',
+    searchTerms: ['caribbean', 'haitian', 'jamaican', 'dominican', 'trinidad', 'tobago'],
     subcategories: [
       'Haitian Products',
       'Jamaican Products',
