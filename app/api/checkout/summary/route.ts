@@ -54,10 +54,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Cart is empty.' }, { status: 400 });
     }
 
-    if (!hasCompleteAddress(shippingRateInfo?.buyerAddress)) {
-      return NextResponse.json({ error: 'Please provide a complete shipping address.' }, { status: 400 });
-    }
-
     const [settings, products] = await Promise.all([
       getMarketplaceSettings(),
       prisma.product.findMany({
@@ -100,6 +96,10 @@ export async function POST(req: Request) {
     const calculatedSellerIds = new Set(calculatedShippingProducts.map(product => product.sellerId));
     const selectedShipmentGroups = shippingRateInfo?.shipmentGroups ?? [];
     const selectedBySeller = new Map(selectedShipmentGroups.map((group) => [group.sellerId, group]));
+
+    if (calculatedSellerIds.size > 0 && !hasCompleteAddress(shippingRateInfo?.buyerAddress)) {
+      return NextResponse.json({ error: 'Please provide a complete shipping address.' }, { status: 400 });
+    }
 
     for (const sellerId of calculatedSellerIds) {
       const selectedRate = selectedBySeller.get(sellerId);
