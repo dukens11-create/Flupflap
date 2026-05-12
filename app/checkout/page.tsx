@@ -202,6 +202,12 @@ export default function CheckoutPage() {
   }, [buyerName, session?.user?.name]);
 
   useEffect(() => {
+    if (!mapboxToken && process.env.NODE_ENV !== 'production') {
+      console.warn('[checkout/address-autocomplete] NEXT_PUBLIC_MAPBOX_TOKEN is not set; falling back to manual address entry.');
+    }
+  }, [mapboxToken]);
+
+  useEffect(() => {
     function handlePointerDown(event: MouseEvent | TouchEvent) {
       if (!addressAutocompleteRef.current?.contains(event.target as Node)) {
         setAddressDropdownOpen(false);
@@ -757,9 +763,10 @@ export default function CheckoutPage() {
             />
           </div>
           <div>
-            <label className="label text-xs">Street address</label>
+            <label htmlFor="checkout-street-address" className="label text-xs">Street address</label>
             <div ref={addressAutocompleteRef} className="relative">
               <input
+                id="checkout-street-address"
                 type="text"
                 value={buyerStreet1}
                 onChange={e => handleStreetAddressChange(e.target.value)}
@@ -811,13 +818,14 @@ export default function CheckoutPage() {
                 aria-autocomplete="list"
                 aria-expanded={addressDropdownOpen && addressSuggestions.length > 0}
                 aria-controls="checkout-address-suggestions"
+                aria-describedby="checkout-street-address-hint"
                 aria-activedescendant={highlightedSuggestionIndex >= 0 ? `checkout-address-suggestion-${highlightedSuggestionIndex}` : undefined}
               />
 
               {(fetchingAddressSuggestions || (addressDropdownOpen && addressSuggestions.length > 0)) && (
                 <div className="absolute inset-x-0 top-full z-20 mt-2 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
                   {fetchingAddressSuggestions ? (
-                    <p className="px-4 py-3 text-sm text-slate-500">Searching addresses…</p>
+                    <p role="status" aria-live="polite" className="px-4 py-3 text-sm text-slate-500">Searching addresses…</p>
                   ) : (
                     <div
                       id="checkout-address-suggestions"
@@ -846,7 +854,7 @@ export default function CheckoutPage() {
                 </div>
               )}
             </div>
-            <p className="mt-1 text-xs text-slate-500">
+            <p id="checkout-street-address-hint" className="mt-1 text-xs text-slate-500">
               Start with your street number and name to autofill city, state, ZIP, and country.
             </p>
             {addressLookupError && (
