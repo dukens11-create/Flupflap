@@ -185,7 +185,9 @@ async function CulturalMarketplaceHighlights() {
       }),
     );
 
-    const visibleSections = sections.filter((section): section is NonNullable<typeof section> => Boolean(section));
+    const visibleSections = sections.filter(
+      (section): section is NonNullable<typeof sections[number]> => section !== null,
+    );
 
     if (visibleSections.length === 0) return null;
 

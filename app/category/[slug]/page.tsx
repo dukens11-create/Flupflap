@@ -9,12 +9,12 @@ type CategoryRouteParams = Promise<{ slug: string }>;
 type CategoryRouteSearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 function findCategoryIdBySlugFromDefaults(slug: string): string | null {
-  const stack = [...DEFAULT_CATEGORY_TREE];
-  while (stack.length > 0) {
-    const current = stack.pop();
+  const queue = [...DEFAULT_CATEGORY_TREE];
+  while (queue.length > 0) {
+    const current = queue.shift();
     if (!current) continue;
     if (current.slug === slug) return current.id;
-    stack.push(...current.children);
+    queue.push(...current.children);
   }
   return null;
 }
