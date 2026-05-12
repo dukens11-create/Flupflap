@@ -12,6 +12,8 @@ import { ArrowRight } from 'lucide-react';
 import { getSellerResponseStatsForSellers } from '@/lib/messages';
 import { authOptions } from '@/lib/auth-options';
 import { getRoleDefaultPath, normalizeExperienceRole } from '@/lib/role-experience';
+import { DEFAULT_CATEGORY_TREE, type DefaultCategoryNode } from '@/lib/default-categories';
+import { FEATURED_MARKETPLACE_CATEGORY_SLUGS } from '@/lib/marketplace-categories';
 
 export const dynamic = 'force-dynamic';
 
@@ -49,6 +51,26 @@ interface SearchParams {
   gender?: string;
   shipping?: string;
   pickup?: string;
+}
+
+const MAX_FEATURED_SUBCATEGORIES = 6;
+
+function findCategoryBySlug(
+  nodes: DefaultCategoryNode[],
+  slug: string,
+): DefaultCategoryNode | null {
+  for (const node of nodes) {
+    if (node.slug === slug) return node;
+    const child = findCategoryBySlug(node.children, slug);
+    if (child) return child;
+  }
+  return null;
+}
+
+function getFeaturedMarketplaceCategories() {
+  return FEATURED_MARKETPLACE_CATEGORY_SLUGS
+    .map((slug) => findCategoryBySlug(DEFAULT_CATEGORY_TREE, slug))
+    .filter((category): category is DefaultCategoryNode => Boolean(category));
 }
 
 function getUniqueSellerIds(products: Array<{ sellerId: string }>) {
@@ -367,6 +389,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const { t } = await getServerTranslations();
   const session = await getServerSession(authOptions);
   const experienceRole = normalizeExperienceRole(session?.user?.role);
+  const featuredMarketplaceCategories = getFeaturedMarketplaceCategories();
   if (experienceRole === 'admin') {
     redirect(getRoleDefaultPath(session?.user?.role));
   }
@@ -401,6 +424,44 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">{t('home.featuredSubtitle')}</p>
           </div>
         </div>
+
+        {featuredMarketplaceCategories.length > 0 && (
+          <div className="grid gap-3 rounded-[24px] border border-slate-200 bg-white p-4 sm:grid-cols-2">
+            {featuredMarketplaceCategories.map((category) => (
+              <article key={category.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{t('home.featuredRegionalEyebrow')}</p>
+                    <h3 className="mt-2 text-xl font-bold text-slate-900">
+                      {category.icon ? `${category.icon} ` : ''}{category.name}
+                    </h3>
+                    <p className="mt-2 text-sm text-slate-600">{t('home.featuredRegionalSubtitle')}</p>
+                  </div>
+                  <Link
+                    href={`/category/${category.slug}`}
+                    className="btn-outline text-xs sm:text-sm"
+                    aria-label={t('home.exploreCategory', { category: category.name })}
+                  >
+                    {t('home.exploreCategory', { category: category.name })}
+                  </Link>
+                </div>
+                {category.children.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {category.children.slice(0, MAX_FEATURED_SUBCATEGORIES).map((subcategory) => (
+                      <Link
+                        key={subcategory.id}
+                        href={`/category/${subcategory.slug}`}
+                        className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-100"
+                      >
+                        {subcategory.name}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </article>
+            ))}
+          </div>
+        )}
 
         <Suspense>
           <BrowseFilters />
