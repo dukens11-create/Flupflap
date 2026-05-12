@@ -1,72 +1,116 @@
-import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
-import { renderHomePage, type SearchParams } from '@/app/page';
-import { CULTURAL_MARKETPLACES } from '@/lib/cultural-marketplaces';
+import { notFound, redirect } from 'next/navigation';
 import { isDatabaseConfigured, prisma } from '@/lib/db';
-import { DEFAULT_CATEGORY_TREE } from '@/lib/default-categories';
+import { createPageMetadata } from '@/lib/seo';
+import { DEFAULT_CATEGORY_TREE, type DefaultCategoryNode } from '@/lib/default-categories';
 
-type CategoryRouteParams = Promise<{ slug: string }>;
-type CategoryRouteSearchParams = Promise<Record<string, string | string[] | undefined>>;
+export const dynamic = 'force-dynamic';
+const ROOT_LEVEL = 0;
+const SUBCATEGORY_LEVEL = 1;
+const REFINED_CATEGORY_LEVEL = 2;
 
-function findCategoryIdBySlugFromDefaults(slug: string): string | null {
-  const queue = [...DEFAULT_CATEGORY_TREE];
-  while (queue.length > 0) {
-    const current = queue.shift();
-    if (!current) continue;
-    if (current.slug === slug) return current.id;
-    queue.push(...current.children);
-  }
-  return null;
-}
+type CategoryLookup = {
+  id: string;
+  name: string;
+  slug: string;
+  level: number;
+  path: Array<{ id: string; level: number }>;
+};
 
-async function resolveCategoryId(slug: string): Promise<string | null> {
-  if (!isDatabaseConfigured()) {
-    return findCategoryIdBySlugFromDefaults(slug);
-  }
-
-  try {
-    const category = await prisma.category.findUnique({
-      where: { slug },
-      select: { id: true },
-    });
-    if (category?.id) return category.id;
-  } catch {
-    // fall back to defaults
-  }
-
-  return findCategoryIdBySlugFromDefaults(slug);
-}
-
-export async function generateMetadata({ params }: { params: CategoryRouteParams }): Promise<Metadata> {
-  const { slug } = await params;
-  const marketplace = CULTURAL_MARKETPLACES.find((entry) => entry.slug === slug);
-  const title = marketplace?.name ?? 'Category';
-  return {
-    title: `${title} | Browse Products`,
-    description: marketplace?.featuredSubtitle ?? `Browse products in ${title}.`,
-  };
-}
-
-export default async function CategoryPage({
-  params,
-  searchParams,
-}: {
-  params: CategoryRouteParams;
-  searchParams: CategoryRouteSearchParams;
-}) {
-  const { slug } = await params;
-  const categoryId = await resolveCategoryId(slug);
-
-  if (!categoryId) notFound();
-
-  const incomingSearchParams = await searchParams;
-  const normalizedSearchParams: Record<string, string | undefined> = {};
-  for (const [key, value] of Object.entries(incomingSearchParams)) {
-    normalizedSearchParams[key] = Array.isArray(value) ? value[0] : value;
-  }
-
-  return renderHomePage({
-    ...(normalizedSearchParams as SearchParams),
-    category: categoryId,
+function flattenCategories(
+  nodes: DefaultCategoryNode[],
+  parentPath: Array<{ id: string; level: number }> = [],
+): CategoryLookup[] {
+  return nodes.flatMap((node) => {
+    const path = [...parentPath, { id: node.id, level: node.level }];
+    return [
+      { id: node.id, name: node.name, slug: node.slug, level: node.level, path },
+      ...flattenCategories(node.children, path),
+    ];
   });
+}
+
+function buildPathForCategory(
+  category: { id: string; level: number; parentId: string | null },
+  lookup: Map<string, { id: string; level: number; parentId: string | null }>,
+) {
+  const path: Array<{ id: string; level: number }> = [];
+  const seen = new Set<string>();
+  let current: { id: string; level: number; parentId: string | null } | undefined = category;
+
+  while (current) {
+    if (seen.has(current.id)) break;
+    seen.add(current.id);
+    path.push({ id: current.id, level: current.level });
+    current = current.parentId ? lookup.get(current.parentId) : undefined;
+  }
+
+  return path.reverse();
+}
+
+async function findCategoryBySlug(slug: string): Promise<CategoryLookup | null> {
+  if (isDatabaseConfigured()) {
+    try {
+      const categories = await prisma.category.findMany({
+        select: { id: true, name: true, slug: true, level: true, parentId: true },
+      });
+      const category = categories.find((entry) => entry.slug === slug) ?? null;
+      if (category) {
+        const lookup = new Map(categories.map((entry) => [entry.id, entry]));
+        return {
+          id: category.id,
+          name: category.name,
+          slug: category.slug,
+          level: category.level,
+          path: buildPathForCategory(category, lookup),
+        };
+      }
+    } catch {
+      // fall through to default categories
+    }
+  }
+
+  return flattenCategories(DEFAULT_CATEGORY_TREE).find((category) => category.slug === slug) ?? null;
+}
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const category = await findCategoryBySlug(slug);
+
+  if (!category) {
+    return createPageMetadata({
+      title: 'Category not found',
+      description: 'The requested category could not be found.',
+      noIndex: true,
+    });
+  }
+
+  return createPageMetadata({
+    title: `${category.name} | FlupFlap`,
+    description: `Browse ${category.name} from trusted sellers on FlupFlap.`,
+    path: `/category/${category.slug}`,
+  });
+}
+
+export default async function CategoryRoutePage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const category = await findCategoryBySlug(slug);
+
+  if (!category) notFound();
+
+  let rootId: string | null = null;
+  let levelOneId: string | null = null;
+  for (const entry of category.path) {
+    if (entry.level === ROOT_LEVEL && !rootId) rootId = entry.id;
+    if (entry.level === SUBCATEGORY_LEVEL && !levelOneId) levelOneId = entry.id;
+  }
+  const paramsOut = new URLSearchParams();
+  paramsOut.set('category', rootId ?? category.id);
+  if (category.level === SUBCATEGORY_LEVEL) {
+    paramsOut.set('subcategory', category.id);
+  } else if (category.level >= REFINED_CATEGORY_LEVEL && levelOneId) {
+    paramsOut.set('subcategory', levelOneId);
+    paramsOut.set('refineCategory', category.id);
+  }
+
+  redirect(`/?${paramsOut.toString()}`);
 }

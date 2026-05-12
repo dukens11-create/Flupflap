@@ -2,18 +2,17 @@ import type { MetadataRoute } from 'next';
 import { isDatabaseConfigured, prisma } from '@/lib/db';
 import { absoluteUrl } from '@/lib/seo';
 import { DEFAULT_CATEGORY_TREE, DefaultCategoryNode } from '@/lib/default-categories';
-import { CULTURAL_MARKETPLACES } from '@/lib/cultural-marketplaces';
 
-/** Flatten a category tree into a list of category ids. */
-function flattenCategoryIds(nodes: DefaultCategoryNode[]): string[] {
-  const ids: string[] = [];
+/** Flatten a category tree into category route data. */
+function flattenCategoryEntries(nodes: DefaultCategoryNode[]): Array<{ id: string; slug: string }> {
+  const entries: Array<{ id: string; slug: string }> = [];
   for (const node of nodes) {
-    ids.push(node.id);
+    entries.push({ id: node.id, slug: node.slug });
     if (node.children.length > 0) {
-      ids.push(...flattenCategoryIds(node.children));
+      entries.push(...flattenCategoryEntries(node.children));
     }
   }
-  return ids;
+  return entries;
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
@@ -31,22 +30,22 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ];
 
   // ── Category pages (homepage query-param URLs) ─────────────────────────────
-  const categoryIds = flattenCategoryIds(DEFAULT_CATEGORY_TREE);
-  const categoryRoutes: MetadataRoute.Sitemap = categoryIds.map((id) => ({
-    url: absoluteUrl(`/?category=${id}`),
+  const categoryEntries = flattenCategoryEntries(DEFAULT_CATEGORY_TREE);
+  const categoryRoutes: MetadataRoute.Sitemap = categoryEntries.map((entry) => ({
+    url: absoluteUrl(`/?category=${entry.id}`),
     lastModified: now,
     changeFrequency: 'daily' as const,
     priority: 0.8,
   }));
-  const categoryLandingRoutes: MetadataRoute.Sitemap = CULTURAL_MARKETPLACES.map((marketplace) => ({
-    url: absoluteUrl(`/category/${marketplace.slug}`),
+  const categorySeoRoutes: MetadataRoute.Sitemap = categoryEntries.map((entry) => ({
+    url: absoluteUrl(`/category/${entry.slug}`),
     lastModified: now,
     changeFrequency: 'daily' as const,
-    priority: 0.85,
+    priority: 0.6,
   }));
 
   if (!isDatabaseConfigured()) {
-    return [...staticRoutes, ...categoryRoutes, ...categoryLandingRoutes];
+    return [...staticRoutes, ...categoryRoutes, ...categorySeoRoutes];
   }
 
   // ── Dynamic product and seller pages ──────────────────────────────────────
@@ -91,5 +90,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // Database unavailable at sitemap generation time — skip dynamic routes.
   }
 
-  return [...staticRoutes, ...categoryRoutes, ...categoryLandingRoutes, ...productRoutes, ...sellerRoutes];
+  return [...staticRoutes, ...categoryRoutes, ...categorySeoRoutes, ...productRoutes, ...sellerRoutes];
 }

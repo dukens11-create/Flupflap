@@ -1,5 +1,6 @@
 import { PERFUME_SIZE_OPTIONS } from '@/lib/category-attribute-schema';
 import { CULTURAL_MARKETPLACES } from '@/lib/cultural-marketplaces';
+import { ASIAN_PRODUCTS_ALIASES } from '@/lib/marketplace-categories';
 
 type FieldDef = {
   name: string;
@@ -53,6 +54,12 @@ const PERFUME_FIELDS: FieldDef[] = [
   { name: 'size_ml', label: 'Size (ml)', type: 'select', options: [...PERFUME_SIZE_OPTIONS] },
   { name: 'fragrance_type', label: 'Fragrance Type', type: 'select', options: ['Floral', 'Woody', 'Fresh', 'Oriental', 'Citrus', 'Gourmand'] },
   { name: 'gender', label: 'Gender', type: 'select', options: ['Men', 'Women', 'Unisex'] },
+];
+const BEAUTY_SKINCARE_FIELDS: FieldDef[] = [
+  { name: 'brand', label: 'Brand', type: 'text' },
+  { name: 'skin_type', label: 'Skin Type', type: 'select', options: ['All Skin Types', 'Dry', 'Oily', 'Combination', 'Sensitive'] },
+  { name: 'concern', label: 'Primary Concern', type: 'select', options: ['Hydration', 'Brightening', 'Acne', 'Anti-Aging', 'Soothing', 'Sun Care'] },
+  { name: 'size_ml', label: 'Size (ml)', type: 'select', options: [...PERFUME_SIZE_OPTIONS] },
 ];
 const CAR_FIELDS: FieldDef[] = [
   { name: 'brand', label: 'Brand / Make', type: 'text' },
@@ -166,6 +173,23 @@ export const DEFAULT_CATEGORY_TREE: DefaultCategoryNode[] = [
     node({ id: 'beauty-fragrance', name: 'Fragrance', slug: 'beauty-fragrance', aliases: ['fragrance', 'perfume', 'cologne', 'scent', 'body mist'], parentId: 'beauty', level: 1, icon: null, sortOrder: 1, attributeSchema: PERFUME_FIELDS, children: [
       node({ id: 'beauty-fragrance-perfume', name: 'Perfume', slug: 'beauty-fragrance-perfume', aliases: ['perfume', 'parfum', 'eau de parfum', 'edp', 'eau de toilette', 'edt', 'fragrance', 'cologne', 'scent', 'body mist'], parentId: 'beauty-fragrance', level: 2, icon: null, sortOrder: 1, attributeSchema: PERFUME_FIELDS }),
     ] }),
+  ] }),
+  node({ id: 'asian-products', name: 'Asian Products', slug: 'asian-products', aliases: [...ASIAN_PRODUCTS_ALIASES], parentId: null, level: 0, icon: '🌏', sortOrder: 10, attributeSchema: null, children: [
+    node({ id: 'asian-fashion', name: 'Asian Fashion', slug: 'asian-fashion', aliases: [], parentId: 'asian-products', level: 1, icon: null, sortOrder: 1, attributeSchema: CLOTHING_FIELDS }),
+    node({ id: 'asian-beauty-skincare', name: 'Asian Beauty & Skincare', slug: 'asian-beauty-skincare', aliases: [], parentId: 'asian-products', level: 1, icon: null, sortOrder: 2, attributeSchema: BEAUTY_SKINCARE_FIELDS }),
+    node({ id: 'asian-food-snacks', name: 'Asian Food & Snacks', slug: 'asian-food-snacks', aliases: [], parentId: 'asian-products', level: 1, icon: null, sortOrder: 3, attributeSchema: null }),
+    node({ id: 'asian-home-decor', name: 'Asian Home Decor', slug: 'asian-home-decor', aliases: [], parentId: 'asian-products', level: 1, icon: null, sortOrder: 4, attributeSchema: FURNITURE_FIELDS }),
+    node({ id: 'asian-electronics-gadgets', name: 'Asian Electronics & Gadgets', slug: 'asian-electronics-gadgets', aliases: [], parentId: 'asian-products', level: 1, icon: null, sortOrder: 5, attributeSchema: ELECTRONICS_FIELDS }),
+    node({ id: 'asian-art-crafts', name: 'Asian Art & Crafts', slug: 'asian-art-crafts', aliases: [], parentId: 'asian-products', level: 1, icon: null, sortOrder: 6, attributeSchema: null }),
+    node({ id: 'asian-jewelry-accessories', name: 'Asian Jewelry & Accessories', slug: 'asian-jewelry-accessories', aliases: [], parentId: 'asian-products', level: 1, icon: null, sortOrder: 7, attributeSchema: CLOTHING_FIELDS }),
+    node({ id: 'asian-anime-collectibles', name: 'Asian Anime & Collectibles', slug: 'asian-anime-collectibles', aliases: [], parentId: 'asian-products', level: 1, icon: null, sortOrder: 8, attributeSchema: null }),
+    node({ id: 'asian-books-media', name: 'Asian Books & Media', slug: 'asian-books-media', aliases: [], parentId: 'asian-products', level: 1, icon: null, sortOrder: 9, attributeSchema: null }),
+    node({ id: 'asian-cultural-products', name: 'Asian Cultural Products', slug: 'asian-cultural-products', aliases: [], parentId: 'asian-products', level: 1, icon: null, sortOrder: 10, attributeSchema: null }),
+    node({ id: 'east-asian-products', name: 'East Asian Products', slug: 'east-asian-products', aliases: [], parentId: 'asian-products', level: 1, icon: null, sortOrder: 11, attributeSchema: null }),
+    node({ id: 'south-asian-products', name: 'South Asian Products', slug: 'south-asian-products', aliases: [], parentId: 'asian-products', level: 1, icon: null, sortOrder: 12, attributeSchema: null }),
+    node({ id: 'southeast-asian-products', name: 'Southeast Asian Products', slug: 'southeast-asian-products', aliases: [], parentId: 'asian-products', level: 1, icon: null, sortOrder: 13, attributeSchema: null }),
+    node({ id: 'central-asian-products', name: 'Central Asian Products', slug: 'central-asian-products', aliases: [], parentId: 'asian-products', level: 1, icon: null, sortOrder: 14, attributeSchema: null }),
+    node({ id: 'middle-eastern-western-asian-products', name: 'Middle Eastern & Western Asian Products', slug: 'middle-eastern-western-asian-products', aliases: [], parentId: 'asian-products', level: 1, icon: null, sortOrder: 15, attributeSchema: null }),
   ] }),
   ...CULTURAL_MARKETPLACES.map((marketplace) => node({
     id: marketplace.id,

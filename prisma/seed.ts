@@ -9,6 +9,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import bcrypt from 'bcryptjs';
 import { PERFUME_SIZE_OPTIONS } from '@/lib/category-attribute-schema';
 import { CULTURAL_MARKETPLACES } from '@/lib/cultural-marketplaces';
+import { ASIAN_PRODUCTS_ALIASES } from '@/lib/marketplace-categories';
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL ?? '' });
 const prisma = new PrismaClient({ adapter });
@@ -53,6 +54,12 @@ const PERFUME_FIELDS = fields(
   { name: 'fragrance_type', label: 'Fragrance Type', type: 'select', options: ['Floral', 'Woody', 'Fresh', 'Oriental', 'Citrus', 'Gourmand'] },
   { name: 'gender', label: 'Gender', type: 'select', options: ['Men', 'Women', 'Unisex'] },
 );
+const BEAUTY_SKINCARE_FIELDS = fields(
+  { name: 'brand', label: 'Brand', type: 'text' },
+  { name: 'skin_type', label: 'Skin Type', type: 'select', options: ['All Skin Types', 'Dry', 'Oily', 'Combination', 'Sensitive'] },
+  { name: 'concern', label: 'Primary Concern', type: 'select', options: ['Hydration', 'Brightening', 'Acne', 'Anti-Aging', 'Soothing', 'Sun Care'] },
+  { name: 'size_ml', label: 'Size (ml)', type: 'select', options: [...PERFUME_SIZE_OPTIONS] },
+);
 const CAR_FIELDS = fields(
   { name: 'brand', label: 'Brand / Make', type: 'text' },
   { name: 'year', label: 'Year', type: 'number' },
@@ -65,6 +72,34 @@ const FURNITURE_FIELDS = fields(
   { name: 'color', label: 'Color', type: 'text' },
   { name: 'brand', label: 'Brand', type: 'text' },
 );
+
+const ASIAN_SUBCATEGORY_DEFINITIONS = [
+  { name: 'Asian Fashion', slug: 'asian-fashion', sortOrder: 1, schemaKey: 'clothing' },
+  { name: 'Asian Beauty & Skincare', slug: 'asian-beauty-skincare', sortOrder: 2, schemaKey: 'beauty' },
+  { name: 'Asian Food & Snacks', slug: 'asian-food-snacks', sortOrder: 3, schemaKey: null },
+  { name: 'Asian Home Decor', slug: 'asian-home-decor', sortOrder: 4, schemaKey: 'furniture' },
+  { name: 'Asian Electronics & Gadgets', slug: 'asian-electronics-gadgets', sortOrder: 5, schemaKey: 'electronics' },
+  { name: 'Asian Art & Crafts', slug: 'asian-art-crafts', sortOrder: 6, schemaKey: null },
+  { name: 'Asian Jewelry & Accessories', slug: 'asian-jewelry-accessories', sortOrder: 7, schemaKey: 'clothing' },
+  { name: 'Asian Anime & Collectibles', slug: 'asian-anime-collectibles', sortOrder: 8, schemaKey: null },
+  { name: 'Asian Books & Media', slug: 'asian-books-media', sortOrder: 9, schemaKey: null },
+  { name: 'Asian Cultural Products', slug: 'asian-cultural-products', sortOrder: 10, schemaKey: null },
+  { name: 'East Asian Products', slug: 'east-asian-products', sortOrder: 11, schemaKey: null },
+  { name: 'South Asian Products', slug: 'south-asian-products', sortOrder: 12, schemaKey: null },
+  { name: 'Southeast Asian Products', slug: 'southeast-asian-products', sortOrder: 13, schemaKey: null },
+  { name: 'Central Asian Products', slug: 'central-asian-products', sortOrder: 14, schemaKey: null },
+  { name: 'Middle Eastern & Western Asian Products', slug: 'middle-eastern-western-asian-products', sortOrder: 15, schemaKey: null },
+] as const;
+
+function resolveAsianAttributeSchema(
+  schemaKey: (typeof ASIAN_SUBCATEGORY_DEFINITIONS)[number]['schemaKey'],
+) {
+  if (schemaKey === 'clothing') return CLOTHING_FIELDS;
+  if (schemaKey === 'beauty') return BEAUTY_SKINCARE_FIELDS;
+  if (schemaKey === 'furniture') return FURNITURE_FIELDS;
+  if (schemaKey === 'electronics') return ELECTRONICS_FIELDS;
+  return undefined;
+}
 
 async function seedCategories() {
   const categoryCount = await prisma.category.count();
@@ -102,6 +137,16 @@ async function seedCategories() {
   });
   const collectibles = await prisma.category.create({
     data: { name: 'Collectibles', slug: 'collectibles', level: 0, icon: '🏆', sortOrder: 8 },
+  });
+  const asianProducts = await prisma.category.create({
+    data: {
+      name: 'Asian Products',
+      slug: 'asian-products',
+      aliases: [...ASIAN_PRODUCTS_ALIASES],
+      level: 0,
+      icon: '🌏',
+      sortOrder: 10,
+    },
   });
 
   for (const marketplace of CULTURAL_MARKETPLACES) {
@@ -281,6 +326,18 @@ async function seedCategories() {
     { name: 'Trading Cards', slug: 'collectibles-cards', parentId: collectibles.id, level: 1, sortOrder: 4 },
   ]});
 
+  // Asian Products subcategories
+  await prisma.category.createMany({
+    data: ASIAN_SUBCATEGORY_DEFINITIONS.map((category) => ({
+      name: category.name,
+      slug: category.slug,
+      parentId: asianProducts.id,
+      level: 1,
+      sortOrder: category.sortOrder,
+      attributeSchema: resolveAsianAttributeSchema(category.schemaKey),
+    })),
+  });
+
   // Silence TypeScript "unused variable" warnings for categories only used
   // as implicit references (their IDs are not used as parent for children)
   void phones; void cameras; void audio;
@@ -337,6 +394,42 @@ async function ensureBeautyCategory() {
   });
 
   console.log('Beauty & Personal Care category hierarchy ensured.');
+}
+
+/**
+ * Ensures the Asian Products category branch exists on existing databases.
+ * Uses upsert so this can be safely re-run.
+ */
+async function ensureAsianCategory() {
+  const asianProducts = await prisma.category.upsert({
+    where: { slug: 'asian-products' },
+    update: {},
+    create: {
+      name: 'Asian Products',
+      slug: 'asian-products',
+      aliases: [...ASIAN_PRODUCTS_ALIASES],
+      level: 0,
+      icon: '🌏',
+      sortOrder: 10,
+    },
+  });
+
+  for (const category of ASIAN_SUBCATEGORY_DEFINITIONS) {
+    await prisma.category.upsert({
+      where: { slug: category.slug },
+      update: {},
+      create: {
+        name: category.name,
+        slug: category.slug,
+        parentId: asianProducts.id,
+        level: 1,
+        sortOrder: category.sortOrder,
+        attributeSchema: resolveAsianAttributeSchema(category.schemaKey),
+      },
+    });
+  }
+
+  console.log('Asian Products category hierarchy ensured.');
 }
 
 async function ensureCulturalMarketplaceCategories() {
@@ -431,6 +524,7 @@ async function main(){
   await seedCategories();
   // Always ensure new categories exist (safe upsert for existing databases)
   await ensureBeautyCategory();
+  await ensureAsianCategory();
   await ensureCulturalMarketplaceCategories();
   const count = await prisma.product.count();
   if(count===0){ await prisma.product.createMany({ data:[

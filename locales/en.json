@@ -52,6 +52,9 @@
     "featuredEyebrow": "Marketplace picks",
     "featuredTitle": "Fresh finds from trusted sellers",
     "featuredSubtitle": "A responsive product grid with filters, cleaner spacing, and faster product comparison across devices.",
+    "featuredRegionalEyebrow": "Featured cultural marketplace",
+    "featuredRegionalSubtitle": "Discover Asian sellers and products with direct category shortcuts and deeper regional browsing.",
+    "exploreCategory": "Explore {category}",
     "trustBadges": {
       "verifiedSellers": {
         "title": "Verified Sellers",

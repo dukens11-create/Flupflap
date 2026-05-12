@@ -22,7 +22,7 @@ export const CULTURAL_MARKETPLACES: ReadonlyArray<CulturalMarketplaceConfig> = [
     slug: 'african-products',
     icon: '🌍',
     aliases: ['african', 'africa', 'african products', 'afro', 'cultural african'],
-    sortOrder: 10,
+    sortOrder: 11,
     featuredTitle: 'Featured African Products',
     featuredSubtitle: 'Shop authentic fashion, food, art, and cultural essentials from African sellers.',
     subcategories: [

@@ -52,6 +52,9 @@
     "featuredEyebrow": "Selecciones del marketplace",
     "featuredTitle": "Novedades de vendedores confiables",
     "featuredSubtitle": "Una cuadrícula responsiva con filtros, mejor espaciado y comparación más rápida entre dispositivos.",
+    "featuredRegionalEyebrow": "Marketplace cultural destacado",
+    "featuredRegionalSubtitle": "Descubre vendedores y productos asiáticos con accesos directos por categoría y exploración regional más profunda.",
+    "exploreCategory": "Explorar {category}",
     "trustBadges": {
       "verifiedSellers": {
         "title": "Vendedores verificados",
