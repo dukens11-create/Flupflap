@@ -30,7 +30,18 @@ export default function CartClient() {
   const router = useRouter();
 
   useEffect(() => {
-    setItems(JSON.parse(localStorage.getItem('flupflap_cart') || '[]'));
+    try {
+      const raw = localStorage.getItem('flupflap_cart');
+      if (!raw) {
+        setItems([]);
+        return;
+      }
+      const parsed = JSON.parse(raw);
+      setItems(Array.isArray(parsed) ? parsed : []);
+    } catch {
+      localStorage.removeItem('flupflap_cart');
+      setItems([]);
+    }
   }, []);
 
   function save(next: Item[]) {
@@ -66,7 +77,7 @@ export default function CartClient() {
       {items.map(i => (
         <div className="card p-4 flex gap-4 items-center" key={i.id}>
           <div className="relative w-16 h-16 flex-shrink-0 rounded-xl overflow-hidden bg-slate-100">
-            <Image src={i.imageUrl} alt={i.title} fill className="object-cover" />
+            <Image src={i.imageUrl || '/flupflap_logo_brand.png'} alt={i.title || 'Cart item'} fill className="object-cover" />
           </div>
           <div className="flex-1 min-w-0">
             <p className="font-semibold truncate">{i.title}</p>
@@ -119,4 +130,3 @@ export default function CartClient() {
     </div>
   );
 }
-

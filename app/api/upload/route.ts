@@ -8,99 +8,111 @@ import {
   getProductMediaMaxBytes,
   getProductMediaUploadError,
 } from '@/lib/product-media';
+import { logError } from '@/lib/logger';
 
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user || !['SELLER', 'ADMIN'].includes(session.user.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
-
-  logCloudinaryConfigStatus();
-
-  if (!isCloudinaryConfigured()) {
-    return NextResponse.json(
-      { error: 'Product media uploads are not configured on this server.' },
-      { status: 503 }
-    );
-  }
-
-  let form: FormData;
   try {
-    form = await req.formData();
-  } catch {
-    return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });
-  }
+    const session = await getServerSession(authOptions);
+    if (!session?.user || !['SELLER', 'ADMIN'].includes(session.user.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
-  const file = form.get('file');
-  if (!(file instanceof File)) {
-    return NextResponse.json({ error: 'No file provided.' }, { status: 400 });
-  }
-  if (!file.type || file.size <= 0) {
-    return NextResponse.json(
-      { error: 'Invalid file. Please choose a valid image or video file and try again.' },
-      { status: 400 },
-    );
-  }
+    logCloudinaryConfigStatus();
 
-  const mediaKind = getProductMediaKind(file.type);
-  if (!mediaKind) {
-    const uploadErrorMessage = file.type.startsWith('video/')
-      ? getProductMediaUploadError('video/mp4')
-      : getProductMediaUploadError(file.type);
-    return NextResponse.json(
-      { error: uploadErrorMessage },
-      { status: 400 }
-    );
-  }
+    if (!isCloudinaryConfigured()) {
+      return NextResponse.json(
+        { error: 'Product media uploads are not configured on this server.' },
+        { status: 503 }
+      );
+    }
 
-  if (file.size > getProductMediaMaxBytes(file.type)) {
-    return NextResponse.json(
-      { error: `File is too large. Maximum size is ${mediaKind === 'video' ? '200' : '10'} MB.` },
-      { status: 400 }
-    );
-  }
+    let form: FormData;
+    try {
+      form = await req.formData();
+    } catch {
+      return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });
+    }
 
-  try {
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    const cloudinary = getCloudinary();
-    const folder = getProductMediaFolderByKind(mediaKind);
+    const file = form.get('file');
+    if (!(file instanceof File)) {
+      return NextResponse.json({ error: 'No file provided.' }, { status: 400 });
+    }
+    if (!file.type || file.size <= 0) {
+      return NextResponse.json(
+        { error: 'Invalid file. Please choose a valid image or video file and try again.' },
+        { status: 400 },
+      );
+    }
 
-    const result = await new Promise<{ secure_url: string; public_id: string; version?: number }>((resolve, reject) => {
-      cloudinary.uploader
-        .upload_stream({ backup: true, folder, resource_type: 'auto' }, (err, res) => {
-          if (err || !res) reject(err ?? new Error('No result from Cloudinary'));
-          else resolve(res as { secure_url: string; public_id: string; version?: number });
-        })
-        .end(buffer);
-    });
+    const mediaKind = getProductMediaKind(file.type);
+    if (!mediaKind) {
+      const uploadErrorMessage = file.type.startsWith('video/')
+        ? getProductMediaUploadError('video/mp4')
+        : getProductMediaUploadError(file.type);
+      return NextResponse.json(
+        { error: uploadErrorMessage },
+        { status: 400 }
+      );
+    }
 
-    const optimizedUrl =
-      mediaKind === 'video'
-        ? cloudinary.url(result.public_id, {
-            secure: true,
-            resource_type: 'video',
-            type: 'upload',
-            version: result.version,
-            transformation: [{ quality: 'auto:good' }],
-            format: 'webm',
+    if (file.size > getProductMediaMaxBytes(file.type)) {
+      return NextResponse.json(
+        { error: `File is too large. Maximum size is ${mediaKind === 'video' ? '200' : '10'} MB.` },
+        { status: 400 }
+      );
+    }
+
+    try {
+      const bytes = await file.arrayBuffer();
+      const buffer = Buffer.from(bytes);
+      const cloudinary = getCloudinary();
+      const folder = getProductMediaFolderByKind(mediaKind);
+
+      const result = await new Promise<{ secure_url: string; public_id: string; version?: number }>((resolve, reject) => {
+        cloudinary.uploader
+          .upload_stream({ backup: true, folder, resource_type: 'auto' }, (err, res) => {
+            if (err || !res) reject(err ?? new Error('No result from Cloudinary'));
+            else resolve(res as { secure_url: string; public_id: string; version?: number });
           })
-        : cloudinary.url(result.public_id, {
-            secure: true,
-            resource_type: 'image',
-            type: 'upload',
-            version: result.version,
-            transformation: [
-              { effect: 'improve' },
-              { effect: 'sharpen' },
-              { quality: 'auto:good' },
-              { fetch_format: 'webp' },
-            ],
-          });
+          .end(buffer);
+      });
 
-    return NextResponse.json({ originalUrl: result.secure_url, url: optimizedUrl });
+      const optimizedUrl =
+        mediaKind === 'video'
+          ? cloudinary.url(result.public_id, {
+              secure: true,
+              resource_type: 'video',
+              type: 'upload',
+              version: result.version,
+              transformation: [{ quality: 'auto:good' }],
+              format: 'webm',
+            })
+          : cloudinary.url(result.public_id, {
+              secure: true,
+              resource_type: 'image',
+              type: 'upload',
+              version: result.version,
+              transformation: [
+                { effect: 'improve' },
+                { effect: 'sharpen' },
+                { quality: 'auto:good' },
+                { fetch_format: 'webp' },
+              ],
+            });
+
+      return NextResponse.json({ originalUrl: result.secure_url, url: optimizedUrl });
+    } catch (err) {
+      logError('Upload failed', err, {
+        tag: 'api/upload',
+        action: 'upload',
+      });
+      return NextResponse.json({ error: 'Upload failed. Please try again.' }, { status: 500 });
+    }
   } catch (err) {
-    console.error('[api/upload]', err);
+    logError('Unexpected upload route failure', err, {
+      tag: 'api/upload',
+      action: 'post',
+    });
     return NextResponse.json({ error: 'Upload failed. Please try again.' }, { status: 500 });
   }
 }

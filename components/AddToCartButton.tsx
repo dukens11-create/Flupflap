@@ -23,7 +23,15 @@ export default function AddToCartButton({ item }: { item: Omit<Item, 'quantity'>
 
   function add() {
     const raw = localStorage.getItem('flupflap_cart');
-    const cart: Item[] = raw ? JSON.parse(raw) : [];
+    let cart: Item[] = [];
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        cart = Array.isArray(parsed) ? parsed as Item[] : [];
+      } catch {
+        localStorage.removeItem('flupflap_cart');
+      }
+    }
     const existing = cart.find(i => i.id === item.id);
     if (existing) {
       const newQty = existing.quantity + qty;
