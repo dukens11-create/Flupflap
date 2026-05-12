@@ -83,6 +83,7 @@ export function sanitizeTextInput(input: string, maxLength = 200): string {
   return input
     .replace(/[\u0000-\u001f\u007f]/g, ' ')
     .replace(/[<>]/g, '')
+    .replace(/`/g, '')
     .trim()
     .slice(0, maxLength);
 }

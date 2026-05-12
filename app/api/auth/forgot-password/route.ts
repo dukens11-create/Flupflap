@@ -61,8 +61,10 @@ export async function POST(req: Request) {
     const { subject, html } = passwordResetEmail(resetUrl.toString());
     const sent = await sendEmail(normalizedEmail, subject, html);
     if (!sent) {
+      const emailHash = crypto.createHash('sha256').update(normalizedEmail).digest('hex').slice(0, 12);
       logWarn('Password reset email delivery failed', {
         tag: 'api/auth/forgot-password',
+        emailHash,
       });
       return NextResponse.json(
         { error: 'Unable to send reset email right now. Please try again shortly.' },

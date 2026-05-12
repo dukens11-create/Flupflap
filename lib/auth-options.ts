@@ -35,6 +35,8 @@ function stripImageFields(target: unknown) {
   Reflect.deleteProperty(target, 'picture');
 }
 
+const siteOrigin = getSiteUrl().origin;
+
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   session: { strategy: 'jwt' },
@@ -116,14 +118,10 @@ export const authOptions: NextAuthOptions = {
     async redirect({ url, baseUrl }) {
       if (url.startsWith('/')) return `${baseUrl}${url}`;
 
-      const allowedOrigins = new Set([
-        new URL(baseUrl).origin,
-        getSiteUrl().origin,
-      ]);
-
       try {
+        const baseOrigin = new URL(baseUrl).origin;
         const redirectUrl = new URL(url);
-        if (allowedOrigins.has(redirectUrl.origin)) {
+        if (redirectUrl.origin === baseOrigin || redirectUrl.origin === siteOrigin) {
           return redirectUrl.toString();
         }
       } catch {
