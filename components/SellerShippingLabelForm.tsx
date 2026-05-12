@@ -135,12 +135,19 @@ export default function SellerShippingLabelForm({
 
   async function handleDownloadLabel() {
     if (!labelUrl) return;
-    const link = document.createElement('a');
-    link.href = `/api/seller/label-download?orderId=${encodeURIComponent(orderId)}`;
-    link.download = `shipping-label-${orderId}.pdf`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    try {
+      const res = await fetch(`/api/seller/label-download?orderId=${encodeURIComponent(orderId)}`);
+      if (!res.ok) throw new Error('Download failed');
+      const blob = await res.blob();
+      const objUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objUrl;
+      link.download = `shipping-label-${orderId}.pdf`;
+      link.click();
+      URL.revokeObjectURL(objUrl);
+    } catch {
+      window.open(`/api/seller/label-download?orderId=${encodeURIComponent(orderId)}`, '_blank');
+    }
   }
 
   return (
