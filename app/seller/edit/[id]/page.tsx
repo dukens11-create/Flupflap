@@ -61,9 +61,9 @@ export default async function SellerEditPage({
   const defaultOriginalImages = product.originalImages?.length ? product.originalImages : defaultImages;
   const defaultEnhancedImages = product.enhancedImages?.length ? product.enhancedImages : [];
   const defaultImageThumbnails = product.imageThumbnails?.length ? product.imageThumbnails : [];
-  // Use the most specific category slug for the condition picker seed value.
+  // Edit flow stores the deepest selected category in categoryId; fall back to subcategoryId for older rows.
   const defaultCategorySlug =
-    product.subcategoryRef?.slug ?? product.categoryRef?.slug ?? undefined;
+    product.categoryRef?.slug ?? product.subcategoryRef?.slug ?? undefined;
   const packageDetails = getEffectivePackageDetails(product);
   const shippingClass = getShippingClass(product.productAttributes) ?? '';
   const shippingSetupIncomplete = !hasStoredPackageDetails(product);
