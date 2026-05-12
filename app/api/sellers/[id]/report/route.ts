@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { z } from 'zod';
 
-export const VALID_SELLER_REPORT_REASONS = [
+const VALID_SELLER_REPORT_REASONS = [
   'scam_fraud',
   'off_platform_payment',
   'counterfeit_behavior',

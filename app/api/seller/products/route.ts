@@ -21,9 +21,7 @@ import {
   SHIPPING_PACKAGE_DETAILS_REQUIRED_MESSAGE,
 } from '@/lib/product-package';
 
-export const SHIPPING_MODES = ['FLAT', 'FREE', 'CALCULATED'] as const;
-type ShippingMode = typeof SHIPPING_MODES[number];
-
+import { SHIPPING_MODES, type ShippingMode } from '@/lib/product-constants';
 const schema = z.object({
   title: z.string().trim().optional(),
   description: z.string().trim().optional(),

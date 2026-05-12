@@ -11,7 +11,7 @@ import {
   shouldRecommendFraudReview,
 } from '@/lib/fraud-detection';
 import { parseJsonOrNull } from '@/lib/parse-json';
-import { SHIPPING_MODES } from '@/app/api/seller/products/route';
+import { SHIPPING_MODES } from '@/lib/product-constants';
 import { loadCategoryHierarchyNodes, validateCategorySelection, resolveLegacyCategorySelection } from '@/lib/category-hierarchy';
 import {
   convertWeightToOunces,
