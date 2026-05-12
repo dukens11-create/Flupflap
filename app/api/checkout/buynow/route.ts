@@ -7,6 +7,7 @@ import { buildCheckoutCommissionItems, getMarketplaceSettings } from '@/lib/comm
 import { checkoutErrorResponse } from '@/lib/checkout-errors';
 import { isSellerVerificationApproved } from '@/lib/seller-verification';
 import { hasStoredPackageDetails } from '@/lib/product-package';
+import { logError } from '@/lib/logger';
 
 function isCalculatedShippingProduct(product: { shippingMode?: string | null; shippingCents: number }) {
   return product.shippingMode === 'CALCULATED' || (!product.shippingMode && product.shippingCents === 0);
@@ -171,7 +172,7 @@ export async function POST(req: Request) {
       warningCode: null,
     });
   } catch (err: unknown) {
-    console.error('[checkout/buynow]', err);
+    logError('Stripe buy-now checkout session failed', err, { tag: 'checkout/buynow', action: 'createCheckoutSession' });
     const reason = classifyStripeError(err).reason;
     return checkoutErrorResponse(reason);
   }

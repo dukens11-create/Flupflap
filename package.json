@@ -20,6 +20,7 @@
     "@prisma/adapter-pg": "latest",
     "@prisma/client": "latest",
     "@prisma/config": "latest",
+    "@sentry/nextjs": "^10.52.0",
     "@tailwindcss/postcss": "^4.2.4",
     "bcryptjs": "latest",
     "cloudinary": "^2.10.0",
