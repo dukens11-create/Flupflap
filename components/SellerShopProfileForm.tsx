@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 const INPUT_CLASS = 'w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500';
 
@@ -56,6 +56,7 @@ export default function SellerShopProfileForm({
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
   const trimmedShopName = shopName.trim();
+  const trimmedShopLogoUrl = shopLogoUrl.trim();
   const trimmedShipFromName = shipFromName.trim();
   const trimmedShipFromStreet = shipFromStreet.trim();
   const trimmedShipFromCity = shipFromCity.trim();
@@ -64,22 +65,34 @@ export default function SellerShopProfileForm({
   const trimmedShipFromCountry = shipFromCountry.trim().toUpperCase();
   const trimmedShipFromPhone = shipFromPhone.trim();
 
-  const hasAnyShipFromField = Boolean(
-    trimmedShipFromName
-    || trimmedShipFromStreet
-    || trimmedShipFromCity
-    || trimmedShipFromState
-    || trimmedShipFromZip
-    || trimmedShipFromCountry
-    || trimmedShipFromPhone,
+  const hasAnyShipFromField = useMemo(
+    () =>
+      Boolean(
+        trimmedShipFromName
+        || trimmedShipFromStreet
+        || trimmedShipFromCity
+        || trimmedShipFromState
+        || trimmedShipFromZip
+        || trimmedShipFromCountry
+        || trimmedShipFromPhone,
+      ),
+    [
+      trimmedShipFromName,
+      trimmedShipFromStreet,
+      trimmedShipFromCity,
+      trimmedShipFromState,
+      trimmedShipFromZip,
+      trimmedShipFromCountry,
+      trimmedShipFromPhone,
+    ],
   );
 
-  function validateForm(): FieldErrors {
+  const validateForm = useCallback((): FieldErrors => {
     const nextErrors: FieldErrors = {};
     if (trimmedShopName.length < 2) {
       nextErrors.shopName = 'Shop / Business name must be at least 2 characters.';
     }
-    if (shopLogoUrl.trim() && !/^https?:\/\//i.test(shopLogoUrl.trim())) {
+    if (trimmedShopLogoUrl && !/^https?:\/\//i.test(trimmedShopLogoUrl)) {
       nextErrors.shopLogoUrl = 'Use a full image URL that starts with http:// or https://.';
     }
     if (hasAnyShipFromField) {
@@ -97,7 +110,17 @@ export default function SellerShopProfileForm({
       nextErrors.shipFromCountry = 'Use a 2-letter country code (for example: US).';
     }
     return nextErrors;
-  }
+  }, [
+    trimmedShopName,
+    trimmedShopLogoUrl,
+    hasAnyShipFromField,
+    trimmedShipFromName,
+    trimmedShipFromStreet,
+    trimmedShipFromCity,
+    trimmedShipFromState,
+    trimmedShipFromZip,
+    trimmedShipFromCountry,
+  ]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -118,7 +141,7 @@ export default function SellerShopProfileForm({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           shopName: trimmedShopName,
-          shopLogoUrl: shopLogoUrl.trim(),
+          shopLogoUrl: trimmedShopLogoUrl,
           shopDescription: shopDescription.trim(),
           shipFromName: trimmedShipFromName,
           shipFromStreet: trimmedShipFromStreet,
@@ -290,7 +313,7 @@ export default function SellerShopProfileForm({
               id="shipFromState"
               type="text"
               value={shipFromState}
-              onChange={(e) => setShipFromState(e.target.value.toUpperCase())}
+              onChange={(e) => setShipFromState(e.target.value)}
               maxLength={2}
               placeholder="e.g. NY"
               className={INPUT_CLASS}

@@ -12,9 +12,25 @@ const schema = z.object({
   shipFromName: z.string().trim().max(100).optional().or(z.literal('')),
   shipFromStreet: z.string().trim().max(200).optional().or(z.literal('')),
   shipFromCity: z.string().trim().max(100).optional().or(z.literal('')),
-  shipFromState: z.string().trim().toUpperCase().max(2).optional().or(z.literal('')),
+  shipFromState: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .refine((value) => value === '' || /^[A-Z]{2}$/.test(value), {
+      message: 'Use a 2-letter state code.',
+    })
+    .optional()
+    .or(z.literal('')),
   shipFromZip: z.string().trim().max(20).optional().or(z.literal('')),
-  shipFromCountry: z.string().trim().toUpperCase().max(2).optional().or(z.literal('')),
+  shipFromCountry: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .refine((value) => value === '' || /^[A-Z]{2}$/.test(value), {
+      message: 'Use a 2-letter country code.',
+    })
+    .optional()
+    .or(z.literal('')),
   shipFromPhone: z.string().trim().max(30).optional().or(z.literal('')),
 }).superRefine((value, ctx) => {
   const hasAnyShipFromField = Boolean(

@@ -56,7 +56,7 @@ export async function POST() {
       );
     }
 
-    const now = existingVerification?.kycStartedAt ?? new Date();
+    const kycStartedAt = existingVerification?.kycStartedAt ?? new Date();
     const identitySession = await createStripeIdentitySession(session.user.id);
     const providerVerificationId = identitySession.id;
     const verificationUrl = identitySession.url ?? null;
@@ -74,7 +74,7 @@ export async function POST() {
         adminFallbackStatus: SellerAdminFallbackStatus.PENDING_REVIEW,
         adminFallbackReason: null,
         eligibleToListAt: null,
-        kycStartedAt: now,
+        kycStartedAt,
         phoneNumber: user.phone ?? '',
         phoneVerificationStatus: user.phone
           ? SellerPhoneVerificationStatus.PENDING
@@ -101,7 +101,7 @@ export async function POST() {
         selfieImagePublicId: '',
         rejectionReason: null,
         adminFallbackStatus: SellerAdminFallbackStatus.PENDING_REVIEW,
-        kycStartedAt: now,
+        kycStartedAt,
       },
     });
 
@@ -140,7 +140,7 @@ export async function POST() {
       code: classified.code,
       statusCode: classified.statusCode,
     });
-    const statusCode = typeof classified.statusCode === 'number' && classified.statusCode > 0
+    const statusCode = typeof classified.statusCode === 'number'
       ? classified.statusCode
       : 500;
     return NextResponse.json(

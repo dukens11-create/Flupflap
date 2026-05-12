@@ -32,10 +32,7 @@ export async function GET(
   if (session.user.role === 'ADMIN' && !sellerIdParam) {
     return NextResponse.json({ error: 'Seller ID is required.' }, { status: 400 });
   }
-  const sellerId = (sellerIdParam ?? '').trim();
-  if (!sellerId) {
-    return NextResponse.json({ error: 'Seller ID is required.' }, { status: 400 });
-  }
+  const sellerId = sellerIdParam as string;
 
   if (session.user.role === 'ADMIN') {
     const seller = await prisma.user.findUnique({
@@ -105,7 +102,10 @@ export async function GET(
       message: err instanceof Error ? err.message : String(err),
     });
     return NextResponse.json(
-      { error: 'Unable to open this verification document right now. Please try again.' },
+      {
+        error:
+          'We could not open this verification document because secure document access is temporarily unavailable. Please retry in a moment or contact support if this continues.',
+      },
       { status: 500 },
     );
   }
