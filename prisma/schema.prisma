@@ -154,8 +154,8 @@ model User {
   sellerTaxProfile         SellerTaxProfile?
   sellerTaxReports         SellerTaxReport[]
   // Seller subscription billing
-  // Keep these nullable identifiers non-unique so production `prisma db push`
-  // stays deploy-safe for existing databases with legacy duplicate values.
+  // Keep these nullable identifiers non-unique so production migration deploys
+  // stay safe for existing databases with legacy duplicate values.
   stripeCustomerId              String?
   subscriptionId                String?
   subscriptionStatus            String?   // ACTIVE | INACTIVE | PAST_DUE | CANCELLED

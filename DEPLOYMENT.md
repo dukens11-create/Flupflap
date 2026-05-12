@@ -55,7 +55,8 @@ Set these values exactly:
 | **Region** | Your preferred region |
 | **Branch** | `main` |
 | **Runtime** | Node |
-| **Build Command** | `npm install && npm run build && if [ -n "$DATABASE_URL" ]; then npx prisma db push --skip-generate; fi` |
+| **Node Version** | `20` |
+| **Build Command** | `npm install && npm run build && if [ -n "$DATABASE_URL" ] && [ -d prisma/migrations ]; then npx prisma migrate deploy; else echo "Skipping Prisma migrate deploy (DATABASE_URL missing or prisma/migrations not found)."; fi` |
 | **Start Command** | `npm run start` |
 | **Publish Directory** | *(leave completely empty)* |
 
@@ -95,7 +96,7 @@ Click **Create Web Service**. Render will:
 1. Clone the repository
 2. Install npm dependencies
 3. Run `prisma generate && next build`
-4. Apply the Prisma schema with `prisma db push` (if `DATABASE_URL` is set at build time)
+4. Apply committed Prisma migrations with `prisma migrate deploy` (when `DATABASE_URL` is set and `prisma/migrations` exists)
 5. Start the server with `next start`
 
 A successful deploy shows the app live at your Render URL.
@@ -306,28 +307,30 @@ After creating the database, copy the connection string into the `DATABASE_URL` 
 ### Automatic schema setup (Blueprint / render.yaml)
 
 When `DATABASE_URL` is set in the Render environment before the deploy runs, the build
-command automatically applies the Prisma schema:
+command automatically applies committed Prisma migrations:
 
 ```bash
 npm install && npm run build && \
-  if [ -n "$DATABASE_URL" ]; then npx prisma db push --skip-generate; fi
+  if [ -n "$DATABASE_URL" ] && [ -d prisma/migrations ]; then npx prisma migrate deploy; \
+  else echo "Skipping Prisma migrate deploy (DATABASE_URL missing or prisma/migrations not found)."; fi
 ```
 
-`prisma db push` is safe for additive schema sync and will stop if Prisma detects
-potentially destructive changes. Do **not** force `--accept-data-loss` in production
-deploy commands. If `DATABASE_URL` is not set at build time the `db push` step is skipped
-automatically.
+This avoids deploy-time `prisma db push` in production. If `DATABASE_URL` is missing or
+`prisma/migrations` is not present yet, migration deployment is skipped automatically.
 
 ### Manual schema setup (first deploy without Blueprint, or DATABASE_URL added after build)
 
 If you added `DATABASE_URL` after the first build already ran (so the automatic step was
-skipped), run the schema push manually once:
+skipped), run migration deployment manually when migrations are present:
 
 ```bash
-npx prisma db push
+npx prisma migrate deploy
 ```
 
-You can do this from:
+If this repository still has no `prisma/migrations` directory, generate and commit an
+initial migration from a development environment first, then redeploy.
+
+You can run migration deployment from:
 - A **Shell** / **Exec** tab inside your Render Web Service (if your plan provides one)
 - Your local machine, with `DATABASE_URL` set to the **External Database URL** from Render
 
@@ -351,7 +354,7 @@ Demo accounts created by seed:
 |---|---|---|
 | `Publish directory dist does not exist!` | Service is configured as Static Site | Delete the service and recreate it as a Web Service, or change the service type in Settings |
 | `PrismaClientInitializationError` | `DATABASE_URL` is missing or wrong | Set `DATABASE_URL` in Render → Environment |
-| Homepage shows "Database schema not yet initialized" | `DATABASE_URL` was added after the first build ran, so `prisma db push` was skipped | Trigger a new deploy (the build will now run `prisma db push` automatically), or run it manually |
+| Homepage shows "Database schema not yet initialized" | `DATABASE_URL` was added after the first build ran, or committed migrations are missing | Trigger a new deploy (the build will run `prisma migrate deploy` when migrations exist), or run `npx prisma migrate deploy` manually |
 | NextAuth errors / redirect loop | `NEXTAUTH_SECRET` or `NEXTAUTH_URL` missing | Set both env vars; `NEXTAUTH_URL` must match the public Render URL |
 | Stripe webhook `400` errors | `STRIPE_WEBHOOK_SECRET` missing or wrong | Re-copy the signing secret from Stripe and update the env var |
 | App loads but images are broken | Image host not in `next.config.js` | Add the hostname to `remotePatterns` in `next.config.js` |

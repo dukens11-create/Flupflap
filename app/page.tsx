@@ -22,7 +22,7 @@ export const metadata: Metadata = { title: 'Browse Products' };
  * applied yet (tables or columns are missing). This lets the homepage show a
  * clear, actionable message instead of crashing to the global error boundary.
  *
- * Common causes: first deploy before `prisma db push` has run, or
+ * Common causes: first deploy before Prisma migrations have been applied, or
  * DATABASE_URL points to a brand-new empty database.
  */
 function isSchemaNotInitializedError(err: unknown): boolean {
@@ -324,11 +324,11 @@ async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?
           <p className="font-semibold text-slate-700 mb-1">Database schema not yet initialized</p>
           <p className="text-sm">
             The database is connected but the tables have not been created.{' '}
-            If you deployed via Render, trigger a new deploy — the build command will apply the
-            schema automatically. If you set up the service manually, make sure your build command
-            includes{' '}
+            If you deployed via Render, trigger a new deploy — the build command applies committed
+            migrations automatically when available. If you set up the service manually, make sure
+            your build command includes{' '}
             <code className="font-mono text-xs bg-slate-100 px-1 rounded">
-              {'if [ -n "$DATABASE_URL" ]; then npx prisma db push --skip-generate; fi'}
+              {'if [ -n "$DATABASE_URL" ] && [ -d prisma/migrations ]; then npx prisma migrate deploy; else echo "Skipping Prisma migrate deploy (DATABASE_URL missing or prisma/migrations not found)."; fi'}
             </code>{' '}
             after{' '}
             <code className="font-mono text-xs bg-slate-100 px-1 rounded">npm run build</code>.
