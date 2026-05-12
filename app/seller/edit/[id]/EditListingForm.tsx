@@ -174,7 +174,12 @@ export default function EditListingForm({
         method: 'DELETE',
         headers: { Accept: 'application/json' },
       });
-      const data = await res.json().catch(() => ({}));
+      let data: { error?: string; message?: string } = {};
+      try {
+        data = await res.json();
+      } catch (parseErr) {
+        console.error('[EditListingForm] delete response parse error:', parseErr);
+      }
       if (!res.ok) {
         const errorMessage = data?.error ?? data?.message ?? 'Unable to delete this listing right now.';
         setSubmitError(errorMessage);

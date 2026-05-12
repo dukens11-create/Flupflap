@@ -5,6 +5,9 @@ import { prisma } from '@/lib/db';
 import { DEFAULT_PROMOTION_PLANS, ensurePromotionPlans } from '@/lib/promotions';
 import { getMarketplaceSettings } from '@/lib/commission';
 
+const MIN_FREE_PROMOTION_DURATION_DAYS = 1;
+const MIN_PROMOTION_CREDITS = 1;
+
 function centsFromDollars(value: FormDataEntryValue | null) {
   const amount = Number(value);
   if (!Number.isFinite(amount) || amount < 0) return null;
@@ -43,7 +46,7 @@ export async function POST(req: Request) {
       const settings = await getMarketplaceSettings();
       const freePromotionEnabled = form.get('freePromotionEnabled') === 'on';
       const durationRaw = Number(form.get('freePromotionDurationDays'));
-      if (!Number.isInteger(durationRaw) || durationRaw < 1) {
+      if (!Number.isInteger(durationRaw) || durationRaw < MIN_FREE_PROMOTION_DURATION_DAYS) {
         return respondError(req, 'Free promotion duration must be a whole number of days (minimum 1).', 400);
       }
       const freePromotionDurationDays = durationRaw;
@@ -60,7 +63,7 @@ export async function POST(req: Request) {
       if (!sellerId) {
         return respondError(req, 'Seller is required.', 400);
       }
-      if (!Number.isInteger(rawCredits) || rawCredits < 1) {
+      if (!Number.isInteger(rawCredits) || rawCredits < MIN_PROMOTION_CREDITS) {
         return respondError(req, 'Credit amount must be a whole number (minimum 1).', 400);
       }
       const credits = rawCredits;

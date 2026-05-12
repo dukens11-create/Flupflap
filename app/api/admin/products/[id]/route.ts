@@ -11,8 +11,10 @@ function isJsonRequest(req: Request) {
   return (req.headers.get('accept') ?? '').includes('application/json');
 }
 
+const ALLOWED_REDIRECT_PATHS = new Set(['/admin', '/admin/fraud']);
+
 function resolveRedirectPath(redirectTo: string | null | undefined) {
-  if (!redirectTo || !redirectTo.startsWith('/')) return '/admin';
+  if (!redirectTo || !ALLOWED_REDIRECT_PATHS.has(redirectTo)) return '/admin';
   return redirectTo;
 }
 
@@ -39,7 +41,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const { id } = await params;
     const form = await req.formData();
     const action = form.get('_method') as string;
-    const redirectTo = resolveRedirectPath(form.get('redirectTo') as string) || '/admin';
+    const redirectTo = resolveRedirectPath(form.get('redirectTo') as string);
     const actionToStatus: Record<string, 'APPROVED' | 'REJECTED' | 'HIDDEN'> = {
       approve: 'APPROVED',
       reject: 'REJECTED',
