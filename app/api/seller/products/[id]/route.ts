@@ -306,7 +306,8 @@ export async function POST(
     }
 
     // Validate categoryId before attempting the DB update to avoid FK constraint errors.
-    const resolvedCategoryId = data.categoryId?.trim() || null;
+    const categoryIdTrimmed = data.categoryId?.trim();
+    const resolvedCategoryId = categoryIdTrimmed && categoryIdTrimmed.length > 0 ? categoryIdTrimmed : null;
     if (resolvedCategoryId) {
       const categoryCheck = await prisma.category.findUnique({
         where: { id: resolvedCategoryId },
@@ -324,7 +325,8 @@ export async function POST(
     }
 
     // Validate subcategoryId if provided
-    const resolvedSubcategoryId = data.subcategoryId?.trim() || null;
+    const subcategoryIdTrimmed = data.subcategoryId?.trim();
+    const resolvedSubcategoryId = subcategoryIdTrimmed && subcategoryIdTrimmed.length > 0 ? subcategoryIdTrimmed : null;
     if (resolvedSubcategoryId) {
       const subCategoryCheck = await prisma.category.findUnique({
         where: { id: resolvedSubcategoryId },
@@ -499,7 +501,8 @@ export async function PATCH(
     }
 
     // Validate categoryId before attempting the DB update to avoid FK constraint errors.
-    const resolvedCategoryId = data.categoryId?.trim() || null;
+    const patchCategoryIdTrimmed = data.categoryId?.trim();
+    const resolvedCategoryId = patchCategoryIdTrimmed && patchCategoryIdTrimmed.length > 0 ? patchCategoryIdTrimmed : null;
     if (resolvedCategoryId) {
       const categoryCheck = await prisma.category.findUnique({
         where: { id: resolvedCategoryId },
@@ -515,7 +518,8 @@ export async function PATCH(
     }
 
     // Validate subcategoryId if provided
-    const resolvedSubcategoryId = data.subcategoryId?.trim() || null;
+    const patchSubcategoryIdTrimmed = data.subcategoryId?.trim();
+    const resolvedSubcategoryId = patchSubcategoryIdTrimmed && patchSubcategoryIdTrimmed.length > 0 ? patchSubcategoryIdTrimmed : null;
     if (resolvedSubcategoryId) {
       const subCategoryCheck = await prisma.category.findUnique({
         where: { id: resolvedSubcategoryId },
