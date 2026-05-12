@@ -1,3 +1,7 @@
+/**
+ * Reads a single-use Response body for a user-facing API error message.
+ * Call this before any other response body reads.
+ */
 export async function readApiMessage(response: Response, fallback: string) {
   try {
     const payload = await response.json() as { error?: unknown; message?: unknown };

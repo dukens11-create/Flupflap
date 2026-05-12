@@ -5,7 +5,7 @@ import { prisma } from '@/lib/db';
 import { z } from 'zod';
 import { apiError } from '@/lib/api-response';
 
-const optionalTwoLetterCode = z.string().trim().length(2).or(z.literal('')).optional();
+const optionalTwoLetterCode = z.union([z.literal(''), z.string().trim().length(2)]).optional();
 
 const schema = z.object({
   shopName: z.string().trim().min(2).max(80),

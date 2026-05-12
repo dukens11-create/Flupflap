@@ -81,12 +81,15 @@ export async function POST(req: Request) {
     };
 
     const items = Array.isArray(body?.items)
-      ? body.items.filter((item) => (
-        typeof item?.productId === 'string'
-        && item.productId.trim().length > 0
-        && Number.isInteger(Number(item.quantity))
-        && Number(item.quantity) > 0
-      ))
+      ? body.items.filter((item) => {
+        const quantity = typeof item?.quantity === 'number' || typeof item?.quantity === 'string'
+          ? Number(item.quantity)
+          : NaN;
+        return typeof item?.productId === 'string'
+          && item.productId.trim().length > 0
+          && Number.isInteger(quantity)
+          && quantity > 0;
+      })
       : [];
     if (!items.length) {
       return apiError('Please provide at least one valid cart item.', 400);

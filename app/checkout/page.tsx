@@ -112,8 +112,14 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     if (status === 'loading' || hasInitializedBuyerNameRef.current) return;
-    hasInitializedBuyerNameRef.current = true;
-    setBuyerName(session?.user?.name ?? '');
+    if (status === 'authenticated') {
+      setBuyerName(session?.user?.name ?? '');
+      hasInitializedBuyerNameRef.current = true;
+      return;
+    }
+    if (status === 'unauthenticated') {
+      hasInitializedBuyerNameRef.current = true;
+    }
   }, [session?.user?.name, status]);
 
   // Items that support pickup

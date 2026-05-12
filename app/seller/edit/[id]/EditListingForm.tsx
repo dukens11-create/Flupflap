@@ -123,7 +123,14 @@ export default function EditListingForm({
     }
     const numericPackageValues = [weight, length, width, height].map(Number);
     if (numericPackageValues.some((value) => Number.isNaN(value) || value <= 0)) {
-      setSubmitError('Shipping package values must be greater than 0.');
+      const packageFields = [
+        ['weight', numericPackageValues[0]],
+        ['length', numericPackageValues[1]],
+        ['width', numericPackageValues[2]],
+        ['height', numericPackageValues[3]],
+      ] as const;
+      const invalidField = packageFields.find(([, value]) => Number.isNaN(value) || value <= 0)?.[0];
+      setSubmitError(`Shipping package ${invalidField ?? 'values'} must be greater than 0.`);
       return;
     }
     const shippingRaw = String(formData.get('shipping') ?? '').trim();
