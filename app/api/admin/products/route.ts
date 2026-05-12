@@ -58,8 +58,8 @@ export async function POST(req: Request) {
     }
 
     const data = parsed.data;
-    const priceCents = cents(String(data.price));
-    const shippingCents = cents(String(data.shipping ?? 0));
+    const priceCents = cents(data.price);
+    const shippingCents = cents(data.shipping ?? 0);
     const inventory = data.inventory ?? 1;
 
     const seller = await prisma.user.findUnique({ where: { email: data.sellerEmail.toLowerCase() } });
