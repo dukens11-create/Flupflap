@@ -138,6 +138,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ offerId: offer.id }, { status: 201 });
   } catch (error) {
     console.error('[offers POST]', error);
-    return NextResponse.json({ error: 'Failed to create offer.' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to submit offer. Please try again.' }, { status: 500 });
   }
 }
