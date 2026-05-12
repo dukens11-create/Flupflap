@@ -56,4 +56,19 @@ services:
         value: "flupflap/users"
       - key: CLOUDINARY_THUMBNAILS_FOLDER
         value: "flupflap/thumbnails"
+      # Sentry — optional error monitoring. Leave unset to disable.
+      - key: SENTRY_DSN
+        sync: false
+      - key: NEXT_PUBLIC_SENTRY_DSN
+        sync: false
+      - key: SENTRY_ENVIRONMENT
+        value: "production"
+      - key: NEXT_PUBLIC_SENTRY_ENVIRONMENT
+        value: "production"
+      - key: SENTRY_ORG
+        sync: false
+      - key: SENTRY_PROJECT
+        sync: false
+      - key: SENTRY_AUTH_TOKEN
+        sync: false
     healthCheckPath: /
