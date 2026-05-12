@@ -4,12 +4,7 @@ if (process.env.DATABASE_URL) {
   try {
     execSync('npx prisma db push', { stdio: 'inherit' });
   } catch (error) {
-    let exitCode = 1;
-    if (typeof error.status === 'number') {
-      exitCode = error.status;
-    } else if (typeof error.exitCode === 'number') {
-      exitCode = error.exitCode;
-    }
+    const exitCode = typeof error.status === 'number' ? error.status : 1;
     process.exit(exitCode);
   }
 } else {
