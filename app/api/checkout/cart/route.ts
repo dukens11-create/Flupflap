@@ -325,7 +325,7 @@ export async function POST(req: Request) {
       try {
         const address = validatedShippingRateInfo.buyerAddress;
         const customer = await stripe.customers.create({
-          name: address.name || session.user.name || undefined,
+          name: address.name || undefined,
           email: session.user.email || undefined,
           address: {
             line1: address.street1,
@@ -336,7 +336,7 @@ export async function POST(req: Request) {
             country: address.country || 'US',
           },
           shipping: {
-            name: address.name || session.user.name || 'Buyer',
+            name: address.name || 'Buyer',
             address: {
               line1: address.street1,
               line2: address.street2 || undefined,
