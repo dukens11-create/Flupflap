@@ -773,7 +773,7 @@ export default function CheckoutPage() {
                 onFocus={() => {
                   if (addressSuggestions.length > 0) {
                     setAddressDropdownOpen(true);
-                    setHighlightedSuggestionIndex(prev => (prev >= 0 ? prev : 0));
+                    setHighlightedSuggestionIndex(0);
                   }
                 }}
                 onKeyDown={(event) => {
@@ -855,7 +855,9 @@ export default function CheckoutPage() {
               )}
             </div>
             <p id="checkout-street-address-hint" className="mt-1 text-xs text-slate-500">
-              Start with your street number and name to autofill city, state, ZIP, and country.
+              {mapboxToken
+                ? 'Start with your street number and name to autofill city, state, ZIP, and country.'
+                : 'Enter your street address manually to continue checkout.'}
             </p>
             {addressLookupError && (
               <p className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
@@ -874,7 +876,7 @@ export default function CheckoutPage() {
               autoComplete="address-line2"
             />
           </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label text-xs">City</label>
               <input
@@ -899,7 +901,7 @@ export default function CheckoutPage() {
               />
             </div>
           </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label text-xs">ZIP code</label>
               <input
