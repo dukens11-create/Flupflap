@@ -100,7 +100,7 @@ export default function EditListingForm({
     const submittedCategoryId = String(formData.get('categoryId') ?? '').trim();
     const leafCategoryId = String(formData.get('leafCategoryId') ?? '').trim();
     const parentCategoryId = String(formData.get('parentCategoryId') ?? '').trim();
-    const categoryId = leafCategoryId || submittedCategoryId;
+    const effectiveCategoryId = leafCategoryId || submittedCategoryId;
     const category = String(formData.get('category') ?? '').trim();
     const weight = String(formData.get('weight') ?? '').trim();
     const length = String(formData.get('length') ?? '').trim();
@@ -110,7 +110,7 @@ export default function EditListingForm({
     const imageUrl = String(formData.get('imageUrl') ?? '').trim();
     const resolvedImages = images.length > 0 ? images : (imageUrl ? [imageUrl] : []);
 
-    if (!category && !categoryId) {
+    if (!category && !effectiveCategoryId) {
       setSubmitError('Please select a category.');
       return;
     }
@@ -135,10 +135,10 @@ export default function EditListingForm({
     setSubmitting(true);
 
     try {
-      formData.set('categoryId', categoryId);
+      formData.set('categoryId', effectiveCategoryId);
       formData.set('subcategoryId', parentCategoryId);
       console.log('[EditListingForm] submitting update', {
-        categoryId,
+        categoryId: effectiveCategoryId,
         subcategoryId: parentCategoryId,
         category,
         condition,

@@ -318,7 +318,7 @@ function resolveSelectionPath(
       seen.add(id);
       return true;
     })
-    .map(id => findNodeById(categories, id))
+    .map((id) => findNodeById(categories, id))
     .filter((node): node is CategoryNode => Boolean(node));
 
   if (foundNodes.length === 0) {
