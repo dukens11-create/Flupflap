@@ -406,18 +406,16 @@ export default function CategoryPicker({
         setCategories(nextCategories);
 
         const nextPath = resolveSelectionPath(nextCategories, defaultCategoryId, defaultSubcategoryId);
-        if (nextPath.mainId || nextPath.subId || nextPath.childId) {
-          setMainId(nextPath.mainId);
-          setSubId(nextPath.subId);
-          setChildId(nextPath.childId);
-          if (!nextPath.stale) {
-            setCategoryError('');
-          }
-        } else if (nextPath.stale) {
+        if (nextPath.stale) {
           setMainId(null);
           setSubId(null);
           setChildId(null);
           setCategoryError('The selected category is no longer valid. Please select a valid category and try again.');
+        } else if (nextPath.mainId || nextPath.subId || nextPath.childId) {
+          setMainId(nextPath.mainId);
+          setSubId(nextPath.subId);
+          setChildId(nextPath.childId);
+          setCategoryError('');
         }
       } catch {
         if (!mounted) return;

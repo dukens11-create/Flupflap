@@ -135,9 +135,9 @@ export default function EditListingForm({
     setSubmitting(true);
 
     try {
+      const subcategoryId = parentCategoryId;
       formData.set('categoryId', categoryId);
-      formData.set('subcategoryId', parentCategoryId);
-      const subcategoryId = String(formData.get('subcategoryId') ?? '').trim();
+      formData.set('subcategoryId', subcategoryId);
       console.log('[EditListingForm] submitting update', { categoryId, subcategoryId, category, condition });
 
       const res = await fetch(`/api/seller/products/${id}`, {
