@@ -53,6 +53,7 @@ interface SearchParams {
 }
 
 const FEATURED_MARKETPLACE_CATEGORY_SLUGS = ['asian-products'] as const;
+const MAX_FEATURED_SUBCATEGORIES = 6;
 
 function findCategoryBySlug(
   nodes: DefaultCategoryNode[],
@@ -446,7 +447,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
                 </div>
                 {category.children.length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {category.children.slice(0, 6).map((subcategory) => (
+                    {category.children.slice(0, MAX_FEATURED_SUBCATEGORIES).map((subcategory) => (
                       <Link
                         key={subcategory.id}
                         href={`/category/${subcategory.slug}`}

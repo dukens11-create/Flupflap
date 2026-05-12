@@ -4,6 +4,9 @@ import { createPageMetadata } from '@/lib/seo';
 import { DEFAULT_CATEGORY_TREE, type DefaultCategoryNode } from '@/lib/default-categories';
 
 export const dynamic = 'force-dynamic';
+const ROOT_LEVEL = 0;
+const SUBCATEGORY_LEVEL = 1;
+const REFINED_CATEGORY_LEVEL = 2;
 
 type CategoryLookup = {
   id: string;
@@ -97,14 +100,14 @@ export default async function CategoryRoutePage({ params }: { params: Promise<{ 
   let rootId: string | null = null;
   let levelOneId: string | null = null;
   for (const entry of category.path) {
-    if (entry.level === 0 && !rootId) rootId = entry.id;
-    if (entry.level === 1 && !levelOneId) levelOneId = entry.id;
+    if (entry.level === ROOT_LEVEL && !rootId) rootId = entry.id;
+    if (entry.level === SUBCATEGORY_LEVEL && !levelOneId) levelOneId = entry.id;
   }
   const paramsOut = new URLSearchParams();
   paramsOut.set('category', rootId ?? category.id);
-  if (category.level === 1) {
+  if (category.level === SUBCATEGORY_LEVEL) {
     paramsOut.set('subcategory', category.id);
-  } else if (category.level >= 2 && levelOneId) {
+  } else if (category.level >= REFINED_CATEGORY_LEVEL && levelOneId) {
     paramsOut.set('subcategory', levelOneId);
     paramsOut.set('refineCategory', category.id);
   }
