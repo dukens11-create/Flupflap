@@ -9,7 +9,10 @@ import { z } from 'zod';
 const schema = z.object({
   title: z.string().min(3),
   description: z.string().min(10),
-  price: z.coerce.number().finite().nonnegative(),
+  price: z.preprocess(
+    (value) => (value === '' || value == null ? Number.NaN : Number(value)),
+    z.number({ error: 'Price must be a valid number.' }).finite().nonnegative(),
+  ),
   condition: z.string(),
   category: z.string(),
   imageUrl: z.string().url(),
@@ -58,14 +61,6 @@ export async function POST(req: Request) {
     const priceCents = cents(data.price);
     const shippingCents = cents(data.shipping ?? 0);
     const inventory = data.inventory ?? 1;
-    if (
-      !Number.isFinite(priceCents) ||
-      !Number.isFinite(shippingCents) ||
-      !Number.isInteger(inventory) ||
-      inventory < 1
-    ) {
-      return NextResponse.json({ error: 'Invalid numeric values.' }, { status: 400 });
-    }
 
     const seller = await prisma.user.findUnique({ where: { email: data.sellerEmail.toLowerCase() } });
     if (!seller) {
