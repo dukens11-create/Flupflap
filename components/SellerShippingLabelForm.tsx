@@ -36,6 +36,7 @@ export default function SellerShippingLabelForm({
   existingLabelUrl,
   existingTrackingNumber,
   existingCarrier,
+  existingService,
   existingTrackingUrl,
 }: {
   orderId: string;
@@ -43,6 +44,7 @@ export default function SellerShippingLabelForm({
   existingLabelUrl?: string | null;
   existingTrackingNumber?: string | null;
   existingCarrier?: string | null;
+  existingService?: string | null;
   existingTrackingUrl?: string | null;
 }) {
   const [weightOz, setWeightOz] = useState('16');
@@ -55,6 +57,7 @@ export default function SellerShippingLabelForm({
   const [labelUrl, setLabelUrl] = useState(existingLabelUrl ?? '');
   const [trackingNumber, setTrackingNumber] = useState(existingTrackingNumber ?? '');
   const [carrier, setCarrier] = useState(existingCarrier ?? '');
+  const [service, setService] = useState(existingService ?? '');
   const [trackingUrl, setTrackingUrl] = useState(existingTrackingUrl ?? '');
   const [loadingRates, setLoadingRates] = useState(false);
   const [loadingPurchase, setLoadingPurchase] = useState(false);
@@ -120,12 +123,30 @@ export default function SellerShippingLabelForm({
       setLabelUrl(data.labelUrl ?? '');
       setTrackingNumber(data.trackingNumber ?? '');
       setCarrier(data.carrier ?? '');
+      setService(data.service ?? '');
       setTrackingUrl(data.trackingUrl ?? '');
       setSuccess('Label purchased successfully.');
     } catch {
       setError('An error occurred. Please try again.');
     } finally {
       setLoadingPurchase(false);
+    }
+  }
+
+  async function handleDownloadLabel() {
+    if (!labelUrl) return;
+    try {
+      const res = await fetch(`/api/seller/label-download?orderId=${encodeURIComponent(orderId)}`);
+      if (!res.ok) throw new Error('Download failed');
+      const blob = await res.blob();
+      const objUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objUrl;
+      link.download = `shipping-label-${orderId}.pdf`;
+      link.click();
+      URL.revokeObjectURL(objUrl);
+    } catch {
+      window.open(`/api/seller/label-download?orderId=${encodeURIComponent(orderId)}`, '_blank');
     }
   }
 
@@ -204,23 +225,47 @@ export default function SellerShippingLabelForm({
         </>
       )}
 
-      {(labelUrl || trackingNumber) && (
-        <div className="flex flex-wrap gap-2">
-          {labelUrl && (
-            <a href={labelUrl} target="_blank" rel="noreferrer" className="btn-outline text-sm">
+      {labelUrl && (
+        <div className="rounded-xl border border-slate-200 p-3 space-y-2">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Shipping Label</p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="btn-outline text-sm"
+              onClick={() => window.open(labelUrl, '_blank')}
+            >
               Print Label
-            </a>
+            </button>
+            <button
+              type="button"
+              className="btn-outline text-sm"
+              onClick={handleDownloadLabel}
+            >
+              Download Label PDF
+            </button>
+            {trackingUrl && (
+              <a href={trackingUrl} target="_blank" rel="noreferrer" className="btn-outline text-sm">
+                Track Package
+              </a>
+            )}
+          </div>
+          {(trackingNumber || carrier || service) && (
+            <p className="text-xs text-slate-500">
+              📦 {[carrier, service].filter(Boolean).join(' · ')}{trackingNumber ? `: ${trackingNumber}` : ''}
+            </p>
           )}
+        </div>
+      )}
+      {!labelUrl && trackingNumber && (
+        <div className="flex flex-wrap gap-2 items-center">
           {trackingUrl && (
             <a href={trackingUrl} target="_blank" rel="noreferrer" className="btn-outline text-sm">
               Track Package
             </a>
           )}
-          {trackingNumber && (
-            <p className="text-xs text-slate-500 self-center">
-              📦 {carrier ? `${carrier}: ` : ''}{trackingNumber}
-            </p>
-          )}
+          <p className="text-xs text-slate-500">
+            📦 {carrier ? `${carrier}: ` : ''}{trackingNumber}
+          </p>
         </div>
       )}
 
