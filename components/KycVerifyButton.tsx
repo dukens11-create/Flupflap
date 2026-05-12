@@ -18,13 +18,13 @@ export default function KycVerifyButton({ isRejected = false }: { isRejected?: b
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) {
-        if (res.status === 409) {
-          setError(data?.error ?? 'Your identity is already verified.');
-        } else if (res.status === 401 || res.status === 403) {
-          setError('Your session expired. Please sign in again and retry.');
-        } else {
-          setError(data?.error ?? 'Unable to start verification. Please try again.');
-        }
+        const fallbackMessage =
+          res.status === 409
+            ? 'Your identity is already verified.'
+            : res.status === 401 || res.status === 403
+              ? 'Your session expired. Please sign in again and retry.'
+              : 'Unable to start verification. Please try again.';
+        setError(data?.error ?? fallbackMessage);
         setStatusMessage(null);
         setLoading(false);
         return;

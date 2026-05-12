@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { z } from 'zod';
+import { apiError } from '@/lib/api-response';
 
 const schema = z.object({
   shopName: z.string().trim().min(2).max(80),
@@ -103,76 +104,79 @@ const PROFILE_SELECT = {
 } as const;
 
 export async function PATCH(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-  if (session.user.role !== 'SELLER') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
-
-  let body: unknown;
   try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
-  }
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return apiError('Unauthorized', 401);
+    }
+    if (session.user.role !== 'SELLER') {
+      return apiError('Forbidden', 403);
+    }
 
-  const parsed = schema.safeParse(body);
-  if (!parsed.success) {
-    const flattened = parsed.error.flatten();
-    return NextResponse.json(
-      {
-        error: 'Please correct the highlighted fields and try again.',
-        details: flattened,
-        fieldErrors: flattened.fieldErrors,
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch {
+      return apiError('Invalid JSON', 400);
+    }
+
+    const parsed = schema.safeParse(body);
+    if (!parsed.success) {
+      const firstIssue = parsed.error.issues[0];
+      return apiError(firstIssue?.message ?? 'Validation failed', 422, parsed.error.flatten());
+    }
+
+    const {
+      shopName, shopLogoUrl, shopDescription,
+      shipFromName, shipFromStreet, shipFromCity, shipFromState, shipFromZip, shipFromCountry, shipFromPhone,
+    } = parsed.data;
+
+    const updated = await prisma.user.update({
+      where: { id: session.user.id },
+      data: {
+        shopName,
+        shopLogoUrl: shopLogoUrl || null,
+        shopDescription: shopDescription || null,
+        shipFromName: shipFromName || null,
+        shipFromStreet: shipFromStreet || null,
+        shipFromCity: shipFromCity || null,
+        shipFromState: shipFromState || null,
+        shipFromZip: shipFromZip || null,
+        shipFromCountry: shipFromCountry || null,
+        shipFromPhone: shipFromPhone || null,
       },
-      { status: 422 },
-    );
+      select: PROFILE_SELECT,
+    });
+
+    return NextResponse.json({ success: true, profile: updated });
+  } catch (error) {
+    console.error('[seller/profile PATCH]', error);
+    return apiError('Failed to save shop profile.', 500);
   }
-
-  const {
-    shopName, shopLogoUrl, shopDescription,
-    shipFromName, shipFromStreet, shipFromCity, shipFromState, shipFromZip, shipFromCountry, shipFromPhone,
-  } = parsed.data;
-
-  const updated = await prisma.user.update({
-    where: { id: session.user.id },
-    data: {
-      shopName,
-      shopLogoUrl: shopLogoUrl || null,
-      shopDescription: shopDescription || null,
-      shipFromName: shipFromName || null,
-      shipFromStreet: shipFromStreet || null,
-      shipFromCity: shipFromCity || null,
-      shipFromState: shipFromState || null,
-      shipFromZip: shipFromZip || null,
-      shipFromCountry: shipFromCountry || null,
-      shipFromPhone: shipFromPhone || null,
-    },
-    select: PROFILE_SELECT,
-  });
-
-  return NextResponse.json({ success: true, profile: updated });
 }
 
 export async function GET(_req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-  if (session.user.role !== 'SELLER') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return apiError('Unauthorized', 401);
+    }
+    if (session.user.role !== 'SELLER') {
+      return apiError('Forbidden', 403);
+    }
 
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: PROFILE_SELECT,
-  });
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: PROFILE_SELECT,
+    });
 
-  if (!user) {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    if (!user) {
+      return apiError('Not found', 404);
+    }
+
+    return NextResponse.json({ profile: user });
+  } catch (error) {
+    console.error('[seller/profile GET]', error);
+    return apiError('Failed to load shop profile.', 500);
   }
-
-  return NextResponse.json({ profile: user });
 }

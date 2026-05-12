@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
+import { readApiMessage } from '@/lib/read-api-message';
 
 interface CartItem {
   id: string;
@@ -306,13 +307,15 @@ export default function CheckoutPage() {
   const allPickup = pickupItemIds.length > 0 && pickupItemIds.length === items.length;
 
   const buyerAddressComplete = useMemo(() => !!(
-    buyerName.trim()
-    && buyerStreet1.trim()
+    // Recipient name is intentionally optional to reduce checkout friction:
+    // buyers can clear/edit it freely without blocking rate/tax recalculation.
+    // We still pass a non-account fallback ("Buyer") downstream when blank.
+    buyerStreet1.trim()
     && buyerCity.trim()
     && buyerState.trim()
     && buyerZip.trim()
     && buyerCountry.trim()
-  ), [buyerCity, buyerCountry, buyerName, buyerState, buyerStreet1, buyerZip]);
+  ), [buyerCity, buyerCountry, buyerState, buyerStreet1, buyerZip]);
 
   const buyerAddress = useMemo(() => ({
     name: buyerName.trim() || 'Buyer',
@@ -677,14 +680,21 @@ export default function CheckoutPage() {
           ...(hasCalculatedShipping && buyerAddressComplete ? { buyerAddress } : {}),
         }),
       });
+      if (!res.ok) {
+        if (res.status === 401) {
+          router.push('/login?callbackUrl=/checkout');
+          return;
+        }
+        setError(await readApiMessage(res, 'Checkout failed. Please try again.'));
+        setChecking(false);
+        return;
+      }
       const data = await res.json();
-      if (data.url) {
+      if (data?.url) {
         // Stripe checkout requires a full page navigation to an external URL
         window.location.href = data.url;
-      } else if (res.status === 401) {
-        router.push('/login?callbackUrl=/checkout');
       } else {
-        setError(data.error || 'Checkout failed. Please try again.');
+        setError('Checkout failed. Please try again.');
         setChecking(false);
       }
     } catch {
@@ -1019,7 +1029,7 @@ export default function CheckoutPage() {
             <div
               className={fetchingRates ? 'opacity-50 pointer-events-none' : undefined}
               aria-disabled={fetchingRates || undefined}
-              {...(fetchingRates ? { inert: '' } : {})}
+              {...(fetchingRates ? { inert: true } : {})}
             >
               {fetchingRates && (
                 <p className="text-xs text-slate-500 mb-2">Refreshing shipping rates…</p>
