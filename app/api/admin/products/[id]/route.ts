@@ -7,6 +7,19 @@ import {
   SHIPPING_PACKAGE_DETAILS_REQUIRED_MESSAGE,
 } from '@/lib/product-package';
 
+/**
+ * Sanitise the redirectTo value coming from form input.
+ * Only allow simple relative paths that start with /admin to prevent open redirects.
+ */
+function safeAdminRedirect(raw: string | null, fallback = '/admin'): string {
+  if (!raw) return fallback;
+  // Reject protocol-relative (//evil.com) and absolute URLs (https://...)
+  if (raw.startsWith('//') || raw.includes('://')) return fallback;
+  // Must be a relative path under /admin
+  if (!raw.startsWith('/admin')) return fallback;
+  return raw;
+}
+
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user || session.user.role !== 'ADMIN') {
@@ -17,7 +30,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   try {
     const form = await req.formData();
     const action = form.get('_method') as string;
-    const redirectTo = (form.get('redirectTo') as string) || '/admin';
+    const redirectTo = safeAdminRedirect(form.get('redirectTo') as string | null);
     const actionToStatus: Record<string, 'APPROVED' | 'REJECTED' | 'HIDDEN'> = {
       approve: 'APPROVED',
       reject: 'REJECTED',
@@ -25,13 +38,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     };
 
     if (action !== 'approve' && action !== 'reject' && action !== 'hide') {
-      return NextResponse.json({ error: 'Invalid action.' }, { status: 400 });
+      const errUrl = new URL(redirectTo, req.url);
+      errUrl.searchParams.set('error', 'Invalid action.');
+      return NextResponse.redirect(errUrl, 302);
     }
 
     const product = await prisma.product.findUnique({ where: { id } });
-    if (!product) return NextResponse.json({ error: 'Not found.' }, { status: 404 });
+    if (!product) {
+      const errUrl = new URL(redirectTo, req.url);
+      errUrl.searchParams.set('error', 'Listing not found.');
+      return NextResponse.redirect(errUrl, 302);
+    }
     if (action === 'approve' && !hasStoredPackageDetails(product)) {
-      return NextResponse.json({ error: SHIPPING_PACKAGE_DETAILS_REQUIRED_MESSAGE }, { status: 400 });
+      const errUrl = new URL(redirectTo, req.url);
+      errUrl.searchParams.set('error', SHIPPING_PACKAGE_DETAILS_REQUIRED_MESSAGE);
+      return NextResponse.redirect(errUrl, 302);
     }
 
     await prisma.product.update({
@@ -41,9 +62,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     // Use 302 (not 307) so the browser follows the redirect with GET, not POST.
     // Next.js page routes only handle GET; a POST redirect (307) causes a 405 crash.
-    return NextResponse.redirect(new URL(redirectTo, req.url), 302);
+    const successUrl = new URL(redirectTo, req.url);
+    successUrl.searchParams.set('success', `Listing ${action}d.`);
+    return NextResponse.redirect(successUrl, 302);
   } catch {
-    return NextResponse.json({ error: 'An unexpected error occurred.' }, { status: 500 });
+    const errUrl = new URL('/admin', req.url);
+    errUrl.searchParams.set('error', 'An unexpected error occurred.');
+    return NextResponse.redirect(errUrl, 302);
   }
 }
 
@@ -54,23 +79,29 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
 
   const { id } = await params;
-  const { status } = await req.json() as { status: 'APPROVED' | 'REJECTED' | 'HIDDEN' };
-  if (!['APPROVED', 'REJECTED', 'HIDDEN'].includes(status)) {
-    return NextResponse.json({ error: 'Invalid status.' }, { status: 400 });
+
+  try {
+    const body = await req.json() as { status?: unknown };
+    const { status } = body;
+    if (!status || !['APPROVED', 'REJECTED', 'HIDDEN'].includes(status as string)) {
+      return NextResponse.json({ error: 'Invalid status.' }, { status: 400 });
+    }
+
+    const existing = await prisma.product.findUnique({ where: { id } });
+    if (!existing) return NextResponse.json({ error: 'Not found.' }, { status: 404 });
+    if (status === 'APPROVED' && !hasStoredPackageDetails(existing)) {
+      return NextResponse.json({ error: SHIPPING_PACKAGE_DETAILS_REQUIRED_MESSAGE }, { status: 400 });
+    }
+
+    const product = await prisma.product.update({
+      where: { id },
+      data: { status: status as 'APPROVED' | 'REJECTED' | 'HIDDEN' },
+    });
+
+    return NextResponse.json(product);
+  } catch {
+    return NextResponse.json({ error: 'An unexpected error occurred.' }, { status: 500 });
   }
-
-  const existing = await prisma.product.findUnique({ where: { id } });
-  if (!existing) return NextResponse.json({ error: 'Not found.' }, { status: 404 });
-  if (status === 'APPROVED' && !hasStoredPackageDetails(existing)) {
-    return NextResponse.json({ error: SHIPPING_PACKAGE_DETAILS_REQUIRED_MESSAGE }, { status: 400 });
-  }
-
-  const product = await prisma.product.update({
-    where: { id },
-    data: { status },
-  });
-
-  return NextResponse.json(product);
 }
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -80,10 +111,15 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
   }
 
   const { id } = await params;
-  const product = await prisma.product.findUnique({ where: { id } });
-  if (!product) return NextResponse.json({ error: 'Not found.' }, { status: 404 });
 
-  await prisma.product.delete({ where: { id } });
+  try {
+    const product = await prisma.product.findUnique({ where: { id } });
+    if (!product) return NextResponse.json({ error: 'Not found.' }, { status: 404 });
 
-  return NextResponse.json({ success: true });
+    await prisma.product.delete({ where: { id } });
+
+    return NextResponse.json({ success: true });
+  } catch {
+    return NextResponse.json({ error: 'An unexpected error occurred.' }, { status: 500 });
+  }
 }

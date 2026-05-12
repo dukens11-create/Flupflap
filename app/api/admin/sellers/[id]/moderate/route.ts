@@ -90,12 +90,27 @@ export async function POST(
       },
     });
 
-    return NextResponse.redirect(new URL('/admin/sellers', req.url));
+    // Fetch calls (from client components) get a JSON response.
+    // Native form POSTs get a redirect so the page refreshes with flash message.
+    if (req.headers.get('accept')?.includes('application/json')) {
+      return NextResponse.json({ success: true });
+    }
+    return NextResponse.redirect(new URL('/admin/sellers?moderate=success', req.url));
   } catch (err: any) {
     if (err?.name === 'ZodError') {
-      return NextResponse.json({ error: 'Invalid input.' }, { status: 400 });
+      if (req.headers.get('accept')?.includes('application/json')) {
+        return NextResponse.json({ error: 'Invalid input — please select an action and reason.' }, { status: 400 });
+      }
+      const errUrl = new URL('/admin/sellers', req.url);
+      errUrl.searchParams.set('error', 'Invalid input — please select an action and reason.');
+      return NextResponse.redirect(errUrl, 302);
     }
     console.error('[admin/sellers/moderate]', err);
-    return NextResponse.json({ error: 'Failed to update seller status.' }, { status: 500 });
+    if (req.headers.get('accept')?.includes('application/json')) {
+      return NextResponse.json({ error: 'Failed to update seller status. Please try again.' }, { status: 500 });
+    }
+    const errUrl = new URL('/admin/sellers', req.url);
+    errUrl.searchParams.set('error', 'Failed to update seller status. Please try again.');
+    return NextResponse.redirect(errUrl, 302);
   }
 }

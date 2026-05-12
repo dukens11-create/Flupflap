@@ -174,8 +174,12 @@ export default async function AdminPromotionsPage() {
           <div className="space-y-2">
             {activePromotions.map(promo => (
               <div key={promo.id} className="card p-4 flex items-center gap-4">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={promo.product.imageUrl} alt={promo.product.title} className="w-12 h-12 object-cover rounded-lg flex-shrink-0" />
+                {promo.product.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={promo.product.imageUrl} alt={promo.product.title ?? 'Listing'} className="w-12 h-12 object-cover rounded-lg flex-shrink-0" />
+                ) : (
+                  <div className="w-12 h-12 rounded-lg bg-slate-100 flex-shrink-0 flex items-center justify-center text-slate-300 text-xs">img</div>
+                )}
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold truncate">{promo.product.title}</p>
                   <p className="text-xs text-slate-500">
