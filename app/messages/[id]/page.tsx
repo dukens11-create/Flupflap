@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
-import { useRouter, useParams } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { dollars } from '@/lib/money';
@@ -53,7 +53,6 @@ function formatTime(dateStr: string): string {
 
 export default function ConversationPage() {
   const { data: session, status } = useSession();
-  const router = useRouter();
   const params = useParams<{ id: string }>();
   const id = params.id;
 
@@ -71,7 +70,12 @@ export default function ConversationPage() {
     if (!id) return;
     try {
       const res = await fetch(`/api/messages/${id}`);
-      if (res.status === 401) { router.push('/login'); return; }
+      if (res.status === 401 || res.status === 403) {
+        setError('Your session has expired. Please sign in again to view this conversation.');
+        setConv(null);
+        setLoading(false);
+        return;
+      }
       if (!res.ok) { setError('Conversation not found.'); setLoading(false); return; }
       const data: ConversationData = await res.json();
       setConv(data);
@@ -79,12 +83,12 @@ export default function ConversationPage() {
       setError('Failed to load conversation.');
     }
     setLoading(false);
-  }, [id, router]);
+  }, [id]);
 
   useEffect(() => {
-    if (status === 'unauthenticated') { router.push('/login'); return; }
+    if (status === 'unauthenticated') { setLoading(false); return; }
     if (status === 'authenticated') load();
-  }, [status, load, router]);
+  }, [status, load]);
 
   // Scroll to bottom when messages change
   const lastMessageId = conv?.messages[conv.messages.length - 1]?.id;
@@ -111,6 +115,10 @@ export default function ConversationPage() {
       const res = await fetch('/api/messages/upload', { method: 'POST', body: fd });
       const data = await res.json();
       if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          setSendError('Your session has expired. Please sign in again to upload attachments.');
+          return;
+        }
         setSendError(data.error || 'Photo upload failed.');
         return;
       }
@@ -138,6 +146,11 @@ export default function ConversationPage() {
       });
       if (!res.ok) {
         const d = await res.json();
+        if (res.status === 401 || res.status === 403) {
+          setSendError('Your session has expired. Please sign in again to send messages.');
+          setSending(false);
+          return;
+        }
         setSendError(d.error || 'Failed to send message.');
         setSending(false);
         return;
@@ -165,6 +178,18 @@ export default function ConversationPage() {
         <div className="card p-8 text-center text-slate-500">
           <p className="mb-4">{error}</p>
           <Link href="/messages" className="btn-outline">Back to messages</Link>
+        </div>
+      </main>
+    );
+  }
+
+  if (!session?.user) {
+    return (
+      <main className="max-w-2xl mx-auto">
+        <div className="card p-6 text-center text-slate-600">
+          <p className="font-medium mb-2">You&apos;re signed out.</p>
+          <p className="text-sm mb-4">Please sign in to open this conversation.</p>
+          <Link href={`/login?callbackUrl=/messages/${id}`} className="btn-primary">Sign in</Link>
         </div>
       </main>
     );

@@ -22,13 +22,17 @@ export async function PATCH(req: Request) {
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const userId = session.user.id;
+    if (!userId) {
+      return NextResponse.json({ error: 'Session expired. Please sign in again.' }, { status: 401 });
+    }
 
     const body = await req.json() as { name?: string; currentPassword?: string; newPassword?: string };
 
     // Password change request
     if (body.currentPassword !== undefined || body.newPassword !== undefined) {
       const { currentPassword, newPassword } = passwordSchema.parse(body);
-      const user = await prisma.user.findUnique({ where: { id: session.user.id } });
+      const user = await prisma.user.findUnique({ where: { id: userId } });
       if (!user) return NextResponse.json({ error: 'User not found.' }, { status: 404 });
 
       const valid = await safeComparePassword(currentPassword, user.password, 'account/password-change');
@@ -37,14 +41,14 @@ export async function PATCH(req: Request) {
       }
 
       const hashed = await bcrypt.hash(newPassword, 12);
-      await prisma.user.update({ where: { id: session.user.id }, data: { password: hashed } });
+      await prisma.user.update({ where: { id: userId }, data: { password: hashed } });
       return NextResponse.json({ ok: true, message: 'Password updated.' });
     }
 
     // Profile update request
     const { name } = profileSchema.parse(body);
     const updated = await prisma.user.update({
-      where: { id: session.user.id },
+      where: { id: userId },
       data: { name },
       select: { id: true, name: true, email: true, role: true },
     });
@@ -89,11 +93,13 @@ export async function DELETE(req: Request) {
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const userId = session.user.id;
+    if (!userId) {
+      return NextResponse.json({ error: 'Session expired. Please sign in again.' }, { status: 401 });
+    }
 
     const body = await req.json();
     const { password, reason, otherDetails } = deleteSchema.parse(body);
-
-    const userId = session.user.id;
 
     const user = await prisma.user.findUnique({
       where: { id: userId },

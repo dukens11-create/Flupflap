@@ -34,51 +34,59 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const userId = session.user.id;
+    if (!userId) {
+      return NextResponse.json({ error: 'Session expired. Please sign in again.' }, { status: 401 });
+    }
 
-  const { id } = await params;
-  const userId = session.user.id;
+    const { id } = await params;
 
-  const conversation = await prisma.conversation.findFirst({
-    where: {
-      id,
-      OR: [{ buyerId: userId }, { sellerId: userId }],
-    },
-    include: {
-      buyer: { select: { id: true, name: true } },
-      seller: { select: { id: true, name: true } },
-      product: {
-        select: { id: true, title: true, imageUrl: true, priceCents: true, status: true },
+    const conversation = await prisma.conversation.findFirst({
+      where: {
+        id,
+        OR: [{ buyerId: userId }, { sellerId: userId }],
       },
-      messages: {
-        orderBy: { createdAt: 'asc' },
-        include: {
-          sender: { select: { id: true, name: true } },
+      include: {
+        buyer: { select: { id: true, name: true } },
+        seller: { select: { id: true, name: true } },
+        product: {
+          select: { id: true, title: true, imageUrl: true, priceCents: true, status: true },
+        },
+        messages: {
+          orderBy: { createdAt: 'asc' },
+          include: {
+            sender: { select: { id: true, name: true } },
+          },
         },
       },
-    },
-  });
-
-  if (!conversation) {
-    return NextResponse.json({ error: 'Conversation not found.' }, { status: 404 });
-  }
-
-  // Mark messages sent by the other party as read
-  const unreadIds = conversation.messages
-    .filter((m) => m.senderId !== userId && m.readAt === null)
-    .map((m) => m.id);
-
-  if (unreadIds.length > 0) {
-    await prisma.message.updateMany({
-      where: { id: { in: unreadIds } },
-      data: { readAt: new Date() },
     });
-  }
 
-  return NextResponse.json(conversation);
+    if (!conversation) {
+      return NextResponse.json({ error: 'Conversation not found.' }, { status: 404 });
+    }
+
+    // Mark messages sent by the other party as read
+    const unreadIds = conversation.messages
+      .filter((m) => m.senderId !== userId && m.readAt === null)
+      .map((m) => m.id);
+
+    if (unreadIds.length > 0) {
+      await prisma.message.updateMany({
+        where: { id: { in: unreadIds } },
+        data: { readAt: new Date() },
+      });
+    }
+
+    return NextResponse.json(conversation);
+  } catch (error) {
+    console.error('[messages/[id] GET]', error);
+    return NextResponse.json({ error: 'Failed to load conversation.' }, { status: 500 });
+  }
 }
 
 /**
@@ -90,73 +98,80 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const { id } = await params;
-  const userId = session.user.id;
-
-  const conversation = await getConversationForUser(id, userId);
-  if (!conversation) {
-    return NextResponse.json({ error: 'Conversation not found.' }, { status: 404 });
-  }
-
-  let parsed: z.infer<typeof replySchema>;
   try {
-    const json = await req.json();
-    parsed = replySchema.parse(json);
-  } catch {
-    return NextResponse.json({ error: 'Invalid input.' }, { status: 400 });
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const userId = session.user.id;
+    if (!userId) {
+      return NextResponse.json({ error: 'Session expired. Please sign in again.' }, { status: 401 });
+    }
+
+    const { id } = await params;
+    const conversation = await getConversationForUser(id, userId);
+    if (!conversation) {
+      return NextResponse.json({ error: 'Conversation not found.' }, { status: 404 });
+    }
+
+    let parsed: z.infer<typeof replySchema>;
+    try {
+      const json = await req.json();
+      parsed = replySchema.parse(json);
+    } catch {
+      return NextResponse.json({ error: 'Invalid input.' }, { status: 400 });
+    }
+
+    const body = normalizeMessageBody(parsed.body);
+    const attachmentUrl = parsed.attachmentUrl?.trim() || null;
+
+    if (!body && !attachmentUrl) {
+      return NextResponse.json(
+        { error: 'Add a message or attach a photo before sending.' },
+        { status: 400 },
+      );
+    }
+
+    if (attachmentUrl && !isAllowedMessageAttachmentUrl(attachmentUrl)) {
+      return NextResponse.json(
+        { error: 'Please upload your photo using the attachment picker.' },
+        { status: 400 },
+      );
+    }
+
+    const spamError = await getMessageSpamError({ senderId: userId, body });
+    if (spamError) {
+      return NextResponse.json({ error: spamError }, { status: 429 });
+    }
+
+    const [message] = await prisma.$transaction([
+      prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          senderId: userId,
+          body,
+          attachmentUrl,
+        },
+      }),
+      prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { updatedAt: new Date() },
+      }),
+    ]);
+
+    const recipientId = conversation.buyerId === userId ? conversation.sellerId : conversation.buyerId;
+    await createNotification({
+      userId: recipientId,
+      type: NotificationType.MESSAGE,
+      title: 'New message in your conversation',
+      body: parsed.body.trim().length > 120 ? `${parsed.body.trim().slice(0, 117)}...` : parsed.body.trim(),
+      link: `/messages/${conversation.id}`,
+      data: { conversationId: conversation.id },
+    });
+
+    return NextResponse.json({ messageId: message.id }, { status: 201 });
+  } catch (error) {
+    console.error('[messages/[id] POST]', error);
+    return NextResponse.json({ error: 'Failed to send message.' }, { status: 500 });
   }
-
-  const body = normalizeMessageBody(parsed.body);
-  const attachmentUrl = parsed.attachmentUrl?.trim() || null;
-
-  if (!body && !attachmentUrl) {
-    return NextResponse.json(
-      { error: 'Add a message or attach a photo before sending.' },
-      { status: 400 },
-    );
-  }
-
-  if (attachmentUrl && !isAllowedMessageAttachmentUrl(attachmentUrl)) {
-    return NextResponse.json(
-      { error: 'Please upload your photo using the attachment picker.' },
-      { status: 400 },
-    );
-  }
-
-  const spamError = await getMessageSpamError({ senderId: userId, body });
-  if (spamError) {
-    return NextResponse.json({ error: spamError }, { status: 429 });
-  }
-
-  const [message] = await prisma.$transaction([
-    prisma.message.create({
-      data: {
-        conversationId: conversation.id,
-        senderId: userId,
-        body,
-        attachmentUrl,
-      },
-    }),
-    prisma.conversation.update({
-      where: { id: conversation.id },
-      data: { updatedAt: new Date() },
-    }),
-  ]);
-
-  const recipientId = conversation.buyerId === userId ? conversation.sellerId : conversation.buyerId;
-  await createNotification({
-    userId: recipientId,
-    type: NotificationType.MESSAGE,
-    title: 'New message in your conversation',
-    body: parsed.body.trim().length > 120 ? `${parsed.body.trim().slice(0, 117)}...` : parsed.body.trim(),
-    link: `/messages/${conversation.id}`,
-    data: { conversationId: conversation.id },
-  });
-
-  return NextResponse.json({ messageId: message.id }, { status: 201 });
 }

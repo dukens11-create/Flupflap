@@ -42,6 +42,10 @@ export async function POST(req: Request) {
     if (!session?.user) {
       return NextResponse.json({ error: 'Please sign in to continue.' }, { status: 401 });
     }
+    const userId = session.user.id;
+    if (!userId) {
+      return NextResponse.json({ error: 'Session expired. Please sign in again.' }, { status: 401 });
+    }
 
     const body = await req.json() as {
       items: { productId: string; quantity: number }[];
