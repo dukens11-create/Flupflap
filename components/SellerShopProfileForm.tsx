@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import { readApiMessage } from '@/lib/read-api-message';
 
 const INPUT_CLASS = 'w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500';
 
@@ -42,9 +43,37 @@ export default function SellerShopProfileForm({
   const [errorMsg, setErrorMsg] = useState('');
 
   const trimmedShopName = shopName.trim();
+  const trimmedShipFromStreet = shipFromStreet.trim();
+  const trimmedShipFromCity = shipFromCity.trim();
+  const trimmedShipFromState = shipFromState.trim();
+  const trimmedShipFromZip = shipFromZip.trim();
+  const trimmedShipFromCountry = shipFromCountry.trim();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const hasAnyShipFromValue = !!(
+      trimmedShipFromStreet
+      || trimmedShipFromCity
+      || trimmedShipFromState
+      || trimmedShipFromZip
+      || trimmedShipFromCountry
+    );
+    if (hasAnyShipFromValue && (!trimmedShipFromStreet || !trimmedShipFromCity || !trimmedShipFromState || !trimmedShipFromZip || !trimmedShipFromCountry)) {
+      setStatus('error');
+      setErrorMsg('Please complete street, city, state, ZIP, and country for your ship-from address.');
+      return;
+    }
+    if (trimmedShipFromState && trimmedShipFromState.length !== 2) {
+      setStatus('error');
+      setErrorMsg('State must be a 2-letter abbreviation.');
+      return;
+    }
+    if (trimmedShipFromCountry && trimmedShipFromCountry.length !== 2) {
+      setStatus('error');
+      setErrorMsg('Country must be a 2-letter code (for example: US).');
+      return;
+    }
+
     setStatus('saving');
     setErrorMsg('');
     try {
@@ -56,18 +85,18 @@ export default function SellerShopProfileForm({
           shopLogoUrl: shopLogoUrl.trim(),
           shopDescription: shopDescription.trim(),
           shipFromName: shipFromName.trim(),
-          shipFromStreet: shipFromStreet.trim(),
-          shipFromCity: shipFromCity.trim(),
-          shipFromState: shipFromState.trim(),
-          shipFromZip: shipFromZip.trim(),
-          shipFromCountry: shipFromCountry.trim(),
+          shipFromStreet: trimmedShipFromStreet,
+          shipFromCity: trimmedShipFromCity,
+          shipFromState: trimmedShipFromState.toUpperCase(),
+          shipFromZip: trimmedShipFromZip,
+          shipFromCountry: trimmedShipFromCountry.toUpperCase(),
           shipFromPhone: shipFromPhone.trim(),
         }),
       });
-      const data = await res.json();
       if (!res.ok) {
+        const message = await readApiMessage(res, 'Failed to save shop profile.');
         setStatus('error');
-        setErrorMsg(data?.error ?? 'Failed to save shop profile.');
+        setErrorMsg(message);
         return;
       }
       setStatus('saved');

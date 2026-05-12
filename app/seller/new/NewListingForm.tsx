@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import CategoryPicker from '@/components/CategoryPicker';
 import ConditionPicker from '@/components/ConditionPicker';
 import MediaUpload, { type MediaUploadState } from '@/components/MediaUpload';
+import { readApiMessage } from '@/lib/read-api-message';
 
 type FormErrors = {
   title?: string;
@@ -81,6 +82,13 @@ export default function NewListingForm() {
     if (!inventoryRaw || Number.isNaN(inventoryQty) || !Number.isInteger(inventoryQty) || inventoryQty < 1 || inventoryQty > 9999) {
       nextErrors.inventoryQty = 'Please enter an inventory quantity between 1 and 9999.';
     }
+    if (shippingMode === 'FLAT') {
+      const shippingRaw = String(formData.get('shipping') ?? '').trim();
+      const shippingPrice = Number(shippingRaw);
+      if (!shippingRaw || Number.isNaN(shippingPrice) || shippingPrice < 0) {
+        nextErrors.submit = 'Please enter a valid flat shipping amount.';
+      }
+    }
 
     const packageValues = packageInputs.map(Number);
     if (
@@ -111,8 +119,14 @@ export default function NewListingForm() {
         headers: { Accept: 'application/json' },
         body: formData,
       });
+      if (!res.ok) {
+        const message = await readApiMessage(res, 'Unable to submit listing. Please try again.');
+        setErrors({ submit: message });
+        setSubmitting(false);
+        return;
+      }
       const data = await res.json();
-      if (!res.ok || !data?.success) {
+      if (!data?.success) {
         setErrors({ submit: data?.message ?? 'Unable to submit listing. Please try again.' });
         setSubmitting(false);
         return;

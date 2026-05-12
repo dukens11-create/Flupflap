@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import CategoryPicker from '@/components/CategoryPicker';
 import ConditionPicker from '@/components/ConditionPicker';
 import MediaUpload, { type MediaUploadState } from '@/components/MediaUpload';
+import { readApiMessage } from '@/lib/read-api-message';
 
 interface EditListingFormProps {
   id: string;
@@ -98,7 +99,6 @@ export default function EditListingForm({
     // Client-side validation
     const condition = String(formData.get('condition') ?? '').trim();
     const submittedCategoryId = String(formData.get('categoryId') ?? '').trim();
-    const submittedSubcategoryId = String(formData.get('subcategoryId') ?? '').trim();
     const category = String(formData.get('category') ?? '').trim();
     const isCategoryStale = formData.get('categoryStale') === 'true';
     const weight = String(formData.get('weight') ?? '').trim();
@@ -121,6 +121,19 @@ export default function EditListingForm({
       setSubmitError('Please fill in all shipping package dimensions (weight, length, width, height).');
       return;
     }
+    const numericPackageValues = [weight, length, width, height].map(Number);
+    if (numericPackageValues.some((value) => Number.isNaN(value) || value <= 0)) {
+      setSubmitError('Shipping package values must be greater than 0.');
+      return;
+    }
+    const shippingRaw = String(formData.get('shipping') ?? '').trim();
+    if (shippingRaw) {
+      const shippingValue = Number(shippingRaw);
+      if (Number.isNaN(shippingValue) || shippingValue < 0) {
+        setSubmitError('Please enter a valid shipping amount.');
+        return;
+      }
+    }
     if (resolvedImages.length < 1) {
       setSubmitError('Please upload at least one product image.');
       return;
@@ -140,15 +153,16 @@ export default function EditListingForm({
         body: formData,
       });
 
-      const data = await res.json();
-
       if (!res.ok) {
-        const errorMessage =
-          data?.error ?? data?.message ?? 'Unable to save listing changes. Please review the form and try again.';
+        const errorMessage = await readApiMessage(
+          res,
+          'Unable to save listing changes. Please review the form and try again.',
+        );
         setSubmitError(errorMessage);
         setSubmitting(false);
         return;
       }
+      const data = await res.json();
 
       const redirectTo = data?.redirectTo ?? `/seller?updated=${id}`;
       router.push(redirectTo);

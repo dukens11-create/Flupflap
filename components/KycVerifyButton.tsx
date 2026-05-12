@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { readApiMessage } from '@/lib/read-api-message';
 
 export default function KycVerifyButton({ isRejected = false }: { isRejected?: boolean }) {
   const [loading, setLoading] = useState(false);
@@ -13,12 +14,12 @@ export default function KycVerifyButton({ isRejected = false }: { isRejected?: b
       const res = await fetch('/api/seller/verification/initiate', {
         method: 'POST',
       });
-      const data = await res.json();
       if (!res.ok) {
-        setError(data?.error ?? 'Unable to start verification. Please try again.');
+        setError(await readApiMessage(res, 'Unable to start verification. Please try again.'));
         setLoading(false);
         return;
       }
+      const data = await res.json();
       if (!data?.sessionUrl) {
         setError('Stripe did not return a verification URL. Please try again.');
         setLoading(false);

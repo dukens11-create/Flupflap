@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
+import { readApiMessage } from '@/lib/read-api-message';
 
 interface CartItem {
   id: string;
@@ -72,6 +73,7 @@ export default function CheckoutPage() {
   const router = useRouter();
   const rateRequestVersionRef = useRef(0);
   const taxRequestVersionRef = useRef(0);
+  const hasInitializedBuyerNameRef = useRef(false);
   const [items, setItems] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
@@ -109,10 +111,10 @@ export default function CheckoutPage() {
   }, []);
 
   useEffect(() => {
-    if (!buyerName.trim() && session?.user?.name) {
-      setBuyerName(session.user.name);
-    }
-  }, [buyerName, session?.user?.name]);
+    if (status === 'loading' || hasInitializedBuyerNameRef.current) return;
+    hasInitializedBuyerNameRef.current = true;
+    setBuyerName(session?.user?.name ?? '');
+  }, [session?.user?.name, status]);
 
   // Items that support pickup
   const pickupEligibleIds = useMemo(
@@ -189,23 +191,22 @@ export default function CheckoutPage() {
   const allPickup = pickupItemIds.length > 0 && pickupItemIds.length === items.length;
 
   const buyerAddressComplete = useMemo(() => !!(
-    buyerName.trim()
-    && buyerStreet1.trim()
+    buyerStreet1.trim()
     && buyerCity.trim()
     && buyerState.trim()
     && buyerZip.trim()
     && buyerCountry.trim()
-  ), [buyerCity, buyerCountry, buyerName, buyerState, buyerStreet1, buyerZip]);
+  ), [buyerCity, buyerCountry, buyerState, buyerStreet1, buyerZip]);
 
   const buyerAddress = useMemo(() => ({
-    name: buyerName.trim() || session?.user?.name || 'Buyer',
+    name: buyerName.trim() || undefined,
     street1: buyerStreet1.trim(),
     street2: buyerStreet2.trim() || undefined,
     city: buyerCity.trim(),
     state: buyerState.trim(),
     zip: buyerZip.trim(),
     country: buyerCountry.trim() || 'US',
-  }), [buyerCity, buyerCountry, buyerName, buyerState, buyerStreet1, buyerStreet2, buyerZip, session?.user?.name]);
+  }), [buyerCity, buyerCountry, buyerName, buyerState, buyerStreet1, buyerStreet2, buyerZip]);
 
   const shippingReady = hasCompleteShippingSelection && !fetchingRates && !rateError;
   const taxReady = taxCalculated && !taxCalculating && !taxError;
@@ -435,14 +436,21 @@ export default function CheckoutPage() {
           ...(hasCalculatedShipping && buyerAddressComplete ? { buyerAddress } : {}),
         }),
       });
+      if (!res.ok) {
+        if (res.status === 401) {
+          router.push('/login?callbackUrl=/checkout');
+          return;
+        }
+        setError(await readApiMessage(res, 'Checkout failed. Please try again.'));
+        setChecking(false);
+        return;
+      }
       const data = await res.json();
-      if (data.url) {
+      if (data?.url) {
         // Stripe checkout requires a full page navigation to an external URL
         window.location.href = data.url;
-      } else if (res.status === 401) {
-        router.push('/login?callbackUrl=/checkout');
       } else {
-        setError(data.error || 'Checkout failed. Please try again.');
+        setError('Checkout failed. Please try again.');
         setChecking(false);
       }
     } catch {
@@ -550,6 +558,15 @@ export default function CheckoutPage() {
               className="input"
               placeholder="Jane Smith"
             />
+            {!!session?.user?.name && (
+              <button
+                type="button"
+                onClick={() => setBuyerName(session.user?.name ?? '')}
+                className="mt-1 text-xs text-blue-700 hover:underline"
+              >
+                Use saved profile name
+              </button>
+            )}
           </div>
           <div>
             <label className="label text-xs">Street address</label>

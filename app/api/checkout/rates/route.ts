@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { createShipmentRates } from '@/lib/shipping';
 import { getMissingPackageProductTitles } from '@/lib/product-package';
+import { apiError } from '@/lib/api-response';
 
 type BuyerAddress = {
   name?: string;
@@ -55,11 +56,23 @@ function resolveFromAddress(seller: {
   return { name, street1, city, state, zip, country, phone };
 }
 
+function normalizeBuyerAddress(address: BuyerAddress) {
+  return {
+    name: address.name?.trim() || undefined,
+    street1: address.street1.trim(),
+    street2: address.street2?.trim() || undefined,
+    city: address.city.trim(),
+    state: address.state.trim(),
+    zip: address.zip.trim(),
+    country: address.country?.trim() || 'US',
+  };
+}
+
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return NextResponse.json({ error: 'Please sign in to calculate shipping.' }, { status: 401 });
+      return apiError('Please sign in to calculate shipping.', 401);
     }
 
     const body = await req.json() as {
@@ -67,14 +80,26 @@ export async function POST(req: Request) {
       buyerAddress: BuyerAddress;
     };
 
-    const { items, buyerAddress } = body;
-    if (!items?.length) {
-      return NextResponse.json({ error: 'No items provided.' }, { status: 400 });
+    const items = Array.isArray(body?.items)
+      ? body.items.filter((item) => (
+        typeof item?.productId === 'string'
+        && item.productId.trim().length > 0
+        && Number.isInteger(Number(item.quantity))
+        && Number(item.quantity) > 0
+      ))
+      : [];
+    if (!items.length) {
+      return apiError('Please provide at least one valid cart item.', 400);
     }
 
-    if (!buyerAddress?.street1 || !buyerAddress?.city || !buyerAddress?.state || !buyerAddress?.zip) {
-      return NextResponse.json({ error: 'Please provide a complete shipping address.' }, { status: 400 });
+    if (!body?.buyerAddress) {
+      return apiError('Please provide a complete shipping address.', 400);
     }
+    const buyerAddress = normalizeBuyerAddress(body.buyerAddress);
+    if (!buyerAddress.street1 || !buyerAddress.city || !buyerAddress.state || !buyerAddress.zip) {
+      return apiError('Please provide a complete shipping address.', 400);
+    }
+
     console.log("Shippo token exists:", !!process.env.SHIPPO_API_TOKEN);
     const buyerAddressForLog = {
       ...buyerAddress,
@@ -87,7 +112,7 @@ export async function POST(req: Request) {
     // Load products with their seller shipping profile and dimensions
     const products = await prisma.product.findMany({
       where: {
-        id: { in: items.map(i => i.productId) },
+        id: { in: items.map(i => i.productId.trim()) },
         status: 'APPROVED',
         inventory: { gt: 0 },
       },
@@ -119,7 +144,7 @@ export async function POST(req: Request) {
     });
 
     if (!products.length) {
-      return NextResponse.json({ error: 'No valid products found in cart.' }, { status: 400 });
+      return apiError('No valid products found in cart.', 400);
     }
 
     // Group products by sellerId
@@ -138,6 +163,10 @@ export async function POST(req: Request) {
 
     for (const [sellerId, sellerProducts] of sellerGroups) {
       const seller = sellerProducts[0].seller;
+      if (!seller) {
+        errors.push('Shipping unavailable. A seller record is missing for one or more items.');
+        continue;
+      }
       const fromAddress = resolveFromAddress(seller);
       const sellerAddress = {
         ...fromAddress,
@@ -191,7 +220,7 @@ export async function POST(req: Request) {
       try {
         const result = await createShipmentRates({
           toAddress: {
-            name: buyerAddress.name || session.user.name || 'Buyer',
+            name: buyerAddress.name || 'Buyer',
             street1: buyerAddress.street1,
             street2: buyerAddress.street2,
             city: buyerAddress.city,
@@ -240,10 +269,7 @@ export async function POST(req: Request) {
 
     if (!groups.length && errors.length > 0) {
       console.error('[checkout/rates] all seller groups failed:', errors);
-      return NextResponse.json(
-        { error: errors.join(' ') },
-        { status: 503 },
-      );
+      return apiError(errors.join(' '), 503);
     }
 
     // Validate that all calculated-shipping products have a corresponding rate group
@@ -260,11 +286,8 @@ export async function POST(req: Request) {
       errors: errors.length ? errors : undefined,
       warnings: uncoveredWarnings.length ? uncoveredWarnings : undefined,
     });
-  } catch (err: any) {
+  } catch (err) {
     console.error('[checkout/rates]', err);
-    return NextResponse.json(
-      { error: 'Shipping rate unavailable. Please check address or package details.' },
-      { status: 500 },
-    );
+    return apiError('Shipping rate unavailable. Please check address or package details.', 500);
   }
 }

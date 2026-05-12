@@ -20,6 +20,9 @@ export async function POST(req: Request) {
     if (!session?.user || session.user.role !== 'SELLER') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+    if (!session.user.id) {
+      return NextResponse.json({ error: 'Seller account is invalid.' }, { status: 400 });
+    }
 
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
