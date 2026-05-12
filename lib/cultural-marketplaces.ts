@@ -15,7 +15,7 @@ export type CulturalMarketplaceConfig = {
   }>;
 };
 
-export const CULTURAL_MARKETPLACES: CulturalMarketplaceConfig[] = [
+export const CULTURAL_MARKETPLACES: ReadonlyArray<CulturalMarketplaceConfig> = [
   {
     id: 'african-products',
     name: 'African Products',

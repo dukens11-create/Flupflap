@@ -185,10 +185,7 @@ async function CulturalMarketplaceHighlights() {
       }),
     );
 
-    const visibleSections = sections.filter(Boolean) as Array<{
-      marketplace: (typeof CULTURAL_MARKETPLACES)[number];
-      products: any[];
-    }>;
+    const visibleSections = sections.filter((section): section is NonNullable<typeof section> => Boolean(section));
 
     if (visibleSections.length === 0) return null;
 
