@@ -97,7 +97,10 @@ export default function EditListingForm({
 
     // Client-side validation
     const condition = String(formData.get('condition') ?? '').trim();
-    const categoryId = String(formData.get('categoryId') ?? '').trim();
+    const submittedCategoryId = String(formData.get('categoryId') ?? '').trim();
+    const leafCategoryId = String(formData.get('leafCategoryId') ?? '').trim();
+    const parentCategoryId = String(formData.get('parentCategoryId') ?? '').trim();
+    const categoryId = leafCategoryId || submittedCategoryId;
     const category = String(formData.get('category') ?? '').trim();
     const weight = String(formData.get('weight') ?? '').trim();
     const length = String(formData.get('length') ?? '').trim();
@@ -132,6 +135,8 @@ export default function EditListingForm({
     setSubmitting(true);
 
     try {
+      formData.set('categoryId', categoryId);
+      formData.set('subcategoryId', parentCategoryId);
       const subcategoryId = String(formData.get('subcategoryId') ?? '').trim();
       console.log('[EditListingForm] submitting update', { categoryId, subcategoryId, category, condition });
 
@@ -219,6 +224,7 @@ export default function EditListingForm({
             defaultCategoryId={defaultCategoryId}
             defaultSubcategoryId={defaultSubcategoryId}
             defaultAttributes={defaultAttributes}
+            submitLeafCategoryId
           />
         </div>
         <div className="flex-1">

@@ -42,6 +42,7 @@ interface Props {
   defaultCategoryId?: string | null;
   defaultSubcategoryId?: string | null;
   defaultAttributes?: Record<string, string> | null;
+  submitLeafCategoryId?: boolean;
 }
 
 const SEARCH_DEBOUNCE_MS = 150;
@@ -297,7 +298,65 @@ function resolveLeafName(
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function CategoryPicker({ defaultCategoryId, defaultSubcategoryId, defaultAttributes }: Props) {
+function resolveSelectionPath(
+  categories: CategoryNode[],
+  defaultCategoryId?: string | null,
+  defaultSubcategoryId?: string | null,
+) {
+  const providedIds = [defaultCategoryId, defaultSubcategoryId]
+    .map(id => id?.trim())
+    .filter((id): id is string => Boolean(id));
+  if (providedIds.length === 0) {
+    return { mainId: null, subId: null, childId: null, stale: false };
+  }
+
+  const seen = new Set<string>();
+  const foundNodes = providedIds
+    .filter((id) => {
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    })
+    .map(id => findNodeById(categories, id))
+    .filter((node): node is CategoryNode => Boolean(node));
+
+  if (foundNodes.length === 0) {
+    return { mainId: null, subId: null, childId: null, stale: true };
+  }
+
+  const deepest = foundNodes.reduce((best, node) => (
+    node.level > best.level ? node : best
+  ));
+  const main = deepest.level === 0 ? deepest : deepest.parentId ? findNodeById(categories, deepest.parentId) : null;
+  const sub = deepest.level === 1
+    ? deepest
+    : deepest.level >= 2 && deepest.parentId
+      ? findNodeById(categories, deepest.parentId)
+      : null;
+  const root = sub?.parentId ? findNodeById(categories, sub.parentId) : main;
+  const pathMainId = root?.level === 0 ? root.id : (main?.level === 0 ? main.id : null);
+  const pathSubId = sub?.level === 1 ? sub.id : null;
+  const pathChildId = deepest.level >= 2 ? deepest.id : null;
+  const ancestorsComplete = deepest.level === 0
+    || (deepest.level === 1 && !!pathMainId)
+    || (deepest.level >= 2 && !!pathMainId && !!pathSubId);
+
+  const pathIds = new Set([pathMainId, pathSubId, pathChildId].filter((id): id is string => Boolean(id)));
+  const stale = !ancestorsComplete || providedIds.some(id => {
+    const node = findNodeById(categories, id);
+    if (!node) return true;
+    return !pathIds.has(id);
+  });
+
+  return { mainId: pathMainId, subId: pathSubId, childId: pathChildId, stale };
+}
+
+export default function CategoryPicker({
+  defaultCategoryId,
+  defaultSubcategoryId,
+  defaultAttributes,
+  submitLeafCategoryId = false,
+}: Props) {
   const [categories, setCategories] = useState<CategoryNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -346,18 +405,19 @@ export default function CategoryPicker({ defaultCategoryId, defaultSubcategoryId
         const nextCategories = Array.isArray(data) ? data : [];
         setCategories(nextCategories);
 
-        // If defaultSubcategoryId is set, figure out its parent main category if not provided
-        if (defaultSubcategoryId && !defaultCategoryId) {
-          const node = findNodeById(nextCategories, defaultSubcategoryId);
-          if (node?.parentId) {
-            const parent = findNodeById(nextCategories, node.parentId);
-            if (parent?.level === 0) setMainId(parent.id);
-            else if (parent?.parentId) {
-              setSubId(parent.id);
-              const grandParent = findNodeById(data, parent.parentId);
-              if (grandParent) setMainId(grandParent.id);
-            }
+        const nextPath = resolveSelectionPath(nextCategories, defaultCategoryId, defaultSubcategoryId);
+        if (nextPath.mainId || nextPath.subId || nextPath.childId) {
+          setMainId(nextPath.mainId);
+          setSubId(nextPath.subId);
+          setChildId(nextPath.childId);
+          if (!nextPath.stale) {
+            setCategoryError('');
           }
+        } else if (nextPath.stale) {
+          setMainId(null);
+          setSubId(null);
+          setChildId(null);
+          setCategoryError('The selected category is no longer valid. Please select a valid category and try again.');
         }
       } catch {
         if (!mounted) return;
@@ -433,7 +493,10 @@ export default function CategoryPicker({ defaultCategoryId, defaultSubcategoryId
   }, [leafSlug]);
 
   // Hidden field values for form submission
-  const effectiveSubId = childId ?? subId;
+  const leafCategoryId = childId ?? subId ?? mainId;
+  const parentCategoryId = childId ? subId : subId ? mainId : null;
+  const submittedCategoryId = submitLeafCategoryId ? leafCategoryId : mainId;
+  const submittedSubcategoryId = submitLeafCategoryId ? parentCategoryId : (childId ?? subId);
 
   useEffect(() => {
     if (!activePicker) return;
@@ -527,11 +590,13 @@ export default function CategoryPicker({ defaultCategoryId, defaultSubcategoryId
     setSubId(id || null);
     setChildId(null);
     setAttrs({});
+    setCategoryError('');
   }
 
   function handleChildChange(id: string) {
     setChildId(id || null);
     setAttrs({});
+    setCategoryError('');
   }
 
   function applyOptionSelection(option: PickerOption) {
@@ -675,8 +740,10 @@ export default function CategoryPicker({ defaultCategoryId, defaultSubcategoryId
   return (
     <div className="space-y-3" ref={wrapperRef}>
       {/* Hidden form fields */}
-      <input type="hidden" name="categoryId" value={mainId ?? ''} />
-      <input type="hidden" name="subcategoryId" value={effectiveSubId ?? ''} />
+      <input type="hidden" name="categoryId" value={submittedCategoryId ?? ''} />
+      <input type="hidden" name="subcategoryId" value={submittedSubcategoryId ?? ''} />
+      <input type="hidden" name="leafCategoryId" value={leafCategoryId ?? ''} />
+      <input type="hidden" name="parentCategoryId" value={parentCategoryId ?? ''} />
       <input type="hidden" name="category" value={leafName} />
       <input type="hidden" name="productAttributes" value={JSON.stringify(attrs)} />
 
