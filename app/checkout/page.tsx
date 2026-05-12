@@ -72,6 +72,7 @@ export default function CheckoutPage() {
   const router = useRouter();
   const rateRequestVersionRef = useRef(0);
   const taxRequestVersionRef = useRef(0);
+  const shippingNameInitializedRef = useRef(false);
   const [items, setItems] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
@@ -109,10 +110,15 @@ export default function CheckoutPage() {
   }, []);
 
   useEffect(() => {
-    if (!buyerName.trim() && session?.user?.name) {
+    if (shippingNameInitializedRef.current || status === 'loading') {
+      return;
+    }
+
+    shippingNameInitializedRef.current = true;
+    if (session?.user?.name?.trim()) {
       setBuyerName(session.user.name);
     }
-  }, [buyerName, session?.user?.name]);
+  }, [session?.user?.name, status]);
 
   // Items that support pickup
   const pickupEligibleIds = useMemo(
@@ -198,14 +204,14 @@ export default function CheckoutPage() {
   ), [buyerCity, buyerCountry, buyerName, buyerState, buyerStreet1, buyerZip]);
 
   const buyerAddress = useMemo(() => ({
-    name: buyerName.trim() || session?.user?.name || 'Buyer',
+    name: buyerName.trim() || 'Buyer',
     street1: buyerStreet1.trim(),
     street2: buyerStreet2.trim() || undefined,
     city: buyerCity.trim(),
     state: buyerState.trim(),
     zip: buyerZip.trim(),
     country: buyerCountry.trim() || 'US',
-  }), [buyerCity, buyerCountry, buyerName, buyerState, buyerStreet1, buyerStreet2, buyerZip, session?.user?.name]);
+  }), [buyerCity, buyerCountry, buyerName, buyerState, buyerStreet1, buyerStreet2, buyerZip]);
 
   const shippingReady = hasCompleteShippingSelection && !fetchingRates && !rateError;
   const taxReady = taxCalculated && !taxCalculating && !taxError;
@@ -542,7 +548,18 @@ export default function CheckoutPage() {
           <p className="text-xs text-slate-500">Enter your full shipping address to calculate live shipping rates automatically.</p>
 
           <div>
-            <label className="label text-xs">Full name</label>
+            <div className="flex items-center justify-between gap-2">
+              <label className="label text-xs">Full name</label>
+              {session?.user?.name?.trim() && (
+                <button
+                  type="button"
+                  onClick={() => setBuyerName(session.user.name ?? '')}
+                  className="text-xs text-slate-500 underline underline-offset-2 hover:text-slate-700"
+                >
+                  Use saved profile name
+                </button>
+              )}
+            </div>
             <input
               type="text"
               value={buyerName}

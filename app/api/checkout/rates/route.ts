@@ -191,7 +191,7 @@ export async function POST(req: Request) {
       try {
         const result = await createShipmentRates({
           toAddress: {
-            name: buyerAddress.name || session.user.name || 'Buyer',
+            name: buyerAddress.name || 'Buyer',
             street1: buyerAddress.street1,
             street2: buyerAddress.street2,
             city: buyerAddress.city,
