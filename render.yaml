@@ -40,6 +40,8 @@ services:
         sync: false
       - key: SHIPPO_API_TOKEN
         sync: false
+      - key: NEXT_PUBLIC_MAPBOX_TOKEN
+        sync: false
       - key: PLATFORM_FEE_PERCENT
         value: "7"
       - key: CLOUDINARY_CLOUD_NAME
