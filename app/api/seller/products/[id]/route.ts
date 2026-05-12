@@ -288,9 +288,57 @@ export async function POST(
       enhancedImages: enhancedImagesRaw.length ? enhancedImagesRaw : undefined,
       imageThumbnails: imageThumbnailsRaw.length ? imageThumbnailsRaw : undefined,
     });
+
+    // Diagnostic logging for debugging failed saves
+    console.log('[seller/products/[id] POST] parsed payload', {
+      productId: id,
+      categoryId: data.categoryId,
+      subcategoryId: data.subcategoryId,
+      condition: data.condition,
+      weight: data.weight,
+      packageType: data.packageType,
+      weightUnit: data.weightUnit,
+    });
+
     const packageDetails = resolveSubmittedPackageDetails(data);
     if (!packageDetails) {
       return respondWithError(id, getPackageDetailsErrorMessage(data), acceptsJson);
+    }
+
+    // Validate categoryId before attempting the DB update to avoid FK constraint errors.
+    const resolvedCategoryId = data.categoryId?.trim() || null;
+    if (resolvedCategoryId) {
+      const categoryCheck = await prisma.category.findUnique({
+        where: { id: resolvedCategoryId },
+        select: { id: true },
+      });
+      if (!categoryCheck) {
+        console.warn('[seller/products/[id] POST] invalid categoryId', { categoryId: resolvedCategoryId, productId: id });
+        return respondWithError(
+          id,
+          'The selected category is no longer valid. Please select a valid category and try again.',
+          acceptsJson,
+          400,
+        );
+      }
+    }
+
+    // Validate subcategoryId if provided
+    const resolvedSubcategoryId = data.subcategoryId?.trim() || null;
+    if (resolvedSubcategoryId) {
+      const subCategoryCheck = await prisma.category.findUnique({
+        where: { id: resolvedSubcategoryId },
+        select: { id: true },
+      });
+      if (!subCategoryCheck) {
+        console.warn('[seller/products/[id] POST] invalid subcategoryId', { subcategoryId: resolvedSubcategoryId, productId: id });
+        return respondWithError(
+          id,
+          'The selected subcategory is no longer valid. Please re-select your category and try again.',
+          acceptsJson,
+          400,
+        );
+      }
     }
 
     const submittedImages = imagesRaw.length ? imagesRaw : data.imageUrl ? [data.imageUrl] : null;
@@ -346,9 +394,9 @@ export async function POST(
           widthIn: packageDetails.widthIn,
           heightIn: packageDetails.heightIn,
           packageType: packageDetails.packageType,
-          // Category system fields
-          categoryId: data.categoryId || null,
-          subcategoryId: data.subcategoryId || null,
+          // Category system fields (pre-validated above)
+          categoryId: resolvedCategoryId,
+          subcategoryId: resolvedSubcategoryId,
           productAttributes: nextProductAttributesValue,
           imageUrl: mainImage,
           images: resolvedImages,
@@ -433,9 +481,53 @@ export async function PATCH(
 
     const body: unknown = await req.json();
     const data = updateSchema.parse(body);
+
+    // Diagnostic logging for debugging failed saves
+    console.log('[seller/products/[id] PATCH] parsed payload', {
+      productId: id,
+      categoryId: data.categoryId,
+      subcategoryId: data.subcategoryId,
+      condition: data.condition,
+      weight: data.weight,
+      packageType: data.packageType,
+      weightUnit: data.weightUnit,
+    });
+
     const packageDetails = resolveSubmittedPackageDetails(data);
     if (!packageDetails) {
       return NextResponse.json({ error: getPackageDetailsErrorMessage(data) }, { status: 400 });
+    }
+
+    // Validate categoryId before attempting the DB update to avoid FK constraint errors.
+    const resolvedCategoryId = data.categoryId?.trim() || null;
+    if (resolvedCategoryId) {
+      const categoryCheck = await prisma.category.findUnique({
+        where: { id: resolvedCategoryId },
+        select: { id: true },
+      });
+      if (!categoryCheck) {
+        console.warn('[seller/products/[id] PATCH] invalid categoryId', { categoryId: resolvedCategoryId, productId: id });
+        return NextResponse.json(
+          { error: 'The selected category is no longer valid. Please select a valid category and try again.' },
+          { status: 400 },
+        );
+      }
+    }
+
+    // Validate subcategoryId if provided
+    const resolvedSubcategoryId = data.subcategoryId?.trim() || null;
+    if (resolvedSubcategoryId) {
+      const subCategoryCheck = await prisma.category.findUnique({
+        where: { id: resolvedSubcategoryId },
+        select: { id: true },
+      });
+      if (!subCategoryCheck) {
+        console.warn('[seller/products/[id] PATCH] invalid subcategoryId', { subcategoryId: resolvedSubcategoryId, productId: id });
+        return NextResponse.json(
+          { error: 'The selected subcategory is no longer valid. Please re-select your category and try again.' },
+          { status: 400 },
+        );
+      }
     }
 
     // Resolve images for PATCH (JSON body): prefer explicit images list, then legacy imageUrl
@@ -508,9 +600,9 @@ export async function PATCH(
           widthIn: packageDetails.widthIn,
           heightIn: packageDetails.heightIn,
           packageType: packageDetails.packageType,
-          // Category system fields
-          categoryId: data.categoryId || null,
-          subcategoryId: data.subcategoryId || null,
+          // Category system fields (pre-validated above)
+          categoryId: resolvedCategoryId,
+          subcategoryId: resolvedSubcategoryId,
           productAttributes: nextProductAttributesValue,
           status: 'PENDING',
         },

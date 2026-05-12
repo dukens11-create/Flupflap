@@ -132,6 +132,9 @@ export default function EditListingForm({
     setSubmitting(true);
 
     try {
+      const subcategoryId = String(formData.get('subcategoryId') ?? '').trim();
+      console.log('[EditListingForm] submitting update', { categoryId, subcategoryId, category, condition });
+
       const res = await fetch(`/api/seller/products/${id}`, {
         method: 'POST',
         headers: { Accept: 'application/json' },
