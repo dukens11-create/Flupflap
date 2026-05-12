@@ -103,15 +103,6 @@ export async function POST(req: Request) {
       return apiError('Please provide a complete shipping address.', 400);
     }
 
-    console.log('Shippo token exists:', !!process.env.SHIPPO_API_TOKEN);
-    const buyerAddressForLog = {
-      ...buyerAddress,
-      street1: '[redacted]',
-      street2: buyerAddress.street2 ? '[redacted]' : '[not provided]',
-      zip: '[redacted]',
-    };
-    console.log('Ship-to address:', buyerAddressForLog);
-
     // Load products with their seller shipping profile and dimensions
     const products = await prisma.product.findMany({
       where: {
