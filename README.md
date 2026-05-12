@@ -97,6 +97,7 @@ Set these in **Environment → Environment Variables** in the Render dashboard:
 | `STRIPE_PUBLISHABLE_KEY` | Stripe publishable key |
 | `STRIPE_WEBHOOK_SECRET` | Secret from your Stripe webhook endpoint |
 | `SHIPPO_API_TOKEN` | Shippo API token for shipping rates + label purchase |
+| `NEXT_PUBLIC_MAPBOX_TOKEN` | Public Mapbox token used only in the checkout address autocomplete UI |
 | `PLATFORM_FEE_PERCENT` | Legacy bootstrap env var (the app normalizes commission snapshots to `7`) |
 
 URL precedence for app redirects/absolute links: `NEXT_PUBLIC_SITE_URL` → `NEXT_PUBLIC_APP_URL` → `NEXTAUTH_URL`.
@@ -184,3 +185,5 @@ A placeholder `taxCents` field exists. For launch, connect Stripe Tax or TaxJar/
 - Add rate limiting and bot protection
 - Have an attorney review all legal pages
 - Test Stripe webhooks before accepting real payments
+- Configure Sentry for production error monitoring (see `DEPLOYMENT.md` → *Error monitoring with Sentry*)
+- Run through the full [pre-deploy QA checklist](docs/QA_CHECKLIST.md) before every release

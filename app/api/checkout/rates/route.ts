@@ -72,17 +72,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'No items provided.' }, { status: 400 });
     }
 
+    // Validate item quantities are positive integers.
+    for (const item of items) {
+      const qty = Number(item.quantity);
+      if (!Number.isInteger(qty) || qty <= 0) {
+        return NextResponse.json({ error: 'Invalid item quantity.' }, { status: 400 });
+      }
+    }
+
     if (!buyerAddress?.street1 || !buyerAddress?.city || !buyerAddress?.state || !buyerAddress?.zip) {
       return NextResponse.json({ error: 'Please provide a complete shipping address.' }, { status: 400 });
     }
-    console.log("Shippo token exists:", !!process.env.SHIPPO_API_TOKEN);
-    const buyerAddressForLog = {
-      ...buyerAddress,
-      street1: '[redacted]',
-      street2: buyerAddress.street2 ? '[redacted]' : '[not provided]',
-      zip: '[redacted]',
-    };
-    console.log("Ship-to address:", buyerAddressForLog);
 
     // Load products with their seller shipping profile and dimensions
     const products = await prisma.product.findMany({
@@ -139,12 +139,6 @@ export async function POST(req: Request) {
     for (const [sellerId, sellerProducts] of sellerGroups) {
       const seller = sellerProducts[0].seller;
       const fromAddress = resolveFromAddress(seller);
-      const sellerAddress = {
-        ...fromAddress,
-        street1: '[redacted]',
-        zip: '[redacted]',
-      };
-      console.log("Ship-from address:", sellerAddress);
 
       // Validate that we have a ship-from address
       if (!fromAddress.street1 || !fromAddress.city || !fromAddress.state || !fromAddress.zip) {
@@ -171,14 +165,6 @@ export async function POST(req: Request) {
       const maxLength = sellerProducts.reduce((m, p) => Math.max(m, p.lengthIn ?? 0), 0);
       const maxWidth = sellerProducts.reduce((m, p) => Math.max(m, p.widthIn ?? 0), 0);
       const maxHeight = sellerProducts.reduce((m, p) => Math.max(m, p.heightIn ?? 0), 0);
-
-      const parcel = {
-        weightOz: totalWeightOz,
-        lengthIn: maxLength,
-        widthIn: maxWidth,
-        heightIn: maxHeight,
-      };
-      console.log("Package:", parcel);
 
       // Skip if no package dimensions available
       if (!totalWeightOz || !maxLength || !maxWidth || !maxHeight) {
@@ -213,7 +199,6 @@ export async function POST(req: Request) {
           rate: rate.rate,
           deliveryDays: rate.deliveryDays,
         }));
-        console.log("Shippo rates:", rates);
         if (!rates.length) {
           throw new Error('No supported shipping rates returned.');
         }
