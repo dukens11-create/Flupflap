@@ -141,6 +141,7 @@ export default function AdminListingsTable({ listings }: { listings: AdminListin
   const handlePageSize = withReset<10 | 25 | 50>(setPageSize);
 
   const [actionError, setActionError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const doAction = useCallback(
     async (id: string, action: 'approve' | 'reject' | 'remove') => {
@@ -149,21 +150,33 @@ export default function AdminListingsTable({ listings }: { listings: AdminListin
       }
       setActionLoading(`${id}:${action}`);
       setActionError(null);
+      setSuccessMessage(null);
       try {
         let res: Response;
         if (action === 'remove') {
           res = await fetch(`/api/admin/products/${id}`, { method: 'DELETE' });
         } else {
-          const fd = new FormData();
-          fd.append('_method', action);
-          fd.append('redirectTo', '');
-          res = await fetch(`/api/admin/products/${id}`, { method: 'POST', body: fd });
+          // Use PATCH (returns JSON) instead of POST (which redirects and causes a crash
+          // when the browser follows the redirect with POST to a Next.js page route).
+          const statusMap: Record<string, string> = { approve: 'APPROVED', reject: 'REJECTED' };
+          res = await fetch(`/api/admin/products/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: statusMap[action] }),
+          });
         }
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
           setActionError((data as { error?: string }).error ?? `Action failed (${res.status})`);
           return;
         }
+        const toastMessages: Record<string, string> = {
+          approve: 'Product approved successfully.',
+          reject: 'Product rejected successfully.',
+          remove: 'Product removed successfully.',
+        };
+        setSuccessMessage(toastMessages[action] ?? 'Action completed.');
+        setTimeout(() => setSuccessMessage(null), 5000);
         router.refresh();
       } catch {
         setActionError('Network error — please try again.');
@@ -331,6 +344,13 @@ export default function AdminListingsTable({ listings }: { listings: AdminListin
         <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 flex items-center justify-between gap-3">
           <span>⚠ {actionError}</span>
           <button onClick={() => setActionError(null)} className="text-red-400 hover:text-red-600 font-bold leading-none">✕</button>
+        </div>
+      )}
+
+      {successMessage && (
+        <div className="mb-4 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 flex items-center justify-between gap-3">
+          <span>✓ {successMessage}</span>
+          <button onClick={() => setSuccessMessage(null)} className="text-green-600 hover:text-green-800 font-bold leading-none">✕</button>
         </div>
       )}
 

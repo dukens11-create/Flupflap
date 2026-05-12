@@ -14,31 +14,37 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 
   const { id } = await params;
-  const form = await req.formData();
-  const action = form.get('_method') as string;
-  const redirectTo = (form.get('redirectTo') as string) || '/admin';
-  const actionToStatus: Record<string, 'APPROVED' | 'REJECTED' | 'HIDDEN'> = {
-    approve: 'APPROVED',
-    reject: 'REJECTED',
-    hide: 'HIDDEN',
-  };
+  try {
+    const form = await req.formData();
+    const action = form.get('_method') as string;
+    const redirectTo = (form.get('redirectTo') as string) || '/admin';
+    const actionToStatus: Record<string, 'APPROVED' | 'REJECTED' | 'HIDDEN'> = {
+      approve: 'APPROVED',
+      reject: 'REJECTED',
+      hide: 'HIDDEN',
+    };
 
-  if (action !== 'approve' && action !== 'reject' && action !== 'hide') {
-    return NextResponse.json({ error: 'Invalid action.' }, { status: 400 });
+    if (action !== 'approve' && action !== 'reject' && action !== 'hide') {
+      return NextResponse.json({ error: 'Invalid action.' }, { status: 400 });
+    }
+
+    const product = await prisma.product.findUnique({ where: { id } });
+    if (!product) return NextResponse.json({ error: 'Not found.' }, { status: 404 });
+    if (action === 'approve' && !hasStoredPackageDetails(product)) {
+      return NextResponse.json({ error: SHIPPING_PACKAGE_DETAILS_REQUIRED_MESSAGE }, { status: 400 });
+    }
+
+    await prisma.product.update({
+      where: { id },
+      data: { status: actionToStatus[action] },
+    });
+
+    // Use 302 (not 307) so the browser follows the redirect with GET, not POST.
+    // Next.js page routes only handle GET; a POST redirect (307) causes a 405 crash.
+    return NextResponse.redirect(new URL(redirectTo, req.url), 302);
+  } catch {
+    return NextResponse.json({ error: 'An unexpected error occurred.' }, { status: 500 });
   }
-
-  const product = await prisma.product.findUnique({ where: { id } });
-  if (!product) return NextResponse.json({ error: 'Not found.' }, { status: 404 });
-  if (action === 'approve' && !hasStoredPackageDetails(product)) {
-    return NextResponse.json({ error: SHIPPING_PACKAGE_DETAILS_REQUIRED_MESSAGE }, { status: 400 });
-  }
-
-  await prisma.product.update({
-    where: { id },
-    data: { status: actionToStatus[action] },
-  });
-
-  return NextResponse.redirect(new URL(redirectTo, req.url));
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
