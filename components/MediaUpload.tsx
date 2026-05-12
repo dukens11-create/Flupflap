@@ -279,9 +279,16 @@ export default function MediaUpload({
   async function readJsonSafe(res: Response) {
     try {
       return await res.json();
-    } catch {
+    } catch (error) {
+      console.warn('[MediaUpload] Failed to parse upload response as JSON.', error);
       return null;
     }
+  }
+
+  function getApiErrorMessage(json: unknown, fallback: string) {
+    if (!json || typeof json !== 'object') return fallback;
+    const candidate = json as { message?: unknown };
+    return typeof candidate.message === 'string' && candidate.message.trim() ? candidate.message : fallback;
   }
 
   async function getUploadConfig(file: File) {
@@ -292,7 +299,7 @@ export default function MediaUpload({
     });
     const json = await readJsonSafe(res);
     if (!res.ok || !json?.success) {
-      throw new Error((json as { message?: string } | null)?.message ?? 'Upload failed.');
+      throw new Error(getApiErrorMessage(json, 'Upload failed.'));
     }
     if (!isValidUploadConfig(json)) {
       throw new Error('Upload configuration is invalid. Please try again.');
@@ -313,7 +320,7 @@ export default function MediaUpload({
     });
     const json = await readJsonSafe(res);
     if (!res.ok || !json?.success) {
-      throw new Error((json as { message?: string } | null)?.message ?? 'Failed to enhance image.');
+      throw new Error(getApiErrorMessage(json, 'Failed to enhance image.'));
     }
     if (
       typeof json.originalUrl !== 'string' ||
@@ -887,6 +894,7 @@ export default function MediaUpload({
               className={`inline-flex min-h-[44px] items-center gap-2 btn-outline px-4 py-2 text-sm ${
                 imageUploadCount > 0 ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
               }`}
+              aria-disabled={imageUploadCount > 0}
             >
               {images.length === 0 ? 'Choose images' : 'Add more images'}
               <input
@@ -993,6 +1001,7 @@ export default function MediaUpload({
                 className={`inline-flex min-h-[44px] items-center gap-2 rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 ${
                   videoUploading ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
                 }`}
+                aria-disabled={videoUploading}
               >
                 Replace video
                 <input
@@ -1028,6 +1037,7 @@ export default function MediaUpload({
               className={`inline-flex min-h-[44px] items-center gap-2 btn-outline px-4 py-2 text-sm ${
                 videoUploading ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
               }`}
+              aria-disabled={videoUploading}
             >
               Choose video
               <input
