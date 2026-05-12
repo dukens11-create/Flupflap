@@ -87,9 +87,9 @@ export default function SellerShopProfileForm({
           shipFromName: shipFromName.trim(),
           shipFromStreet: trimmedShipFromStreet,
           shipFromCity: trimmedShipFromCity,
-          shipFromState: trimmedShipFromState.toUpperCase(),
+          shipFromState: trimmedShipFromState ? trimmedShipFromState.toUpperCase() : '',
           shipFromZip: trimmedShipFromZip,
-          shipFromCountry: trimmedShipFromCountry.toUpperCase(),
+          shipFromCountry: trimmedShipFromCountry ? trimmedShipFromCountry.toUpperCase() : '',
           shipFromPhone: shipFromPhone.trim(),
         }),
       });
