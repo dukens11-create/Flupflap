@@ -436,7 +436,11 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
                     </h3>
                     <p className="mt-2 text-sm text-slate-600">{t('home.featuredRegionalSubtitle')}</p>
                   </div>
-                  <Link href={`/category/${category.slug}`} className="btn-outline text-xs sm:text-sm">
+                  <Link
+                    href={`/category/${category.slug}`}
+                    className="btn-outline text-xs sm:text-sm"
+                    aria-label={t('home.exploreCategory', { category: category.name })}
+                  >
                     {t('home.exploreCategory', { category: category.name })}
                   </Link>
                 </div>

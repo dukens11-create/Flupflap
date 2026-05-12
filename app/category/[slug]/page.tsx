@@ -94,10 +94,14 @@ export default async function CategoryRoutePage({ params }: { params: Promise<{ 
 
   if (!category) notFound();
 
-  const rootId = category.path.find((entry) => entry.level === 0)?.id ?? category.id;
-  const levelOneId = category.path.find((entry) => entry.level === 1)?.id ?? null;
+  let rootId: string | null = null;
+  let levelOneId: string | null = null;
+  for (const entry of category.path) {
+    if (entry.level === 0 && !rootId) rootId = entry.id;
+    if (entry.level === 1 && !levelOneId) levelOneId = entry.id;
+  }
   const paramsOut = new URLSearchParams();
-  paramsOut.set('category', rootId);
+  paramsOut.set('category', rootId ?? category.id);
   if (category.level === 1) {
     paramsOut.set('subcategory', category.id);
   } else if (category.level >= 2 && levelOneId) {

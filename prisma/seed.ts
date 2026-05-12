@@ -364,19 +364,19 @@ async function ensureAsianCategory() {
   const asianSubcategories = [
     { name: 'Asian Fashion', slug: 'asian-fashion', sortOrder: 1, attributeSchema: CLOTHING_FIELDS },
     { name: 'Asian Beauty & Skincare', slug: 'asian-beauty-skincare', sortOrder: 2, attributeSchema: PERFUME_FIELDS },
-    { name: 'Asian Food & Snacks', slug: 'asian-food-snacks', sortOrder: 3, attributeSchema: null },
+    { name: 'Asian Food & Snacks', slug: 'asian-food-snacks', sortOrder: 3 },
     { name: 'Asian Home Decor', slug: 'asian-home-decor', sortOrder: 4, attributeSchema: FURNITURE_FIELDS },
     { name: 'Asian Electronics & Gadgets', slug: 'asian-electronics-gadgets', sortOrder: 5, attributeSchema: ELECTRONICS_FIELDS },
-    { name: 'Asian Art & Crafts', slug: 'asian-art-crafts', sortOrder: 6, attributeSchema: null },
+    { name: 'Asian Art & Crafts', slug: 'asian-art-crafts', sortOrder: 6 },
     { name: 'Asian Jewelry & Accessories', slug: 'asian-jewelry-accessories', sortOrder: 7, attributeSchema: CLOTHING_FIELDS },
-    { name: 'Asian Anime & Collectibles', slug: 'asian-anime-collectibles', sortOrder: 8, attributeSchema: null },
-    { name: 'Asian Books & Media', slug: 'asian-books-media', sortOrder: 9, attributeSchema: null },
-    { name: 'Asian Cultural Products', slug: 'asian-cultural-products', sortOrder: 10, attributeSchema: null },
-    { name: 'East Asian Products', slug: 'east-asian-products', sortOrder: 11, attributeSchema: null },
-    { name: 'South Asian Products', slug: 'south-asian-products', sortOrder: 12, attributeSchema: null },
-    { name: 'Southeast Asian Products', slug: 'southeast-asian-products', sortOrder: 13, attributeSchema: null },
-    { name: 'Central Asian Products', slug: 'central-asian-products', sortOrder: 14, attributeSchema: null },
-    { name: 'Middle Eastern & Western Asian Products', slug: 'middle-eastern-western-asian-products', sortOrder: 15, attributeSchema: null },
+    { name: 'Asian Anime & Collectibles', slug: 'asian-anime-collectibles', sortOrder: 8 },
+    { name: 'Asian Books & Media', slug: 'asian-books-media', sortOrder: 9 },
+    { name: 'Asian Cultural Products', slug: 'asian-cultural-products', sortOrder: 10 },
+    { name: 'East Asian Products', slug: 'east-asian-products', sortOrder: 11 },
+    { name: 'South Asian Products', slug: 'south-asian-products', sortOrder: 12 },
+    { name: 'Southeast Asian Products', slug: 'southeast-asian-products', sortOrder: 13 },
+    { name: 'Central Asian Products', slug: 'central-asian-products', sortOrder: 14 },
+    { name: 'Middle Eastern & Western Asian Products', slug: 'middle-eastern-western-asian-products', sortOrder: 15 },
   ] as const;
 
   for (const category of asianSubcategories) {
@@ -389,7 +389,7 @@ async function ensureAsianCategory() {
         parentId: asianProducts.id,
         level: 1,
         sortOrder: category.sortOrder,
-        attributeSchema: category.attributeSchema ?? undefined,
+        attributeSchema: 'attributeSchema' in category ? category.attributeSchema : undefined,
       },
     });
   }
