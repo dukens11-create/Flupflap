@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import ReportModerationForm from '@/components/ReportModerationForm';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,17 +28,6 @@ const ACTION_OPTIONS = [
   { value: 'suspend_seller', label: 'Suspend seller' },
   { value: 'ban_seller', label: 'Ban seller (permanent)' },
 ];
-
-const STATUS_ACTIONS = {
-  OPEN: [
-    { value: 'dismiss', label: 'Dismiss', className: 'btn-outline text-sm' },
-    { value: 'resolve', label: 'Resolve', className: 'btn bg-green-600 hover:bg-green-700 text-white text-sm' },
-    { value: 'hide_listing', label: 'Hide listing', className: 'btn bg-orange-600 hover:bg-orange-700 text-white text-sm' },
-    { value: 'warn_seller', label: 'Warn seller', className: 'btn bg-yellow-500 hover:bg-yellow-600 text-white text-sm' },
-    { value: 'suspend_seller', label: 'Suspend seller', className: 'btn bg-red-500 hover:bg-red-600 text-white text-sm' },
-    { value: 'ban_seller', label: 'Ban seller', className: 'btn bg-red-800 hover:bg-red-900 text-white text-sm' },
-  ],
-} as const;
 
 function reportStatusBadge(status: string) {
   const map: Record<string, string> = {
@@ -71,13 +61,13 @@ function productStatusBadge(status: string) {
 export default async function AdminReportsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string; error?: string; success?: string }>;
 }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect('/login');
   if (session.user.role !== 'ADMIN') redirect('/');
 
-  const { status: statusParam } = await searchParams;
+  const { status: statusParam, error: errorParam, success: successParam } = await searchParams;
   const validStatuses = ['OPEN', 'DISMISSED', 'RESOLVED'];
   const activeStatus = validStatuses.includes(statusParam ?? '') ? (statusParam as string) : 'OPEN';
 
@@ -108,6 +98,18 @@ export default async function AdminReportsPage({
         </div>
         <a href="/admin" className="btn-outline text-sm">← Admin Dashboard</a>
       </div>
+
+      {successParam && (
+        <div className="card p-4 mb-6 bg-green-50 border-green-200 text-green-800 text-sm">
+          ✅ {successParam}
+        </div>
+      )}
+
+      {errorParam && (
+        <div className="card p-4 mb-6 bg-red-50 border-red-200 text-red-800 text-sm">
+          ⚠ {errorParam}
+        </div>
+      )}
 
       {/* Status tabs */}
       <div className="flex gap-2 mb-6">
@@ -167,25 +169,28 @@ export default async function AdminReportsPage({
 
               {/* Product info */}
               <div className="flex gap-3 items-start mb-4 p-3 bg-slate-50 rounded-xl">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={report.product.imageUrl}
-                  alt={report.product.title}
-                  className="w-16 h-16 object-cover rounded-lg flex-shrink-0"
-                />
+                {report.product.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={report.product.imageUrl}
+                    alt={report.product.title ?? 'Untitled listing'}
+                    className="w-16 h-16 object-cover rounded-lg flex-shrink-0"
+                  />
+                ) : (
+                  <div className="w-16 h-16 rounded-lg bg-slate-200 flex-shrink-0" aria-hidden="true" />
+                )}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-semibold text-slate-900 truncate">{report.product.title}</p>
-                    <span className={productStatusBadge(report.product.status)}>{report.product.status}</span>
+                    <p className="font-semibold text-slate-900 truncate">{report.product.title ?? 'Untitled listing'}</p>                    <span className={productStatusBadge(report.product.status)}>{report.product.status}</span>
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5">
                     Sold by{' '}
                     <Link href={`/admin/users/${report.seller.id}`} className="font-medium hover:underline">
-                      {report.seller.name}
+                      {report.seller.name ?? 'Unknown seller'}
                     </Link>
-                    {' '}({report.seller.email})
-                    <span className={`ml-2 ${sellerStatusBadge(report.seller.sellerStatus)}`}>
-                      {report.seller.sellerStatus}
+                    {report.seller.email ? ` (${report.seller.email})` : ''}
+                    <span className={`ml-2 ${sellerStatusBadge(report.seller.sellerStatus ?? 'ACTIVE')}`}>
+                      {report.seller.sellerStatus ?? 'ACTIVE'}
                     </span>
                   </p>
                   {report.product.status === 'APPROVED' && (
@@ -204,17 +209,17 @@ export default async function AdminReportsPage({
               <div className="mb-4 text-xs text-slate-500">
                 Reported by{' '}
                 <Link href={`/admin/users/${report.reporter.id}`} className="font-medium hover:underline">
-                  {report.reporter.name}
+                  {report.reporter.name ?? 'Unknown user'}
                 </Link>
-                {' '}({report.reporter.email})
+                {report.reporter.email ? ` (${report.reporter.email})` : ''}
               </div>
 
               {/* Admin resolution (if resolved/dismissed) */}
               {report.status !== 'OPEN' && report.admin && (
                 <div className="mb-4 p-3 bg-blue-50 rounded-xl text-xs text-blue-800">
                   <span className="font-semibold">Action taken:</span>{' '}
-                  {ACTION_OPTIONS.find((a) => a.value === report.adminAction)?.label ?? report.adminAction}
-                  {' '}by {report.admin.name}
+                  {ACTION_OPTIONS.find((a) => a.value === report.adminAction)?.label ?? report.adminAction ?? '—'}
+                  {' '}by {report.admin.name ?? 'an admin'}
                   {report.resolvedAt && (
                     <> on {new Date(report.resolvedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</>
                   )}
@@ -226,39 +231,7 @@ export default async function AdminReportsPage({
 
               {/* Moderation form (only for open reports) */}
               {report.status === 'OPEN' && (
-                <details className="group">
-                  <summary className="cursor-pointer text-sm font-medium text-slate-600 hover:text-slate-900 select-none list-none flex items-center gap-1">
-                    <span className="group-open:rotate-90 transition-transform inline-block">▶</span>
-                    Moderation actions
-                  </summary>
-                  <form
-                    action={`/api/admin/reports/${report.id}/moderate`}
-                    method="POST"
-                    className="mt-4 space-y-3 border-t border-slate-100 pt-4"
-                  >
-                    <div>
-                      <label className="label">Action <span className="text-red-500">*</span></label>
-                      <select name="action" className="input" required>
-                        <option value="">Select action…</option>
-                        {ACTION_OPTIONS.map((opt) => (
-                          <option key={opt.value} value={opt.value}>{opt.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="label">Admin notes (optional, internal only)</label>
-                      <textarea
-                        name="adminNotes"
-                        className="input h-20 resize-none"
-                        placeholder="Internal notes visible only to admins…"
-                        maxLength={2000}
-                      />
-                    </div>
-                    <button type="submit" className="btn-primary text-sm">
-                      Apply action
-                    </button>
-                  </form>
-                </details>
+                <ReportModerationForm reportId={report.id} />
               )}
             </div>
           ))}

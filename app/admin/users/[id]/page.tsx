@@ -226,7 +226,7 @@ export default async function AdminUserDetailPage({
                   <span className={`badge ${orderStatusBadge(o.status)}`}>{o.status.replace('_', ' ')}</span>
                 </div>
                 <p className="text-sm text-slate-600">
-                  {o.items.map(i => i.product.title).join(', ')}
+                  {o.items.map(i => i.product?.title ?? 'Untitled item').join(', ')}
                 </p>
                 <div className="flex justify-between mt-1">
                   <p className="text-xs text-slate-400">
@@ -279,7 +279,7 @@ export default async function AdminUserDetailPage({
                       {log.createdAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-500">By {log.admin.name}</p>
+                  <p className="text-xs text-slate-500">By {log.admin?.name ?? 'Admin'}</p>
                   {log.reasonCategory && (
                     <p className="text-xs text-slate-600 mt-0.5">
                       {REASON_LABELS[log.reasonCategory] ?? log.reasonCategory}

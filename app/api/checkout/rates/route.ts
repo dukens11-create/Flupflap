@@ -95,6 +95,14 @@ export async function POST(req: Request) {
       return apiError('Please provide at least one valid cart item.', 400);
     }
 
+    // Validate item quantities are positive integers.
+    for (const item of items) {
+      const qty = Number(item.quantity);
+      if (!Number.isInteger(qty) || qty <= 0) {
+        return apiError('Invalid item quantity.', 400);
+      }
+    }
+
     if (!body?.buyerAddress) {
       return apiError('Please provide a complete shipping address.', 400);
     }

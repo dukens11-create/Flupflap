@@ -18,6 +18,7 @@ import {
   KYC_NOT_SUBMITTED_WHERE,
   deriveEffectiveKycStatus,
 } from '@/lib/seller-kyc-stats';
+import SellerModerationForm from '@/components/SellerModerationForm';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,8 +33,6 @@ const REASON_LABELS: Record<string, string> = {
   policy_violation: 'Policy violation',
   other: 'Other',
 };
-
-const REASON_OPTIONS = Object.entries(REASON_LABELS);
 
 function statusBadge(status: string) {
   const map: Record<string, string> = {
@@ -86,7 +85,7 @@ const KYC_FILTER_OPTIONS = [
 export default async function AdminSellersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ verification?: string; kyc?: string; status?: string }>;
+  searchParams: Promise<{ verification?: string; kyc?: string; status?: string; moderate?: string; error?: string }>;
 }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect('/login');
@@ -94,6 +93,8 @@ export default async function AdminSellersPage({
   const sp = await searchParams;
   const kycFilter = sp.kyc ?? '';
   const statusFilter = sp.status ?? '';
+  const moderateSuccess = sp.moderate === 'success';
+  const errorMessage = sp.error ?? null;
 
   // Build the seller status filter for the DB query.
   const validSellerStatuses = Object.values(SellerStatus);
@@ -190,6 +191,18 @@ export default async function AdminSellersPage({
       {sp.verification === 'updated' && (
         <div className="card p-4 mb-6 bg-green-50 border-green-200 text-green-800 text-sm">
           ✅ Seller verification review updated.
+        </div>
+      )}
+
+      {moderateSuccess && (
+        <div className="card p-4 mb-6 bg-green-50 border-green-200 text-green-800 text-sm">
+          ✅ Seller moderation action applied.
+        </div>
+      )}
+
+      {errorMessage && (
+        <div className="card p-4 mb-6 bg-red-50 border-red-200 text-red-800 text-sm">
+          ⚠ {errorMessage}
         </div>
       )}
 
@@ -434,53 +447,7 @@ export default async function AdminSellersPage({
               </div>
 
               {/* Moderation form */}
-              <details className="group">
-                <summary className="cursor-pointer text-sm font-medium text-slate-600 hover:text-slate-900 select-none list-none flex items-center gap-1">
-                  <span className="group-open:rotate-90 transition-transform inline-block">▶</span>
-                  Moderation actions
-                </summary>
-                <form
-                  action={`/api/admin/sellers/${seller.id}/moderate`}
-                  method="POST"
-                  className="mt-4 space-y-3 border-t border-slate-100 pt-4"
-                >
-                  <div className="flex gap-3 flex-wrap">
-                    <div className="flex-1 min-w-[160px]">
-                      <label className="label">Action</label>
-                      <select name="action" className="input" required>
-                        <option value="">Select action…</option>
-                        <option value="SUSPENDED">Suspend (temporary)</option>
-                        <option value="RESTRICTED">Restrict (partial restriction)</option>
-                        <option value="BANNED">Ban (permanent)</option>
-                        <option value="REINSTATED">Reinstate (lift restriction)</option>
-                      </select>
-                    </div>
-                    <div className="flex-1 min-w-[160px]">
-                      <label className="label">Reason category</label>
-                      <select name="reasonCategory" className="input">
-                        <option value="">Select reason… (required unless reinstating)</option>
-                        {REASON_OPTIONS.map(([val, label]) => (
-                          <option key={val} value={val}>{label}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="label">Notes (optional, internal only)</label>
-                    <textarea
-                      name="notes"
-                      className="input h-20 resize-none"
-                      placeholder="Additional context visible only to admins…"
-                      maxLength={1000}
-                    />
-                  </div>
-                  <div className="flex gap-2">
-                    <button type="submit" className="btn-primary text-sm">
-                      Apply action
-                    </button>
-                  </div>
-                </form>
-              </details>
+              <SellerModerationForm sellerId={seller.id} sellerName={seller.name ?? 'this seller'} />
 
               {/* Audit log */}
               {seller.moderationLogsAsSeller.length > 0 && (
@@ -494,7 +461,7 @@ export default async function AdminSellersPage({
                         <span className="font-medium">{log.action}</span>
                         <span className="text-slate-400">
                           {log.createdAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                          {' '}by {log.admin.name}
+                          {' '}by {log.admin?.name ?? 'Admin'}
                         </span>
                         {log.reasonCategory && (
                           <span>{REASON_LABELS[log.reasonCategory] ?? log.reasonCategory}</span>
