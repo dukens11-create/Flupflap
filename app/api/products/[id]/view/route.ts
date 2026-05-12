@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
+import { logError } from '@/lib/logger';
 
 export async function POST(
   _req: Request,
@@ -45,7 +46,7 @@ export async function POST(
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error('[products/view POST]', err);
-    return NextResponse.json({ ok: false }, { status: 500 });
+    logError('Failed to register product view', err, { tag: 'products/[id]/view/POST' });
+    return NextResponse.json({ ok: false, error: 'Unable to register view right now.' }, { status: 500 });
   }
 }
