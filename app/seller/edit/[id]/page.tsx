@@ -76,6 +76,7 @@ export default async function SellerEditPage({
       </p>
       <EditListingForm
         id={id}
+        canDelete={product.status !== 'SOLD'}
         defaultTitle={product.title}
         defaultDescription={product.description}
         defaultPriceDollars={priceDollars}
@@ -104,24 +105,6 @@ export default async function SellerEditPage({
         defaultPickupState={product.pickupState}
         defaultPickupPostalCode={product.pickupPostalCode}
       />
-
-      {product.status !== 'SOLD' && (
-        <div className="mt-6 card p-4 border-red-200">
-          <h2 className="font-bold text-red-700 mb-2">Danger zone</h2>
-          <p className="text-sm text-slate-500 mb-3">
-            Permanently delete this listing. This cannot be undone.
-          </p>
-          <form action={`/api/seller/products/${id}`} method="POST">
-            <input type="hidden" name="_method" value="delete" />
-            <button
-              type="submit"
-              className="btn bg-red-600 hover:bg-red-700 text-white text-sm"
-            >
-              Delete listing
-            </button>
-          </form>
-        </div>
-      )}
     </main>
   );
 }

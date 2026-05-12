@@ -40,6 +40,7 @@ type ImageUploadItem = {
   enhancementStatus: 'idle' | 'processing' | 'ready' | 'error';
   fileName: string;
   fileSize: number | null;
+  sourceFile: File | null;
   status: UploadStatus;
   error?: string;
 };
@@ -51,6 +52,7 @@ type VideoUploadItem = {
   uploadedUrl: string;
   fileName: string;
   fileSize: number | null;
+  sourceFile: File | null;
   previewKind: 'object-url' | 'remote-url';
   status: UploadStatus;
   error?: string;
@@ -102,6 +104,19 @@ function getSafePreviewUrl(url: string) {
   }
 
   return '';
+}
+
+function getSkippedUploadMessage(skippedCount: number, uploadableCount: number) {
+  const maxImageMb = Math.round(MAX_PRODUCT_IMAGE_BYTES / (1024 * 1024));
+  if (!skippedCount) return '';
+  if (!uploadableCount) {
+    return skippedCount === 1
+      ? `The selected file could not be uploaded. Please choose a valid image under ${maxImageMb} MB.`
+      : `${skippedCount} files could not be uploaded. Please choose valid images under ${maxImageMb} MB.`;
+  }
+  return skippedCount === 1
+    ? '1 file was skipped because it is invalid or too large.'
+    : `${skippedCount} files were skipped because they are invalid or too large.`;
 }
 
 function getMediaStatusMessage(
@@ -178,6 +193,7 @@ export default function MediaUpload({
         enhancementStatus: enhancedUrl ? ('ready' as const) : ('idle' as const),
         fileName: getFileNameFromUrl(selectedUrl),
         fileSize: null,
+        sourceFile: null,
         status: 'uploaded' as const,
       };
     })
@@ -191,6 +207,7 @@ export default function MediaUpload({
           uploadedUrl: defaultVideoUrl,
           fileName: getFileNameFromUrl(defaultVideoUrl),
           fileSize: null,
+          sourceFile: null,
           previewKind: 'remote-url',
           status: 'uploaded' as const,
         }
@@ -259,15 +276,30 @@ export default function MediaUpload({
       : undefined;
   }
 
+  async function readJsonSafe(res: Response) {
+    try {
+      return await res.json();
+    } catch (error) {
+      console.warn('[MediaUpload] Failed to parse upload response as JSON.', error);
+      return null;
+    }
+  }
+
+  function getApiErrorMessage(json: unknown, fallback: string) {
+    if (!json || typeof json !== 'object') return fallback;
+    const candidate = json as { message?: unknown };
+    return typeof candidate.message === 'string' && candidate.message.trim() ? candidate.message : fallback;
+  }
+
   async function getUploadConfig(file: File) {
     const res = await fetch('/api/upload/product-media', {
       method: 'POST',
       headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
       body: JSON.stringify({ contentType: file.type, fileSize: file.size }),
     });
-    const json = await res.json();
+    const json = await readJsonSafe(res);
     if (!res.ok || !json?.success) {
-      throw new Error(json?.message ?? 'Upload failed.');
+      throw new Error(getApiErrorMessage(json, 'Upload failed.'));
     }
     if (!isValidUploadConfig(json)) {
       throw new Error('Upload configuration is invalid. Please try again.');
@@ -286,9 +318,9 @@ export default function MediaUpload({
       headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
       body: JSON.stringify({ imageUrl, hdUpscale: enableUpscale }),
     });
-    const json = await res.json();
+    const json = await readJsonSafe(res);
     if (!res.ok || !json?.success) {
-      throw new Error(json?.message ?? 'Failed to enhance image.');
+      throw new Error(getApiErrorMessage(json, 'Failed to enhance image.'));
     }
     if (
       typeof json.originalUrl !== 'string' ||
@@ -331,23 +363,78 @@ export default function MediaUpload({
     });
   }
 
+  function startImageUpload(itemId: string, file: File, enableUpscale: boolean) {
+    uploadFile(file)
+      .then((url) => {
+        setImages((prev) =>
+          prev.map((image) =>
+            image.id === itemId
+              ? {
+                  ...image,
+                  uploadedUrl: url,
+                  originalUrl: url,
+                  selectedVariant: 'original',
+                  status: 'uploaded',
+                  enhancementStatus: 'processing',
+                  error: undefined,
+                }
+              : image,
+          ),
+        );
+
+        return getEnhancedVariants(url, enableUpscale)
+          .then((variants) => {
+            setImages((prev) =>
+              prev.map((image) => {
+                if (image.id !== itemId) return image;
+                return {
+                  ...image,
+                  originalUrl: variants.originalUrl,
+                  enhancedUrl: variants.enhancedUrl,
+                  thumbnailUrl: variants.thumbnailUrl,
+                  selectedVariant: 'enhanced',
+                  enhancementStatus: 'ready',
+                  error: undefined,
+                };
+              }),
+            );
+          })
+          .catch((err: unknown) => {
+            const msg = err instanceof Error ? err.message : 'AI enhancement failed.';
+            setImages((prev) =>
+              prev.map((image) =>
+                image.id === itemId
+                  ? {
+                      ...image,
+                      enhancementStatus: 'error',
+                      selectedVariant: 'original',
+                      error: msg,
+                    }
+                  : image,
+              ),
+            );
+            setUploadError(msg);
+          });
+      })
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : 'Upload failed.';
+        setImages((prev) =>
+          prev.map((image) => (image.id === itemId ? { ...image, status: 'error', error: msg } : image)),
+        );
+        setUploadError(msg);
+      });
+  }
+
   async function handleImageFilesChange(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
     if (!files.length) return;
-
-    const invalidTypeFile = files.find(file => !PRODUCT_IMAGE_TYPES.includes(file.type as (typeof PRODUCT_IMAGE_TYPES)[number]));
-    if (invalidTypeFile) {
-      setUploadError('Unsupported image format. Please upload JPEG, PNG, WebP, or GIF.');
-      if (imageInputRef.current) imageInputRef.current.value = '';
-      return;
-    }
-
-    const tooLargeImage = files.find(file => file.size > MAX_PRODUCT_IMAGE_BYTES);
-    if (tooLargeImage) {
-      setUploadError('One or more images are too large. Maximum size is 10 MB each.');
-      if (imageInputRef.current) imageInputRef.current.value = '';
-      return;
-    }
+    const validFiles = files.filter(
+      (file) =>
+        PRODUCT_IMAGE_TYPES.includes(file.type as (typeof PRODUCT_IMAGE_TYPES)[number]) &&
+        file.size > 0 &&
+        file.size <= MAX_PRODUCT_IMAGE_BYTES,
+    );
+    const skippedCount = files.length - validFiles.length;
 
     const remaining = MAX_PRODUCT_IMAGES - images.length;
     if (remaining <= 0) {
@@ -356,12 +443,16 @@ export default function MediaUpload({
       return;
     }
 
-    const toUpload = files.slice(0, remaining);
-    if (files.length > remaining) {
-      setUploadError(`Only ${remaining} more image(s) can be added (max ${MAX_PRODUCT_IMAGES}). Extra files ignored.`);
-    } else {
-      setUploadError('');
+    if (!validFiles.length) {
+      setUploadError(getSkippedUploadMessage(skippedCount || files.length, 0));
+      if (imageInputRef.current) imageInputRef.current.value = '';
+      return;
     }
+
+    const toUpload = validFiles.slice(0, remaining);
+    const skippedBecauseLimit = validFiles.length - toUpload.length;
+    const totalSkipped = skippedCount + (skippedBecauseLimit > 0 ? skippedBecauseLimit : 0);
+    setUploadError(getSkippedUploadMessage(totalSkipped, toUpload.length));
 
     const nextItems = toUpload.map((file) => {
       const previewUrl = URL.createObjectURL(file);
@@ -379,79 +470,14 @@ export default function MediaUpload({
         enhancementStatus: 'idle' as const,
         fileName: file.name,
         fileSize: file.size,
+        sourceFile: file,
         status: 'uploading' as const,
       };
     });
 
     setImages((prev) => [...prev, ...nextItems]);
     if (imageInputRef.current) imageInputRef.current.value = '';
-
-    nextItems.forEach((item, index) => {
-      uploadFile(toUpload[index])
-        .then((url) => {
-          setImages((prev) =>
-            prev.map((image) =>
-              image.id === item.id
-                ? {
-                    ...image,
-                    uploadedUrl: url,
-                    originalUrl: url,
-                    selectedVariant: 'original',
-                    status: 'uploaded',
-                    enhancementStatus: 'processing',
-                    error: undefined,
-                  }
-                : image
-            )
-          );
-
-          return getEnhancedVariants(url, hdUpscale)
-            .then((variants) => {
-              setImages((prev) =>
-                prev.map((image) => {
-                  if (image.id !== item.id) return image;
-                  return {
-                    ...image,
-                    originalUrl: variants.originalUrl,
-                    enhancedUrl: variants.enhancedUrl,
-                    thumbnailUrl: variants.thumbnailUrl,
-                    selectedVariant: 'enhanced',
-                    enhancementStatus: 'ready',
-                    error: undefined,
-                  };
-                }),
-              );
-              setUploadError('');
-            })
-            .catch((err: unknown) => {
-              const msg = err instanceof Error ? err.message : 'AI enhancement failed.';
-              setImages((prev) =>
-                prev.map((image) =>
-                  image.id === item.id
-                    ? {
-                        ...image,
-                        enhancementStatus: 'error',
-                        selectedVariant: 'original',
-                        error: msg,
-                      }
-                    : image,
-                ),
-              );
-              setUploadError((current) => current || msg);
-            });
-        })
-        .catch((err: unknown) => {
-          const msg = err instanceof Error ? err.message : 'Upload failed.';
-          setImages((prev) =>
-            prev.map((image) =>
-              image.id === item.id
-                ? { ...image, status: 'error', error: msg }
-                : image
-            )
-          );
-          setUploadError((current) => current || msg);
-        });
-    });
+    nextItems.forEach((item, index) => startImageUpload(item.id, toUpload[index], hdUpscale));
   }
 
   async function handleVideoFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -482,6 +508,7 @@ export default function MediaUpload({
       uploadedUrl: '',
       fileName: file.name,
       fileSize: file.size,
+      sourceFile: file,
       previewKind: 'object-url',
       status: 'uploading',
     };
@@ -503,7 +530,7 @@ export default function MediaUpload({
           ? { ...current, status: 'error', error: msg }
           : current
       );
-      setUploadError((current) => current || msg);
+      setUploadError(msg);
     }
   }
 
@@ -583,7 +610,48 @@ export default function MediaUpload({
             : image,
         ),
       );
-      setUploadError((current) => current || msg);
+      setUploadError(msg);
+    }
+  }
+
+  function retryImageUpload(imageId: string) {
+    const target = images.find((image) => image.id === imageId);
+    if (!target?.sourceFile) return;
+    setImages((prev) =>
+      prev.map((image) =>
+        image.id === imageId
+          ? {
+              ...image,
+              status: 'uploading',
+              enhancementStatus: 'idle',
+              error: undefined,
+            }
+          : image,
+      ),
+    );
+    setUploadError('');
+    startImageUpload(imageId, target.sourceFile, hdUpscale);
+  }
+
+  async function retryVideoUpload() {
+    const sourceFile = video?.sourceFile;
+    if (!video || !sourceFile) return;
+    const videoId = video.id;
+    setVideo((current) =>
+      current?.id === videoId ? { ...current, status: 'uploading', error: undefined } : current,
+    );
+    setUploadError('');
+    try {
+      const url = await uploadFile(sourceFile);
+      setVideo((current) =>
+        current?.id === videoId
+          ? { ...current, uploadedUrl: url, status: 'uploaded', error: undefined }
+          : current,
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Upload failed.';
+      setVideo((current) => (current?.id === videoId ? { ...current, status: 'error', error: msg } : current));
+      setUploadError(msg);
     }
   }
 
@@ -690,6 +758,7 @@ export default function MediaUpload({
                 image.status === 'uploaded' &&
                 image.enhancementStatus === 'error' &&
                 !!image.originalUrl;
+              const showRetryUploadButton = image.status === 'error' && !!image.sourceFile;
               return (
               <div
                 key={image.id}
@@ -780,6 +849,15 @@ export default function MediaUpload({
                   </div>
                 )}
                 <div className="mt-3 flex flex-wrap gap-2">
+                  {showRetryUploadButton && (
+                    <button
+                      type="button"
+                      onClick={() => retryImageUpload(image.id)}
+                      className="rounded-md border border-amber-300 px-2.5 py-1 text-xs font-medium text-amber-700"
+                    >
+                      Retry upload
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => moveImage(i, i - 1)}
@@ -812,7 +890,12 @@ export default function MediaUpload({
 
         {images.length < MAX_PRODUCT_IMAGES && (
           <div>
-            <label className="inline-flex items-center gap-2 cursor-pointer btn-outline text-sm">
+            <label
+              className={`inline-flex min-h-[44px] items-center gap-2 btn-outline px-4 py-2 text-sm ${
+                imageUploadCount > 0 ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+              }`}
+              aria-disabled={imageUploadCount > 0}
+            >
               {images.length === 0 ? 'Choose images' : 'Add more images'}
               <input
                 ref={imageInputRef}
@@ -820,6 +903,7 @@ export default function MediaUpload({
                 accept={PRODUCT_IMAGE_TYPES.join(",")}
                 multiple
                 onChange={handleImageFilesChange}
+                disabled={imageUploadCount > 0}
                 className="hidden"
               />
             </label>
@@ -913,16 +997,31 @@ export default function MediaUpload({
               )}
             </div>
             <div className="flex flex-wrap gap-2">
-              <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700">
+              <label
+                className={`inline-flex min-h-[44px] items-center gap-2 rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 ${
+                  videoUploading ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+                }`}
+                aria-disabled={videoUploading}
+              >
                 Replace video
                 <input
                   ref={videoInputRef}
                   type="file"
                   accept={PRODUCT_VIDEO_TYPES.join(",")}
                   onChange={handleVideoFileChange}
+                  disabled={videoUploading}
                   className="hidden"
                 />
               </label>
+              {video.status === 'error' && video.sourceFile && (
+                <button
+                  type="button"
+                  onClick={retryVideoUpload}
+                  className="rounded-md border border-amber-300 px-3 py-1.5 text-sm font-medium text-amber-700"
+                >
+                  Retry upload
+                </button>
+              )}
               <button
                 type="button"
                 onClick={removeVideo}
@@ -934,13 +1033,19 @@ export default function MediaUpload({
           </div>
         ) : (
           <div>
-            <label className="inline-flex items-center gap-2 cursor-pointer btn-outline text-sm">
+            <label
+              className={`inline-flex min-h-[44px] items-center gap-2 btn-outline px-4 py-2 text-sm ${
+                videoUploading ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+              }`}
+              aria-disabled={videoUploading}
+            >
               Choose video
               <input
                 ref={videoInputRef}
                 type="file"
                 accept={PRODUCT_VIDEO_TYPES.join(",")}
                 onChange={handleVideoFileChange}
+                disabled={videoUploading}
                 className="hidden"
               />
             </label>

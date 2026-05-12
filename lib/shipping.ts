@@ -114,16 +114,32 @@ function serializeAddress(address: AddressInput) {
   };
 }
 
+const SHIPPO_REQUEST_TIMEOUT_MS = 30_000;
+
 async function shippoRequest(path: string, method: 'GET' | 'POST', body?: unknown) {
-  const res = await fetch(`${SHIPPO_API_BASE}${path}`, {
-    method,
-    headers: {
-      Authorization: `ShippoToken ${getShippoApiToken()}`,
-      'Content-Type': 'application/json',
-    },
-    body: body ? JSON.stringify(body) : undefined,
-    cache: 'no-store',
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), SHIPPO_REQUEST_TIMEOUT_MS);
+
+  let res: Response;
+  try {
+    res = await fetch(`${SHIPPO_API_BASE}${path}`, {
+      method,
+      headers: {
+        Authorization: `ShippoToken ${getShippoApiToken()}`,
+        'Content-Type': 'application/json',
+      },
+      body: body ? JSON.stringify(body) : undefined,
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+  } catch (err: unknown) {
+    clearTimeout(timeoutId);
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new Error('Shipping rate request timed out. Please try again.');
+    }
+    throw err;
+  }
+  clearTimeout(timeoutId);
 
   const payload = await res.json().catch(() => null);
   if (!res.ok) {
@@ -165,6 +181,28 @@ export async function createShipmentRates(params: {
   widthIn: number;
   heightIn: number;
 }) {
+  // Validate package inputs before hitting the Shippo API.
+  if (!Number.isFinite(params.weightValue) || params.weightValue <= 0) {
+    throw new Error('Package weight must be a positive number.');
+  }
+  if (!Number.isFinite(params.lengthIn) || params.lengthIn <= 0) {
+    throw new Error('Package length must be a positive number.');
+  }
+  if (!Number.isFinite(params.widthIn) || params.widthIn <= 0) {
+    throw new Error('Package width must be a positive number.');
+  }
+  if (!Number.isFinite(params.heightIn) || params.heightIn <= 0) {
+    throw new Error('Package height must be a positive number.');
+  }
+  if (!params.toAddress.street1?.trim() || !params.toAddress.city?.trim()
+      || !params.toAddress.state?.trim() || !params.toAddress.zip?.trim()) {
+    throw new Error('Destination address is incomplete.');
+  }
+  if (!params.fromAddress.street1?.trim() || !params.fromAddress.city?.trim()
+      || !params.fromAddress.state?.trim() || !params.fromAddress.zip?.trim()) {
+    throw new Error('Origin address is incomplete.');
+  }
+
   const weightUnit = params.weightUnit === 'lb' ? 'lb' : 'oz';
   const weight = params.weightValue;
   const payload = await shippoRequest('/shipments/', 'POST', {

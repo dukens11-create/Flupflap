@@ -6,6 +6,7 @@ import {
   getProductMediaKind,
   getProductMediaFolderByKind,
   getProductMediaMaxBytes,
+  getProductMediaUploadError,
 } from '@/lib/product-media';
 
 export async function POST(req: Request) {
@@ -34,11 +35,20 @@ export async function POST(req: Request) {
   if (!(file instanceof File)) {
     return NextResponse.json({ error: 'No file provided.' }, { status: 400 });
   }
+  if (!file.type || file.size <= 0) {
+    return NextResponse.json(
+      { error: 'Invalid file. Please choose a valid image or video file and try again.' },
+      { status: 400 },
+    );
+  }
 
   const mediaKind = getProductMediaKind(file.type);
   if (!mediaKind) {
+    const uploadErrorMessage = file.type.startsWith('video/')
+      ? getProductMediaUploadError('video/mp4')
+      : getProductMediaUploadError(file.type);
     return NextResponse.json(
-      { error: 'Unsupported file type. Please upload a JPEG, PNG, WebP, GIF image or MP4, MOV, WebM video.' },
+      { error: uploadErrorMessage },
       { status: 400 }
     );
   }

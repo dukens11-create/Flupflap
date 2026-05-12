@@ -1,5 +1,8 @@
 'use client';
 
+import { useEffect } from 'react';
+import * as Sentry from '@sentry/nextjs';
+
 /**
  * Global error boundary for the app.
  * Catches unhandled errors from server components, including those caused by a
@@ -13,6 +16,14 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  useEffect(() => {
+    // Report unhandled page-level errors to Sentry when configured.
+    Sentry.captureException(error, {
+      tags: { boundary: 'GlobalError' },
+      extra: { digest: error.digest },
+    });
+  }, [error]);
+
   return (
     <main className="max-w-2xl mx-auto py-16 text-center">
       <h2 className="text-2xl font-black mb-4 text-slate-800">Something went wrong</h2>

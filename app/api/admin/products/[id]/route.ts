@@ -7,36 +7,41 @@ import {
   SHIPPING_PACKAGE_DETAILS_REQUIRED_MESSAGE,
 } from '@/lib/product-package';
 
-/**
- * Sanitise the redirectTo value coming from form input.
- * Only allow simple relative paths under /admin to prevent open redirects and path traversal.
- */
-function safeAdminRedirect(raw: string | null, fallback = '/admin'): string {
-  if (!raw) return fallback;
-  // Reject protocol-relative (//evil.com) and absolute URLs (https://...)
-  if (raw.startsWith('//') || raw.includes('://')) return fallback;
-  // Normalise the path to resolve any traversal sequences like ../
-  // new URL resolves /admin/../../etc to /etc so we re-check after normalisation.
-  try {
-    const normalized = new URL(raw, 'https://placeholder.invalid').pathname;
-    if (!normalized.startsWith('/admin')) return fallback;
-    return normalized;
-  } catch {
-    return fallback;
+function isJsonRequest(req: Request) {
+  return (req.headers.get('accept') ?? '').includes('application/json');
+}
+
+const ALLOWED_REDIRECT_PATHS = new Set(['/admin', '/admin/fraud']);
+
+function resolveRedirectPath(redirectTo: string | null | undefined) {
+  if (!redirectTo || !ALLOWED_REDIRECT_PATHS.has(redirectTo)) return '/admin';
+  return redirectTo;
+}
+
+function redirectWithMessage(req: Request, redirectTo: string, key: 'error' | 'success', message: string) {
+  const url = new URL(resolveRedirectPath(redirectTo), req.url);
+  url.searchParams.set(key, message);
+  return NextResponse.redirect(url, 303);
+}
+
+function respondError(req: Request, message: string, status: number, redirectTo = '/admin') {
+  if (isJsonRequest(req)) {
+    return NextResponse.json({ error: message }, { status });
   }
+  return redirectWithMessage(req, redirectTo, 'error', message);
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
-
-  const { id } = await params;
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user || session.user.role !== 'ADMIN') {
+      return respondError(req, 'Forbidden', 403);
+    }
+
+    const { id } = await params;
     const form = await req.formData();
     const action = form.get('_method') as string;
-    const redirectTo = safeAdminRedirect(form.get('redirectTo') as string | null);
+    const redirectTo = resolveRedirectPath(form.get('redirectTo') as string);
     const actionToStatus: Record<string, 'APPROVED' | 'REJECTED' | 'HIDDEN'> = {
       approve: 'APPROVED',
       reject: 'REJECTED',
@@ -44,21 +49,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     };
 
     if (action !== 'approve' && action !== 'reject' && action !== 'hide') {
-      const errUrl = new URL(redirectTo, req.url);
-      errUrl.searchParams.set('error', 'Invalid action.');
-      return NextResponse.redirect(errUrl, 302);
+      return respondError(req, 'Invalid action.', 400, redirectTo);
     }
 
     const product = await prisma.product.findUnique({ where: { id } });
-    if (!product) {
-      const errUrl = new URL(redirectTo, req.url);
-      errUrl.searchParams.set('error', 'Listing not found.');
-      return NextResponse.redirect(errUrl, 302);
-    }
+    if (!product) return respondError(req, 'Not found.', 404, redirectTo);
     if (action === 'approve' && !hasStoredPackageDetails(product)) {
-      const errUrl = new URL(redirectTo, req.url);
-      errUrl.searchParams.set('error', SHIPPING_PACKAGE_DETAILS_REQUIRED_MESSAGE);
-      return NextResponse.redirect(errUrl, 302);
+      return respondError(req, SHIPPING_PACKAGE_DETAILS_REQUIRED_MESSAGE, 400, redirectTo);
     }
 
     await prisma.product.update({
@@ -66,30 +63,26 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       data: { status: actionToStatus[action] },
     });
 
-    // Use 302 (not 307) so the browser follows the redirect with GET, not POST.
-    // Next.js page routes only handle GET; a POST redirect (307) causes a 405 crash.
-    const successUrl = new URL(redirectTo, req.url);
-    successUrl.searchParams.set('success', `Listing ${action}d.`);
-    return NextResponse.redirect(successUrl, 302);
-  } catch {
-    const errUrl = new URL('/admin', req.url);
-    errUrl.searchParams.set('error', 'An unexpected error occurred.');
-    return NextResponse.redirect(errUrl, 302);
+    if (isJsonRequest(req)) {
+      return NextResponse.json({ success: true });
+    }
+    return redirectWithMessage(req, redirectTo, 'success', 'Listing status updated.');
+  } catch (err) {
+    console.error('[api/admin/products/[id] POST] unexpected error', err);
+    return respondError(req, 'An unexpected error occurred.', 500);
   }
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
-
-  const { id } = await params;
-
   try {
-    const body = await req.json() as { status?: unknown };
-    const { status } = body;
-    if (!status || !['APPROVED', 'REJECTED', 'HIDDEN'].includes(status as string)) {
+    const session = await getServerSession(authOptions);
+    if (!session?.user || session.user.role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const { id } = await params;
+    const { status } = await req.json() as { status: 'APPROVED' | 'REJECTED' | 'HIDDEN' };
+    if (!['APPROVED', 'REJECTED', 'HIDDEN'].includes(status)) {
       return NextResponse.json({ error: 'Invalid status.' }, { status: 400 });
     }
 
@@ -101,31 +94,32 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
     const product = await prisma.product.update({
       where: { id },
-      data: { status: status as 'APPROVED' | 'REJECTED' | 'HIDDEN' },
+      data: { status },
     });
 
     return NextResponse.json(product);
-  } catch {
+  } catch (err) {
+    console.error('[api/admin/products/[id] PATCH] unexpected error', err);
     return NextResponse.json({ error: 'An unexpected error occurred.' }, { status: 500 });
   }
 }
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
-
-  const { id } = await params;
-
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user || session.user.role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const { id } = await params;
     const product = await prisma.product.findUnique({ where: { id } });
     if (!product) return NextResponse.json({ error: 'Not found.' }, { status: 404 });
 
     await prisma.product.delete({ where: { id } });
 
     return NextResponse.json({ success: true });
-  } catch {
+  } catch (err) {
+    console.error('[api/admin/products/[id] DELETE] unexpected error', err);
     return NextResponse.json({ error: 'An unexpected error occurred.' }, { status: 500 });
   }
 }

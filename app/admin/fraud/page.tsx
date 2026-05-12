@@ -5,7 +5,7 @@ import type { Metadata } from 'next';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { dollars } from '@/lib/money';
-import { getListingRiskAssessment } from '@/lib/fraud-detection';
+import { getListingRiskAssessment, type ListingRiskAssessment } from '@/lib/fraud-detection';
 import { describeSuspiciousReason } from '@/lib/login-security';
 import FraudListingActions from '@/components/FraudListingActions';
 import FraudSellerReportForm from '@/components/FraudSellerReportForm';
@@ -105,7 +105,7 @@ export default async function AdminFraudPage({
     }),
   ]);
 
-  const comparisonListings = recentListings.map((listing) => ({
+  const comparisonListings = recentListings.map((listing: (typeof recentListings)[number]) => ({
     id: listing.id,
     sellerId: listing.sellerId,
     title: listing.title,
@@ -118,12 +118,13 @@ export default async function AdminFraudPage({
     createdAt: listing.createdAt,
   }));
 
-  const riskyListings = recentListings
-    .map((listing) => {
+  type RiskyListing = { listing: (typeof recentListings)[number]; assessment: ListingRiskAssessment };
+  const riskyListings: RiskyListing[] = recentListings
+    .map((listing: (typeof recentListings)[number]) => {
       const windowStart = new Date(listing.createdAt);
       windowStart.setHours(windowStart.getHours() - 24);
       const sellerRecentCount = recentListings.filter(
-        (candidate) =>
+        (candidate: (typeof recentListings)[number]) =>
           candidate.sellerId === listing.sellerId &&
           candidate.createdAt >= windowStart &&
           candidate.createdAt <= listing.createdAt,
@@ -147,11 +148,11 @@ export default async function AdminFraudPage({
 
       return { listing, assessment };
     })
-    .filter(({ assessment }) => assessment.level !== 'NONE')
-    .sort((a, b) => b.assessment.score - a.assessment.score)
+    .filter((item: RiskyListing) => item.assessment.level !== 'NONE')
+    .sort((a: RiskyListing, b: RiskyListing) => b.assessment.score - a.assessment.score)
     .slice(0, 15);
 
-  const listingTitleById = new Map(recentListings.map((listing) => [listing.id, listing.title]));
+  const listingTitleById = new Map(recentListings.map((listing: (typeof recentListings)[number]) => [listing.id, listing.title]));
 
   return (
     <main className="max-w-6xl mx-auto">
@@ -243,7 +244,7 @@ export default async function AdminFraudPage({
                             <span key={id}>
                               {index > 0 && ', '}
                               <Link href={`/products/${id}`} target="_blank" className="text-blue-600 hover:underline">
-                                {listingTitleById.get(id) ?? (id.length > 6 ? id.slice(-6) : id)}
+                                {String(listingTitleById.get(id) ?? (id.length > 6 ? id.slice(-6) : id))}
                               </Link>
                             </span>
                           ))}
@@ -267,7 +268,7 @@ export default async function AdminFraudPage({
           <div className="card p-6 text-sm text-slate-500">No open seller reports.</div>
         ) : (
           <div className="space-y-4">
-            {sellerReports.map((report) => (
+            {sellerReports.map((report: (typeof sellerReports)[number]) => (
               <div key={report.id} className="card p-5">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
@@ -313,7 +314,7 @@ export default async function AdminFraudPage({
           <div className="card p-6 text-sm text-slate-500">No suspicious login alerts in the last 30 days.</div>
         ) : (
           <div className="space-y-3">
-            {suspiciousLogins.map((login) => (
+            {suspiciousLogins.map((login: (typeof suspiciousLogins)[number]) => (
               <div key={login.id} className="card p-4 flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                 <div>
                   <p className="font-medium text-slate-900">
@@ -334,7 +335,7 @@ export default async function AdminFraudPage({
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {login.suspiciousReasons.map((reason) => (
+                  {login.suspiciousReasons.map((reason: string) => (
                     <span key={`${login.id}-${reason}`} className="badge badge-yellow">
                       {describeSuspiciousReason(reason)}
                     </span>

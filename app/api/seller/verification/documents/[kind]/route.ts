@@ -91,7 +91,22 @@ export async function GET(
     });
   }
 
-  return NextResponse.redirect(
-    getSignedSellerVerificationDocumentUrl(document.publicId, document.format),
-  );
+  try {
+    return NextResponse.redirect(
+      getSignedSellerVerificationDocumentUrl(document.publicId, document.format),
+    );
+  } catch (err) {
+    console.error('[seller/verification/documents GET] Failed to sign document URL', {
+      sellerId,
+      kind,
+      message: err instanceof Error ? err.message : String(err),
+    });
+    return NextResponse.json(
+      {
+        error:
+          'We could not open this verification document because secure document access is temporarily unavailable. Please retry in a moment or contact support if this continues.',
+      },
+      { status: 500 },
+    );
+  }
 }

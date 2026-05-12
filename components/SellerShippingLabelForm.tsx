@@ -67,6 +67,29 @@ export default function SellerShippingLabelForm({
   async function handleCreateLabel() {
     setError('');
     setSuccess('');
+
+    // Client-side validation: all dimensions must be positive numbers.
+    const parsedWeight = Number(weightOz);
+    const parsedLength = Number(lengthIn);
+    const parsedWidth = Number(widthIn);
+    const parsedHeight = Number(heightIn);
+    if (!Number.isFinite(parsedWeight) || parsedWeight <= 0) {
+      setError('Weight must be a positive number (oz).');
+      return;
+    }
+    if (!Number.isFinite(parsedLength) || parsedLength <= 0) {
+      setError('Length must be a positive number (in).');
+      return;
+    }
+    if (!Number.isFinite(parsedWidth) || parsedWidth <= 0) {
+      setError('Width must be a positive number (in).');
+      return;
+    }
+    if (!Number.isFinite(parsedHeight) || parsedHeight <= 0) {
+      setError('Height must be a positive number (in).');
+      return;
+    }
+
     setLoadingRates(true);
     try {
       const res = await fetch('/api/seller/ship', {
@@ -188,7 +211,7 @@ export default function SellerShippingLabelForm({
             type="button"
             className="btn-primary text-sm"
             onClick={handleCreateLabel}
-            disabled={loadingRates}
+            disabled={loadingRates || loadingPurchase}
           >
             {loadingRates ? 'Loading rates…' : 'Create Label'}
           </button>
