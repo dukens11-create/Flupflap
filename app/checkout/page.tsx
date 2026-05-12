@@ -99,6 +99,7 @@ export default function CheckoutPage() {
   const [taxError, setTaxError] = useState('');
   const [taxFallbackApplied, setTaxFallbackApplied] = useState(false);
   const [finalTotalCents, setFinalTotalCents] = useState(0);
+  const [rateRetryKey, setRateRetryKey] = useState(0);
 
   useEffect(() => {
     try {
@@ -311,7 +312,7 @@ export default function CheckoutPage() {
     return () => {
       window.clearTimeout(timer);
     };
-  }, [allPickup, buyerAddress, buyerAddressComplete, calculatedShippingItems, hasCalculatedShipping]);
+  }, [allPickup, buyerAddress, buyerAddressComplete, calculatedShippingItems, hasCalculatedShipping, rateRetryKey]);
 
   useEffect(() => {
     const requestVersion = taxRequestVersionRef.current + 1;
@@ -409,7 +410,15 @@ export default function CheckoutPage() {
 
     // If live shipping is needed, validate rates selected
     if (hasCalculatedShipping && !canProceedToCheckout) {
-      setError(rateError || taxError || 'Please select a valid shipping option before proceeding.');
+      if (!buyerAddressComplete) {
+        setError('Please complete your shipping address to calculate rates.');
+      } else if (rateError) {
+        setError(rateError || 'Shipping rate unavailable. Please update your address and retry.');
+      } else if (!hasCompleteShippingSelection) {
+        setError('Please select a shipping rate before proceeding.');
+      } else {
+        setError(taxError || 'Please wait for the total to finish calculating.');
+      }
       return;
     }
 
@@ -544,12 +553,18 @@ export default function CheckoutPage() {
       {/* Shipping address for live rate calculation */}
       {!allPickup && hasCalculatedShipping && (
         <div className="card p-5 mb-4 space-y-3">
-          <p className="font-semibold text-slate-900">📦 Shipping address</p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="font-semibold text-slate-900">📦 Shipping address</p>
+            <span className="text-xs text-slate-400">* Required</span>
+          </div>
           <p className="text-xs text-slate-500">Enter your full shipping address to calculate live shipping rates automatically.</p>
+
+          {/* sr-only text for screen readers announcing required fields */}
+          <span id="required-fields-note" className="sr-only">Fields marked with an asterisk are required.</span>
 
           <div>
             <div className="flex items-center justify-between gap-2">
-              <label className="label text-xs">Full name</label>
+              <label className="label text-xs">Full name <span className="text-red-500" aria-hidden="true">*</span></label>
               {session?.user?.name?.trim() && (
                 <button
                   type="button"
@@ -566,41 +581,50 @@ export default function CheckoutPage() {
               onChange={e => setBuyerName(e.target.value)}
               className="input"
               placeholder="Jane Smith"
+              autoComplete="name"
+              aria-required="true"
+              aria-describedby="required-fields-note"
             />
           </div>
           <div>
-            <label className="label text-xs">Street address</label>
+            <label className="label text-xs">Street address <span className="text-red-500" aria-hidden="true">*</span></label>
             <input
               type="text"
               value={buyerStreet1}
               onChange={e => setBuyerStreet1(e.target.value)}
               className="input"
               placeholder="123 Main St"
+              autoComplete="address-line1"
+              aria-required="true"
             />
           </div>
           <div>
-            <label className="label text-xs">Apt, suite, etc. (optional)</label>
+            <label className="label text-xs">Apt, suite, etc. <span className="text-slate-400 font-normal">(optional)</span></label>
             <input
               type="text"
               value={buyerStreet2}
               onChange={e => setBuyerStreet2(e.target.value)}
               className="input"
               placeholder="Apt 4B"
+              autoComplete="address-line2"
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          {/* State field is intentionally narrow (80px) on mobile: accepts 2-letter abbreviations only */}
+          <div className="grid grid-cols-[1fr_80px] gap-3 sm:grid-cols-2">
             <div>
-              <label className="label text-xs">City</label>
+              <label className="label text-xs">City <span className="text-red-500" aria-hidden="true">*</span></label>
               <input
                 type="text"
                 value={buyerCity}
                 onChange={e => setBuyerCity(e.target.value)}
                 className="input"
                 placeholder="New York"
+                autoComplete="address-level2"
+                aria-required="true"
               />
             </div>
             <div>
-              <label className="label text-xs">State</label>
+              <label className="label text-xs">State <span className="text-red-500" aria-hidden="true">*</span></label>
               <input
                 type="text"
                 value={buyerState}
@@ -608,26 +632,32 @@ export default function CheckoutPage() {
                 className="input"
                 placeholder="NY"
                 maxLength={2}
+                autoComplete="address-level1"
+                aria-required="true"
               />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="label text-xs">ZIP code</label>
+              <label className="label text-xs">ZIP code <span className="text-red-500" aria-hidden="true">*</span></label>
               <input
                 type="text"
                 value={buyerZip}
                 onChange={e => setBuyerZip(e.target.value)}
                 className="input"
                 placeholder="10001"
+                autoComplete="postal-code"
+                aria-required="true"
               />
             </div>
             <div>
-              <label className="label text-xs">Country</label>
+              <label className="label text-xs">Country <span className="text-red-500" aria-hidden="true">*</span></label>
               <select
                 value={buyerCountry}
                 onChange={e => setBuyerCountry(e.target.value)}
                 className="input"
+                autoComplete="country"
+                aria-required="true"
               >
                 <option value="US">United States</option>
                 <option value="CA">Canada</option>
@@ -638,13 +668,23 @@ export default function CheckoutPage() {
           </div>
 
           {fetchingRates && (
-            <p className="text-sm text-slate-600 font-medium">Calculating shipping…</p>
+            <div className="flex items-center gap-2 text-sm text-slate-600 font-medium" role="status" aria-live="polite">
+              <span className="inline-block w-4 h-4 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin flex-shrink-0" aria-hidden="true" />
+              Calculating rates…
+            </div>
           )}
 
-          {rateError && (
-            <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-              ⚠️ {rateError}
-            </p>
+          {rateError && !fetchingRates && (
+            <div className="flex items-start justify-between gap-3 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              <span>⚠️ {rateError}</span>
+              <button
+                type="button"
+                onClick={() => setRateRetryKey(k => k + 1)}
+                className="text-xs font-semibold underline underline-offset-2 flex-shrink-0 hover:text-amber-900"
+              >
+                Retry
+              </button>
+            </div>
           )}
 
           {/* Rate options per seller group */}
@@ -716,29 +756,31 @@ export default function CheckoutPage() {
             {allPickup
               ? 'Free (pickup)'
               : hasCalculatedShipping && fetchingRates
-                ? 'Calculating shipping…'
+                ? <span className="flex items-center gap-1.5 text-slate-400" role="status" aria-live="polite"><span className="inline-block w-3 h-3 border-2 border-slate-300 border-t-slate-500 rounded-full animate-spin" aria-hidden="true" />Calculating…</span>
                 : hasCalculatedShipping && rateError
-                  ? 'Shipping unavailable'
+                  ? <span className="text-amber-600">Unavailable</span>
                   : hasCalculatedShipping && !hasCompleteShippingSelection
-                    ? 'Shipping not selected'
+                    ? <span className="text-slate-400">Select a rate</span>
                     : totalShipping === 0
                       ? 'Free'
                       : dollars(totalShipping)}
           </span>
         </div>
         <div className="flex justify-between">
-          <span className="text-slate-500">Tax fee</span>
+          <span className="text-slate-500">Tax</span>
           <span>
-            {taxNotReady
-              ? 'TBD'
-              : dollars(taxCents)}
+            {taxCalculating
+              ? <span className="flex items-center gap-1.5 text-slate-400" role="status" aria-live="polite"><span className="inline-block w-3 h-3 border-2 border-slate-300 border-t-slate-500 rounded-full animate-spin" aria-hidden="true" />Calculating…</span>
+              : taxNotReady
+                ? <span className="text-slate-400" aria-label="Not yet calculated">—</span>
+                : dollars(taxCents)}
           </span>
         </div>
         <div className="flex justify-between font-bold text-base border-t pt-2 mt-1">
           <span>Grand total</span>
           <span>
             {taxNotReady
-              ? 'TBD'
+              ? <span className="text-slate-400" aria-label="Total not yet calculated">—</span>
               : dollars(hasCalculatedShipping ? finalTotalCents : total + taxCents)}
           </span>
         </div>
@@ -746,7 +788,7 @@ export default function CheckoutPage() {
           <p className="text-xs text-slate-500">Tax is temporarily unavailable and has been set to $0.00.</p>
         )}
         {taxError && (
-          <p className="text-xs text-amber-700">{taxError}</p>
+          <p className="text-xs text-amber-700">⚠️ {taxError}</p>
         )}
       </div>
 
@@ -765,7 +807,10 @@ export default function CheckoutPage() {
       )}
 
       {error && (
-        <p className="text-red-600 text-sm mb-3">{error}</p>
+        <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700 mb-3" role="alert">
+          <span className="text-base leading-none flex-shrink-0">⚠️</span>
+          <span>{error}</span>
+        </div>
       )}
 
       <div className="flex gap-3">
@@ -775,13 +820,22 @@ export default function CheckoutPage() {
         <button
           onClick={handleCheckout}
           disabled={checking || !canProceedToCheckout}
+          aria-busy={checking}
           className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {checking
-            ? 'Redirecting to payment…'
-            : !canProceedToCheckout
-              ? 'Select shipping first'
-              : 'Proceed to payment →'}
+            ? <span className="flex items-center justify-center gap-2"><span className="inline-block w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" aria-hidden="true" />Processing…</span>
+            : hasCalculatedShipping && !allPickup && !buyerAddressComplete
+              ? 'Enter shipping address'
+              : hasCalculatedShipping && !allPickup && fetchingRates
+                ? 'Calculating rates…'
+                : hasCalculatedShipping && !allPickup && rateError
+                  ? 'Fix shipping address'
+                  : hasCalculatedShipping && !allPickup && !hasCompleteShippingSelection
+                    ? 'Select a shipping rate'
+                    : hasCalculatedShipping && !allPickup && taxCalculating
+                      ? 'Calculating total…'
+                      : 'Proceed to payment →'}
         </button>
       </div>
     </main>
