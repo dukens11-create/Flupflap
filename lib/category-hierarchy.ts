@@ -263,7 +263,7 @@ export function resolveLegacyCategorySelection(
   const normalizedFromIds = getNormalizedPath(leafFromIds, lookup);
 
   let leaf = normalizedFromIds?.leaf ?? null;
-  let reason: string | null = normalizedFromIds ? null : null;
+  let reason: string | null = null;
 
   const labelMatch = resolveLabelMatch(
     input.categoryLabel,

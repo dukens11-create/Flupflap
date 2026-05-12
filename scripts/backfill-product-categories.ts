@@ -34,6 +34,9 @@ async function run() {
       categoryLabel: product.category,
     });
     if (resolved.stale) {
+      // Skip rows we cannot confidently map back onto the current hierarchy.
+      // These need manual review because neither the stored IDs nor the saved label
+      // provide an unambiguous repair target.
       return [];
     }
 
