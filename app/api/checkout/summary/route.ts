@@ -164,7 +164,7 @@ export async function POST(req: Request) {
       });
     }
 
-    const subtotalCents = lineItems.reduce((sum, item) => sum + (item.amount * item.quantity), 0);
+    const subtotalCents = lineItems.reduce((sum, item) => sum + item.amount, 0);
 
     try {
       const calculation = await stripe.tax.calculations.create({
@@ -189,7 +189,13 @@ export async function POST(req: Request) {
         taxFallbackApplied: false,
       });
     } catch (taxErr) {
-      console.warn('[checkout/summary] stripe tax unavailable, falling back to tax=0', taxErr);
+      console.warn('[checkout/summary] stripe tax unavailable, falling back to tax=0', {
+        reason: classifyStripeError(taxErr).reason,
+        statusCode: (taxErr as { statusCode?: unknown })?.statusCode,
+        type: (taxErr as { type?: unknown })?.type,
+        code: (taxErr as { code?: unknown })?.code,
+        message: taxErr instanceof Error ? taxErr.message : String(taxErr),
+      });
       return NextResponse.json({
         taxCents: 0,
         totalCents: subtotalCents,

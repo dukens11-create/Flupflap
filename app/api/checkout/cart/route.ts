@@ -46,6 +46,11 @@ function hasCompleteAddress(address?: ShippingRateInfo['buyerAddress']) {
   return !!(address?.street1 && address?.city && address?.state && address?.zip);
 }
 
+function extractStripeErrorField(err: unknown, key: 'code' | 'type') {
+  const value = (err as Record<'code' | 'type', unknown> | null)?.[key];
+  return typeof value === 'string' ? value.toLowerCase() : '';
+}
+
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions);
@@ -348,7 +353,7 @@ export async function POST(req: Request) {
       }
     }
 
-    const shouldCollectStripeShippingAddress = !allPickup && !checkoutCustomerId;
+    const requiresShippingAddressCollection = !allPickup && !checkoutCustomerId;
     const createCheckoutSession = async (enableAutomaticTax: boolean) => stripe.checkout.sessions.create({
       mode: 'payment',
       payment_method_types: ['card'],
@@ -356,7 +361,7 @@ export async function POST(req: Request) {
       automatic_tax: { enabled: enableAutomaticTax },
       success_url: `${appUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${appUrl}/checkout/cancel`,
-      ...(shouldCollectStripeShippingAddress
+      ...(requiresShippingAddressCollection
         ? { shipping_address_collection: { allowed_countries: ['US', 'CA', 'GB', 'AU'] } }
         : {}),
       ...(checkoutCustomerId ? { customer: checkoutCustomerId } : {}),
@@ -382,11 +387,31 @@ export async function POST(req: Request) {
         return await createCheckoutSession(true);
       } catch (err) {
         const classified = classifyStripeError(err);
+        const stripeCode = extractStripeErrorField(err, 'code');
+        const stripeType = extractStripeErrorField(err, 'type');
         const message = classified.message.toLowerCase();
+        const knownTaxErrorCodes = new Set([
+          'automatic_tax_not_supported',
+          'automatic_tax_unsupported',
+          'tax_calculation_failed',
+          'tax_not_supported',
+        ]);
+        const hasTaxSignal = stripeCode.includes('tax') || stripeType.includes('tax') || message.includes('automatic_tax');
+        const hasAvailabilitySignal = message.includes('unsupported')
+          || message.includes('unavailable')
+          || message.includes('cannot')
+          || message.includes('address')
+          || message.includes('location');
         const isTaxFailure = classified.reason === 'stripe_error'
-          && (message.includes('tax') || message.includes('automatic_tax'));
+          && (knownTaxErrorCodes.has(stripeCode) || (hasTaxSignal && hasAvailabilitySignal));
         if (!isTaxFailure) throw err;
-        console.warn('[checkout/cart] automatic tax unavailable, retrying with tax disabled', err);
+        console.warn('[checkout/cart] automatic tax unavailable, retrying with tax disabled', {
+          reason: classified.reason,
+          statusCode: classified.statusCode,
+          code: stripeCode,
+          type: stripeType,
+          message: classified.message,
+        });
         return createCheckoutSession(false);
       }
     })();
