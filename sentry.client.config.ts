@@ -37,6 +37,9 @@ Sentry.init({
       const urlStr: string = breadcrumb.data?.url ?? '';
       // Never record auth API calls or external Stripe requests in breadcrumbs.
       try {
+        // `new URL` requires an absolute URL. We supply a dummy base so that
+        // relative paths (e.g. "/api/auth/session") are accepted as well.
+        // Any truly malformed string throws and is caught below.
         const parsed = new URL(urlStr, 'https://placeholder.invalid');
         if (
           parsed.pathname.startsWith('/api/auth') ||
@@ -46,7 +49,7 @@ Sentry.init({
           return null;
         }
       } catch {
-        // If the URL is unparseable, drop it to be safe.
+        // Unparseable URL — drop the breadcrumb to be safe.
         return null;
       }
     }
