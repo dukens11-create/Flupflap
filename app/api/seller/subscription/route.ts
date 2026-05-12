@@ -7,26 +7,31 @@ import { SELLER_SUBSCRIPTION_PRICE_CENTS, isSubscriptionActive } from '@/lib/sub
 
 /** GET /api/seller/subscription — return current subscription status for the signed-in seller */
 export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user || session.user.role !== 'SELLER') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user || session.user.role !== 'SELLER') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: {
+        subscriptionStatus: true,
+        subscriptionId: true,
+        subscriptionCurrentPeriodEnd: true,
+      },
+    });
+
+    return NextResponse.json({
+      subscriptionStatus: user?.subscriptionStatus ?? null,
+      subscriptionId: user?.subscriptionId ?? null,
+      subscriptionCurrentPeriodEnd: user?.subscriptionCurrentPeriodEnd ?? null,
+      active: isSubscriptionActive(user ?? {}),
+    });
+  } catch (err) {
+    console.error('[seller/subscription GET]', err);
+    return NextResponse.json({ error: 'Failed to load subscription status.' }, { status: 500 });
   }
-
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: {
-      subscriptionStatus: true,
-      subscriptionId: true,
-      subscriptionCurrentPeriodEnd: true,
-    },
-  });
-
-  return NextResponse.json({
-    subscriptionStatus: user?.subscriptionStatus ?? null,
-    subscriptionId: user?.subscriptionId ?? null,
-    subscriptionCurrentPeriodEnd: user?.subscriptionCurrentPeriodEnd ?? null,
-    active: isSubscriptionActive(user ?? {}),
-  });
 }
 
 /** POST /api/seller/subscription — create a Stripe Checkout session to enroll in the subscription */
