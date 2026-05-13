@@ -476,7 +476,6 @@ async function ensureCulturalMarketplaceCategories() {
 
   console.log('Cultural marketplace categories ensured.');
 }
-
 async function main(){
   const pass = await bcrypt.hash('password123', 10);
   await prisma.user.upsert({ where:{email:'guest@flupflap.local'}, update:{}, create:{name:'Guest Buyer',email:'guest@flupflap.local',password:'',role:Role.CUSTOMER} });
