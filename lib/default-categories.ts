@@ -1,4 +1,5 @@
 import { PERFUME_SIZE_OPTIONS } from '@/lib/category-attribute-schema';
+import { CULTURAL_MARKETPLACES } from '@/lib/cultural-marketplaces';
 import { ASIAN_PRODUCTS_ALIASES } from '@/lib/marketplace-categories';
 
 type FieldDef = {
@@ -190,4 +191,26 @@ export const DEFAULT_CATEGORY_TREE: DefaultCategoryNode[] = [
     node({ id: 'central-asian-products', name: 'Central Asian Products', slug: 'central-asian-products', aliases: [], parentId: 'asian-products', level: 1, icon: null, sortOrder: 14, attributeSchema: null }),
     node({ id: 'middle-eastern-western-asian-products', name: 'Middle Eastern & Western Asian Products', slug: 'middle-eastern-western-asian-products', aliases: [], parentId: 'asian-products', level: 1, icon: null, sortOrder: 15, attributeSchema: null }),
   ] }),
+  ...CULTURAL_MARKETPLACES.map((marketplace) => node({
+    id: marketplace.id,
+    name: marketplace.name,
+    slug: marketplace.slug,
+    aliases: marketplace.aliases,
+    parentId: null,
+    level: 0,
+    icon: marketplace.icon,
+    sortOrder: marketplace.sortOrder,
+    attributeSchema: null,
+    children: marketplace.subcategories.map((subcategory, index) => node({
+      id: subcategory.id,
+      name: subcategory.name,
+      slug: subcategory.slug,
+      aliases: subcategory.aliases ?? [],
+      parentId: marketplace.id,
+      level: 1,
+      icon: null,
+      sortOrder: index + 1,
+      attributeSchema: null,
+    })),
+  })),
 ];
