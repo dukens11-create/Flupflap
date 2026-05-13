@@ -8,11 +8,10 @@ import BrowseFilters from '@/components/BrowseFilters';
 import type { Metadata } from 'next';
 import { expirePromotions } from '@/lib/promotions';
 import { getServerTranslations } from '@/lib/i18n/server';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, BadgeCheck, CreditCard, Palette, ShieldCheck, Sparkles, Store, Sun, Truck } from 'lucide-react';
 import { getSellerResponseStatsForSellers } from '@/lib/messages';
 import { authOptions } from '@/lib/auth-options';
 import { getRoleDefaultPath, normalizeExperienceRole } from '@/lib/role-experience';
-import { CULTURAL_MARKETPLACES } from '@/lib/cultural-marketplaces';
 import { DEFAULT_CATEGORY_TREE, type DefaultCategoryNode } from '@/lib/default-categories';
 import { FEATURED_MARKETPLACE_CATEGORY_SLUGS } from '@/lib/marketplace-categories';
 
@@ -54,7 +53,59 @@ interface SearchParams {
   pickup?: string;
 }
 
-const MAX_FEATURED_SUBCATEGORIES = 6;
+const TRUST_SIGNALS = [
+  {
+    title: 'Verified sellers',
+    description: 'Shop storefronts with clear trust signals and seller verification built in.',
+    icon: BadgeCheck,
+    accentClassName: 'bg-emerald-50 text-emerald-700',
+  },
+  {
+    title: 'Secure payments',
+    description: 'Protected checkout keeps orders simple, secure, and easy to complete.',
+    icon: CreditCard,
+    accentClassName: 'bg-slate-100 text-slate-700',
+  },
+  {
+    title: 'Shipping support',
+    description: 'Track shipped orders confidently with marketplace support from checkout onward.',
+    icon: Truck,
+    accentClassName: 'bg-amber-100 text-amber-700',
+  },
+  {
+    title: 'Buyer protection',
+    description: 'Browse with confidence thanks to clearer policies and stronger marketplace trust.',
+    icon: ShieldCheck,
+    accentClassName: 'bg-blue-100 text-blue-700',
+  },
+] as const;
+
+const CULTURE_CARD_CONTENT = {
+  'asian-products': {
+    description: 'Discover Asian fashion, beauty, snacks, home decor, electronics, and cultural products.',
+    chips: ['Fashion', 'Beauty', 'Snacks', 'Electronics'],
+    badge: 'Top picks',
+    icon: Sparkles,
+    iconClassName: 'bg-amber-100 text-amber-700',
+    buttonClassName: 'bg-amber-500 text-white hover:bg-amber-600',
+  },
+  'african-products': {
+    description: 'Explore African fashion, fabrics, beauty, jewelry, art, food, and cultural items.',
+    chips: ['Fashion', 'Fabrics', 'Jewelry', 'Art'],
+    badge: 'Cultural favorites',
+    icon: Palette,
+    iconClassName: 'bg-emerald-100 text-emerald-700',
+    buttonClassName: 'bg-emerald-600 text-white hover:bg-emerald-700',
+  },
+  'caribbean-products': {
+    description: 'Shop Haitian, Jamaican, Dominican, Trinidadian, Caribbean fashion, food, beauty, and cultural products.',
+    chips: ['Haitian', 'Jamaican', 'Dominican', 'Trinidadian'],
+    badge: 'Island storefronts',
+    icon: Sun,
+    iconClassName: 'bg-orange-100 text-orange-700',
+    buttonClassName: 'bg-[var(--ff-primary-navy)] text-white hover:bg-[var(--ff-hover-navy)]',
+  },
+} as const;
 
 function findCategoryBySlug(
   nodes: DefaultCategoryNode[],
@@ -138,117 +189,6 @@ function productMatchesSearch(product: SearchableProduct, query?: string) {
   collectStringValues(product.productAttributes, searchableValues);
 
   return searchableValues.some((value) => value.toLocaleLowerCase().includes(normalizedQuery));
-}
-
-async function CulturalMarketplaceHighlights() {
-  if (!isDatabaseConfigured()) return null;
-
-  try {
-    const categories = await prisma.category.findMany({
-      where: { slug: { in: CULTURAL_MARKETPLACES.map((marketplace) => marketplace.slug) } },
-      select: { id: true, slug: true },
-    });
-
-    if (categories.length === 0) return null;
-
-    const categoryBySlug = new Map(categories.map((category) => [category.slug, category.id]));
-    const sections = await Promise.all(
-      CULTURAL_MARKETPLACES.map(async (marketplace) => {
-        const categoryId = categoryBySlug.get(marketplace.slug);
-        if (!categoryId) return null;
-
-        const products = await prisma.product.findMany({
-          where: {
-            status: 'APPROVED',
-            inventory: { gt: 0 },
-            categoryId,
-          },
-          orderBy: { createdAt: 'desc' },
-          take: 4,
-          include: {
-            seller: {
-              select: {
-                id: true,
-                name: true,
-                shopName: true,
-                phoneVerified: true,
-                verificationSubmission: {
-                  select: {
-                    status: true,
-                    eligibleToListAt: true,
-                    adminFallbackStatus: true,
-                  },
-                },
-              },
-            },
-            promotions: {
-              where: { status: 'ACTIVE', expiresAt: { gt: new Date() } },
-              orderBy: { expiresAt: 'desc' },
-              take: 1,
-            },
-            cartInterest: {
-              select: { totalAdds: true },
-            },
-          },
-        });
-
-        if (products.length === 0) return null;
-
-        const sellerResponseRates = await getSellerResponseStatsForSellers(getUniqueSellerIds(products));
-
-        return {
-          marketplace,
-          products: products.map((product) => ({
-            ...product,
-            activePromotion: product.promotions[0] ?? null,
-            sellerResponseRate: sellerResponseRates.get(product.sellerId)?.responseRate ?? null,
-          })),
-        };
-      }),
-    );
-
-    const visibleSections = sections.filter(
-      (section): section is NonNullable<typeof sections[number]> => section !== null,
-    );
-
-    if (visibleSections.length === 0) return null;
-
-    return (
-      <section className="space-y-5">
-        {visibleSections.map((section) => (
-          <div
-            key={section.marketplace.slug}
-            className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6"
-          >
-            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-amber-700">
-                  {section.marketplace.name}
-                </p>
-                <h2 className="mt-1 text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">
-                  {section.marketplace.featuredTitle}
-                </h2>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-                  {section.marketplace.featuredSubtitle}
-                </p>
-              </div>
-              <Link href={`/category/${section.marketplace.slug}`} className="btn-brand-outline">
-                Explore {section.marketplace.name}
-              </Link>
-            </div>
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
-              {section.products.map((product) => (
-                <ProductCard key={product.id} p={product} />
-              ))}
-            </div>
-          </div>
-        ))}
-      </section>
-    );
-  } catch (err) {
-    console.error('[HomePage] failed to load cultural marketplace highlights', err);
-    return null;
-  }
 }
 
 async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?: Record<string, string | number>) => string }) {
@@ -502,93 +442,231 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const session = await getServerSession(authOptions);
   const experienceRole = normalizeExperienceRole(session?.user?.role);
   const featuredMarketplaceCategories = getFeaturedMarketplaceCategories();
-  const culturalMarketplaceHighlights = await CulturalMarketplaceHighlights();
   if (experienceRole === 'admin') {
     redirect(getRoleDefaultPath(session?.user?.role));
   }
 
   return (
-    <main className="space-y-6 pb-6">
-      <section className="relative overflow-hidden rounded-[28px] border border-slate-200 bg-slate-50 px-5 py-6 shadow-sm sm:px-8 sm:py-8 lg:px-10 lg:py-10">
-        <div className="absolute inset-y-0 right-0 hidden w-1/3 bg-[radial-gradient(circle_at_top,_rgba(11,31,58,0.12),_transparent_60%)] lg:block" />
-        <div className="max-w-3xl space-y-5">
-          <div className="space-y-4">
-            <h1 className="max-w-2xl text-3xl font-black tracking-tight text-slate-900 sm:text-5xl">{t('home.title')}</h1>
-            <p className="max-w-2xl text-sm leading-6 text-slate-600 sm:text-lg">{t('home.subtitle')}</p>
+    <main className="space-y-8 pb-8">
+      <section className="relative overflow-hidden rounded-[32px] border border-slate-200 bg-[linear-gradient(135deg,#0B1F3A_0%,#17345F_55%,#F97316_130%)] text-white shadow-sm">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.16),_transparent_34%)]" />
+        <div className="absolute -right-16 top-8 h-48 w-48 rounded-full bg-emerald-400/20 blur-3xl" />
+        <div className="absolute bottom-0 left-1/3 h-40 w-40 rounded-full bg-orange-300/20 blur-3xl" />
+        <div className="relative grid gap-8 px-5 py-7 sm:px-8 sm:py-10 lg:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)] lg:px-10">
+          <div className="space-y-6">
+            <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-white/90">
+              <Store size={14} />
+              Professional marketplace
+            </div>
+
+            <div className="space-y-4">
+              <h1 className="max-w-3xl text-4xl font-black tracking-tight text-white sm:text-5xl lg:text-6xl">
+                Buy and sell with confidence on FlupFlap
+              </h1>
+              <p className="max-w-2xl text-sm leading-6 text-white/85 sm:text-lg sm:leading-7">
+                Discover trusted sellers, cultural products, everyday deals, and secure checkout in one modern marketplace.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Link href="#featured-products" className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-semibold text-[var(--ff-primary-navy)] shadow-sm transition-colors hover:bg-slate-100">
+                Shop products
+                <ArrowRight size={16} />
+              </Link>
+              <Link href="/signup" className="inline-flex items-center justify-center rounded-xl border border-white/30 bg-white/10 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/15">
+                Start selling
+              </Link>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {TRUST_SIGNALS.map((signal) => (
+                <div key={signal.title} className="rounded-2xl border border-white/12 bg-white/10 px-4 py-3 text-sm font-medium text-white/90 backdrop-blur-sm">
+                  {signal.title}
+                </div>
+              ))}
+            </div>
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <Link href="#featured-products" className="btn-brand">
-              {t('home.shopNow')}
-              <ArrowRight size={16} />
-            </Link>
-            <Link href="/signup" className="btn-brand-outline">
-              {t('home.startSelling')}
-            </Link>
+          <div className="rounded-[28px] border border-white/15 bg-white/95 p-5 text-slate-900 shadow-xl sm:p-6">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">
+              FlupFlap buyer experience
+            </p>
+            <h2 className="mt-3 text-2xl font-black tracking-tight text-slate-900">
+              Cleaner browsing. Stronger trust. Better mobile shopping.
+            </h2>
+            <div className="mt-5 space-y-3">
+              {[
+                {
+                  title: 'Trusted discovery',
+                  description: 'Spot culture-driven categories, featured products, and standout sellers faster.',
+                  accentClassName: 'bg-amber-100 text-amber-700',
+                },
+                {
+                  title: 'Organized shopping',
+                  description: 'Use search and filters without losing a polished, modern marketplace layout.',
+                  accentClassName: 'bg-emerald-100 text-emerald-700',
+                },
+                {
+                  title: 'Confident checkout',
+                  description: 'Secure payments and buyer protection keep each purchase feeling professional.',
+                  accentClassName: 'bg-slate-100 text-slate-700',
+                },
+              ].map((item) => (
+                <div key={item.title} className="flex gap-3 rounded-2xl border border-slate-200 bg-white p-3">
+                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${item.accentClassName}`}>
+                    <BadgeCheck size={18} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">{item.title}</p>
+                    <p className="mt-1 text-sm leading-6 text-slate-500">{item.description}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </section>
 
-      <section id="featured-products" className="space-y-4">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-amber-700">{t('home.featuredEyebrow')}</p>
-            <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-900">{t('home.featuredTitle')}</h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">{t('home.featuredSubtitle')}</p>
-          </div>
+      <section id="search-marketplace" className="space-y-4">
+        <div className="space-y-2">
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-amber-700">Search marketplace</p>
+          <h2 className="text-3xl font-black tracking-tight text-slate-900">Find products faster</h2>
+          <p className="max-w-2xl text-sm leading-6 text-slate-500">
+            Use search and filters to explore trusted sellers, culture-first categories, and everyday deals without losing your place.
+          </p>
         </div>
-
-        {featuredMarketplaceCategories.length > 0 && (
-          <div className="grid gap-3 rounded-[24px] border border-slate-200 bg-white p-4 sm:grid-cols-2">
-            {featuredMarketplaceCategories.map((category) => (
-              <article key={category.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{t('home.featuredRegionalEyebrow')}</p>
-                    <h3 className="mt-2 text-xl font-bold text-slate-900">
-                      {category.icon ? `${category.icon} ` : ''}{category.name}
-                    </h3>
-                    <p className="mt-2 text-sm text-slate-600">{t('home.featuredRegionalSubtitle')}</p>
-                  </div>
-                  <Link
-                    href={`/category/${category.slug}`}
-                    className="btn-outline text-xs sm:text-sm"
-                    aria-label={t('home.exploreCategory', { category: category.name })}
-                  >
-                    {t('home.exploreCategory', { category: category.name })}
-                  </Link>
-                </div>
-                {category.children.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {category.children.slice(0, MAX_FEATURED_SUBCATEGORIES).map((subcategory) => (
-                      <Link
-                        key={subcategory.id}
-                        href={`/category/${subcategory.slug}`}
-                        className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-100"
-                      >
-                        {subcategory.name}
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </article>
-            ))}
-          </div>
-        )}
-
         <Suspense>
           <BrowseFilters />
         </Suspense>
+      </section>
+
+      {featuredMarketplaceCategories.length > 0 && (
+        <section className="space-y-4">
+          <div className="space-y-2">
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-700">Culture-led discovery</p>
+            <h2 className="text-3xl font-black tracking-tight text-slate-900">Shop by Culture &amp; Community</h2>
+            <p className="max-w-2xl text-sm leading-6 text-slate-500">
+              Explore unique products from Caribbean, African, Asian, and local sellers.
+            </p>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            {featuredMarketplaceCategories.map((category) => {
+              const cardContent = CULTURE_CARD_CONTENT[category.slug as keyof typeof CULTURE_CARD_CONTENT];
+              const Icon = cardContent?.icon ?? Store;
+              const chips = cardContent?.chips ?? category.children.slice(0, 4).map((subcategory) => subcategory.name);
+
+              return (
+                <article
+                  key={category.id}
+                  className="flex h-full flex-col rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm transition-transform hover:-translate-y-0.5"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-600">
+                      {cardContent?.badge ?? 'Marketplace'}
+                    </span>
+                    <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${cardContent?.iconClassName ?? 'bg-slate-100 text-slate-700'}`}>
+                      <Icon size={22} />
+                    </div>
+                  </div>
+
+                  <div className="mt-5 space-y-3">
+                    <h3 className="text-2xl font-black tracking-tight text-slate-900">
+                      {category.icon ? `${category.icon} ` : ''}
+                      {category.name}
+                    </h3>
+                    <p className="text-sm leading-6 text-slate-500">
+                      {cardContent?.description ?? 'Discover curated cultural products from trusted sellers.'}
+                    </p>
+                  </div>
+
+                  <div className="mt-5 flex flex-wrap gap-2">
+                    {chips.map((chip) => (
+                      <span
+                        key={chip}
+                        className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700"
+                      >
+                        {chip}
+                      </span>
+                    ))}
+                  </div>
+
+                  <Link
+                    href={`/category/${category.slug}`}
+                    className={`mt-6 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors ${cardContent?.buttonClassName ?? 'bg-[var(--ff-primary-navy)] text-white hover:bg-[var(--ff-hover-navy)]'}`}
+                    aria-label={`Explore ${category.name}`}
+                  >
+                    Explore
+                    <ArrowRight size={16} />
+                  </Link>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      <section id="featured-products" className="space-y-4">
+        <div className="space-y-2">
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-amber-700">Featured products</p>
+          <h2 className="text-3xl font-black tracking-tight text-slate-900">Fresh finds from trusted sellers</h2>
+          <p className="max-w-2xl text-sm leading-6 text-slate-500">
+            Browse standout products, everyday deals, and recent listings with the same search and filter tools buyers already use.
+          </p>
+        </div>
+
         <Suspense fallback={<p className="text-slate-500">{t('home.loadingProducts')}</p>}>
           <ProductGrid sp={sp} t={t} />
         </Suspense>
       </section>
 
-      {culturalMarketplaceHighlights}
+      <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <div className="space-y-2">
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-700">Why buyers trust us</p>
+          <h2 className="text-3xl font-black tracking-tight text-slate-900">Why shop on FlupFlap</h2>
+          <p className="max-w-2xl text-sm leading-6 text-slate-500">
+            Designed to feel more organized, professional, and mobile-friendly from discovery to delivery.
+          </p>
+        </div>
 
-      <p className="text-center text-xs text-slate-500 sm:text-sm">
-        Verified sellers. Secure payments. Buyer protection.
-      </p>
+        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {TRUST_SIGNALS.map((signal) => {
+            const Icon = signal.icon;
+            return (
+              <article key={signal.title} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className={`flex h-11 w-11 items-center justify-center rounded-2xl ${signal.accentClassName}`}>
+                  <Icon size={20} />
+                </div>
+                <h3 className="mt-4 text-lg font-bold text-slate-900">{signal.title}</h3>
+                <p className="mt-2 text-sm leading-6 text-slate-500">{signal.description}</p>
+              </article>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-[linear-gradient(135deg,rgba(249,115,22,0.08),rgba(255,255,255,1),rgba(15,138,95,0.1))] p-6 shadow-sm sm:p-8">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="max-w-2xl space-y-3">
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--ff-primary-navy)]">Start selling on FlupFlap</p>
+            <h2 className="text-3xl font-black tracking-tight text-slate-900">
+              Open your storefront in a marketplace built for trust and discovery.
+            </h2>
+            <p className="text-sm leading-6 text-slate-600 sm:text-base">
+              Reach buyers looking for cultural products, everyday essentials, and secure checkout in one modern marketplace.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Link href="/signup" className="btn-brand">
+              Start selling
+            </Link>
+            <Link href="#search-marketplace" className="btn-brand-outline">
+              Shop products
+            </Link>
+          </div>
+        </div>
+      </section>
     </main>
   );
 }
