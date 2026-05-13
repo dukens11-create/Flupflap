@@ -165,22 +165,36 @@ export default function Navbar() {
                   <button
                     className={`${navLinkClass} flex items-center gap-1`}
                     onClick={() => setCultureMenuOpen(!cultureMenuOpen)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') setCultureMenuOpen(false);
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setCultureMenuOpen(!cultureMenuOpen);
+                      }
+                    }}
                     aria-expanded={cultureMenuOpen}
-                    aria-label="Shop by Culture"
+                    aria-haspopup="true"
+                    aria-label="Shop by Culture menu"
                   >
                     Shop by Culture
                     <ChevronDown size={14} className={`transition-transform ${cultureMenuOpen ? 'rotate-180' : ''}`} />
                   </button>
                   
                   {cultureMenuOpen && (
-                    <div className="absolute left-0 top-full z-50 mt-1 w-[600px] rounded-2xl border border-slate-200 bg-white p-4 shadow-xl">
+                    <div 
+                      className="absolute left-0 top-full z-50 mt-1 w-full max-w-[600px] min-w-[500px] rounded-2xl border border-slate-200 bg-white p-4 shadow-xl"
+                      role="menu"
+                      aria-label="Cultural marketplace categories"
+                    >
                       <div className="grid grid-cols-3 gap-3">
                         {CULTURAL_MARKETPLACES.map((marketplace) => (
                           <div key={marketplace.slug} className="space-y-2">
                             <Link
                               href={`/category/${marketplace.slug}`}
-                              className="block rounded-xl border border-slate-200 bg-slate-50 p-3 transition-colors hover:border-[var(--ff-primary-navy)] hover:bg-slate-100"
+                              className="block rounded-xl border border-slate-200 bg-slate-50 p-3 transition-colors hover:border-[var(--ff-primary-navy)] hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-[var(--ff-primary-navy)] focus:ring-offset-2"
                               onClick={() => setCultureMenuOpen(false)}
+                              role="menuitem"
+                              tabIndex={0}
                             >
                               <div className="flex items-center gap-2">
                                 <span className="text-2xl">{marketplace.icon}</span>
@@ -194,8 +208,10 @@ export default function Navbar() {
                                 <Link
                                   key={sub.slug}
                                   href={`/category/${sub.slug}`}
-                                  className="block rounded-lg px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 hover:text-[var(--ff-primary-navy)]"
+                                  className="block rounded-lg px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 hover:text-[var(--ff-primary-navy)] focus:outline-none focus:ring-2 focus:ring-[var(--ff-primary-navy)] focus:ring-offset-1"
                                   onClick={() => setCultureMenuOpen(false)}
+                                  role="menuitem"
+                                  tabIndex={0}
                                 >
                                   {sub.name}
                                 </Link>
