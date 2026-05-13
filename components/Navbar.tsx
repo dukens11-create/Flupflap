@@ -2,7 +2,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { signOut, useSession } from 'next-auth/react';
-import { ShoppingCart, Package, LogIn, UserPlus, LogOut, User, MessageCircle, Bell, Menu, X } from 'lucide-react';
+import { ShoppingCart, Package, LogIn, UserPlus, LogOut, User, MessageCircle, Bell, Menu, X, ChevronDown } from 'lucide-react';
 import LanguageSelector from '@/components/LanguageSelector';
 import { useI18n } from '@/components/I18nProvider';
 import { useEffect, useState } from 'react';
@@ -108,12 +108,14 @@ export default function Navbar() {
   const unreadMessages = useUnreadMessages(!!session?.user);
   const unreadNotifications = useUnreadNotifications(!!session?.user);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [cultureMenuOpen, setCultureMenuOpen] = useState(false);
   const { t } = useI18n();
   const navLinkClass = 'rounded-full px-3 py-2 transition-colors hover:bg-slate-100 link-hover-navy';
   const actionLinkClass = 'relative flex items-center gap-1 rounded-full px-3 py-2 transition-colors hover:bg-slate-100 link-hover-navy';
   const callbackPathname = pathname && pathname !== '/' ? pathname : null;
   const loginHref = callbackPathname ? `/login?callbackUrl=${encodeURIComponent(callbackPathname)}` : '/login';
   const signupHref = callbackPathname ? `/signup?callbackUrl=${encodeURIComponent(callbackPathname)}` : '/signup';
+  const localSellersHref = '/?pickup=1';
 
   return (
     <header className="sticky top-0 z-30 border-b border-slate-200 bg-white">
@@ -154,6 +156,80 @@ export default function Navbar() {
                   {item.label}
                 </Link>
               ))}
+              
+              {/* Shop by Culture Dropdown */}
+              {CULTURAL_MARKETPLACES.length > 0 && (
+                <div className="relative"
+                  onMouseEnter={() => setCultureMenuOpen(true)}
+                  onMouseLeave={() => setCultureMenuOpen(false)}
+                >
+                  <button
+                    className={`${navLinkClass} flex items-center gap-1`}
+                    onClick={() => setCultureMenuOpen(!cultureMenuOpen)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') setCultureMenuOpen(false);
+                      if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        setCultureMenuOpen(true);
+                      }
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setCultureMenuOpen(!cultureMenuOpen);
+                      }
+                    }}
+                    aria-expanded={cultureMenuOpen}
+                    aria-haspopup="true"
+                    aria-label={t('nav.shopByCulture')}
+                  >
+                    {t('nav.shopByCulture')}
+                    <ChevronDown size={14} className={`transition-transform ${cultureMenuOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                  
+                  {cultureMenuOpen && (
+                    <div 
+                      className="absolute left-0 top-full z-50 mt-1 w-80 rounded-2xl border border-slate-200 bg-white p-3 shadow-xl"
+                      role="menu"
+                      aria-label="Cultural marketplace categories"
+                    >
+                      <div className="space-y-1">
+                        {CULTURAL_MARKETPLACES.map((marketplace) => (
+                          <Link
+                            key={marketplace.slug}
+                            href={`/category/${marketplace.slug}`}
+                            className="block rounded-xl px-3 py-2.5 transition-colors hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-[var(--ff-primary-navy)] focus:ring-offset-2"
+                            onClick={() => setCultureMenuOpen(false)}
+                            role="menuitem"
+                          >
+                            <div className="flex items-start gap-2">
+                              <span className="mt-0.5 text-base">{marketplace.icon}</span>
+                              <div className="min-w-0">
+                                <p className="text-sm font-semibold text-slate-900">{marketplace.name}</p>
+                                <p className="truncate text-xs text-slate-500">
+                                  {marketplace.subcategories.slice(0, 3).map((sub) => sub.name).join(' • ')}
+                                </p>
+                              </div>
+                            </div>
+                          </Link>
+                        ))}
+                        <Link
+                          href={localSellersHref}
+                          className="block rounded-xl px-3 py-2.5 transition-colors hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-[var(--ff-primary-navy)] focus:ring-offset-2"
+                          onClick={() => setCultureMenuOpen(false)}
+                          role="menuitem"
+                        >
+                          <div className="flex items-start gap-2">
+                            <span className="mt-0.5 text-base">📍</span>
+                            <div>
+                              <p className="text-sm font-semibold text-slate-900">{t('nav.localSellers')}</p>
+                              <p className="text-xs text-slate-500">{t('nav.localSellersSubtitle')}</p>
+                            </div>
+                          </div>
+                        </Link>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </nav>
 
             <div className="flex flex-wrap items-center gap-2 text-sm font-medium lg:ml-auto">
@@ -268,7 +344,7 @@ export default function Navbar() {
                   <p className={`px-3 pb-1 text-[11px] font-bold uppercase tracking-[0.16em] ${
                     experienceRole === 'admin' ? 'text-slate-300' : 'text-slate-500'
                   }`}>
-                    Categories
+                    {t('nav.shopByCulture')}
                   </p>
                   {CULTURAL_MARKETPLACES.map((marketplace) => (
                     <Link
@@ -284,6 +360,17 @@ export default function Navbar() {
                       {marketplace.icon} {marketplace.name}
                     </Link>
                   ))}
+                  <Link
+                    href={localSellersHref}
+                    className={`rounded-lg px-3 py-2.5 ${
+                      experienceRole === 'admin'
+                        ? 'text-slate-100 hover:bg-white/10'
+                        : 'text-slate-700 hover:bg-white/80'
+                    }`}
+                    onClick={() => setMobileOpen(false)}
+                  >
+                    📍 {t('nav.localSellers')}
+                  </Link>
                 </div>
               )}
             </nav>

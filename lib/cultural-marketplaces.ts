@@ -17,6 +17,27 @@ export type CulturalMarketplaceConfig = {
 
 export const CULTURAL_MARKETPLACES: ReadonlyArray<CulturalMarketplaceConfig> = [
   {
+    id: 'asian-products',
+    name: 'Asian Products',
+    slug: 'asian-products',
+    icon: '🌏',
+    aliases: ['asian', 'asia', 'asian products', 'east asian', 'south asian', 'southeast asian'],
+    sortOrder: 10,
+    featuredTitle: 'Featured Asian Products',
+    featuredSubtitle: 'Shop authentic fashion, beauty, snacks, home decor, electronics, and cultural products.',
+    subcategories: [
+      { id: 'asian-fashion', name: 'Asian Fashion', slug: 'asian-fashion' },
+      { id: 'asian-beauty-skincare', name: 'Asian Beauty & Skincare', slug: 'asian-beauty-skincare' },
+      { id: 'asian-food-snacks', name: 'Asian Food & Snacks', slug: 'asian-food-snacks' },
+      { id: 'asian-home-decor', name: 'Asian Home Decor', slug: 'asian-home-decor' },
+      { id: 'asian-electronics-gadgets', name: 'Asian Electronics & Gadgets', slug: 'asian-electronics-gadgets' },
+      { id: 'asian-art-crafts', name: 'Asian Art & Crafts', slug: 'asian-art-crafts' },
+      { id: 'east-asian-products', name: 'East Asian Products', slug: 'east-asian-products' },
+      { id: 'south-asian-products', name: 'South Asian Products', slug: 'south-asian-products' },
+      { id: 'southeast-asian-products', name: 'Southeast Asian Products', slug: 'southeast-asian-products' },
+    ],
+  },
+  {
     id: 'african-products',
     name: 'African Products',
     slug: 'african-products',

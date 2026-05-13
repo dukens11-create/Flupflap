@@ -12,7 +12,10 @@
     "logout": "Cerrar sesión",
     "login": "Iniciar sesión",
     "signUp": "Registrarse",
-    "language": "Idioma"
+    "language": "Idioma",
+    "shopByCulture": "Comprar por cultura",
+    "localSellers": "Vendedores locales",
+    "localSellersSubtitle": "Encuentra publicaciones cercanas con recogida"
   },
   "footer": {
     "description": "Descubre anuncios confiables, pagos protegidos y una forma más clara de comprar y vender todos los días.",

@@ -12,7 +12,10 @@
     "logout": "Se déconnecter",
     "login": "Se connecter",
     "signUp": "S'inscrire",
-    "language": "Langue"
+    "language": "Langue",
+    "shopByCulture": "Acheter par culture",
+    "localSellers": "Vendeurs locaux",
+    "localSellersSubtitle": "Trouvez des annonces proches avec retrait"
   },
   "footer": {
     "description": "Découvrez des annonces fiables, un paiement protégé et une façon plus claire d'acheter et de vendre au quotidien.",
