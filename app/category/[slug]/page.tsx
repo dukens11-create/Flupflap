@@ -1,35 +1,116 @@
 import { notFound, redirect } from 'next/navigation';
-import { DEFAULT_CATEGORY_TREE, type DefaultCategoryNode } from '@/lib/default-categories';
 import { isDatabaseConfigured, prisma } from '@/lib/db';
+import { createPageMetadata } from '@/lib/seo';
+import { DEFAULT_CATEGORY_TREE, type DefaultCategoryNode } from '@/lib/default-categories';
 
-function findDefaultCategoryBySlug(nodes: DefaultCategoryNode[], slug: string): DefaultCategoryNode | null {
-  for (const node of nodes) {
-    if (node.slug === slug) return node;
-    const nested = findDefaultCategoryBySlug(node.children, slug);
-    if (nested) return nested;
-  }
-  return null;
+export const dynamic = 'force-dynamic';
+const ROOT_LEVEL = 0;
+const SUBCATEGORY_LEVEL = 1;
+const REFINED_CATEGORY_LEVEL = 2;
+
+type CategoryLookup = {
+  id: string;
+  name: string;
+  slug: string;
+  level: number;
+  path: Array<{ id: string; level: number }>;
+};
+
+function flattenCategories(
+  nodes: DefaultCategoryNode[],
+  parentPath: Array<{ id: string; level: number }> = [],
+): CategoryLookup[] {
+  return nodes.flatMap((node) => {
+    const path = [...parentPath, { id: node.id, level: node.level }];
+    return [
+      { id: node.id, name: node.name, slug: node.slug, level: node.level, path },
+      ...flattenCategories(node.children, path),
+    ];
+  });
 }
 
-export default async function CategoryPage({ params }: { params: Promise<{ slug: string }> }) {
+function buildPathForCategory(
+  category: { id: string; level: number; parentId: string | null },
+  lookup: Map<string, { id: string; level: number; parentId: string | null }>,
+) {
+  const path: Array<{ id: string; level: number }> = [];
+  const seen = new Set<string>();
+  let current: { id: string; level: number; parentId: string | null } | undefined = category;
+
+  while (current) {
+    if (seen.has(current.id)) break;
+    seen.add(current.id);
+    path.push({ id: current.id, level: current.level });
+    current = current.parentId ? lookup.get(current.parentId) : undefined;
+  }
+
+  return path.reverse();
+}
+
+async function findCategoryBySlug(slug: string): Promise<CategoryLookup | null> {
+  if (isDatabaseConfigured()) {
+    try {
+      const categories = await prisma.category.findMany({
+        select: { id: true, name: true, slug: true, level: true, parentId: true },
+      });
+      const category = categories.find((entry) => entry.slug === slug) ?? null;
+      if (category) {
+        const lookup = new Map(categories.map((entry) => [entry.id, entry]));
+        return {
+          id: category.id,
+          name: category.name,
+          slug: category.slug,
+          level: category.level,
+          path: buildPathForCategory(category, lookup),
+        };
+      }
+    } catch {
+      // fall through to default categories
+    }
+  }
+
+  return flattenCategories(DEFAULT_CATEGORY_TREE).find((category) => category.slug === slug) ?? null;
+}
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
+  const category = await findCategoryBySlug(slug);
 
-  if (!isDatabaseConfigured()) {
-    const defaultCategory = findDefaultCategoryBySlug(DEFAULT_CATEGORY_TREE, slug);
-    if (!defaultCategory) notFound();
-    redirect(`/?category=${defaultCategory.id}`);
+  if (!category) {
+    return createPageMetadata({
+      title: 'Category not found',
+      description: 'The requested category could not be found.',
+      noIndex: true,
+    });
   }
 
-  const category = await prisma.category.findUnique({
-    where: { slug },
-    select: { id: true },
+  return createPageMetadata({
+    title: `${category.name} | FlupFlap`,
+    description: `Browse ${category.name} from trusted sellers on FlupFlap.`,
+    path: `/category/${category.slug}`,
   });
+}
 
-  if (category) {
-    redirect(`/?category=${category.id}`);
+export default async function CategoryRoutePage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const category = await findCategoryBySlug(slug);
+
+  if (!category) notFound();
+
+  let rootId: string | null = null;
+  let levelOneId: string | null = null;
+  for (const entry of category.path) {
+    if (entry.level === ROOT_LEVEL && !rootId) rootId = entry.id;
+    if (entry.level === SUBCATEGORY_LEVEL && !levelOneId) levelOneId = entry.id;
+  }
+  const paramsOut = new URLSearchParams();
+  paramsOut.set('category', rootId ?? category.id);
+  if (category.level === SUBCATEGORY_LEVEL) {
+    paramsOut.set('subcategory', category.id);
+  } else if (category.level >= REFINED_CATEGORY_LEVEL && levelOneId) {
+    paramsOut.set('subcategory', levelOneId);
+    paramsOut.set('refineCategory', category.id);
   }
 
-  const defaultCategory = findDefaultCategoryBySlug(DEFAULT_CATEGORY_TREE, slug);
-  if (!defaultCategory) notFound();
-  redirect(`/?category=${defaultCategory.id}`);
+  redirect(`/?${paramsOut.toString()}`);
 }
