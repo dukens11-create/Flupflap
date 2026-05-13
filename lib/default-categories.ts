@@ -1,4 +1,5 @@
 import { PERFUME_SIZE_OPTIONS } from '@/lib/category-attribute-schema';
+import { CULTURAL_MARKETPLACES } from '@/lib/cultural-marketplaces';
 import { ASIAN_PRODUCTS_ALIASES } from '@/lib/marketplace-categories';
 
 type FieldDef = {
@@ -190,16 +191,26 @@ export const DEFAULT_CATEGORY_TREE: DefaultCategoryNode[] = [
     node({ id: 'central-asian-products', name: 'Central Asian Products', slug: 'central-asian-products', aliases: [], parentId: 'asian-products', level: 1, icon: null, sortOrder: 14, attributeSchema: null }),
     node({ id: 'middle-eastern-western-asian-products', name: 'Middle Eastern & Western Asian Products', slug: 'middle-eastern-western-asian-products', aliases: [], parentId: 'asian-products', level: 1, icon: null, sortOrder: 15, attributeSchema: null }),
   ] }),
-  node({ id: 'caribbean-products', name: 'Caribbean Products', slug: 'caribbean-products', aliases: ['caribbean', 'caribbean products', 'island products', 'west indies'], parentId: null, level: 0, icon: '🏝️', sortOrder: 11, attributeSchema: null, children: [
-    node({ id: 'caribbean-products-haitian', name: 'Haitian Products', slug: 'caribbean-products-haitian', aliases: ['haitian', 'haiti', 'haitian products'], parentId: 'caribbean-products', level: 1, icon: null, sortOrder: 1, attributeSchema: null }),
-    node({ id: 'caribbean-products-jamaican', name: 'Jamaican Products', slug: 'caribbean-products-jamaican', aliases: ['jamaican', 'jamaica', 'jamaican products'], parentId: 'caribbean-products', level: 1, icon: null, sortOrder: 2, attributeSchema: null }),
-    node({ id: 'caribbean-products-dominican', name: 'Dominican Products', slug: 'caribbean-products-dominican', aliases: ['dominican', 'dominican republic', 'dominican products'], parentId: 'caribbean-products', level: 1, icon: null, sortOrder: 3, attributeSchema: null }),
-    node({ id: 'caribbean-products-trinidad-tobago', name: 'Trinidad & Tobago Products', slug: 'caribbean-products-trinidad-tobago', aliases: ['trinidad', 'tobago', 'trinidad and tobago', 'trinidad & tobago'], parentId: 'caribbean-products', level: 1, icon: null, sortOrder: 4, attributeSchema: null }),
-    node({ id: 'caribbean-products-fashion', name: 'Caribbean Fashion', slug: 'caribbean-products-fashion', aliases: ['caribbean fashion', 'island fashion'], parentId: 'caribbean-products', level: 1, icon: null, sortOrder: 5, attributeSchema: CLOTHING_FIELDS }),
-    node({ id: 'caribbean-products-food-snacks', name: 'Caribbean Food & Snacks', slug: 'caribbean-products-food-snacks', aliases: ['caribbean food', 'caribbean snacks', 'island food'], parentId: 'caribbean-products', level: 1, icon: null, sortOrder: 6, attributeSchema: null }),
-    node({ id: 'caribbean-products-beauty-hair', name: 'Caribbean Beauty & Hair', slug: 'caribbean-products-beauty-hair', aliases: ['caribbean beauty', 'caribbean hair', 'island beauty'], parentId: 'caribbean-products', level: 1, icon: null, sortOrder: 7, attributeSchema: null }),
-    node({ id: 'caribbean-products-art-crafts', name: 'Caribbean Art & Crafts', slug: 'caribbean-products-art-crafts', aliases: ['caribbean art', 'caribbean crafts', 'island crafts'], parentId: 'caribbean-products', level: 1, icon: null, sortOrder: 8, attributeSchema: null }),
-    node({ id: 'caribbean-products-flags-accessories', name: 'Caribbean Flags & Accessories', slug: 'caribbean-products-flags-accessories', aliases: ['caribbean flags', 'flags', 'caribbean accessories'], parentId: 'caribbean-products', level: 1, icon: null, sortOrder: 9, attributeSchema: CLOTHING_FIELDS }),
-    node({ id: 'caribbean-products-music-culture', name: 'Caribbean Music & Culture', slug: 'caribbean-products-music-culture', aliases: ['caribbean music', 'caribbean culture', 'island culture'], parentId: 'caribbean-products', level: 1, icon: null, sortOrder: 10, attributeSchema: null }),
-  ] }),
+  ...CULTURAL_MARKETPLACES.map((marketplace) => node({
+    id: marketplace.id,
+    name: marketplace.name,
+    slug: marketplace.slug,
+    aliases: marketplace.aliases,
+    parentId: null,
+    level: 0,
+    icon: marketplace.icon,
+    sortOrder: marketplace.sortOrder,
+    attributeSchema: null,
+    children: marketplace.subcategories.map((subcategory, index) => node({
+      id: subcategory.id,
+      name: subcategory.name,
+      slug: subcategory.slug,
+      aliases: subcategory.aliases ?? [],
+      parentId: marketplace.id,
+      level: 1,
+      icon: null,
+      sortOrder: index + 1,
+      attributeSchema: null,
+    })),
+  })),
 ];

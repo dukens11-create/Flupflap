@@ -8,4 +8,4 @@ export const ASIAN_PRODUCTS_ALIASES = [
   'western asian',
 ] as const;
 
-export const FEATURED_MARKETPLACE_CATEGORY_SLUGS = ['asian-products'] as const;
+export const FEATURED_MARKETPLACE_CATEGORY_SLUGS = ['asian-products', 'african-products'] as const;

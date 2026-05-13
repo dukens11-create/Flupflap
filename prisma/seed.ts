@@ -8,6 +8,7 @@ import {
 import { PrismaPg } from '@prisma/adapter-pg';
 import bcrypt from 'bcryptjs';
 import { PERFUME_SIZE_OPTIONS } from '@/lib/category-attribute-schema';
+import { CULTURAL_MARKETPLACES } from '@/lib/cultural-marketplaces';
 import { ASIAN_PRODUCTS_ALIASES } from '@/lib/marketplace-categories';
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL ?? '' });
@@ -147,6 +148,30 @@ async function seedCategories() {
       sortOrder: 10,
     },
   });
+
+  for (const marketplace of CULTURAL_MARKETPLACES) {
+    const root = await prisma.category.create({
+      data: {
+        name: marketplace.name,
+        slug: marketplace.slug,
+        aliases: marketplace.aliases,
+        level: 0,
+        icon: marketplace.icon,
+        sortOrder: marketplace.sortOrder,
+      },
+    });
+
+    await prisma.category.createMany({
+      data: marketplace.subcategories.map((subcategory, index) => ({
+        name: subcategory.name,
+        slug: subcategory.slug,
+        aliases: subcategory.aliases ?? [],
+        parentId: root.id,
+        level: 1,
+        sortOrder: index + 1,
+      })),
+    });
+  }
 
   // Electronics subcategories
   const phones = await prisma.category.create({
@@ -371,74 +396,6 @@ async function ensureBeautyCategory() {
   console.log('Beauty & Personal Care category hierarchy ensured.');
 }
 
-async function ensureCaribbeanCategory() {
-  const caribbean = await prisma.category.upsert({
-    where: { slug: 'caribbean-products' },
-    update: {},
-    create: {
-      name: 'Caribbean Products',
-      slug: 'caribbean-products',
-      aliases: ['caribbean', 'caribbean products', 'island products', 'west indies'],
-      level: 0,
-      icon: '🏝️',
-      sortOrder: 11,
-    },
-  });
-
-  await prisma.category.upsert({
-    where: { slug: 'caribbean-products-haitian' },
-    update: {},
-    create: { name: 'Haitian Products', slug: 'caribbean-products-haitian', aliases: ['haitian', 'haiti', 'haitian products'], parentId: caribbean.id, level: 1, sortOrder: 1 },
-  });
-  await prisma.category.upsert({
-    where: { slug: 'caribbean-products-jamaican' },
-    update: {},
-    create: { name: 'Jamaican Products', slug: 'caribbean-products-jamaican', aliases: ['jamaican', 'jamaica', 'jamaican products'], parentId: caribbean.id, level: 1, sortOrder: 2 },
-  });
-  await prisma.category.upsert({
-    where: { slug: 'caribbean-products-dominican' },
-    update: {},
-    create: { name: 'Dominican Products', slug: 'caribbean-products-dominican', aliases: ['dominican', 'dominican republic', 'dominican products'], parentId: caribbean.id, level: 1, sortOrder: 3 },
-  });
-  await prisma.category.upsert({
-    where: { slug: 'caribbean-products-trinidad-tobago' },
-    update: {},
-    create: { name: 'Trinidad & Tobago Products', slug: 'caribbean-products-trinidad-tobago', aliases: ['trinidad', 'tobago', 'trinidad and tobago', 'trinidad & tobago'], parentId: caribbean.id, level: 1, sortOrder: 4 },
-  });
-  await prisma.category.upsert({
-    where: { slug: 'caribbean-products-fashion' },
-    update: {},
-    create: { name: 'Caribbean Fashion', slug: 'caribbean-products-fashion', aliases: ['caribbean fashion', 'island fashion'], parentId: caribbean.id, level: 1, sortOrder: 5, attributeSchema: CLOTHING_FIELDS },
-  });
-  await prisma.category.upsert({
-    where: { slug: 'caribbean-products-food-snacks' },
-    update: {},
-    create: { name: 'Caribbean Food & Snacks', slug: 'caribbean-products-food-snacks', aliases: ['caribbean food', 'caribbean snacks', 'island food'], parentId: caribbean.id, level: 1, sortOrder: 6 },
-  });
-  await prisma.category.upsert({
-    where: { slug: 'caribbean-products-beauty-hair' },
-    update: {},
-    create: { name: 'Caribbean Beauty & Hair', slug: 'caribbean-products-beauty-hair', aliases: ['caribbean beauty', 'caribbean hair', 'island beauty'], parentId: caribbean.id, level: 1, sortOrder: 7 },
-  });
-  await prisma.category.upsert({
-    where: { slug: 'caribbean-products-art-crafts' },
-    update: {},
-    create: { name: 'Caribbean Art & Crafts', slug: 'caribbean-products-art-crafts', aliases: ['caribbean art', 'caribbean crafts', 'island crafts'], parentId: caribbean.id, level: 1, sortOrder: 8 },
-  });
-  await prisma.category.upsert({
-    where: { slug: 'caribbean-products-flags-accessories' },
-    update: {},
-    create: { name: 'Caribbean Flags & Accessories', slug: 'caribbean-products-flags-accessories', aliases: ['caribbean flags', 'flags', 'caribbean accessories'], parentId: caribbean.id, level: 1, sortOrder: 9, attributeSchema: CLOTHING_FIELDS },
-  });
-  await prisma.category.upsert({
-    where: { slug: 'caribbean-products-music-culture' },
-    update: {},
-    create: { name: 'Caribbean Music & Culture', slug: 'caribbean-products-music-culture', aliases: ['caribbean music', 'caribbean culture', 'island culture'], parentId: caribbean.id, level: 1, sortOrder: 10 },
-  });
-
-  console.log('Caribbean Products category hierarchy ensured.');
-}
-
 /**
  * Ensures the Asian Products category branch exists on existing databases.
  * Uses upsert so this can be safely re-run.
@@ -475,6 +432,50 @@ async function ensureAsianCategory() {
   console.log('Asian Products category hierarchy ensured.');
 }
 
+async function ensureCulturalMarketplaceCategories() {
+  for (const marketplace of CULTURAL_MARKETPLACES) {
+    const root = await prisma.category.upsert({
+      where: { slug: marketplace.slug },
+      update: {
+        name: marketplace.name,
+        aliases: marketplace.aliases,
+        icon: marketplace.icon,
+        sortOrder: marketplace.sortOrder,
+      },
+      create: {
+        name: marketplace.name,
+        slug: marketplace.slug,
+        aliases: marketplace.aliases,
+        level: 0,
+        icon: marketplace.icon,
+        sortOrder: marketplace.sortOrder,
+      },
+    });
+
+    for (const [index, subcategory] of marketplace.subcategories.entries()) {
+      await prisma.category.upsert({
+        where: { slug: subcategory.slug },
+        update: {
+          name: subcategory.name,
+          aliases: subcategory.aliases ?? [],
+          parentId: root.id,
+          level: 1,
+          sortOrder: index + 1,
+        },
+        create: {
+          name: subcategory.name,
+          slug: subcategory.slug,
+          aliases: subcategory.aliases ?? [],
+          parentId: root.id,
+          level: 1,
+          sortOrder: index + 1,
+        },
+      });
+    }
+  }
+
+  console.log('Cultural marketplace categories ensured.');
+}
 async function main(){
   const pass = await bcrypt.hash('password123', 10);
   await prisma.user.upsert({ where:{email:'guest@flupflap.local'}, update:{}, create:{name:'Guest Buyer',email:'guest@flupflap.local',password:'',role:Role.CUSTOMER} });
@@ -522,8 +523,8 @@ async function main(){
   await seedCategories();
   // Always ensure new categories exist (safe upsert for existing databases)
   await ensureBeautyCategory();
-  await ensureCaribbeanCategory();
   await ensureAsianCategory();
+  await ensureCulturalMarketplaceCategories();
   const count = await prisma.product.count();
   if(count===0){ await prisma.product.createMany({ data:[
     {title:'Used iPhone 13',description:'Clean used phone, unlocked, good battery.',priceCents:32900,condition:'Used',category:'Phones',imageUrl:'https://images.unsplash.com/photo-1592750475338-74b7b21085ab',status:ProductStatus.APPROVED,sellerId:seller.id,shippingCents:1299,inventory:1},

@@ -8,7 +8,7 @@ import { useI18n } from '@/components/I18nProvider';
 import { useEffect, useState } from 'react';
 import { getRoleNavigation, normalizeExperienceRole } from '@/lib/role-experience';
 import { usePathname } from 'next/navigation';
-import { REGIONAL_MARKETPLACES } from '@/lib/regional-marketplaces';
+import { CULTURAL_MARKETPLACES } from '@/lib/cultural-marketplaces';
 
 function useCartCount() {
   const [count, setCount] = useState(0);
@@ -260,29 +260,32 @@ export default function Navbar() {
                   </Link>
                 </>
               )}
-              <div className={`mt-2 border-t pt-2 ${
-                experienceRole === 'admin' ? 'border-white/20' : 'border-slate-200'
-              }`}>
-                <p className={`px-3 py-1 text-xs font-semibold uppercase tracking-wide ${
-                  experienceRole === 'admin' ? 'text-slate-300' : 'text-slate-500'
+
+              {CULTURAL_MARKETPLACES.length > 0 && (
+                <div className={`mt-2 border-t pt-2 ${
+                  experienceRole === 'admin' ? 'border-white/15' : 'border-slate-200'
                 }`}>
-                  Categories
-                </p>
-                {REGIONAL_MARKETPLACES.map((marketplace) => (
-                  <Link
-                    key={`mobile-category-${marketplace.slug}`}
-                    href={`/category/${marketplace.slug}`}
-                    className={`rounded-lg px-3 py-2.5 ${
-                      experienceRole === 'admin'
-                        ? 'text-slate-100 hover:bg-white/10'
-                        : 'text-slate-700 hover:bg-white/80'
-                    }`}
-                    onClick={() => setMobileOpen(false)}
-                  >
-                    {marketplace.icon} {marketplace.name}
-                  </Link>
-                ))}
-              </div>
+                  <p className={`px-3 pb-1 text-[11px] font-bold uppercase tracking-[0.16em] ${
+                    experienceRole === 'admin' ? 'text-slate-300' : 'text-slate-500'
+                  }`}>
+                    Categories
+                  </p>
+                  {CULTURAL_MARKETPLACES.map((marketplace) => (
+                    <Link
+                      key={`mobile-category-${marketplace.slug}`}
+                      href={`/category/${marketplace.slug}`}
+                      className={`rounded-lg px-3 py-2.5 ${
+                        experienceRole === 'admin'
+                          ? 'text-slate-100 hover:bg-white/10'
+                          : 'text-slate-700 hover:bg-white/80'
+                      }`}
+                      onClick={() => setMobileOpen(false)}
+                    >
+                      {marketplace.icon} {marketplace.name}
+                    </Link>
+                  ))}
+                </div>
+              )}
             </nav>
           </div>
         )}
