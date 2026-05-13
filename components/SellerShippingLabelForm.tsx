@@ -173,10 +173,68 @@ export default function SellerShippingLabelForm({
     }
   }
 
+  const hasLabel = !!labelUrl;
+  const hasTracking = !!trackingNumber;
+
   return (
-    <div className="mt-3 space-y-2">
-      {canCreateLabel && (
-        <>
+    <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+      {/* Section header */}
+      <div className="flex items-center gap-2">
+        <span className="text-base" aria-hidden="true">🏷️</span>
+        <h3 className="text-sm font-semibold text-slate-800">Shipping Labels</h3>
+        {hasLabel && (
+          <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+            ✓ Label Ready
+          </span>
+        )}
+        {!hasLabel && canCreateLabel && (
+          <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+            Action Needed
+          </span>
+        )}
+      </div>
+
+      {/* Label already purchased — show print / download / track actions */}
+      {hasLabel && (
+        <div className="space-y-2">
+          <p className="text-xs text-slate-500">
+            Your shipping label is ready. Print or download it and attach it to your package before dropping it off.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="btn-primary text-sm"
+              onClick={() => window.open(labelUrl, '_blank')}
+            >
+              Print Label
+            </button>
+            <button
+              type="button"
+              className="btn-outline text-sm"
+              onClick={handleDownloadLabel}
+            >
+              Download Label PDF
+            </button>
+            {trackingUrl && (
+              <a href={trackingUrl} target="_blank" rel="noreferrer" className="btn-outline text-sm">
+                Track Package
+              </a>
+            )}
+          </div>
+          {(trackingNumber || carrier || service) && (
+            <p className="text-xs text-slate-500">
+              📦 {[carrier, service].filter(Boolean).join(' · ')}{trackingNumber ? `: ${trackingNumber}` : ''}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Order is PAID and no label yet — show rate-fetch form */}
+      {!hasLabel && canCreateLabel && (
+        <div className="space-y-2">
+          <p className="text-xs text-slate-500">
+            Enter package weight and dimensions to compare shipping rates, then purchase a label directly from here.
+          </p>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             <input
               className="input"
@@ -213,12 +271,13 @@ export default function SellerShippingLabelForm({
             onClick={handleCreateLabel}
             disabled={loadingRates || loadingPurchase}
           >
-            {loadingRates ? 'Loading rates…' : 'Create Label'}
+            {loadingRates ? 'Loading rates…' : 'Get Shipping Rates'}
           </button>
           {rates.length > 0 && (
-            <div className="space-y-2 rounded-xl border border-slate-200 p-3">
+            <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
+              <p className="text-xs font-semibold text-slate-600 mb-1">Select a shipping rate:</p>
               {rates.map(rate => (
-                <label key={rate.id} className="flex items-center justify-between gap-3 text-sm">
+                <label key={rate.id} className="flex items-center justify-between gap-3 text-sm cursor-pointer">
                   <span className="flex items-center gap-2">
                     <input
                       type="radio"
@@ -245,41 +304,18 @@ export default function SellerShippingLabelForm({
               </button>
             </div>
           )}
-        </>
-      )}
-
-      {labelUrl && (
-        <div className="rounded-xl border border-slate-200 p-3 space-y-2">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Shipping Label</p>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              className="btn-outline text-sm"
-              onClick={() => window.open(labelUrl, '_blank')}
-            >
-              Print Label
-            </button>
-            <button
-              type="button"
-              className="btn-outline text-sm"
-              onClick={handleDownloadLabel}
-            >
-              Download Label PDF
-            </button>
-            {trackingUrl && (
-              <a href={trackingUrl} target="_blank" rel="noreferrer" className="btn-outline text-sm">
-                Track Package
-              </a>
-            )}
-          </div>
-          {(trackingNumber || carrier || service) && (
-            <p className="text-xs text-slate-500">
-              📦 {[carrier, service].filter(Boolean).join(' · ')}{trackingNumber ? `: ${trackingNumber}` : ''}
-            </p>
-          )}
         </div>
       )}
-      {!labelUrl && trackingNumber && (
+
+      {/* Order not yet PAID — label unavailable */}
+      {!hasLabel && !canCreateLabel && !hasTracking && (
+        <p className="text-xs text-slate-500">
+          Shipping label purchase is available once this order reaches <strong>PAID</strong> status.
+        </p>
+      )}
+
+      {/* No Shippo label but has an external tracking number */}
+      {!hasLabel && hasTracking && (
         <div className="flex flex-wrap gap-2 items-center">
           {trackingUrl && (
             <a href={trackingUrl} target="_blank" rel="noreferrer" className="btn-outline text-sm">
