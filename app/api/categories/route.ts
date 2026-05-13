@@ -18,6 +18,13 @@ export interface CategoryNode {
   children: CategoryNode[];
 }
 
+function flattenDefaults(nodes: CategoryNode[]): Omit<CategoryNode, 'children'>[] {
+  return nodes.flatMap((node) => {
+    const { children, ...nodeWithoutChildren } = node;
+    return [nodeWithoutChildren, ...flattenDefaults(children)];
+  });
+}
+
 function buildTree(categories: Omit<CategoryNode, 'children'>[]): CategoryNode[] {
   const map = new Map<string, CategoryNode>();
   for (const cat of categories) {
@@ -54,12 +61,20 @@ export async function GET() {
     if (cats.length === 0) {
       return NextResponse.json(DEFAULT_CATEGORY_TREE);
     }
-    const tree = buildTree(
-      cats.map((category) => ({
+    const mergedCategories = [
+      ...cats.map((category) => ({
         ...category,
         attributeSchema: normalizePerfumeAttributeSchema(category.attributeSchema),
       })),
-    );
+    ];
+    const existingIds = new Set(mergedCategories.map((category) => category.id));
+    const defaultFallbacks = flattenDefaults(DEFAULT_CATEGORY_TREE)
+      .filter((category) => !existingIds.has(category.id))
+      .map((category) => ({
+        ...category,
+        attributeSchema: normalizePerfumeAttributeSchema(category.attributeSchema),
+      }));
+    const tree = buildTree([...mergedCategories, ...defaultFallbacks]);
     return NextResponse.json(tree);
   } catch {
     return NextResponse.json(DEFAULT_CATEGORY_TREE);
