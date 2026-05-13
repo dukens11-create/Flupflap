@@ -19,20 +19,10 @@ export interface CategoryNode {
 }
 
 function flattenDefaults(nodes: CategoryNode[]): Omit<CategoryNode, 'children'>[] {
-  return nodes.flatMap((node) => [
-    {
-      id: node.id,
-      name: node.name,
-      slug: node.slug,
-      aliases: node.aliases,
-      parentId: node.parentId,
-      level: node.level,
-      icon: node.icon,
-      sortOrder: node.sortOrder,
-      attributeSchema: node.attributeSchema,
-    },
-    ...flattenDefaults(node.children),
-  ]);
+  return nodes.flatMap((node) => {
+    const { children, ...nodeWithoutChildren } = node;
+    return [nodeWithoutChildren, ...flattenDefaults(children)];
+  });
 }
 
 function buildTree(categories: Omit<CategoryNode, 'children'>[]): CategoryNode[] {

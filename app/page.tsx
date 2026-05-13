@@ -14,7 +14,7 @@ import { authOptions } from '@/lib/auth-options';
 import { DEFAULT_CATEGORY_TREE, type DefaultCategoryNode } from '@/lib/default-categories';
 import { FEATURED_MARKETPLACE_CATEGORY_SLUGS } from '@/lib/marketplace-categories';
 import { getRoleDefaultPath, normalizeExperienceRole } from '@/lib/role-experience';
-import { REGIONAL_MARKETPLACES } from '@/lib/regional-marketplaces';
+import { REGIONAL_MARKETPLACES, getRegionalMarketplaceBySlug } from '@/lib/regional-marketplaces';
 
 export const dynamic = 'force-dynamic';
 
@@ -140,18 +140,23 @@ function productMatchesSearch(product: SearchableProduct, query?: string) {
   return searchableValues.some((value) => value.toLocaleLowerCase().includes(normalizedQuery));
 }
 
-async function getFeaturedProductsByCategoryId(categoryId: string, fallbackTerms: string[]) {
+async function getFeaturedProductsByCategorySlug(categorySlug: string, fallbackTerms: string[]) {
   if (!isDatabaseConfigured()) return [];
 
   const categoryTextFallback = fallbackTerms.map((term) => ({
     category: { contains: term, mode: 'insensitive' as const },
   }));
+  const category = await prisma.category.findUnique({
+    where: { slug: categorySlug },
+    select: { id: true },
+  });
+  const categoryConditions = category ? [{ categoryId: category.id }] : [];
 
   const products = await prisma.product.findMany({
     where: {
       status: 'APPROVED',
       inventory: { gt: 0 },
-      OR: [{ categoryId }, ...categoryTextFallback],
+      OR: [...categoryConditions, ...categoryTextFallback],
     },
     orderBy: { createdAt: 'desc' },
     take: 8,
@@ -185,7 +190,7 @@ async function getFeaturedProductsByCategoryId(categoryId: string, fallbackTerms
   }));
 }
 
-type FeaturedRegionalProduct = Awaited<ReturnType<typeof getFeaturedProductsByCategoryId>>[number];
+type FeaturedRegionalProduct = Awaited<ReturnType<typeof getFeaturedProductsByCategorySlug>>[number];
 
 async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?: Record<string, string | number>) => string }) {
   const where: any = { status: 'APPROVED', inventory: { gt: 0 } };
@@ -437,9 +442,9 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const { t } = await getServerTranslations();
   const session = await getServerSession(authOptions);
   const experienceRole = normalizeExperienceRole(session?.user?.role);
-  const caribbeanMarketplace = REGIONAL_MARKETPLACES.find((marketplace) => marketplace.slug === 'caribbean-products');
+  const caribbeanMarketplace = getRegionalMarketplaceBySlug('caribbean-products');
   const featuredCaribbeanProducts = caribbeanMarketplace
-    ? await getFeaturedProductsByCategoryId(caribbeanMarketplace.slug, caribbeanMarketplace.searchTerms)
+    ? await getFeaturedProductsByCategorySlug(caribbeanMarketplace.slug, caribbeanMarketplace.searchTerms)
     : [];
   const homepageCategories = [...DEFAULT_CATEGORY_TREE].sort((a, b) => a.sortOrder - b.sortOrder);
   const featuredMarketplaceCategories = getFeaturedMarketplaceCategories();

@@ -381,7 +381,7 @@ async function ensureCaribbeanCategory() {
       aliases: ['caribbean', 'caribbean products', 'island products', 'west indies'],
       level: 0,
       icon: '🏝️',
-      sortOrder: 10,
+      sortOrder: 11,
     },
   });
 
