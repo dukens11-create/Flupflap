@@ -115,6 +115,7 @@ export default function Navbar() {
   const callbackPathname = pathname && pathname !== '/' ? pathname : null;
   const loginHref = callbackPathname ? `/login?callbackUrl=${encodeURIComponent(callbackPathname)}` : '/login';
   const signupHref = callbackPathname ? `/signup?callbackUrl=${encodeURIComponent(callbackPathname)}` : '/signup';
+  const localSellersHref = '/?pickup=1';
 
   return (
     <header className="sticky top-0 z-30 border-b border-slate-200 bg-white">
@@ -174,51 +175,54 @@ export default function Navbar() {
                     }}
                     aria-expanded={cultureMenuOpen}
                     aria-haspopup="true"
-                    aria-label="Shop by Culture menu"
+                    aria-label={t('nav.shopByCulture')}
                   >
-                    Shop by Culture
+                    {t('nav.shopByCulture')}
                     <ChevronDown size={14} className={`transition-transform ${cultureMenuOpen ? 'rotate-180' : ''}`} />
                   </button>
                   
                   {cultureMenuOpen && (
                     <div 
-                      className="absolute left-0 top-full z-50 mt-1 w-full max-w-[600px] min-w-[500px] rounded-2xl border border-slate-200 bg-white p-4 shadow-xl"
+                      className="absolute left-0 top-full z-50 mt-1 w-80 rounded-2xl border border-slate-200 bg-white p-3 shadow-xl"
                       role="menu"
                       aria-label="Cultural marketplace categories"
                     >
-                      <div className="grid grid-cols-3 gap-3">
+                      <div className="space-y-1">
                         {CULTURAL_MARKETPLACES.map((marketplace) => (
-                          <div key={marketplace.slug} className="space-y-2">
-                            <Link
-                              href={`/category/${marketplace.slug}`}
-                              className="block rounded-xl border border-slate-200 bg-slate-50 p-3 transition-colors hover:border-[var(--ff-primary-navy)] hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-[var(--ff-primary-navy)] focus:ring-offset-2"
-                              onClick={() => setCultureMenuOpen(false)}
-                              role="menuitem"
-                              tabIndex={0}
-                            >
-                              <div className="flex items-center gap-2">
-                                <span className="text-2xl">{marketplace.icon}</span>
-                                <div>
-                                  <p className="text-sm font-bold text-slate-900">{marketplace.name}</p>
-                                </div>
+                          <Link
+                            key={marketplace.slug}
+                            href={`/category/${marketplace.slug}`}
+                            className="block rounded-xl px-3 py-2.5 transition-colors hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-[var(--ff-primary-navy)] focus:ring-offset-2"
+                            onClick={() => setCultureMenuOpen(false)}
+                            role="menuitem"
+                            tabIndex={0}
+                          >
+                            <div className="flex items-start gap-2">
+                              <span className="mt-0.5 text-base">{marketplace.icon}</span>
+                              <div className="min-w-0">
+                                <p className="text-sm font-semibold text-slate-900">{marketplace.name}</p>
+                                <p className="truncate text-xs text-slate-500">
+                                  {marketplace.subcategories.slice(0, 2).map((sub) => sub.name).join(' • ')}
+                                </p>
                               </div>
-                            </Link>
-                            <div className="space-y-1 pl-2">
-                              {marketplace.subcategories.slice(0, 4).map((sub) => (
-                                <Link
-                                  key={sub.slug}
-                                  href={`/category/${sub.slug}`}
-                                  className="block rounded-lg px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 hover:text-[var(--ff-primary-navy)] focus:outline-none focus:ring-2 focus:ring-[var(--ff-primary-navy)] focus:ring-offset-1"
-                                  onClick={() => setCultureMenuOpen(false)}
-                                  role="menuitem"
-                                  tabIndex={0}
-                                >
-                                  {sub.name}
-                                </Link>
-                              ))}
+                            </div>
+                          </Link>
+                        ))}
+                        <Link
+                          href={localSellersHref}
+                          className="block rounded-xl px-3 py-2.5 transition-colors hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-[var(--ff-primary-navy)] focus:ring-offset-2"
+                          onClick={() => setCultureMenuOpen(false)}
+                          role="menuitem"
+                          tabIndex={0}
+                        >
+                          <div className="flex items-start gap-2">
+                            <span className="mt-0.5 text-base">📍</span>
+                            <div>
+                              <p className="text-sm font-semibold text-slate-900">{t('nav.localSellers')}</p>
+                              <p className="text-xs text-slate-500">{t('nav.localSellersSubtitle')}</p>
                             </div>
                           </div>
-                        ))}
+                        </Link>
                       </div>
                     </div>
                   )}
@@ -338,7 +342,7 @@ export default function Navbar() {
                   <p className={`px-3 pb-1 text-[11px] font-bold uppercase tracking-[0.16em] ${
                     experienceRole === 'admin' ? 'text-slate-300' : 'text-slate-500'
                   }`}>
-                    Categories
+                    {t('nav.shopByCulture')}
                   </p>
                   {CULTURAL_MARKETPLACES.map((marketplace) => (
                     <Link
@@ -354,6 +358,17 @@ export default function Navbar() {
                       {marketplace.icon} {marketplace.name}
                     </Link>
                   ))}
+                  <Link
+                    href={localSellersHref}
+                    className={`rounded-lg px-3 py-2.5 ${
+                      experienceRole === 'admin'
+                        ? 'text-slate-100 hover:bg-white/10'
+                        : 'text-slate-700 hover:bg-white/80'
+                    }`}
+                    onClick={() => setMobileOpen(false)}
+                  >
+                    📍 {t('nav.localSellers')}
+                  </Link>
                 </div>
               )}
             </nav>

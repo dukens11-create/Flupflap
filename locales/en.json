@@ -12,7 +12,10 @@
     "logout": "Logout",
     "login": "Login",
     "signUp": "Sign up",
-    "language": "Language"
+    "language": "Language",
+    "shopByCulture": "Shop by Culture",
+    "localSellers": "Local Sellers",
+    "localSellersSubtitle": "Find nearby pickup-ready listings"
   },
   "footer": {
     "description": "Discover trusted listings, protected checkout, and a cleaner way to buy and sell every day.",
