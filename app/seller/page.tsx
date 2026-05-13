@@ -990,7 +990,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
           <h2 className="text-xl font-bold">Recent Orders</h2>
           {pendingOrdersToShip > 0 && (
             <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-700">
-              {pendingOrdersToShip} need{pendingOrdersToShip === 1 ? 's' : ''} shipping label
+              {pendingOrdersToShip} {pendingOrdersToShip === 1 ? 'needs' : 'need'} shipping label
             </span>
           )}
         </div>
