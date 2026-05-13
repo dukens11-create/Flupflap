@@ -8,11 +8,10 @@ import BrowseFilters from '@/components/BrowseFilters';
 import type { Metadata } from 'next';
 import { expirePromotions } from '@/lib/promotions';
 import { getServerTranslations } from '@/lib/i18n/server';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, BadgeCheck, CreditCard, Palette, ShieldCheck, Sparkles, Store, Sun, Truck } from 'lucide-react';
 import { getSellerResponseStatsForSellers } from '@/lib/messages';
 import { authOptions } from '@/lib/auth-options';
 import { getRoleDefaultPath, normalizeExperienceRole } from '@/lib/role-experience';
-import { CULTURAL_MARKETPLACES } from '@/lib/cultural-marketplaces';
 import { DEFAULT_CATEGORY_TREE, type DefaultCategoryNode } from '@/lib/default-categories';
 import { FEATURED_MARKETPLACE_CATEGORY_SLUGS } from '@/lib/marketplace-categories';
 
@@ -54,7 +53,70 @@ interface SearchParams {
   pickup?: string;
 }
 
-const MAX_FEATURED_SUBCATEGORIES = 6;
+const TRUST_SIGNALS = [
+  {
+    titleKey: 'home.trustBadges.verifiedSellers.title',
+    descriptionKey: 'home.trustBadges.verifiedSellers.description',
+    icon: BadgeCheck,
+    accentClassName: 'bg-emerald-50 text-emerald-700',
+  },
+  {
+    titleKey: 'home.trustBadges.securePayments.title',
+    descriptionKey: 'home.trustBadges.securePayments.description',
+    icon: CreditCard,
+    accentClassName: 'bg-slate-100 text-slate-700',
+  },
+  {
+    titleKey: 'home.trustBadges.shippingSupport.title',
+    descriptionKey: 'home.trustBadges.shippingSupport.description',
+    icon: Truck,
+    accentClassName: 'bg-amber-100 text-amber-700',
+  },
+  {
+    titleKey: 'home.trustBadges.buyerProtection.title',
+    descriptionKey: 'home.trustBadges.buyerProtection.description',
+    icon: ShieldCheck,
+    accentClassName: 'bg-blue-100 text-blue-700',
+  },
+] as const;
+
+const CULTURE_CARD_CONTENT = {
+  'asian-products': {
+    descriptionKey: 'home.cultureCards.asian.description',
+    chips: ['Fashion', 'Beauty', 'Snacks', 'Electronics'],
+    badgeKey: 'home.cultureCards.asian.badge',
+    icon: Sparkles,
+    iconClassName: 'bg-amber-100 text-amber-700',
+    buttonClassName: 'bg-amber-500 text-white hover:bg-amber-600',
+  },
+  'african-products': {
+    descriptionKey: 'home.cultureCards.african.description',
+    chips: ['Fashion', 'Fabrics', 'Jewelry', 'Art'],
+    badgeKey: 'home.cultureCards.african.badge',
+    icon: Palette,
+    iconClassName: 'bg-emerald-100 text-emerald-700',
+    buttonClassName: 'bg-emerald-600 text-white hover:bg-emerald-700',
+  },
+  'caribbean-products': {
+    descriptionKey: 'home.cultureCards.caribbean.description',
+    chips: ['Haitian', 'Jamaican', 'Dominican', 'Trinidadian'],
+    badgeKey: 'home.cultureCards.caribbean.badge',
+    icon: Sun,
+    iconClassName: 'bg-orange-100 text-orange-700',
+    buttonClassName: 'bg-[var(--ff-primary-navy)] text-white hover:bg-[var(--ff-hover-navy)]',
+  },
+} as const;
+
+function getCultureCardContent(slug: string) {
+  switch (slug) {
+    case 'asian-products':
+    case 'african-products':
+    case 'caribbean-products':
+      return CULTURE_CARD_CONTENT[slug];
+    default:
+      return null;
+  }
+}
 
 function findCategoryBySlug(
   nodes: DefaultCategoryNode[],
@@ -138,117 +200,6 @@ function productMatchesSearch(product: SearchableProduct, query?: string) {
   collectStringValues(product.productAttributes, searchableValues);
 
   return searchableValues.some((value) => value.toLocaleLowerCase().includes(normalizedQuery));
-}
-
-async function CulturalMarketplaceHighlights() {
-  if (!isDatabaseConfigured()) return null;
-
-  try {
-    const categories = await prisma.category.findMany({
-      where: { slug: { in: CULTURAL_MARKETPLACES.map((marketplace) => marketplace.slug) } },
-      select: { id: true, slug: true },
-    });
-
-    if (categories.length === 0) return null;
-
-    const categoryBySlug = new Map(categories.map((category) => [category.slug, category.id]));
-    const sections = await Promise.all(
-      CULTURAL_MARKETPLACES.map(async (marketplace) => {
-        const categoryId = categoryBySlug.get(marketplace.slug);
-        if (!categoryId) return null;
-
-        const products = await prisma.product.findMany({
-          where: {
-            status: 'APPROVED',
-            inventory: { gt: 0 },
-            categoryId,
-          },
-          orderBy: { createdAt: 'desc' },
-          take: 4,
-          include: {
-            seller: {
-              select: {
-                id: true,
-                name: true,
-                shopName: true,
-                phoneVerified: true,
-                verificationSubmission: {
-                  select: {
-                    status: true,
-                    eligibleToListAt: true,
-                    adminFallbackStatus: true,
-                  },
-                },
-              },
-            },
-            promotions: {
-              where: { status: 'ACTIVE', expiresAt: { gt: new Date() } },
-              orderBy: { expiresAt: 'desc' },
-              take: 1,
-            },
-            cartInterest: {
-              select: { totalAdds: true },
-            },
-          },
-        });
-
-        if (products.length === 0) return null;
-
-        const sellerResponseRates = await getSellerResponseStatsForSellers(getUniqueSellerIds(products));
-
-        return {
-          marketplace,
-          products: products.map((product) => ({
-            ...product,
-            activePromotion: product.promotions[0] ?? null,
-            sellerResponseRate: sellerResponseRates.get(product.sellerId)?.responseRate ?? null,
-          })),
-        };
-      }),
-    );
-
-    const visibleSections = sections.filter(
-      (section): section is NonNullable<typeof sections[number]> => section !== null,
-    );
-
-    if (visibleSections.length === 0) return null;
-
-    return (
-      <section className="space-y-5">
-        {visibleSections.map((section) => (
-          <div
-            key={section.marketplace.slug}
-            className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6"
-          >
-            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-amber-700">
-                  {section.marketplace.name}
-                </p>
-                <h2 className="mt-1 text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">
-                  {section.marketplace.featuredTitle}
-                </h2>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-                  {section.marketplace.featuredSubtitle}
-                </p>
-              </div>
-              <Link href={`/category/${section.marketplace.slug}`} className="btn-brand-outline">
-                Explore {section.marketplace.name}
-              </Link>
-            </div>
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
-              {section.products.map((product) => (
-                <ProductCard key={product.id} p={product} />
-              ))}
-            </div>
-          </div>
-        ))}
-      </section>
-    );
-  } catch (err) {
-    console.error('[HomePage] failed to load cultural marketplace highlights', err);
-    return null;
-  }
 }
 
 async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?: Record<string, string | number>) => string }) {
@@ -502,93 +453,235 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const session = await getServerSession(authOptions);
   const experienceRole = normalizeExperienceRole(session?.user?.role);
   const featuredMarketplaceCategories = getFeaturedMarketplaceCategories();
-  const culturalMarketplaceHighlights = await CulturalMarketplaceHighlights();
+  const heroExperienceCards = [
+    {
+      title: t('home.heroExperienceCards.discovery.title'),
+      description: t('home.heroExperienceCards.discovery.description'),
+      icon: Sparkles,
+      accentClassName: 'bg-amber-100 text-amber-700',
+    },
+    {
+      title: t('home.heroExperienceCards.shopping.title'),
+      description: t('home.heroExperienceCards.shopping.description'),
+      icon: Store,
+      accentClassName: 'bg-emerald-100 text-emerald-700',
+    },
+    {
+      title: t('home.heroExperienceCards.checkout.title'),
+      description: t('home.heroExperienceCards.checkout.description'),
+      icon: ShieldCheck,
+      accentClassName: 'bg-slate-100 text-slate-700',
+    },
+  ];
   if (experienceRole === 'admin') {
     redirect(getRoleDefaultPath(session?.user?.role));
   }
 
   return (
-    <main className="space-y-6 pb-6">
-      <section className="relative overflow-hidden rounded-[28px] border border-slate-200 bg-slate-50 px-5 py-6 shadow-sm sm:px-8 sm:py-8 lg:px-10 lg:py-10">
-        <div className="absolute inset-y-0 right-0 hidden w-1/3 bg-[radial-gradient(circle_at_top,_rgba(11,31,58,0.12),_transparent_60%)] lg:block" />
-        <div className="max-w-3xl space-y-5">
-          <div className="space-y-4">
-            <h1 className="max-w-2xl text-3xl font-black tracking-tight text-slate-900 sm:text-5xl">{t('home.title')}</h1>
-            <p className="max-w-2xl text-sm leading-6 text-slate-600 sm:text-lg">{t('home.subtitle')}</p>
+    <main className="space-y-8 pb-8">
+      <section className="relative overflow-hidden rounded-[32px] border border-slate-200 bg-[linear-gradient(135deg,var(--ff-primary-navy)_0%,var(--ff-hover-navy)_55%,var(--ff-brand-orange)_130%)] text-white shadow-sm">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.16),_transparent_34%)]" />
+        <div className="absolute -right-16 top-8 h-48 w-48 rounded-full bg-emerald-400/20 blur-3xl" />
+        <div className="absolute bottom-0 left-1/3 h-40 w-40 rounded-full bg-orange-300/20 blur-3xl" />
+        <div className="relative grid gap-8 px-5 py-7 sm:px-8 sm:py-10 lg:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)] lg:px-10">
+          <div className="space-y-6">
+            <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-white/90">
+              <Store size={14} />
+              {t('home.heroBadge')}
+            </div>
+
+            <div className="space-y-4">
+              <h1 className="max-w-3xl text-4xl font-black tracking-tight text-white sm:text-5xl lg:text-6xl">
+                {t('home.title')}
+              </h1>
+              <p className="max-w-2xl text-sm leading-6 text-white/85 sm:text-lg sm:leading-7">
+                {t('home.subtitle')}
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Link href="#featured-products" className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-semibold text-[var(--ff-primary-navy)] shadow-sm transition-colors hover:bg-slate-100">
+                {t('home.shopNow')}
+                <ArrowRight size={16} />
+              </Link>
+              <Link href="/signup" className="inline-flex items-center justify-center rounded-xl border border-white/30 bg-white/10 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/15">
+                {t('home.startSelling')}
+              </Link>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {TRUST_SIGNALS.map((signal) => (
+                <div key={signal.titleKey} className="rounded-2xl border border-white/12 bg-white/10 px-4 py-3 text-sm font-medium text-white/90 backdrop-blur-sm">
+                  {t(signal.titleKey)}
+                </div>
+              ))}
+            </div>
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <Link href="#featured-products" className="btn-brand">
-              {t('home.shopNow')}
-              <ArrowRight size={16} />
-            </Link>
-            <Link href="/signup" className="btn-brand-outline">
-              {t('home.startSelling')}
-            </Link>
+          <div className="rounded-[28px] border border-white/15 bg-white/95 p-5 text-slate-900 shadow-xl sm:p-6">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">
+              {t('home.heroExperienceEyebrow')}
+            </p>
+            <h2 className="mt-3 text-2xl font-black tracking-tight text-slate-900">
+              {t('home.heroExperienceTitle')}
+            </h2>
+            <div className="mt-5 space-y-3">
+              {heroExperienceCards.map((item) => (
+                <div key={item.title} className="flex gap-3 rounded-2xl border border-slate-200 bg-white p-3">
+                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${item.accentClassName}`}>
+                    <item.icon size={18} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">{item.title}</p>
+                    <p className="mt-1 text-sm leading-6 text-slate-500">{item.description}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </section>
 
-      <section id="featured-products" className="space-y-4">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-amber-700">{t('home.featuredEyebrow')}</p>
-            <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-900">{t('home.featuredTitle')}</h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">{t('home.featuredSubtitle')}</p>
-          </div>
+      <section id="search-marketplace" className="space-y-4">
+        <div className="space-y-2">
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-amber-700">{t('home.searchSectionEyebrow')}</p>
+          <h2 className="text-3xl font-black tracking-tight text-slate-900">{t('home.searchSectionTitle')}</h2>
+          <p className="max-w-2xl text-sm leading-6 text-slate-500">
+            {t('home.searchSectionSubtitle')}
+          </p>
         </div>
-
-        {featuredMarketplaceCategories.length > 0 && (
-          <div className="grid gap-3 rounded-[24px] border border-slate-200 bg-white p-4 sm:grid-cols-2">
-            {featuredMarketplaceCategories.map((category) => (
-              <article key={category.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{t('home.featuredRegionalEyebrow')}</p>
-                    <h3 className="mt-2 text-xl font-bold text-slate-900">
-                      {category.icon ? `${category.icon} ` : ''}{category.name}
-                    </h3>
-                    <p className="mt-2 text-sm text-slate-600">{t('home.featuredRegionalSubtitle')}</p>
-                  </div>
-                  <Link
-                    href={`/category/${category.slug}`}
-                    className="btn-outline text-xs sm:text-sm"
-                    aria-label={t('home.exploreCategory', { category: category.name })}
-                  >
-                    {t('home.exploreCategory', { category: category.name })}
-                  </Link>
-                </div>
-                {category.children.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {category.children.slice(0, MAX_FEATURED_SUBCATEGORIES).map((subcategory) => (
-                      <Link
-                        key={subcategory.id}
-                        href={`/category/${subcategory.slug}`}
-                        className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-100"
-                      >
-                        {subcategory.name}
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </article>
-            ))}
-          </div>
-        )}
-
         <Suspense>
           <BrowseFilters />
         </Suspense>
+      </section>
+
+      {featuredMarketplaceCategories.length > 0 && (
+        <section className="space-y-4">
+          <div className="space-y-2">
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-700">{t('home.cultureSectionEyebrow')}</p>
+            <h2 className="text-3xl font-black tracking-tight text-slate-900">{t('home.cultureSectionTitle')}</h2>
+            <p className="max-w-2xl text-sm leading-6 text-slate-500">
+              {t('home.cultureSectionSubtitle')}
+            </p>
+          </div>
+
+            <div className="grid gap-4 lg:grid-cols-3">
+            {featuredMarketplaceCategories.map((category) => {
+              const cardContent = getCultureCardContent(category.slug);
+              const Icon = cardContent?.icon ?? Store;
+              const chips = cardContent?.chips ?? category.children.slice(0, 4).map((subcategory) => subcategory.name);
+
+              return (
+                <article
+                  key={category.id}
+                  className="flex h-full flex-col rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm transition-transform hover:-translate-y-0.5"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-600">
+                      {cardContent ? t(cardContent.badgeKey) : t('home.cultureSectionEyebrow')}
+                    </span>
+                    <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${cardContent?.iconClassName ?? 'bg-slate-100 text-slate-700'}`}>
+                      <Icon size={22} />
+                    </div>
+                  </div>
+
+                  <div className="mt-5 space-y-3">
+                    <h3 className="text-2xl font-black tracking-tight text-slate-900">
+                      {category.icon ? `${category.icon} ` : ''}
+                      {category.name}
+                    </h3>
+                    <p className="text-sm leading-6 text-slate-500">
+                      {cardContent ? t(cardContent.descriptionKey) : t('home.cultureSectionSubtitle')}
+                    </p>
+                  </div>
+
+                  <div className="mt-5 flex flex-wrap gap-2">
+                    {chips.map((chip) => (
+                      <span
+                        key={chip}
+                        className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700"
+                      >
+                        {chip}
+                      </span>
+                    ))}
+                  </div>
+
+                  <Link
+                    href={`/category/${category.slug}`}
+                    className={`mt-6 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors ${cardContent?.buttonClassName ?? 'bg-[var(--ff-primary-navy)] text-white hover:bg-[var(--ff-hover-navy)]'}`}
+                    aria-label={`Explore ${category.name}`}
+                  >
+                    {t('home.explore')}
+                    <ArrowRight size={16} />
+                  </Link>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      <section id="featured-products" className="space-y-4">
+        <div className="space-y-2">
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-amber-700">{t('home.featuredProductsEyebrow')}</p>
+          <h2 className="text-3xl font-black tracking-tight text-slate-900">{t('home.featuredProductsTitle')}</h2>
+          <p className="max-w-2xl text-sm leading-6 text-slate-500">
+            {t('home.featuredProductsSubtitle')}
+          </p>
+        </div>
+
         <Suspense fallback={<p className="text-slate-500">{t('home.loadingProducts')}</p>}>
           <ProductGrid sp={sp} t={t} />
         </Suspense>
       </section>
 
-      {culturalMarketplaceHighlights}
+      <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <div className="space-y-2">
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-700">{t('home.whyShopEyebrow')}</p>
+          <h2 className="text-3xl font-black tracking-tight text-slate-900">{t('home.whyShopTitle')}</h2>
+          <p className="max-w-2xl text-sm leading-6 text-slate-500">
+            {t('home.whyShopSubtitle')}
+          </p>
+        </div>
 
-      <p className="text-center text-xs text-slate-500 sm:text-sm">
-        Verified sellers. Secure payments. Buyer protection.
-      </p>
+        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {TRUST_SIGNALS.map((signal) => {
+            const Icon = signal.icon;
+            return (
+              <article key={signal.titleKey} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className={`flex h-11 w-11 items-center justify-center rounded-2xl ${signal.accentClassName}`}>
+                  <Icon size={20} />
+                </div>
+                <h3 className="mt-4 text-lg font-bold text-slate-900">{t(signal.titleKey)}</h3>
+                <p className="mt-2 text-sm leading-6 text-slate-500">{t(signal.descriptionKey)}</p>
+              </article>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-[linear-gradient(135deg,rgba(249,115,22,0.08),rgba(255,255,255,1),rgba(15,138,95,0.1))] p-6 shadow-sm sm:p-8">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="max-w-2xl space-y-3">
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--ff-primary-navy)]">{t('home.sellingCtaEyebrow')}</p>
+            <h2 className="text-3xl font-black tracking-tight text-slate-900">
+              {t('home.sellingCtaTitle')}
+            </h2>
+            <p className="text-sm leading-6 text-slate-600 sm:text-base">
+              {t('home.sellingCtaSubtitle')}
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Link href="/signup" className="btn-brand">
+              {t('home.startSelling')}
+            </Link>
+            <Link href="#search-marketplace" className="btn-brand-outline">
+              {t('home.shopNow')}
+            </Link>
+          </div>
+        </div>
+      </section>
     </main>
   );
 }
