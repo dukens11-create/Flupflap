@@ -2,7 +2,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { signOut, useSession } from 'next-auth/react';
-import { ShoppingCart, Package, LogIn, UserPlus, LogOut, User, MessageCircle, Bell, Menu, X } from 'lucide-react';
+import { ShoppingCart, Package, LogIn, UserPlus, LogOut, User, MessageCircle, Bell, Menu, X, ChevronDown } from 'lucide-react';
 import LanguageSelector from '@/components/LanguageSelector';
 import { useI18n } from '@/components/I18nProvider';
 import { useEffect, useState } from 'react';
@@ -108,6 +108,7 @@ export default function Navbar() {
   const unreadMessages = useUnreadMessages(!!session?.user);
   const unreadNotifications = useUnreadNotifications(!!session?.user);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [cultureMenuOpen, setCultureMenuOpen] = useState(false);
   const { t } = useI18n();
   const navLinkClass = 'rounded-full px-3 py-2 transition-colors hover:bg-slate-100 link-hover-navy';
   const actionLinkClass = 'relative flex items-center gap-1 rounded-full px-3 py-2 transition-colors hover:bg-slate-100 link-hover-navy';
@@ -154,6 +155,59 @@ export default function Navbar() {
                   {item.label}
                 </Link>
               ))}
+              
+              {/* Shop by Culture Dropdown */}
+              {CULTURAL_MARKETPLACES.length > 0 && (
+                <div className="relative"
+                  onMouseEnter={() => setCultureMenuOpen(true)}
+                  onMouseLeave={() => setCultureMenuOpen(false)}
+                >
+                  <button
+                    className={`${navLinkClass} flex items-center gap-1`}
+                    onClick={() => setCultureMenuOpen(!cultureMenuOpen)}
+                    aria-expanded={cultureMenuOpen}
+                    aria-label="Shop by Culture"
+                  >
+                    Shop by Culture
+                    <ChevronDown size={14} className={`transition-transform ${cultureMenuOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                  
+                  {cultureMenuOpen && (
+                    <div className="absolute left-0 top-full z-50 mt-1 w-[600px] rounded-2xl border border-slate-200 bg-white p-4 shadow-xl">
+                      <div className="grid grid-cols-3 gap-3">
+                        {CULTURAL_MARKETPLACES.map((marketplace) => (
+                          <div key={marketplace.slug} className="space-y-2">
+                            <Link
+                              href={`/category/${marketplace.slug}`}
+                              className="block rounded-xl border border-slate-200 bg-slate-50 p-3 transition-colors hover:border-[var(--ff-primary-navy)] hover:bg-slate-100"
+                              onClick={() => setCultureMenuOpen(false)}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="text-2xl">{marketplace.icon}</span>
+                                <div>
+                                  <p className="text-sm font-bold text-slate-900">{marketplace.name}</p>
+                                </div>
+                              </div>
+                            </Link>
+                            <div className="space-y-1 pl-2">
+                              {marketplace.subcategories.slice(0, 4).map((sub) => (
+                                <Link
+                                  key={sub.slug}
+                                  href={`/category/${sub.slug}`}
+                                  className="block rounded-lg px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 hover:text-[var(--ff-primary-navy)]"
+                                  onClick={() => setCultureMenuOpen(false)}
+                                >
+                                  {sub.name}
+                                </Link>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </nav>
 
             <div className="flex flex-wrap items-center gap-2 text-sm font-medium lg:ml-auto">
