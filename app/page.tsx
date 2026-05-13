@@ -446,16 +446,19 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
     {
       title: t('home.heroExperienceCards.discovery.title'),
       description: t('home.heroExperienceCards.discovery.description'),
+      icon: Sparkles,
       accentClassName: 'bg-amber-100 text-amber-700',
     },
     {
       title: t('home.heroExperienceCards.shopping.title'),
       description: t('home.heroExperienceCards.shopping.description'),
+      icon: Store,
       accentClassName: 'bg-emerald-100 text-emerald-700',
     },
     {
       title: t('home.heroExperienceCards.checkout.title'),
       description: t('home.heroExperienceCards.checkout.description'),
+      icon: ShieldCheck,
       accentClassName: 'bg-slate-100 text-slate-700',
     },
   ];
@@ -515,7 +518,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
               {heroExperienceCards.map((item) => (
                 <div key={item.title} className="flex gap-3 rounded-2xl border border-slate-200 bg-white p-3">
                   <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${item.accentClassName}`}>
-                    <BadgeCheck size={18} />
+                    <item.icon size={18} />
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-slate-900">{item.title}</p>
