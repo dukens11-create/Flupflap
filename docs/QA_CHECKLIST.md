@@ -128,6 +128,18 @@ Use this checklist before every production deploy (or after a significant code c
 
 ---
 
+## 10. Security Hardening Verification
+
+- [ ] Auth-protected routes (`/account`, `/orders`, `/checkout`, `/seller`, `/admin`) redirect unauthenticated users to login with a safe local `callbackUrl`
+- [ ] Admin-only operations (user moderation, seller moderation, report moderation, commission/pricing changes) reject non-admin sessions with safe JSON or redirect errors
+- [ ] Seller-only mutations (listing create/edit/delete, shipping label actions, seller profile updates) reject non-seller sessions
+- [ ] Sensitive auth endpoints (`/api/auth/signup`, `/api/auth/forgot-password`, `/api/auth/reset-password`, OTP routes) return `429` after repeated abuse attempts
+- [ ] Upload endpoints reject unsupported MIME types and oversized files, and never return stack traces or secrets in API responses
+- [ ] Redirect/callback handling never permits external callback URLs for login/signout/auth redirects
+- [ ] Checkout/payment initiation endpoints reject malformed payloads and unauthenticated/unauthorized requests with non-sensitive error messages
+
+---
+
 ## Sign-off
 
 | Tester | Date | Environment | Outcome |

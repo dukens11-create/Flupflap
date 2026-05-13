@@ -27,6 +27,8 @@ import { createAndSendOtp } from '@/lib/otp';
 import { normalizePhone } from '@/lib/phone';
 import { isSmsOtpEnabled, SELLER_OTP_FORCE_DISABLED } from '@/lib/feature-flags';
 import { safeComparePassword } from '@/lib/password';
+import { applyRateLimit } from '@/lib/security';
+import { logError, logInfo, logWarn } from '@/lib/logger';
 
 const schema = z.object({
   email: z.string().email(),
@@ -40,6 +42,19 @@ const schema = z.object({
 
 export async function POST(req: Request) {
   try {
+    const limit = applyRateLimit({
+      request: req,
+      key: 'auth:otp-setup-phone',
+      windowMs: 10 * 60 * 1000,
+      max: 20,
+    });
+    if (limit.limited) {
+      return NextResponse.json(
+        { error: 'Too many requests. Please wait before trying again.' },
+        { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } },
+      );
+    }
+
     const body = await req.json();
     const { email, password, phone } = schema.parse(body);
 
@@ -67,7 +82,8 @@ export async function POST(req: Request) {
     }
 
     if (user.role !== 'SELLER') {
-      console.info('[setup-phone] Rejected phone setup for non-seller role', {
+      logInfo('Rejected phone setup for non-seller role', {
+        tag: 'api/auth/otp/setup-phone',
         userId: user.id,
         role: user.role,
       });
@@ -75,7 +91,8 @@ export async function POST(req: Request) {
     }
 
     if (SELLER_OTP_FORCE_DISABLED || !isSmsOtpEnabled()) {
-      console.warn('[setup-phone] Seller OTP forcibly bypassed: pending Twilio A2P 10DLC approval', {
+      logWarn('Seller OTP bypassed due to feature flags', {
+        tag: 'api/auth/otp/setup-phone',
         userId: user.id,
         role: user.role,
         reason: SELLER_OTP_FORCE_DISABLED
@@ -89,7 +106,8 @@ export async function POST(req: Request) {
     const normalizedPhone = normalizePhone(phone);
     if (!normalizedPhone) {
       const digitsOnly = phone.replace(/\D/g, '');
-      console.warn('[setup-phone] Invalid phone entered for seller OTP setup', {
+      logWarn('Invalid phone entered for seller OTP setup', {
+        tag: 'api/auth/otp/setup-phone',
         userId: user.id,
         digitsLength: digitsOnly.length,
         hadPlusPrefix: phone.trim().startsWith('+'),
@@ -110,20 +128,27 @@ export async function POST(req: Request) {
 
     if (!result.ok) {
       if (result.error === 'rate_limited') {
-        console.info('[setup-phone] OTP blocked by resend cooldown', { userId: user.id });
+        logInfo('OTP blocked by resend cooldown after setup-phone', {
+          tag: 'api/auth/otp/setup-phone',
+          userId: user.id,
+        });
         return NextResponse.json(
           { error: 'Please wait 60 seconds before requesting another code.' },
           { status: 429 },
         );
       }
-      console.error('[setup-phone] OTP send failed after phone save', { userId: user.id });
+      logError('OTP send failed after phone save', new Error('otp_send_failed_after_phone_save'), {
+        tag: 'api/auth/otp/setup-phone',
+        userId: user.id,
+      });
       return NextResponse.json(
         { error: 'Failed to send verification code. Please check your phone number and try again.' },
         { status: 500 },
       );
     }
 
-    console.info('[setup-phone] OTP send succeeded after phone setup', {
+    logInfo('OTP send succeeded after phone setup', {
+      tag: 'api/auth/otp/setup-phone',
       userId: user.id,
       maskedPhone: result.maskedPhone,
     });
@@ -132,8 +157,8 @@ export async function POST(req: Request) {
     if (err?.name === 'ZodError') {
       return NextResponse.json({ error: err.errors[0]?.message || 'Invalid input.' }, { status: 400 });
     }
-    console.error('[setup-phone] Unexpected server error', {
-      error: err?.message ?? 'unknown_error',
+    logError('Unexpected setup-phone failure', err, {
+      tag: 'api/auth/otp/setup-phone',
     });
     return NextResponse.json({ error: 'Server error.' }, { status: 500 });
   }
