@@ -28,11 +28,57 @@
     "refundPolicy": "Politique de remboursement"
   },
   "home": {
-    "title": "Un marketplace moderne pour acheter et vendre en toute confiance",
-    "subtitle": "Parcourez des annonces sélectionnées, comparez les produits plus vite et achetez auprès de vendeurs vérifiés dans une expérience FlupFlap plus nette.",
-    "heroBadge": "Design prêt pour le marketplace",
-    "shopNow": "Acheter les produits en vedette",
-    "startSelling": "Commencer à vendre sur FlupFlap",
+    "title": "Achetez et vendez en toute confiance sur FlupFlap",
+    "subtitle": "Découvrez des vendeurs fiables, des produits culturels, des offres du quotidien et un paiement sécurisé dans un marketplace moderne.",
+    "heroBadge": "Marketplace professionnel",
+    "shopNow": "Acheter des produits",
+    "startSelling": "Commencer à vendre",
+    "heroExperienceEyebrow": "Expérience acheteur FlupFlap",
+    "heroExperienceTitle": "Navigation plus claire. Confiance renforcée. Meilleure expérience mobile.",
+    "heroExperienceCards": {
+      "discovery": {
+        "title": "Découverte fiable",
+        "description": "Repérez plus vite les catégories culturelles, les produits en vedette et les vendeurs remarquables."
+      },
+      "shopping": {
+        "title": "Shopping organisé",
+        "description": "Utilisez la recherche et les filtres sans perdre une mise en page élégante et moderne."
+      },
+      "checkout": {
+        "title": "Paiement en confiance",
+        "description": "Les paiements sécurisés et la protection acheteur rendent chaque achat plus rassurant."
+      }
+    },
+    "searchSectionEyebrow": "Rechercher sur le marketplace",
+    "searchSectionTitle": "Trouvez des produits plus vite",
+    "searchSectionSubtitle": "Utilisez la recherche et les filtres pour découvrir des vendeurs fiables, des catégories culturelles et des offres du quotidien sans perdre votre place.",
+    "cultureSectionEyebrow": "Découverte culturelle",
+    "cultureSectionTitle": "Acheter par culture et communauté",
+    "cultureSectionSubtitle": "Explorez des produits uniques proposés par des vendeurs caribéens, africains, asiatiques et locaux.",
+    "cultureCards": {
+      "asian": {
+        "badge": "Meilleures sélections",
+        "description": "Découvrez la mode asiatique, la beauté, les snacks, la décoration, l'électronique et les produits culturels."
+      },
+      "african": {
+        "badge": "Favoris culturels",
+        "description": "Explorez la mode africaine, les tissus, la beauté, les bijoux, l'art, l'alimentation et les articles culturels."
+      },
+      "caribbean": {
+        "badge": "Boutiques des îles",
+        "description": "Achetez des produits haïtiens, jamaïcains, dominicains, trinidadiens, de la mode caribéenne, de la nourriture, de la beauté et des produits culturels."
+      }
+    },
+    "explore": "Explorer",
+    "featuredProductsEyebrow": "Produits en vedette",
+    "featuredProductsTitle": "Nouvelles trouvailles de vendeurs fiables",
+    "featuredProductsSubtitle": "Parcourez des produits remarquables, des offres du quotidien et des annonces récentes avec les mêmes outils de recherche et de filtrage.",
+    "whyShopEyebrow": "Pourquoi les acheteurs nous font confiance",
+    "whyShopTitle": "Pourquoi acheter sur FlupFlap",
+    "whyShopSubtitle": "Conçu pour paraître plus organisé, plus professionnel et plus agréable sur mobile, de la découverte à la livraison.",
+    "sellingCtaEyebrow": "Commencer à vendre sur FlupFlap",
+    "sellingCtaTitle": "Ouvrez votre boutique dans un marketplace pensé pour la confiance et la découverte.",
+    "sellingCtaSubtitle": "Touchez des acheteurs à la recherche de produits culturels, d'articles du quotidien et d'un paiement sécurisé dans un marketplace moderne.",
     "heroHighlights": {
       "discovery": {
         "title": "Parcourez plus vite",
@@ -58,15 +104,19 @@
     "trustBadges": {
       "verifiedSellers": {
         "title": "Vendeurs vérifiés",
-        "description": "Les badges vendeur mettent en avant les annonces fiables et aident les acheteurs à décider plus sereinement."
+        "description": "Achetez auprès de boutiques avec des signaux de confiance clairs et une vérification vendeur intégrée."
       },
       "securePayments": {
         "title": "Paiements sécurisés",
-        "description": "Les parcours de paiement protégés gardent chaque achat fluide et sécurisé."
+        "description": "Le paiement protégé garde chaque commande simple, sûre et fluide."
+      },
+      "shippingSupport": {
+        "title": "Assistance livraison",
+        "description": "Suivez les commandes expédiées avec une meilleure assistance du marketplace après le paiement."
       },
       "buyerProtection": {
         "title": "Protection acheteur",
-        "description": "Des messages de confiance clairs renforcent des transactions plus sûres de la recherche à la livraison."
+        "description": "Naviguez avec plus de confiance grâce à une protection acheteur et un cadre plus rassurant."
       }
     },
     "loadingProducts": "Chargement des produits…",

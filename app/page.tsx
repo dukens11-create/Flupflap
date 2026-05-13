@@ -55,26 +55,26 @@ interface SearchParams {
 
 const TRUST_SIGNALS = [
   {
-    title: 'Verified sellers',
-    description: 'Shop storefronts with clear trust signals and seller verification built in.',
+    titleKey: 'home.trustBadges.verifiedSellers.title',
+    descriptionKey: 'home.trustBadges.verifiedSellers.description',
     icon: BadgeCheck,
     accentClassName: 'bg-emerald-50 text-emerald-700',
   },
   {
-    title: 'Secure payments',
-    description: 'Protected checkout keeps orders simple, secure, and easy to complete.',
+    titleKey: 'home.trustBadges.securePayments.title',
+    descriptionKey: 'home.trustBadges.securePayments.description',
     icon: CreditCard,
     accentClassName: 'bg-slate-100 text-slate-700',
   },
   {
-    title: 'Shipping support',
-    description: 'Track shipped orders confidently with marketplace support from checkout onward.',
+    titleKey: 'home.trustBadges.shippingSupport.title',
+    descriptionKey: 'home.trustBadges.shippingSupport.description',
     icon: Truck,
     accentClassName: 'bg-amber-100 text-amber-700',
   },
   {
-    title: 'Buyer protection',
-    description: 'Browse with confidence thanks to clearer policies and stronger marketplace trust.',
+    titleKey: 'home.trustBadges.buyerProtection.title',
+    descriptionKey: 'home.trustBadges.buyerProtection.description',
     icon: ShieldCheck,
     accentClassName: 'bg-blue-100 text-blue-700',
   },
@@ -82,25 +82,25 @@ const TRUST_SIGNALS = [
 
 const CULTURE_CARD_CONTENT = {
   'asian-products': {
-    description: 'Discover Asian fashion, beauty, snacks, home decor, electronics, and cultural products.',
+    descriptionKey: 'home.cultureCards.asian.description',
     chips: ['Fashion', 'Beauty', 'Snacks', 'Electronics'],
-    badge: 'Top picks',
+    badgeKey: 'home.cultureCards.asian.badge',
     icon: Sparkles,
     iconClassName: 'bg-amber-100 text-amber-700',
     buttonClassName: 'bg-amber-500 text-white hover:bg-amber-600',
   },
   'african-products': {
-    description: 'Explore African fashion, fabrics, beauty, jewelry, art, food, and cultural items.',
+    descriptionKey: 'home.cultureCards.african.description',
     chips: ['Fashion', 'Fabrics', 'Jewelry', 'Art'],
-    badge: 'Cultural favorites',
+    badgeKey: 'home.cultureCards.african.badge',
     icon: Palette,
     iconClassName: 'bg-emerald-100 text-emerald-700',
     buttonClassName: 'bg-emerald-600 text-white hover:bg-emerald-700',
   },
   'caribbean-products': {
-    description: 'Shop Haitian, Jamaican, Dominican, Trinidadian, Caribbean fashion, food, beauty, and cultural products.',
+    descriptionKey: 'home.cultureCards.caribbean.description',
     chips: ['Haitian', 'Jamaican', 'Dominican', 'Trinidadian'],
-    badge: 'Island storefronts',
+    badgeKey: 'home.cultureCards.caribbean.badge',
     icon: Sun,
     iconClassName: 'bg-orange-100 text-orange-700',
     buttonClassName: 'bg-[var(--ff-primary-navy)] text-white hover:bg-[var(--ff-hover-navy)]',
@@ -442,6 +442,23 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const session = await getServerSession(authOptions);
   const experienceRole = normalizeExperienceRole(session?.user?.role);
   const featuredMarketplaceCategories = getFeaturedMarketplaceCategories();
+  const heroExperienceCards = [
+    {
+      title: t('home.heroExperienceCards.discovery.title'),
+      description: t('home.heroExperienceCards.discovery.description'),
+      accentClassName: 'bg-amber-100 text-amber-700',
+    },
+    {
+      title: t('home.heroExperienceCards.shopping.title'),
+      description: t('home.heroExperienceCards.shopping.description'),
+      accentClassName: 'bg-emerald-100 text-emerald-700',
+    },
+    {
+      title: t('home.heroExperienceCards.checkout.title'),
+      description: t('home.heroExperienceCards.checkout.description'),
+      accentClassName: 'bg-slate-100 text-slate-700',
+    },
+  ];
   if (experienceRole === 'admin') {
     redirect(getRoleDefaultPath(session?.user?.role));
   }
@@ -456,32 +473,32 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
           <div className="space-y-6">
             <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-white/90">
               <Store size={14} />
-              Professional marketplace
+              {t('home.heroBadge')}
             </div>
 
             <div className="space-y-4">
               <h1 className="max-w-3xl text-4xl font-black tracking-tight text-white sm:text-5xl lg:text-6xl">
-                Buy and sell with confidence on FlupFlap
+                {t('home.title')}
               </h1>
               <p className="max-w-2xl text-sm leading-6 text-white/85 sm:text-lg sm:leading-7">
-                Discover trusted sellers, cultural products, everyday deals, and secure checkout in one modern marketplace.
+                {t('home.subtitle')}
               </p>
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row">
               <Link href="#featured-products" className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-semibold text-[var(--ff-primary-navy)] shadow-sm transition-colors hover:bg-slate-100">
-                Shop products
+                {t('home.shopNow')}
                 <ArrowRight size={16} />
               </Link>
               <Link href="/signup" className="inline-flex items-center justify-center rounded-xl border border-white/30 bg-white/10 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/15">
-                Start selling
+                {t('home.startSelling')}
               </Link>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               {TRUST_SIGNALS.map((signal) => (
-                <div key={signal.title} className="rounded-2xl border border-white/12 bg-white/10 px-4 py-3 text-sm font-medium text-white/90 backdrop-blur-sm">
-                  {signal.title}
+                <div key={signal.titleKey} className="rounded-2xl border border-white/12 bg-white/10 px-4 py-3 text-sm font-medium text-white/90 backdrop-blur-sm">
+                  {t(signal.titleKey)}
                 </div>
               ))}
             </div>
@@ -489,29 +506,13 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
 
           <div className="rounded-[28px] border border-white/15 bg-white/95 p-5 text-slate-900 shadow-xl sm:p-6">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">
-              FlupFlap buyer experience
+              {t('home.heroExperienceEyebrow')}
             </p>
             <h2 className="mt-3 text-2xl font-black tracking-tight text-slate-900">
-              Cleaner browsing. Stronger trust. Better mobile shopping.
+              {t('home.heroExperienceTitle')}
             </h2>
             <div className="mt-5 space-y-3">
-              {[
-                {
-                  title: 'Trusted discovery',
-                  description: 'Spot culture-driven categories, featured products, and standout sellers faster.',
-                  accentClassName: 'bg-amber-100 text-amber-700',
-                },
-                {
-                  title: 'Organized shopping',
-                  description: 'Use search and filters without losing a polished, modern marketplace layout.',
-                  accentClassName: 'bg-emerald-100 text-emerald-700',
-                },
-                {
-                  title: 'Confident checkout',
-                  description: 'Secure payments and buyer protection keep each purchase feeling professional.',
-                  accentClassName: 'bg-slate-100 text-slate-700',
-                },
-              ].map((item) => (
+              {heroExperienceCards.map((item) => (
                 <div key={item.title} className="flex gap-3 rounded-2xl border border-slate-200 bg-white p-3">
                   <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${item.accentClassName}`}>
                     <BadgeCheck size={18} />
@@ -529,10 +530,10 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
 
       <section id="search-marketplace" className="space-y-4">
         <div className="space-y-2">
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-amber-700">Search marketplace</p>
-          <h2 className="text-3xl font-black tracking-tight text-slate-900">Find products faster</h2>
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-amber-700">{t('home.searchSectionEyebrow')}</p>
+          <h2 className="text-3xl font-black tracking-tight text-slate-900">{t('home.searchSectionTitle')}</h2>
           <p className="max-w-2xl text-sm leading-6 text-slate-500">
-            Use search and filters to explore trusted sellers, culture-first categories, and everyday deals without losing your place.
+            {t('home.searchSectionSubtitle')}
           </p>
         </div>
         <Suspense>
@@ -543,10 +544,10 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
       {featuredMarketplaceCategories.length > 0 && (
         <section className="space-y-4">
           <div className="space-y-2">
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-700">Culture-led discovery</p>
-            <h2 className="text-3xl font-black tracking-tight text-slate-900">Shop by Culture &amp; Community</h2>
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-700">{t('home.cultureSectionEyebrow')}</p>
+            <h2 className="text-3xl font-black tracking-tight text-slate-900">{t('home.cultureSectionTitle')}</h2>
             <p className="max-w-2xl text-sm leading-6 text-slate-500">
-              Explore unique products from Caribbean, African, Asian, and local sellers.
+              {t('home.cultureSectionSubtitle')}
             </p>
           </div>
 
@@ -563,7 +564,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
                 >
                   <div className="flex items-start justify-between gap-4">
                     <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-600">
-                      {cardContent?.badge ?? 'Marketplace'}
+                      {cardContent ? t(cardContent.badgeKey) : t('home.cultureSectionEyebrow')}
                     </span>
                     <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${cardContent?.iconClassName ?? 'bg-slate-100 text-slate-700'}`}>
                       <Icon size={22} />
@@ -576,7 +577,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
                       {category.name}
                     </h3>
                     <p className="text-sm leading-6 text-slate-500">
-                      {cardContent?.description ?? 'Discover curated cultural products from trusted sellers.'}
+                      {cardContent ? t(cardContent.descriptionKey) : t('home.cultureSectionSubtitle')}
                     </p>
                   </div>
 
@@ -596,7 +597,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
                     className={`mt-6 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors ${cardContent?.buttonClassName ?? 'bg-[var(--ff-primary-navy)] text-white hover:bg-[var(--ff-hover-navy)]'}`}
                     aria-label={`Explore ${category.name}`}
                   >
-                    Explore
+                    {t('home.explore')}
                     <ArrowRight size={16} />
                   </Link>
                 </article>
@@ -608,10 +609,10 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
 
       <section id="featured-products" className="space-y-4">
         <div className="space-y-2">
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-amber-700">Featured products</p>
-          <h2 className="text-3xl font-black tracking-tight text-slate-900">Fresh finds from trusted sellers</h2>
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-amber-700">{t('home.featuredProductsEyebrow')}</p>
+          <h2 className="text-3xl font-black tracking-tight text-slate-900">{t('home.featuredProductsTitle')}</h2>
           <p className="max-w-2xl text-sm leading-6 text-slate-500">
-            Browse standout products, everyday deals, and recent listings with the same search and filter tools buyers already use.
+            {t('home.featuredProductsSubtitle')}
           </p>
         </div>
 
@@ -622,10 +623,10 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
 
       <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
         <div className="space-y-2">
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-700">Why buyers trust us</p>
-          <h2 className="text-3xl font-black tracking-tight text-slate-900">Why shop on FlupFlap</h2>
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-700">{t('home.whyShopEyebrow')}</p>
+          <h2 className="text-3xl font-black tracking-tight text-slate-900">{t('home.whyShopTitle')}</h2>
           <p className="max-w-2xl text-sm leading-6 text-slate-500">
-            Designed to feel more organized, professional, and mobile-friendly from discovery to delivery.
+            {t('home.whyShopSubtitle')}
           </p>
         </div>
 
@@ -633,12 +634,12 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
           {TRUST_SIGNALS.map((signal) => {
             const Icon = signal.icon;
             return (
-              <article key={signal.title} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <article key={signal.titleKey} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <div className={`flex h-11 w-11 items-center justify-center rounded-2xl ${signal.accentClassName}`}>
                   <Icon size={20} />
                 </div>
-                <h3 className="mt-4 text-lg font-bold text-slate-900">{signal.title}</h3>
-                <p className="mt-2 text-sm leading-6 text-slate-500">{signal.description}</p>
+                <h3 className="mt-4 text-lg font-bold text-slate-900">{t(signal.titleKey)}</h3>
+                <p className="mt-2 text-sm leading-6 text-slate-500">{t(signal.descriptionKey)}</p>
               </article>
             );
           })}
@@ -648,21 +649,21 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
       <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-[linear-gradient(135deg,rgba(249,115,22,0.08),rgba(255,255,255,1),rgba(15,138,95,0.1))] p-6 shadow-sm sm:p-8">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
           <div className="max-w-2xl space-y-3">
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--ff-primary-navy)]">Start selling on FlupFlap</p>
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--ff-primary-navy)]">{t('home.sellingCtaEyebrow')}</p>
             <h2 className="text-3xl font-black tracking-tight text-slate-900">
-              Open your storefront in a marketplace built for trust and discovery.
+              {t('home.sellingCtaTitle')}
             </h2>
             <p className="text-sm leading-6 text-slate-600 sm:text-base">
-              Reach buyers looking for cultural products, everyday essentials, and secure checkout in one modern marketplace.
+              {t('home.sellingCtaSubtitle')}
             </p>
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row">
             <Link href="/signup" className="btn-brand">
-              Start selling
+              {t('home.startSelling')}
             </Link>
             <Link href="#search-marketplace" className="btn-brand-outline">
-              Shop products
+              {t('home.shopNow')}
             </Link>
           </div>
         </div>

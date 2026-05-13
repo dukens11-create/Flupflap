@@ -28,11 +28,57 @@
     "refundPolicy": "Refund Policy"
   },
   "home": {
-    "title": "A modern marketplace built for confident buying and selling",
-    "subtitle": "Shop curated listings, compare products faster, and check out with verified sellers on a cleaner FlupFlap experience.",
-    "heroBadge": "Marketplace-ready design",
-    "shopNow": "Shop featured products",
-    "startSelling": "Start selling on FlupFlap",
+    "title": "Buy and sell with confidence on FlupFlap",
+    "subtitle": "Discover trusted sellers, cultural products, everyday deals, and secure checkout in one modern marketplace.",
+    "heroBadge": "Professional marketplace",
+    "shopNow": "Shop products",
+    "startSelling": "Start selling",
+    "heroExperienceEyebrow": "FlupFlap buyer experience",
+    "heroExperienceTitle": "Cleaner browsing. Stronger trust. Better mobile shopping.",
+    "heroExperienceCards": {
+      "discovery": {
+        "title": "Trusted discovery",
+        "description": "Spot culture-driven categories, featured products, and standout sellers faster."
+      },
+      "shopping": {
+        "title": "Organized shopping",
+        "description": "Use search and filters without losing a polished, modern marketplace layout."
+      },
+      "checkout": {
+        "title": "Confident checkout",
+        "description": "Secure payments and buyer protection keep each purchase feeling professional."
+      }
+    },
+    "searchSectionEyebrow": "Search marketplace",
+    "searchSectionTitle": "Find products faster",
+    "searchSectionSubtitle": "Use search and filters to explore trusted sellers, culture-first categories, and everyday deals without losing your place.",
+    "cultureSectionEyebrow": "Culture-led discovery",
+    "cultureSectionTitle": "Shop by Culture & Community",
+    "cultureSectionSubtitle": "Explore unique products from Caribbean, African, Asian, and local sellers.",
+    "cultureCards": {
+      "asian": {
+        "badge": "Top picks",
+        "description": "Discover Asian fashion, beauty, snacks, home decor, electronics, and cultural products."
+      },
+      "african": {
+        "badge": "Cultural favorites",
+        "description": "Explore African fashion, fabrics, beauty, jewelry, art, food, and cultural items."
+      },
+      "caribbean": {
+        "badge": "Island storefronts",
+        "description": "Shop Haitian, Jamaican, Dominican, Trinidadian, Caribbean fashion, food, beauty, and cultural products."
+      }
+    },
+    "explore": "Explore",
+    "featuredProductsEyebrow": "Featured products",
+    "featuredProductsTitle": "Fresh finds from trusted sellers",
+    "featuredProductsSubtitle": "Browse standout products, everyday deals, and recent listings with the same search and filter tools buyers already use.",
+    "whyShopEyebrow": "Why buyers trust us",
+    "whyShopTitle": "Why shop on FlupFlap",
+    "whyShopSubtitle": "Designed to feel more organized, professional, and mobile-friendly from discovery to delivery.",
+    "sellingCtaEyebrow": "Start selling on FlupFlap",
+    "sellingCtaTitle": "Open your storefront in a marketplace built for trust and discovery.",
+    "sellingCtaSubtitle": "Reach buyers looking for cultural products, everyday essentials, and secure checkout in one modern marketplace.",
     "heroHighlights": {
       "discovery": {
         "title": "Browse faster",
@@ -57,16 +103,20 @@
     "exploreCategory": "Explore {category}",
     "trustBadges": {
       "verifiedSellers": {
-        "title": "Verified Sellers",
-        "description": "Seller badges highlight trusted listings and help shoppers buy with more confidence."
+        "title": "Verified sellers",
+        "description": "Shop storefronts with clear trust signals and seller verification built in."
       },
       "securePayments": {
-        "title": "Secure Payments",
-        "description": "Protected checkout flows keep every purchase streamlined and secure."
+        "title": "Secure payments",
+        "description": "Protected checkout keeps orders simple, secure, and easy to complete."
+      },
+      "shippingSupport": {
+        "title": "Shipping support",
+        "description": "Track shipped orders confidently with marketplace support from checkout onward."
       },
       "buyerProtection": {
-        "title": "Buyer Protection",
-        "description": "Clear trust messaging reinforces safer transactions from browse to delivery."
+        "title": "Buyer protection",
+        "description": "Browse with confidence thanks to clearer policies and stronger marketplace trust."
       }
     },
     "loadingProducts": "Loading products…",
