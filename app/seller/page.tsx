@@ -986,7 +986,19 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
 
       {/* ── Recent Orders (for shipping management) ── */}
       <section id="orders-to-ship">
-        <h2 className="text-xl font-bold mb-3">Recent Orders</h2>
+        <div className="flex items-center gap-3 mb-1">
+          <h2 className="text-xl font-bold">Recent Orders</h2>
+          {pendingOrdersToShip > 0 && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-700">
+              {pendingOrdersToShip} need{pendingOrdersToShip === 1 ? 's' : ''} shipping label
+            </span>
+          )}
+        </div>
+        {!isRestricted && orders.some(o => !o.isPickup) && (
+          <p className="text-sm text-slate-500 mb-3">
+            Purchase, print, and track shipping labels directly from each order card below. Labels are available for non-pickup orders in <strong>PAID</strong> status.
+          </p>
+        )}
         {orders.length === 0 ? (
           <div className="card p-6 text-slate-500">No orders yet.</div>
         ) : (
