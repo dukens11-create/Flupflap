@@ -168,6 +168,10 @@ export default function Navbar() {
                     onClick={() => setCultureMenuOpen(!cultureMenuOpen)}
                     onKeyDown={(e) => {
                       if (e.key === 'Escape') setCultureMenuOpen(false);
+                      if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        setCultureMenuOpen(true);
+                      }
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
                         setCultureMenuOpen(!cultureMenuOpen);
@@ -195,14 +199,13 @@ export default function Navbar() {
                             className="block rounded-xl px-3 py-2.5 transition-colors hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-[var(--ff-primary-navy)] focus:ring-offset-2"
                             onClick={() => setCultureMenuOpen(false)}
                             role="menuitem"
-                            tabIndex={0}
                           >
                             <div className="flex items-start gap-2">
                               <span className="mt-0.5 text-base">{marketplace.icon}</span>
                               <div className="min-w-0">
                                 <p className="text-sm font-semibold text-slate-900">{marketplace.name}</p>
                                 <p className="truncate text-xs text-slate-500">
-                                  {marketplace.subcategories.slice(0, 2).map((sub) => sub.name).join(' • ')}
+                                  {marketplace.subcategories.slice(0, 3).map((sub) => sub.name).join(' • ')}
                                 </p>
                               </div>
                             </div>
@@ -213,7 +216,6 @@ export default function Navbar() {
                           className="block rounded-xl px-3 py-2.5 transition-colors hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-[var(--ff-primary-navy)] focus:ring-offset-2"
                           onClick={() => setCultureMenuOpen(false)}
                           role="menuitem"
-                          tabIndex={0}
                         >
                           <div className="flex items-start gap-2">
                             <span className="mt-0.5 text-base">📍</span>
