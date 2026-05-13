@@ -107,6 +107,17 @@ const CULTURE_CARD_CONTENT = {
   },
 } as const;
 
+function getCultureCardContent(slug: string) {
+  switch (slug) {
+    case 'asian-products':
+    case 'african-products':
+    case 'caribbean-products':
+      return CULTURE_CARD_CONTENT[slug];
+    default:
+      return null;
+  }
+}
+
 function findCategoryBySlug(
   nodes: DefaultCategoryNode[],
   slug: string,
@@ -468,7 +479,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
 
   return (
     <main className="space-y-8 pb-8">
-      <section className="relative overflow-hidden rounded-[32px] border border-slate-200 bg-[linear-gradient(135deg,#0B1F3A_0%,#17345F_55%,#F97316_130%)] text-white shadow-sm">
+      <section className="relative overflow-hidden rounded-[32px] border border-slate-200 bg-[linear-gradient(135deg,var(--ff-primary-navy)_0%,var(--ff-hover-navy)_55%,var(--ff-brand-orange)_130%)] text-white shadow-sm">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.16),_transparent_34%)]" />
         <div className="absolute -right-16 top-8 h-48 w-48 rounded-full bg-emerald-400/20 blur-3xl" />
         <div className="absolute bottom-0 left-1/3 h-40 w-40 rounded-full bg-orange-300/20 blur-3xl" />
@@ -554,9 +565,9 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
             </p>
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-3">
+            <div className="grid gap-4 lg:grid-cols-3">
             {featuredMarketplaceCategories.map((category) => {
-              const cardContent = CULTURE_CARD_CONTENT[category.slug as keyof typeof CULTURE_CARD_CONTENT];
+              const cardContent = getCultureCardContent(category.slug);
               const Icon = cardContent?.icon ?? Store;
               const chips = cardContent?.chips ?? category.children.slice(0, 4).map((subcategory) => subcategory.name);
 
