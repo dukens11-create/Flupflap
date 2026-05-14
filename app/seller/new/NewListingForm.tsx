@@ -20,12 +20,9 @@ type FormErrors = {
 
 const INVALID_CATEGORY_MESSAGE = 'Please select a valid category before submitting.';
 const EMPTY_SELECTED_CATEGORY: SelectedCategoryState = {
-  id: '',
-  name: '',
-  slug: '',
-  path: '',
   categoryId: '',
   categoryName: '',
+  categorySlug: '',
   categoryPath: '',
   leafCategoryId: '',
   parentCategoryId: '',

@@ -47,12 +47,9 @@ interface Props {
 }
 
 export interface SelectedCategoryState {
-  id: string;
-  name: string;
-  slug: string;
-  path: string;
   categoryId: string;
   categoryName: string;
+  categorySlug: string;
   categoryPath: string;
   leafCategoryId: string;
   parentCategoryId: string;
@@ -554,12 +551,9 @@ export default function CategoryPicker({
 
   useEffect(() => {
     onSelectionChange?.({
-      id: leafCategoryId ?? '',
-      name: leafName,
-      slug: leafSlug,
-      path: categoryPath,
       categoryId: submittedCategoryId ?? '',
       categoryName: leafName,
+      categorySlug: leafSlug,
       categoryPath,
       leafCategoryId: leafCategoryId ?? '',
       parentCategoryId: parentCategoryId ?? '',
