@@ -35,7 +35,7 @@ const List<_HomeCat> _kHomeCategories = [
   _HomeCat(
       label: 'Perfume',
       icon: Icons.spa_outlined,
-      filterValue: 'Other'),
+      filterValue: 'Perfume'),
   _HomeCat(
       label: 'Caribbean',
       icon: Icons.beach_access,
@@ -214,7 +214,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Container(
                     padding: const EdgeInsets.all(3),
                     decoration: const BoxDecoration(
-                      color: AppTheme.accent,
+                      color: AppTheme.danger,
                       shape: BoxShape.circle,
                     ),
                     constraints:
