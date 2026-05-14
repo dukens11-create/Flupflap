@@ -129,7 +129,7 @@ class _ListingTile extends StatelessWidget {
   Color get _statusColor {
     switch (product.status) {
       case 'APPROVED':
-        return AppTheme.logoGreen;
+        return AppTheme.accent;
       case 'PENDING':
         return AppTheme.warning;
       case 'REJECTED':

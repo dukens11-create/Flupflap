@@ -137,7 +137,7 @@ class OrderStatusBadge extends StatelessWidget {
   Color get _color {
     switch (status) {
       case 'PAID':
-        return AppTheme.logoGreen;
+        return AppTheme.accent;
       case 'SHIPPED':
         return AppTheme.primary;
       case 'DELIVERED':

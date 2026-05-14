@@ -128,13 +128,13 @@ class _SubscriptionBody extends StatelessWidget {
                     height: 72,
                     decoration: BoxDecoration(
                       color: isActive
-                          ? AppTheme.logoGreen.withAlpha(30)
+                          ? AppTheme.accent.withAlpha(30)
                           : AppTheme.danger.withAlpha(20),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
                       isActive ? Icons.verified_outlined : Icons.lock_outline,
-                      color: isActive ? AppTheme.logoGreen : AppTheme.danger,
+                      color: isActive ? AppTheme.accent : AppTheme.danger,
                       size: 36,
                     ),
                   ),
