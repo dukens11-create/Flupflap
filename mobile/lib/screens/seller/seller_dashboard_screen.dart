@@ -224,18 +224,18 @@ class _SubscriptionCard extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
                     color: isActive
-                        ? AppTheme.logoGreen.withAlpha(30)
+                        ? AppTheme.accent.withAlpha(30)
                         : AppTheme.danger.withAlpha(20),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                         color: isActive
-                            ? AppTheme.logoGreen.withAlpha(80)
+                            ? AppTheme.accent.withAlpha(80)
                             : AppTheme.danger.withAlpha(60)),
                   ),
                   child: Text(
                     isActive ? 'Active' : status,
                     style: TextStyle(
-                      color: isActive ? AppTheme.logoGreen : AppTheme.danger,
+                      color: isActive ? AppTheme.accent : AppTheme.danger,
                       fontWeight: FontWeight.w700,
                       fontSize: 12,
                     ),
