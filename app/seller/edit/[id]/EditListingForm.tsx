@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import CategoryPicker from '@/components/CategoryPicker';
+import CategoryPicker, { type SelectedCategoryState } from '@/components/CategoryPicker';
 import ConditionPicker from '@/components/ConditionPicker';
 import MediaUpload, { type MediaUploadState } from '@/components/MediaUpload';
 import { readApiMessage } from '@/lib/read-api-message';
@@ -43,6 +43,17 @@ interface EditListingFormProps {
   defaultPickupState?: string | null;
   defaultPickupPostalCode?: string | null;
 }
+
+const INVALID_CATEGORY_MESSAGE = 'Please select a valid category before submitting.';
+const EMPTY_SELECTED_CATEGORY: SelectedCategoryState = {
+  categoryId: '',
+  categoryName: '',
+  categoryPath: '',
+  leafCategoryId: '',
+  parentCategoryId: '',
+  subcategoryId: '',
+  stale: false,
+};
 
 export default function EditListingForm({
   id,
@@ -88,9 +99,15 @@ export default function EditListingForm({
     canSubmit: defaultImages.length > 0,
     message: defaultImages.length > 0 ? '' : 'Please upload at least one image.',
   });
+  const [selectedCategory, setSelectedCategory] = useState<SelectedCategoryState>(EMPTY_SELECTED_CATEGORY);
 
   const handleMediaStateChange = useCallback((nextState: MediaUploadState) => {
     setMediaState(nextState);
+  }, []);
+  const handleCategoryChange = useCallback((nextCategory: SelectedCategoryState) => {
+    setSelectedCategory(nextCategory);
+    if (!nextCategory.categoryId || nextCategory.stale) return;
+    setSubmitError((current) => (current === INVALID_CATEGORY_MESSAGE ? '' : current));
   }, []);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -102,7 +119,9 @@ export default function EditListingForm({
     // Client-side validation
     const condition = String(formData.get('condition') ?? '').trim();
     const submittedCategoryId = String(formData.get('categoryId') ?? '').trim();
-    const category = String(formData.get('category') ?? '').trim();
+    const categoryPath = String(formData.get('categoryPath') ?? '').trim();
+    const categoryName = String(formData.get('categoryName') ?? formData.get('category') ?? '').trim();
+    const categoryStale = String(formData.get('categoryStale') ?? '').trim() === 'true';
     const weight = String(formData.get('weight') ?? '').trim();
     const length = String(formData.get('length') ?? '').trim();
     const width = String(formData.get('width') ?? '').trim();
@@ -111,8 +130,8 @@ export default function EditListingForm({
     const imageUrl = String(formData.get('imageUrl') ?? '').trim();
     const resolvedImages = images.length > 0 ? images : (imageUrl ? [imageUrl] : []);
 
-    if (!category || !submittedCategoryId) {
-      setSubmitError('Please select a valid category before submitting.');
+    if (!submittedCategoryId || categoryStale) {
+      setSubmitError(INVALID_CATEGORY_MESSAGE);
       return;
     }
     if (!condition) {
@@ -156,6 +175,22 @@ export default function EditListingForm({
     setSubmitting(true);
 
     try {
+      const payload = {
+        ...Object.fromEntries(formData.entries()),
+        categoryId: submittedCategoryId,
+        categoryName,
+        categoryPath,
+        subcategoryId: String(formData.get('subcategoryId') ?? '').trim(),
+        parentCategoryId: String(formData.get('parentCategoryId') ?? '').trim(),
+        images: formData.getAll('images').map(String).filter(Boolean),
+        originalImages: formData.getAll('originalImages').map(String).filter(Boolean),
+        enhancedImages: formData.getAll('enhancedImages').map(String).filter(Boolean),
+        imageThumbnails: formData.getAll('imageThumbnails').map(String).filter(Boolean),
+      };
+      console.log('selectedCategory', selectedCategory);
+      console.log('categoryId', submittedCategoryId);
+      console.log('categoryPath', categoryPath);
+      console.log('payload', payload);
       const res = await fetch(`/api/seller/products/${id}`, {
         method: 'POST',
         headers: { Accept: 'application/json' },
@@ -272,6 +307,7 @@ export default function EditListingForm({
             defaultCategoryId={defaultCategoryId}
             defaultSubcategoryId={defaultSubcategoryId}
             defaultAttributes={defaultAttributes}
+            onSelectionChange={handleCategoryChange}
           />
         </div>
         <div className="flex-1">
@@ -456,11 +492,20 @@ export default function EditListingForm({
         </div>
       </fieldset>
 
+      {selectedCategory.categoryPath && !selectedCategory.stale && (
+        <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          Selected category: {selectedCategory.categoryPath}
+        </p>
+      )}
       <div className="flex gap-3">
         <a href="/seller" className="btn-outline flex-1 text-center">
           Cancel
         </a>
-        <button className="btn-primary flex-1" type="submit" disabled={submitting || deleting}>
+        <button
+          className="btn-primary flex-1"
+          type="submit"
+          disabled={submitting || deleting || !selectedCategory.categoryId || selectedCategory.stale}
+        >
           {submitting ? 'Saving…' : 'Save changes'}
         </button>
       </div>
