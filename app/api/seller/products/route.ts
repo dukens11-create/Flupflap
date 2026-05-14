@@ -335,7 +335,7 @@ export async function POST(req: Request) {
       ?? data.refineCategory
       ?? null;
     if (process.env.NODE_ENV !== 'production') {
-      console.log('Submitting categoryId:', safeCategoryId);
+      console.log('Submitting categoryId:', safeCategoryId, 'subcategoryId:', safeSubcategoryId ?? null);
     }
     const categoryRecord = await prisma.category.findUnique({
       where: { id: safeCategoryId },
