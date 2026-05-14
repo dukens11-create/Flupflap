@@ -47,6 +47,10 @@ interface Props {
 }
 
 export interface SelectedCategoryState {
+  id: string;
+  name: string;
+  slug: string;
+  path: string;
   categoryId: string;
   categoryName: string;
   categoryPath: string;
@@ -408,6 +412,20 @@ export default function CategoryPicker({
   }, [defaultAttributes]);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const staleCategoryStorageKeys = [
+      'flupflap_seller_category_selection',
+      'flupflap_seller_category_id',
+      'flupflap_seller_subcategory_id',
+      'flupflap_seller_category_path',
+    ];
+    for (const key of staleCategoryStorageKeys) {
+      window.sessionStorage.removeItem(key);
+      window.localStorage.removeItem(key);
+    }
+  }, []);
+
+  useEffect(() => {
     let mounted = true;
 
     async function loadCategories() {
@@ -536,6 +554,10 @@ export default function CategoryPicker({
 
   useEffect(() => {
     onSelectionChange?.({
+      id: leafCategoryId ?? '',
+      name: leafName,
+      slug: leafSlug,
+      path: categoryPath,
       categoryId: submittedCategoryId ?? '',
       categoryName: leafName,
       categoryPath,
@@ -549,6 +571,7 @@ export default function CategoryPicker({
     categoryStale,
     leafCategoryId,
     leafName,
+    leafSlug,
     onSelectionChange,
     parentCategoryId,
     submittedCategoryId,
@@ -807,6 +830,7 @@ export default function CategoryPicker({
       <input type="hidden" name="parentCategoryId" value={parentCategoryId ?? ''} />
       <input type="hidden" name="category" value={leafName} />
       <input type="hidden" name="categoryName" value={leafName} />
+      <input type="hidden" name="categorySlug" value={leafSlug} />
       <input type="hidden" name="categoryPath" value={categoryPath} />
       <input type="hidden" name="productAttributes" value={JSON.stringify(attrs)} />
       <input type="hidden" name="categoryStale" value={categoryStale ? 'true' : ''} />

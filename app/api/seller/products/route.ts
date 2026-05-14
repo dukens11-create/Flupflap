@@ -334,6 +334,23 @@ export async function POST(req: Request) {
       validatedCategory.path.find((node) => node.level >= 2)?.name
       ?? data.refineCategory
       ?? null;
+    console.log('Submitting categoryId:', safeCategoryId);
+    const categoryRecord = await prisma.category.findUnique({
+      where: { id: safeCategoryId },
+      select: { id: true, name: true, slug: true, parentId: true, level: true },
+    });
+    if (!categoryRecord) {
+      return jsonError('Selected category does not exist. Please reselect a category and try again.', 400);
+    }
+    if (safeSubcategoryId) {
+      const subcategoryRecord = await prisma.category.findUnique({
+        where: { id: safeSubcategoryId },
+        select: { id: true, name: true, slug: true, parentId: true, level: true },
+      });
+      if (!subcategoryRecord) {
+        return jsonError('Selected subcategory does not exist. Please reselect a category and try again.', 400);
+      }
+    }
 
     const loggingPayload = {
       title,

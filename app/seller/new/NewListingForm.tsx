@@ -20,6 +20,10 @@ type FormErrors = {
 
 const INVALID_CATEGORY_MESSAGE = 'Please select a valid category before submitting.';
 const EMPTY_SELECTED_CATEGORY: SelectedCategoryState = {
+  id: '',
+  name: '',
+  slug: '',
+  path: '',
   categoryId: '',
   categoryName: '',
   categoryPath: '',
@@ -80,6 +84,7 @@ export default function NewListingForm() {
     const categoryId = String(formData.get('categoryId') ?? '').trim();
     const categoryPath = String(formData.get('categoryPath') ?? '').trim();
     const categoryName = String(formData.get('categoryName') ?? formData.get('category') ?? '').trim();
+    const categorySlug = String(formData.get('categorySlug') ?? '').trim();
     const categoryStale = String(formData.get('categoryStale') ?? '').trim() === 'true';
     const condition = String(formData.get('condition') ?? '').trim();
     const priceRaw = String(formData.get('price') ?? '').trim();
@@ -139,6 +144,7 @@ export default function NewListingForm() {
       ...Object.fromEntries(formData.entries()),
       categoryId,
       categoryName,
+      categorySlug,
       categoryPath,
       subcategoryId: String(formData.get('subcategoryId') ?? '').trim(),
       parentCategoryId: String(formData.get('parentCategoryId') ?? '').trim(),

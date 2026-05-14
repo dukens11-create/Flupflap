@@ -408,6 +408,84 @@ async function ensureBeautyCategory() {
   console.log('Beauty & Personal Care category hierarchy ensured.');
 }
 
+async function ensureFashionCategoryHierarchy() {
+  const fashion = await prisma.category.upsert({
+    where: { slug: 'fashion' },
+    update: {
+      name: 'Fashion',
+      level: 0,
+      icon: '👗',
+      sortOrder: 2,
+    },
+    create: {
+      name: 'Fashion',
+      slug: 'fashion',
+      level: 0,
+      icon: '👗',
+      sortOrder: 2,
+    },
+  });
+
+  const men = await prisma.category.upsert({
+    where: { slug: 'fashion-men' },
+    update: {
+      name: 'Men',
+      parentId: fashion.id,
+      level: 1,
+      sortOrder: 1,
+    },
+    create: {
+      name: 'Men',
+      slug: 'fashion-men',
+      parentId: fashion.id,
+      level: 1,
+      sortOrder: 1,
+    },
+  });
+
+  await prisma.category.upsert({
+    where: { slug: 'fashion-men-tshirts' },
+    update: {
+      name: 'T-Shirts',
+      aliases: ['tshirts', 't-shirt', 'tee'],
+      parentId: men.id,
+      level: 2,
+      sortOrder: 1,
+      attributeSchema: JSON.parse(CLOTHING_FIELDS),
+    },
+    create: {
+      name: 'T-Shirts',
+      slug: 'fashion-men-tshirts',
+      aliases: ['tshirts', 't-shirt', 'tee'],
+      parentId: men.id,
+      level: 2,
+      sortOrder: 1,
+      attributeSchema: JSON.parse(CLOTHING_FIELDS),
+    },
+  });
+
+  await prisma.category.upsert({
+    where: { slug: 'fashion-men-shirts' },
+    update: {
+      name: 'Shirts',
+      parentId: men.id,
+      level: 2,
+      sortOrder: 2,
+      attributeSchema: JSON.parse(CLOTHING_FIELDS),
+    },
+    create: {
+      name: 'Shirts',
+      slug: 'fashion-men-shirts',
+      parentId: men.id,
+      level: 2,
+      sortOrder: 2,
+      attributeSchema: JSON.parse(CLOTHING_FIELDS),
+    },
+  });
+
+  console.log('Fashion > Men > T-Shirts hierarchy ensured.');
+}
+
 /**
  * Ensures the Asian Products category branch exists on existing databases.
  * Uses upsert so this can be safely re-run.
@@ -535,6 +613,7 @@ async function main(){
   await seedCategories();
   // Always ensure new categories exist (safe upsert for existing databases)
   await ensureBeautyCategory();
+  await ensureFashionCategoryHierarchy();
   await ensureAsianCategory();
   await ensureCulturalMarketplaceCategories();
   const count = await prisma.product.count();
