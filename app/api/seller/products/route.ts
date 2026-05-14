@@ -14,6 +14,7 @@ import {
 } from '@/lib/fraud-detection';
 import { parseJsonOrNull } from '@/lib/parse-json';
 import { loadCategoryHierarchyNodesWithFallback, validateCategorySelection } from '@/lib/category-hierarchy';
+import { ensureFashionCategoryHierarchy } from '@/lib/ensure-fashion-category-hierarchy';
 import {
   convertWeightToOunces,
   normalizeWeightUnit,
@@ -72,6 +73,9 @@ const schema = z.object({
   categoryId: z.string().trim().optional(),
   subcategoryId: z.string().trim().optional(),
   parentCategoryId: z.string().trim().optional(),
+  categoryName: z.string().trim().optional(),
+  categorySlug: z.string().trim().optional(),
+  categoryPath: z.string().trim().optional(),
   categoryStale: z.string().trim().optional(),
   productAttributes: z.string().optional(), // JSON string
   mediaEnhancements: z.string().optional(),
@@ -219,6 +223,15 @@ export async function POST(req: Request) {
       return jsonError(parsed.error.issues[0]?.message ?? 'Invalid input.', 400);
     }
     const data = parsed.data;
+    console.info('[seller/products POST] parsed category fields', {
+      categoryId: data.categoryId ?? null,
+      subcategoryId: data.subcategoryId ?? null,
+      parentCategoryId: data.parentCategoryId ?? null,
+      categoryName: data.categoryName ?? null,
+      categorySlug: data.categorySlug ?? null,
+      categoryPath: data.categoryPath ?? null,
+      categoryLabel: data.category ?? data.refineCategory ?? data.subcategory ?? null,
+    });
 
     // Resolve images array: prefer multi-images/imageUrls, fall back to legacy imageUrl
     const resolvedImages: string[] = imagesRaw.length
@@ -295,6 +308,7 @@ export async function POST(req: Request) {
           ? undefined
           : (attributes as Prisma.InputJsonValue);
 
+    await ensureFashionCategoryHierarchy(prisma);
     const categoryNodes = await loadCategoryHierarchyNodesWithFallback(prisma);
     if (data.categoryStale === 'true') {
       return jsonError(INVALID_CATEGORY_SUBMIT_MESSAGE, 400);
@@ -303,7 +317,7 @@ export async function POST(req: Request) {
       categoryId: data.categoryId,
       subcategoryId: data.subcategoryId,
       parentCategoryId: data.parentCategoryId,
-      categoryLabel: data.category ?? data.refineCategory ?? data.subcategory ?? '',
+      categoryLabel: data.categoryName ?? data.category ?? data.refineCategory ?? data.subcategory ?? '',
     });
     if (!validatedCategory.ok) {
       console.warn('[seller/products POST] invalid category selection', {
@@ -341,6 +355,11 @@ export async function POST(req: Request) {
       where: { id: safeCategoryId },
       select: { id: true, name: true, slug: true, parentId: true, level: true },
     });
+    console.info('[seller/products POST] category existence lookup', {
+      requestedCategoryId: safeCategoryId,
+      found: Boolean(categoryRecord),
+      categoryRecord,
+    });
     if (!categoryRecord) {
       return jsonError('Selected category does not exist. Please reselect a category and try again.', 400);
     }
@@ -348,6 +367,11 @@ export async function POST(req: Request) {
       const subcategoryRecord = await prisma.category.findUnique({
         where: { id: safeSubcategoryId },
         select: { id: true, name: true, slug: true, parentId: true, level: true },
+      });
+      console.info('[seller/products POST] subcategory existence lookup', {
+        requestedSubcategoryId: safeSubcategoryId,
+        found: Boolean(subcategoryRecord),
+        subcategoryRecord,
       });
       if (!subcategoryRecord) {
         return jsonError('Selected subcategory does not exist. Please reselect a category and try again.', 400);

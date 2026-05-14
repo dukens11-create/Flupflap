@@ -155,6 +155,12 @@ export default function NewListingForm() {
     setSubmitting(true);
     try {
       console.log('selectedCategory', selectedCategory);
+      console.log('hiddenCategoryInputs', {
+        categoryId,
+        subcategoryId: String(formData.get('subcategoryId') ?? '').trim(),
+        parentCategoryId: String(formData.get('parentCategoryId') ?? '').trim(),
+        leafCategoryId: String(formData.get('leafCategoryId') ?? '').trim(),
+      });
       console.log('categoryId', categoryId);
       console.log('categoryPath', categoryPath);
       console.log('payload', payload);

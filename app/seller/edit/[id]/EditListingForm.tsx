@@ -191,6 +191,12 @@ export default function EditListingForm({
         imageThumbnails: formData.getAll('imageThumbnails').map(String).filter(Boolean),
       };
       console.log('selectedCategory', selectedCategory);
+      console.log('hiddenCategoryInputs', {
+        categoryId: submittedCategoryId,
+        subcategoryId: String(formData.get('subcategoryId') ?? '').trim(),
+        parentCategoryId: String(formData.get('parentCategoryId') ?? '').trim(),
+        leafCategoryId: String(formData.get('leafCategoryId') ?? '').trim(),
+      });
       console.log('categoryId', submittedCategoryId);
       console.log('categoryPath', categoryPath);
       console.log('payload', payload);
