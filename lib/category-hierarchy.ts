@@ -1,4 +1,5 @@
 import { LEGACY_CATEGORY_ALIAS_FALLBACK } from '@/lib/category-aliases';
+import { DEFAULT_CATEGORY_TREE, type DefaultCategoryNode } from '@/lib/default-categories';
 import type { PrismaClient } from '@prisma/client';
 
 export interface CategoryHierarchyNode {
@@ -49,6 +50,40 @@ export async function loadCategoryHierarchyNodes(db: CategoryHierarchyReader) {
     orderBy: [{ level: 'asc' }, { sortOrder: 'asc' }],
     select: { id: true, name: true, slug: true, aliases: true, parentId: true, level: true },
   }) as Promise<CategoryHierarchyNode[]>;
+}
+
+/** Flatten DEFAULT_CATEGORY_TREE into a plain list of CategoryHierarchyNode records. */
+function flattenDefaultCategoryNodes(
+  nodes: DefaultCategoryNode[],
+): CategoryHierarchyNode[] {
+  return nodes.flatMap((node): CategoryHierarchyNode[] => {
+    const { children, ...entry } = node;
+    return [entry, ...flattenDefaultCategoryNodes(children ?? [])];
+  });
+}
+
+/**
+ * Load category hierarchy nodes from the database, falling back to the static
+ * DEFAULT_CATEGORY_TREE for any IDs not present in the database.
+ *
+ * This mirrors the logic in /api/categories so that server-side validation
+ * accepts the same category IDs that the CategoryPicker UI can display.
+ */
+export async function loadCategoryHierarchyNodesWithFallback(
+  db: CategoryHierarchyReader,
+): Promise<CategoryHierarchyNode[]> {
+  const dbNodes = await loadCategoryHierarchyNodes(db);
+  const defaultNodes = flattenDefaultCategoryNodes(DEFAULT_CATEGORY_TREE);
+
+  if (dbNodes.length === 0) {
+    // No categories in DB — use the static default tree for validation.
+    return defaultNodes;
+  }
+
+  // Merge: DB nodes take precedence; add default nodes for any IDs not in DB.
+  const existingIds = new Set(dbNodes.map((node) => node.id));
+  const fallbacks = defaultNodes.filter((node) => !existingIds.has(node.id));
+  return [...dbNodes, ...fallbacks];
 }
 
 function normalizeTerm(value: string | null | undefined): string {

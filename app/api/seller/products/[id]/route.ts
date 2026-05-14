@@ -12,7 +12,7 @@ import {
 } from '@/lib/fraud-detection';
 import { parseJsonOrNull } from '@/lib/parse-json';
 import { SHIPPING_MODES } from '@/lib/product-constants';
-import { loadCategoryHierarchyNodes, validateCategorySelection, resolveLegacyCategorySelection } from '@/lib/category-hierarchy';
+import { loadCategoryHierarchyNodesWithFallback, validateCategorySelection, resolveLegacyCategorySelection } from '@/lib/category-hierarchy';
 import {
   convertWeightToOunces,
   getShippingClass,
@@ -182,7 +182,7 @@ async function resolveSubmittedCategorySelection(data: ProductUpdateInput) {
 
   if (!submitted) return fallback;
 
-  const categoryNodes = await loadCategoryHierarchyNodes(prisma);
+  const categoryNodes = await loadCategoryHierarchyNodesWithFallback(prisma);
   const validatedCategory = validateCategorySelection(categoryNodes, {
     categoryId: data.categoryId,
     subcategoryId: data.subcategoryId,
