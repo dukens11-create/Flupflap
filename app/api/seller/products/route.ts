@@ -223,15 +223,17 @@ export async function POST(req: Request) {
       return jsonError(parsed.error.issues[0]?.message ?? 'Invalid input.', 400);
     }
     const data = parsed.data;
-    console.info('[seller/products POST] parsed category fields', {
-      categoryId: data.categoryId ?? null,
-      subcategoryId: data.subcategoryId ?? null,
-      parentCategoryId: data.parentCategoryId ?? null,
-      categoryName: data.categoryName ?? null,
-      categorySlug: data.categorySlug ?? null,
-      categoryPath: data.categoryPath ?? null,
-      categoryLabel: data.category ?? data.refineCategory ?? data.subcategory ?? null,
-    });
+    if (process.env.NODE_ENV !== 'production') {
+      console.info('[seller/products POST] parsed category fields', {
+        categoryId: data.categoryId ?? null,
+        subcategoryId: data.subcategoryId ?? null,
+        parentCategoryId: data.parentCategoryId ?? null,
+        categoryName: data.categoryName ?? null,
+        categorySlug: data.categorySlug ?? null,
+        categoryPath: data.categoryPath ?? null,
+        categoryLabel: data.category ?? data.refineCategory ?? data.subcategory ?? null,
+      });
+    }
 
     // Resolve images array: prefer multi-images/imageUrls, fall back to legacy imageUrl
     const resolvedImages: string[] = imagesRaw.length
@@ -355,11 +357,13 @@ export async function POST(req: Request) {
       where: { id: safeCategoryId },
       select: { id: true, name: true, slug: true, parentId: true, level: true },
     });
-    console.info('[seller/products POST] category existence lookup', {
-      requestedCategoryId: safeCategoryId,
-      found: Boolean(categoryRecord),
-      categoryRecord,
-    });
+    if (process.env.NODE_ENV !== 'production') {
+      console.info('[seller/products POST] category existence lookup', {
+        requestedCategoryId: safeCategoryId,
+        found: Boolean(categoryRecord),
+        categoryRecord,
+      });
+    }
     if (!categoryRecord) {
       return jsonError('Selected category does not exist. Please reselect a category and try again.', 400);
     }
@@ -368,11 +372,13 @@ export async function POST(req: Request) {
         where: { id: safeSubcategoryId },
         select: { id: true, name: true, slug: true, parentId: true, level: true },
       });
-      console.info('[seller/products POST] subcategory existence lookup', {
-        requestedSubcategoryId: safeSubcategoryId,
-        found: Boolean(subcategoryRecord),
-        subcategoryRecord,
-      });
+      if (process.env.NODE_ENV !== 'production') {
+        console.info('[seller/products POST] subcategory existence lookup', {
+          requestedSubcategoryId: safeSubcategoryId,
+          found: Boolean(subcategoryRecord),
+          subcategoryRecord,
+        });
+      }
       if (!subcategoryRecord) {
         return jsonError('Selected subcategory does not exist. Please reselect a category and try again.', 400);
       }
