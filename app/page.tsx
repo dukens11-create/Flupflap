@@ -12,6 +12,12 @@ import { BadgeCheck, CreditCard, ShieldCheck, Truck } from 'lucide-react';
 import { getSellerResponseStatsForSellers } from '@/lib/messages';
 import { authOptions } from '@/lib/auth-options';
 import { getRoleDefaultPath, normalizeExperienceRole } from '@/lib/role-experience';
+import {
+  buildProductSearchableText,
+  normalizeSearchText,
+  searchTextMatchesQuery,
+  searchTextMatchesQueryWithoutFuzzy,
+} from '@/lib/smart-search';
 
 export const dynamic = 'force-dynamic';
 
@@ -82,27 +88,11 @@ function getUniqueSellerIds(products: Array<{ sellerId: string }>) {
   return Array.from(new Set(products.map((product) => product.sellerId)));
 }
 
-function collectStringValues(value: unknown, strings: string[]) {
-  if (typeof value === 'string') {
-    strings.push(value);
-    return;
-  }
-  if (Array.isArray(value)) {
-    for (const item of value) collectStringValues(item, strings);
-    return;
-  }
-  if (value && typeof value === 'object') {
-    for (const nestedValue of Object.values(value as Record<string, unknown>)) {
-      collectStringValues(nestedValue, strings);
-    }
-  }
-}
-
 type SearchableProduct = {
   title: string;
   description: string;
-  category: string;
   condition: string;
+  category: string;
   productAttributes: unknown;
   categoryRef?: {
     name?: string | null;
@@ -122,73 +112,51 @@ type SearchableProduct = {
   } | null;
 };
 
-// Normalize search text: lowercase, trim, remove hyphens, collapse extra spaces.
-function normalizeSearchText(text: string): string {
-  return text
-    .toLowerCase()
-    .trim()
-    .replace(/-/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+function getSearchableTextFromAttributes(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return '';
+  return typeof (value as Record<string, unknown>).searchableText === 'string'
+    ? String((value as Record<string, unknown>).searchableText)
+    : '';
 }
 
-// All recognized T-shirt term variants (normalized).
-const TSHIRT_SYNONYMS = ['tshirt', 't shirt', 'tshirts', 't shirts', 'tee', 'tee shirt', 'shirt'];
+function getCategoryPathForSearch(product: SearchableProduct) {
+  const candidates = [
+    product.categoryRef?.name,
+    product.subcategoryRef?.parent?.parent?.name,
+    product.subcategoryRef?.parent?.name,
+    product.subcategoryRef?.name,
+  ].filter((value): value is string => typeof value === 'string' && value.length > 0);
+  const path = candidates.filter((value, index) => candidates.indexOf(value) === index);
 
-// Known typos mapped to the terms they should search for.
-const TSHIRT_TYPO_EXPANSIONS: Record<string, string[]> = {
-  't shit': ['tshirt', 'shirt'],
-};
-
-// Returns the full set of query terms to match against (supports synonym & typo expansion).
-function expandQueryTerms(normalizedQuery: string): string[] {
-  // Typo handling first
-  if (TSHIRT_TYPO_EXPANSIONS[normalizedQuery]) {
-    return [normalizedQuery, ...TSHIRT_TYPO_EXPANSIONS[normalizedQuery]];
-  }
-  // Synonym expansion for any recognized T-shirt variant
-  if (TSHIRT_SYNONYMS.includes(normalizedQuery)) {
-    return [...TSHIRT_SYNONYMS];
-  }
-  return [normalizedQuery];
+  return path.length > 0 ? path.join(' > ') : product.category;
 }
 
-function productMatchesSearch(product: SearchableProduct, query?: string) {
-  const normalizedQuery = normalizeSearchText(query ?? '');
+function productMatchesSearch(product: SearchableProduct, query?: string, useFuzzy = false) {
+  const normalizedQuery = normalizeSearchText(query);
   if (!normalizedQuery) return true;
 
-  const queryTerms = expandQueryTerms(normalizedQuery);
+  const attributes =
+    product.productAttributes && typeof product.productAttributes === 'object' && !Array.isArray(product.productAttributes)
+      ? (product.productAttributes as Record<string, unknown>)
+      : {};
+  const existingSearchableText = getSearchableTextFromAttributes(product.productAttributes);
 
-  // Build a human-readable category path from the hierarchy.
-  const categoryPath = [
-    product.subcategoryRef?.parent?.parent?.name,
-    product.subcategoryRef?.parent?.name,
-    product.subcategoryRef?.name,
-  ]
-    .filter((part): part is string => typeof part === 'string' && part.length > 0)
-    .join(' > ');
+  const fallbackSearchableText = buildProductSearchableText({
+    title: product.title,
+    description: product.description,
+    brand: typeof attributes.brand === 'string' ? attributes.brand : null,
+    condition: product.condition,
+    categoryName: product.category,
+    categoryPath: getCategoryPathForSearch(product),
+    tags: attributes.tags,
+    keywords: attributes.keywords,
+  });
 
-  const searchableValues: string[] = [
-    product.title,
-    product.description,
-    product.category,
-    product.condition,
-    categoryPath,
-    product.categoryRef?.name,
-    ...(product.categoryRef?.aliases ?? []),
-    product.subcategoryRef?.name,
-    ...(product.subcategoryRef?.aliases ?? []),
-    product.subcategoryRef?.parent?.name,
-    ...(product.subcategoryRef?.parent?.aliases ?? []),
-    product.subcategoryRef?.parent?.parent?.name,
-    ...(product.subcategoryRef?.parent?.parent?.aliases ?? []),
-  ].filter((value): value is string => typeof value === 'string' && value.length > 0);
-
-  collectStringValues(product.productAttributes, searchableValues);
-
-  const normalizedValues = searchableValues.map(normalizeSearchText);
-
-  return queryTerms.some((term) => normalizedValues.some((value) => value.includes(term)));
+  const searchableText = existingSearchableText || fallbackSearchableText;
+  if (!useFuzzy) {
+    return searchTextMatchesQueryWithoutFuzzy(searchableText, normalizedQuery);
+  }
+  return searchTextMatchesQuery(searchableText, normalizedQuery);
 }
 
 async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?: Record<string, string | number>) => string }) {
@@ -368,10 +336,15 @@ async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?
         },
       },
     });
-    console.log("rawQuery", sp.q);
-    console.log("normalizedQuery", sp.q ? normalizeSearchText(sp.q) : undefined);
-    products = products.filter((product: any) => productMatchesSearch(product, sp.q));
-    console.log("matchedProducts", products.length);
+    console.log('rawQuery', sp.q ?? '');
+    console.log('normalizedQuery', normalizeSearchText(sp.q));
+    const normalizedQuery = normalizeSearchText(sp.q);
+    const allProducts = products;
+    products = allProducts.filter((product: any) => productMatchesSearch(product, sp.q, false));
+    if (normalizedQuery && products.length === 0) {
+      products = allProducts.filter((product: any) => productMatchesSearch(product, sp.q, true));
+    }
+    console.log('matchedProducts', products.length);
     const promotionIds = products
       .map((product: any) => product.promotions[0]?.id)
       .filter(Boolean);

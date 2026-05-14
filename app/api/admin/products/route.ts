@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { cents } from '@/lib/money';
 import { z } from 'zod';
+import { buildProductSearchableText } from '@/lib/smart-search';
 
 const schema = z.object({ title: z.string().min(3), description: z.string().min(10), price: z.string(), condition: z.string(), category: z.string(), imageUrl: z.string().url(), sellerEmail: z.string().email(), shipping: z.string().optional(), inventory: z.string().optional() });
 
@@ -45,6 +46,15 @@ export async function POST(req: Request) {
       sellerId: seller.id,
       shippingCents: cents(data.shipping || '0'),
       inventory: Number(data.inventory || 1),
+      productAttributes: {
+        searchableText: buildProductSearchableText({
+          title: data.title,
+          description: data.description,
+          condition: data.condition,
+          categoryName: data.category,
+          categoryPath: data.category,
+        }),
+      },
     },
   });
   return NextResponse.redirect(new URL(`/seller?created=${product.id}`, req.url));
