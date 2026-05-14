@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import CategoryPicker from '@/components/CategoryPicker';
+import CategoryPicker, { type SelectedCategoryState } from '@/components/CategoryPicker';
 import ConditionPicker from '@/components/ConditionPicker';
 import MediaUpload, { type MediaUploadState } from '@/components/MediaUpload';
 import { readApiMessage } from '@/lib/read-api-message';
@@ -16,6 +16,17 @@ type FormErrors = {
   images?: string;
   shippingPackage?: string;
   submit?: string;
+};
+
+const INVALID_CATEGORY_MESSAGE = 'Please select a valid category before submitting.';
+const EMPTY_SELECTED_CATEGORY: SelectedCategoryState = {
+  categoryId: '',
+  categoryName: '',
+  categoryPath: '',
+  leafCategoryId: '',
+  parentCategoryId: '',
+  subcategoryId: '',
+  stale: false,
 };
 
 export default function NewListingForm() {
@@ -32,6 +43,7 @@ export default function NewListingForm() {
     canSubmit: false,
     message: 'Please upload at least one image.',
   });
+  const [selectedCategory, setSelectedCategory] = useState<SelectedCategoryState>(EMPTY_SELECTED_CATEGORY);
 
   const handleMediaStateChange = useCallback((nextState: MediaUploadState) => {
     setMediaState(nextState);
@@ -45,6 +57,16 @@ export default function NewListingForm() {
       return nextErrors;
     });
   }, []);
+  const handleCategoryChange = useCallback((nextCategory: SelectedCategoryState) => {
+    setSelectedCategory(nextCategory);
+    if (!nextCategory.categoryId || nextCategory.stale) return;
+    setErrors((current) => {
+      if (!current.category) return current;
+      const nextErrors = { ...current };
+      delete nextErrors.category;
+      return nextErrors;
+    });
+  }, []);
   const shippingPackageInputClass = `input ${errors.shippingPackage ? 'border-red-300 ring-1 ring-red-100' : ''}`;
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -55,8 +77,10 @@ export default function NewListingForm() {
 
     const nextErrors: FormErrors = {};
     const title = String(formData.get('title') ?? '').trim();
-    const category = String(formData.get('category') ?? '').trim();
     const categoryId = String(formData.get('categoryId') ?? '').trim();
+    const categoryPath = String(formData.get('categoryPath') ?? '').trim();
+    const categoryName = String(formData.get('categoryName') ?? formData.get('category') ?? '').trim();
+    const categoryStale = String(formData.get('categoryStale') ?? '').trim() === 'true';
     const condition = String(formData.get('condition') ?? '').trim();
     const priceRaw = String(formData.get('price') ?? '').trim();
     const inventoryRaw = String(formData.get('inventoryQty') ?? '').trim();
@@ -70,7 +94,7 @@ export default function NewListingForm() {
     const resolvedImages = images.length > 0 ? images : (fallbackImage ? [fallbackImage] : []);
 
     if (!title) nextErrors.title = 'Please enter a product title.';
-    if (!category && !categoryId) nextErrors.category = 'Please select a valid category before submitting.';
+    if (!categoryId || categoryStale) nextErrors.category = INVALID_CATEGORY_MESSAGE;
     if (!condition) nextErrors.condition = 'Please select an item condition.';
 
     const price = Number(priceRaw);
@@ -111,9 +135,26 @@ export default function NewListingForm() {
       return;
     }
 
+    const payload = {
+      ...Object.fromEntries(formData.entries()),
+      categoryId,
+      categoryName,
+      categoryPath,
+      subcategoryId: String(formData.get('subcategoryId') ?? '').trim(),
+      parentCategoryId: String(formData.get('parentCategoryId') ?? '').trim(),
+      images: formData.getAll('images').map(String).filter(Boolean),
+      originalImages: formData.getAll('originalImages').map(String).filter(Boolean),
+      enhancedImages: formData.getAll('enhancedImages').map(String).filter(Boolean),
+      imageThumbnails: formData.getAll('imageThumbnails').map(String).filter(Boolean),
+    };
+
     setErrors({});
     setSubmitting(true);
     try {
+      console.log('selectedCategory', selectedCategory);
+      console.log('categoryId', categoryId);
+      console.log('categoryPath', categoryPath);
+      console.log('payload', payload);
       const res = await fetch('/api/seller/products', {
         method: 'POST',
         headers: { Accept: 'application/json' },
@@ -180,7 +221,7 @@ export default function NewListingForm() {
       </div>
       <div className="flex gap-3">
         <div className="flex-1">
-          <CategoryPicker />
+          <CategoryPicker onSelectionChange={handleCategoryChange} />
           {errors.category && <p className="mt-1 text-xs text-red-600">{errors.category}</p>}
         </div>
         <div className="flex-1">
@@ -294,11 +335,22 @@ export default function NewListingForm() {
       {errors.submit && (
         <div className="card p-3 bg-red-50 border-red-200 text-red-700 text-sm">{errors.submit}</div>
       )}
+      {selectedCategory.categoryPath && !selectedCategory.stale && (
+        <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          Selected category: {selectedCategory.categoryPath}
+        </p>
+      )}
 
       <button
         className="btn-primary w-full disabled:opacity-60 disabled:cursor-not-allowed"
         type="submit"
-        disabled={submitting || mediaState.isUploading || mediaState.isEnhancing}
+        disabled={
+          submitting
+          || mediaState.isUploading
+          || mediaState.isEnhancing
+          || !selectedCategory.categoryId
+          || selectedCategory.stale
+        }
       >
         {submitting ? 'Submitting…' : 'Submit for review'}
       </button>

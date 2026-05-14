@@ -43,6 +43,17 @@ interface Props {
   defaultSubcategoryId?: string | null;
   defaultAttributes?: Record<string, string> | null;
   submitLeafCategoryId?: boolean;
+  onSelectionChange?: (selection: SelectedCategoryState) => void;
+}
+
+export interface SelectedCategoryState {
+  categoryId: string;
+  categoryName: string;
+  categoryPath: string;
+  leafCategoryId: string;
+  parentCategoryId: string;
+  subcategoryId: string;
+  stale: boolean;
 }
 
 const SEARCH_DEBOUNCE_MS = 150;
@@ -362,6 +373,7 @@ export default function CategoryPicker({
   defaultSubcategoryId,
   defaultAttributes,
   submitLeafCategoryId = false,
+  onSelectionChange,
 }: Props) {
   const [categories, setCategories] = useState<CategoryNode[]>([]);
   const [loading, setLoading] = useState(true);
@@ -490,6 +502,12 @@ export default function CategoryPicker({
   const schema = resolveSchema(categories, mainId, subId, childId);
   const leafName = resolveLeafName(categories, mainId, subId, childId);
   const leafSlug = resolveLeafSlug(categories, mainId, subId, childId);
+  const selectedPathNodes = [
+    mainId ? findNodeById(categories, mainId) : null,
+    subId ? findNodeById(categories, subId) : null,
+    childId ? findNodeById(categories, childId) : null,
+  ].filter((node): node is CategoryNode => Boolean(node));
+  const categoryPath = selectedPathNodes.map((node) => node.name).join(' > ');
 
   // Notify sibling components (e.g. ConditionPicker) about the resolved category slug.
   // Dispatches on meaningful transitions: when a category is selected (non-empty slug) or
@@ -515,6 +533,27 @@ export default function CategoryPicker({
   const parentCategoryId = childId ? subId : subId ? mainId : null;
   const submittedCategoryId = submitLeafCategoryId ? leafCategoryId : mainId;
   const submittedSubcategoryId = submitLeafCategoryId ? parentCategoryId : (childId ?? subId);
+
+  useEffect(() => {
+    onSelectionChange?.({
+      categoryId: submittedCategoryId ?? '',
+      categoryName: leafName,
+      categoryPath,
+      leafCategoryId: leafCategoryId ?? '',
+      parentCategoryId: parentCategoryId ?? '',
+      subcategoryId: submittedSubcategoryId ?? '',
+      stale: categoryStale,
+    });
+  }, [
+    categoryPath,
+    categoryStale,
+    leafCategoryId,
+    leafName,
+    onSelectionChange,
+    parentCategoryId,
+    submittedCategoryId,
+    submittedSubcategoryId,
+  ]);
 
   useEffect(() => {
     if (!activePicker) return;
@@ -586,7 +625,7 @@ export default function CategoryPicker({
     if (!form) return;
 
     function handleSubmit(event: Event) {
-      if (!mainId || categoryStale) {
+      if (!submittedCategoryId || categoryStale) {
         event.preventDefault();
         setCategoryError(INVALID_CATEGORY_MESSAGE);
       }
@@ -594,7 +633,7 @@ export default function CategoryPicker({
 
     form.addEventListener('submit', handleSubmit);
     return () => form.removeEventListener('submit', handleSubmit);
-  }, [mainId, categoryStale]);
+  }, [categoryStale, submittedCategoryId]);
 
   function handleMainChange(id: string) {
     setMainId(id || null);
@@ -767,6 +806,8 @@ export default function CategoryPicker({
       <input type="hidden" name="leafCategoryId" value={leafCategoryId ?? ''} />
       <input type="hidden" name="parentCategoryId" value={parentCategoryId ?? ''} />
       <input type="hidden" name="category" value={leafName} />
+      <input type="hidden" name="categoryName" value={leafName} />
+      <input type="hidden" name="categoryPath" value={categoryPath} />
       <input type="hidden" name="productAttributes" value={JSON.stringify(attrs)} />
       <input type="hidden" name="categoryStale" value={categoryStale ? 'true' : ''} />
 
