@@ -164,6 +164,26 @@ export default function Navbar() {
                   </Link>
                 </>
               )}
+              {session?.user && experienceRole === 'seller' && (
+                <>
+                  <Link href="/messages" className={iconButtonClass} aria-label={t('nav.messages')}>
+                    <MessageCircle size={17} />
+                    {unreadMessages > 0 && (
+                      <span className={`${iconBadgeClass} bg-indigo-500`}>
+                        {formatBadgeCount(unreadMessages)}
+                      </span>
+                    )}
+                  </Link>
+                  <Link href="/notifications" className={iconButtonClass} aria-label={t('nav.notifications')}>
+                    <Bell size={17} />
+                    {unreadNotifications > 0 && (
+                      <span className={`${iconBadgeClass} bg-indigo-500`}>
+                        {formatBadgeCount(unreadNotifications)}
+                      </span>
+                    )}
+                  </Link>
+                </>
+              )}
               <button
                 type="button"
                 className={iconButtonClass}
@@ -291,6 +311,29 @@ export default function Navbar() {
                         <Bell size={17} />
                         {unreadNotifications > 0 && (
                           <span className={`${iconBadgeClass} bg-emerald-500`}>
+                            {formatBadgeCount(unreadNotifications)}
+                          </span>
+                        )}
+                      </Link>
+                      <Link href="/account" className={iconButtonClass} aria-label={t('nav.account')}>
+                        <User size={17} />
+                      </Link>
+                    </>
+                  )}
+                  {experienceRole === 'seller' && (
+                    <>
+                      <Link href="/messages" className={iconButtonClass} aria-label={t('nav.messages')}>
+                        <MessageCircle size={17} />
+                        {unreadMessages > 0 && (
+                          <span className={`${iconBadgeClass} bg-indigo-500`}>
+                            {formatBadgeCount(unreadMessages)}
+                          </span>
+                        )}
+                      </Link>
+                      <Link href="/notifications" className={iconButtonClass} aria-label={t('nav.notifications')}>
+                        <Bell size={17} />
+                        {unreadNotifications > 0 && (
+                          <span className={`${iconBadgeClass} bg-indigo-500`}>
                             {formatBadgeCount(unreadNotifications)}
                           </span>
                         )}
