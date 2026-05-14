@@ -13,6 +13,10 @@ class AppTheme {
   static const Color textSecondary = Color(0xFF64748B); // slate-500
   static const Color border = Color(0xFFE2E8F0);        // slate-200
 
+  // Trust-badge icon colours
+  static const Color trustBlue = Color(0xFF3B82F6);    // blue-500
+  static const Color trustPurple = Color(0xFF8B5CF6);  // violet-500
+
   static ThemeData get lightTheme {
     return ThemeData(
       useMaterial3: true,

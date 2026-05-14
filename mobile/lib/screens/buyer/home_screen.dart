@@ -78,16 +78,19 @@ const List<_TrustBadge> _kTrustBadges = [
   _TrustBadge(
       icon: Icons.lock_outlined,
       label: 'Secure\nPayments',
-      color: Color(0xFF3B82F6)),
+      color: AppTheme.trustBlue),
   _TrustBadge(
       icon: Icons.shield_outlined,
       label: 'Buyer\nProtection',
-      color: Color(0xFF8B5CF6)),
+      color: AppTheme.trustPurple),
   _TrustBadge(
       icon: Icons.local_shipping_outlined,
       label: 'Fast\nShipping',
       color: AppTheme.accent),
 ];
+
+// Number of products shown in each discovery section
+const int _kDiscoverySectionLimit = 8;
 
 // ---------------------------------------------------------------------------
 // HomeScreen
@@ -127,13 +130,11 @@ class _HomeScreenState extends State<HomeScreen> {
       _selectedCondition != null;
 
   // Derived sections from the fetched product list
-  List<Product> get _trendingProducts => _products.take(8).toList();
+  List<Product> get _trendingProducts =>
+      _products.take(_kDiscoverySectionLimit).toList();
 
-  List<Product> get _flashDeals {
-    final featured =
-        _products.where((p) => p.isFeatured).take(8).toList();
-    return featured;
-  }
+  List<Product> get _flashDeals =>
+      _products.where((p) => p.isFeatured).take(_kDiscoverySectionLimit).toList();
 
   Future<void> _loadProducts() async {
     setState(() {
@@ -588,7 +589,7 @@ class _HomeScreenState extends State<HomeScreen> {
               if (_trendingProducts.isNotEmpty)
                 SliverToBoxAdapter(
                   child: _buildHorizontalSection(
-                    '🔥 Trending Now',
+                    'Trending Now',
                     _trendingProducts,
                   ),
                 ),
@@ -597,7 +598,7 @@ class _HomeScreenState extends State<HomeScreen> {
               if (_flashDeals.isNotEmpty)
                 SliverToBoxAdapter(
                   child: _buildHorizontalSection(
-                    '⚡ Flash Deals',
+                    'Flash Deals',
                     _flashDeals,
                     showDealBadge: true,
                   ),
@@ -844,13 +845,24 @@ class _SectionCardState extends State<_SectionCard> {
                               color: AppTheme.accent,
                               borderRadius: BorderRadius.circular(20),
                             ),
-                            child: const Text(
-                              '★',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                              ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.star,
+                                  color: Colors.white,
+                                  size: 9,
+                                ),
+                                SizedBox(width: 3),
+                                Text(
+                                  'Featured',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
