@@ -2,6 +2,8 @@
 // backfilled with aliases[] yet. Keep in sync with seed aliases until all
 // environments have migrated, then remove this fallback.
 export const LEGACY_CATEGORY_ALIAS_FALLBACK: Record<string, string[]> = {
+  'fashion-men-tshirts': ['tshirts', 'tshirt', 't-shirt', 't shirt', 'tee', 'tee shirt', 'shirt'],
+  'fashion-kids-tshirts': ['tshirts', 'tshirt', 't-shirt', 't shirt', 'tee', 'tee shirt', 'shirt'],
   'fashion-women-perfume': ['perfume', 'perfum', 'fragrance', 'cologne', 'body mist', 'scent'],
   electronics: ['electronic', 'electr', 'tech', 'gadgets'],
   'fashion-kids-clothing': ['clothing', 'cloth', 'clothes', 'apparel'],

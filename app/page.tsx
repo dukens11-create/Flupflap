@@ -102,6 +102,7 @@ type SearchableProduct = {
   title: string;
   description: string;
   category: string;
+  condition: string;
   productAttributes: unknown;
   categoryRef?: {
     name?: string | null;
@@ -121,14 +122,58 @@ type SearchableProduct = {
   } | null;
 };
 
+// Normalize search text: lowercase, trim, remove hyphens, collapse extra spaces.
+function normalizeSearchText(text: string): string {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/-/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// All recognized T-shirt term variants (normalized).
+const TSHIRT_SYNONYMS = ['tshirt', 't shirt', 'tshirts', 't shirts', 'tee', 'tee shirt', 'shirt'];
+
+// Known typos mapped to the terms they should search for.
+const TSHIRT_TYPO_EXPANSIONS: Record<string, string[]> = {
+  't shit': ['tshirt', 'shirt'],
+};
+
+// Returns the full set of query terms to match against (supports synonym & typo expansion).
+function expandQueryTerms(normalizedQuery: string): string[] {
+  // Typo handling first
+  if (TSHIRT_TYPO_EXPANSIONS[normalizedQuery]) {
+    return [normalizedQuery, ...TSHIRT_TYPO_EXPANSIONS[normalizedQuery]];
+  }
+  // Synonym expansion for any recognized T-shirt variant
+  if (TSHIRT_SYNONYMS.includes(normalizedQuery)) {
+    return [...TSHIRT_SYNONYMS];
+  }
+  return [normalizedQuery];
+}
+
 function productMatchesSearch(product: SearchableProduct, query?: string) {
-  const normalizedQuery = query?.trim().toLocaleLowerCase();
+  const normalizedQuery = normalizeSearchText(query ?? '');
   if (!normalizedQuery) return true;
+
+  const queryTerms = expandQueryTerms(normalizedQuery);
+
+  // Build a human-readable category path from the hierarchy.
+  const categoryPath = [
+    product.subcategoryRef?.parent?.parent?.name,
+    product.subcategoryRef?.parent?.name,
+    product.subcategoryRef?.name,
+  ]
+    .filter((part): part is string => typeof part === 'string' && part.length > 0)
+    .join(' > ');
 
   const searchableValues: string[] = [
     product.title,
     product.description,
     product.category,
+    product.condition,
+    categoryPath,
     product.categoryRef?.name,
     ...(product.categoryRef?.aliases ?? []),
     product.subcategoryRef?.name,
@@ -141,7 +186,9 @@ function productMatchesSearch(product: SearchableProduct, query?: string) {
 
   collectStringValues(product.productAttributes, searchableValues);
 
-  return searchableValues.some((value) => value.toLocaleLowerCase().includes(normalizedQuery));
+  const normalizedValues = searchableValues.map(normalizeSearchText);
+
+  return queryTerms.some((term) => normalizedValues.some((value) => value.includes(term)));
 }
 
 async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?: Record<string, string | number>) => string }) {
@@ -321,7 +368,10 @@ async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?
         },
       },
     });
+    console.log("rawQuery", sp.q);
+    console.log("normalizedQuery", sp.q ? normalizeSearchText(sp.q) : undefined);
     products = products.filter((product: any) => productMatchesSearch(product, sp.q));
+    console.log("matchedProducts", products.length);
     const promotionIds = products
       .map((product: any) => product.promotions[0]?.id)
       .filter(Boolean);

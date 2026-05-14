@@ -220,7 +220,7 @@ async function seedCategories() {
 
   // Fashion → Men children
   await prisma.category.createMany({ data: [
-    { name: 'T-Shirts', slug: 'fashion-men-tshirts', aliases: ['tshirts', 't-shirt', 'tee'], parentId: men.id, level: 2, sortOrder: 1, attributeSchema: CLOTHING_FIELDS },
+    { name: 'T-Shirts', slug: 'fashion-men-tshirts', aliases: ['tshirts', 'tshirt', 't-shirt', 't shirt', 'tee', 'tee shirt', 'shirt'], parentId: men.id, level: 2, sortOrder: 1, attributeSchema: CLOTHING_FIELDS },
     { name: 'Shirts', slug: 'fashion-men-shirts', parentId: men.id, level: 2, sortOrder: 2, attributeSchema: CLOTHING_FIELDS },
     { name: 'Pants', slug: 'fashion-men-trousers', aliases: ['pants', 'trousers'], parentId: men.id, level: 2, sortOrder: 3, attributeSchema: CLOTHING_FIELDS },
     { name: 'Shoes', slug: 'fashion-men-shoes', parentId: men.id, level: 2, sortOrder: 4, attributeSchema: SHOE_FIELDS },
@@ -253,7 +253,7 @@ async function seedCategories() {
     {
       name: 'T-Shirts',
       slug: 'fashion-kids-tshirts',
-      aliases: ['tshirts', 't-shirt', 'tee'],
+      aliases: ['tshirts', 'tshirt', 't-shirt', 't shirt', 'tee', 'tee shirt', 'shirt'],
       parentId: kids.id,
       level: 2,
       sortOrder: 1,
@@ -448,7 +448,7 @@ async function ensureFashionCategoryHierarchy() {
     where: { slug: 'fashion-men-tshirts' },
     update: {
       name: 'T-Shirts',
-      aliases: ['tshirts', 't-shirt', 'tee'],
+      aliases: ['tshirts', 'tshirt', 't-shirt', 't shirt', 'tee', 'tee shirt', 'shirt'],
       parentId: men.id,
       level: 2,
       sortOrder: 1,
@@ -457,7 +457,7 @@ async function ensureFashionCategoryHierarchy() {
     create: {
       name: 'T-Shirts',
       slug: 'fashion-men-tshirts',
-      aliases: ['tshirts', 't-shirt', 'tee'],
+      aliases: ['tshirts', 'tshirt', 't-shirt', 't shirt', 'tee', 'tee shirt', 'shirt'],
       parentId: men.id,
       level: 2,
       sortOrder: 1,
