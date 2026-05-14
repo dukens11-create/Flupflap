@@ -121,8 +121,6 @@ export async function POST(req: Request) {
       uploadUrl,
       signedParams: paramsToSign,
       responseSummary: {
-        folder,
-        timestamp,
         hasSignature: Boolean(signature),
       },
     });
