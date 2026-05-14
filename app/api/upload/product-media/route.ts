@@ -108,7 +108,22 @@ export async function POST(req: Request) {
 
   try {
     const cloudinary = getCloudinary();
+    console.info('[temporary-upload-debug][backend] product-media-signature-input', {
+      mediaKind,
+      folder,
+      timestamp,
+      paramsToSign,
+    });
     const signature = cloudinary.utils.api_sign_request(paramsToSign, cloudinaryEnv.apiSecret);
+    const uploadUrl = `https://api.cloudinary.com/v1_1/${cloudinaryEnv.cloudName}/${mediaKind}/upload`;
+    console.info('[temporary-upload-debug][backend] product-media-signature-output', {
+      mediaKind,
+      uploadUrl,
+      signedParams: paramsToSign,
+      responseSummary: {
+        hasSignature: Boolean(signature),
+      },
+    });
 
     return NextResponse.json({
       success: true,
@@ -116,7 +131,7 @@ export async function POST(req: Request) {
       folder,
       timestamp,
       signature,
-      uploadUrl: `https://api.cloudinary.com/v1_1/${cloudinaryEnv.cloudName}/${mediaKind}/upload`,
+      uploadUrl,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'unknown error';

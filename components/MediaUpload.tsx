@@ -338,15 +338,30 @@ export default function MediaUpload({
 
   async function uploadFile(file: File): Promise<string> {
     const uploadConfig = await getUploadConfig(file);
+    const timestamp = String(uploadConfig.timestamp);
     const fd = new FormData();
     fd.append('file', file);
     fd.append('api_key', uploadConfig.apiKey);
     fd.append('folder', uploadConfig.folder);
     fd.append('signature', uploadConfig.signature);
-    fd.append('timestamp', String(uploadConfig.timestamp));
+    fd.append('timestamp', timestamp);
 
     return new Promise<string>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
+      console.info('[temporary-upload-debug][frontend] product-media-cloudinary-request', {
+        uploadUrl: uploadConfig.uploadUrl,
+        params: {
+          folder: uploadConfig.folder,
+          timestamp,
+          api_key: uploadConfig.apiKey,
+          signature: uploadConfig.signature,
+        },
+        file: {
+          name: file.name,
+          type: file.type,
+          size: file.size,
+        },
+      });
       xhr.open('POST', uploadConfig.uploadUrl);
       xhr.responseType = 'json';
       xhr.onerror = () =>
