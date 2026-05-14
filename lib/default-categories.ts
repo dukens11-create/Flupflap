@@ -107,7 +107,7 @@ export const DEFAULT_CATEGORY_TREE: DefaultCategoryNode[] = [
   }),
   node({ id: 'fashion', name: 'Fashion', slug: 'fashion', aliases: [], parentId: null, level: 0, icon: '👗', sortOrder: 2, attributeSchema: null, children: [
     node({ id: 'fashion-men', name: 'Men', slug: 'fashion-men', aliases: [], parentId: 'fashion', level: 1, icon: null, sortOrder: 1, attributeSchema: null, children: [
-      node({ id: 'fashion-men-tshirts', name: 'T-Shirts', slug: 'fashion-men-tshirts', aliases: ['tshirts', 't-shirt', 'tee'], parentId: 'fashion-men', level: 2, icon: null, sortOrder: 1, attributeSchema: CLOTHING_FIELDS }),
+      node({ id: 'fashion-men-tshirts', name: 'T-Shirts', slug: 'fashion-men-tshirts', aliases: ['tshirts', 'tshirt', 't-shirt', 't shirt', 'tee', 'tee shirt', 'shirt'], parentId: 'fashion-men', level: 2, icon: null, sortOrder: 1, attributeSchema: CLOTHING_FIELDS }),
       node({ id: 'fashion-men-shoes', name: 'Shoes', slug: 'fashion-men-shoes', aliases: [], parentId: 'fashion-men', level: 2, icon: null, sortOrder: 4, attributeSchema: SHOE_FIELDS }),
       node({ id: 'fashion-men-watches', name: 'Watches', slug: 'fashion-men-watches', aliases: [], parentId: 'fashion-men', level: 2, icon: null, sortOrder: 5, attributeSchema: CLOTHING_FIELDS }),
       node({ id: 'fashion-men-jackets', name: 'Jackets', slug: 'fashion-men-jackets', aliases: [], parentId: 'fashion-men', level: 2, icon: null, sortOrder: 6, attributeSchema: CLOTHING_FIELDS }),
@@ -124,7 +124,7 @@ export const DEFAULT_CATEGORY_TREE: DefaultCategoryNode[] = [
       node({ id: 'fashion-women-jewelry', name: 'Jewelry', slug: 'fashion-women-jewelry', aliases: [], parentId: 'fashion-women', level: 2, icon: null, sortOrder: 7, attributeSchema: CLOTHING_FIELDS }),
     ] }),
     node({ id: 'fashion-kids', name: 'Kids', slug: 'fashion-kids', aliases: [], parentId: 'fashion', level: 1, icon: null, sortOrder: 3, attributeSchema: null, children: [
-      node({ id: 'fashion-kids-tshirts', name: 'T-Shirts', slug: 'fashion-kids-tshirts', aliases: ['tshirts', 't-shirt', 'tee'], parentId: 'fashion-kids', level: 2, icon: null, sortOrder: 1, attributeSchema: CLOTHING_FIELDS }),
+      node({ id: 'fashion-kids-tshirts', name: 'T-Shirts', slug: 'fashion-kids-tshirts', aliases: ['tshirts', 'tshirt', 't-shirt', 't shirt', 'tee', 'tee shirt', 'shirt'], parentId: 'fashion-kids', level: 2, icon: null, sortOrder: 1, attributeSchema: CLOTHING_FIELDS }),
       node({ id: 'fashion-kids-clothing', name: 'Clothing Sets', slug: 'fashion-kids-clothing', aliases: ['clothing', 'cloth', 'clothes', 'apparel', 'clothing sets'], parentId: 'fashion-kids', level: 2, icon: null, sortOrder: 2, attributeSchema: CLOTHING_FIELDS }),
       node({ id: 'fashion-kids-shoes', name: 'Shoes', slug: 'fashion-kids-shoes', aliases: [], parentId: 'fashion-kids', level: 2, icon: null, sortOrder: 3, attributeSchema: SHOE_FIELDS }),
     ] }),
