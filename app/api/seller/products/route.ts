@@ -21,6 +21,7 @@ import {
   setShippingClass,
   SHIPPING_PACKAGE_DETAILS_REQUIRED_MESSAGE,
 } from '@/lib/product-package';
+import { buildProductSearchableText } from '@/lib/smart-search';
 
 import { SHIPPING_MODES, type ShippingMode } from '@/lib/product-constants';
 const schema = z.object({
@@ -303,12 +304,6 @@ export async function POST(req: Request) {
     }
     if (data.gender) normalizedAttributes.gender = data.gender;
     if (mediaEnhancements) normalizedAttributes.mediaEnhancements = mediaEnhancements;
-    const productAttributesValue: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput | undefined =
-      Object.keys(normalizedAttributes).length > 0
-        ? (normalizedAttributes as Prisma.InputJsonValue)
-        : attributes === null || attributes === undefined
-          ? undefined
-          : (attributes as Prisma.InputJsonValue);
 
     await ensureFashionCategoryHierarchy(prisma);
     const categoryNodes = await loadCategoryHierarchyNodesWithFallback(prisma);
@@ -332,6 +327,23 @@ export async function POST(req: Request) {
       return jsonError(INVALID_CATEGORY_SUBMIT_MESSAGE, 400);
     }
     const category = validatedCategory.displayName;
+    const categoryPath = validatedCategory.path.map((node) => node.name).join(' > ');
+    normalizedAttributes.searchableText = buildProductSearchableText({
+      title,
+      description: data.description || '',
+      brand: (normalizedAttributes.brand as string | undefined) ?? null,
+      condition: data.condition,
+      categoryName: category,
+      categoryPath,
+      tags: normalizedAttributes.tags,
+      keywords: normalizedAttributes.keywords,
+    });
+    const productAttributesValue: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput | undefined =
+      Object.keys(normalizedAttributes).length > 0
+        ? (normalizedAttributes as Prisma.InputJsonValue)
+        : attributes === null || attributes === undefined
+          ? undefined
+          : (attributes as Prisma.InputJsonValue);
 
     const mainImage = resolvedImages[0] ?? '';
     const resolvedOriginalImages =
@@ -392,7 +404,7 @@ export async function POST(req: Request) {
       category,
       subcategory: subcategoryName,
       refineCategory: refineCategoryName,
-      categoryPath: validatedCategory.path.map((node) => node.name).join(' > '),
+      categoryPath,
       condition: data.condition,
       brand: (normalizedAttributes.brand as string | undefined) ?? null,
       sizeMl: (normalizedAttributes.size_ml as string | undefined) ?? null,

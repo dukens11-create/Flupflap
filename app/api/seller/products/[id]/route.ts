@@ -13,6 +13,7 @@ import {
 import { parseJsonOrNull } from '@/lib/parse-json';
 import { SHIPPING_MODES } from '@/lib/product-constants';
 import { loadCategoryHierarchyNodesWithFallback, validateCategorySelection, resolveLegacyCategorySelection } from '@/lib/category-hierarchy';
+import { buildProductSearchableText } from '@/lib/smart-search';
 import {
   convertWeightToOunces,
   getShippingClass,
@@ -167,6 +168,7 @@ async function resolveSubmittedCategorySelection(data: ProductUpdateInput) {
       categoryId: null,
       subcategoryId: null,
       categoryName: '',
+      categoryPath: '',
       error: INVALID_CATEGORY_SUBMIT_MESSAGE,
     };
   }
@@ -177,6 +179,7 @@ async function resolveSubmittedCategorySelection(data: ProductUpdateInput) {
     categoryId: resolveOptionalId(data.categoryId),
     subcategoryId: resolveOptionalId(data.subcategoryId),
     categoryName: data.category?.trim() || '',
+    categoryPath: data.category?.trim() || '',
     error: null as string | null,
   };
 
@@ -192,11 +195,12 @@ async function resolveSubmittedCategorySelection(data: ProductUpdateInput) {
   if (validatedCategory.ok) {
     return {
       submitted: true,
-      categoryId: validatedCategory.categoryId,
-      subcategoryId: validatedCategory.subcategoryId,
-      categoryName: validatedCategory.displayName,
-      error: null,
-    };
+        categoryId: validatedCategory.categoryId,
+        subcategoryId: validatedCategory.subcategoryId,
+        categoryName: validatedCategory.displayName,
+        categoryPath: validatedCategory.path.map((node) => node.name).join(' > '),
+        error: null,
+      };
   }
 
   // Validation failed — attempt legacy resolution before blocking the save.
@@ -219,6 +223,7 @@ async function resolveSubmittedCategorySelection(data: ProductUpdateInput) {
       categoryId: legacyResolution.categoryId,
       subcategoryId: legacyResolution.subcategoryId,
       categoryName: legacyResolution.displayName ?? data.category?.trim() ?? '',
+      categoryPath: legacyResolution.path.map((node) => node.name).join(' > ') || data.category?.trim() || '',
       error: null,
     };
   }
@@ -235,6 +240,24 @@ async function resolveSubmittedCategorySelection(data: ProductUpdateInput) {
     submitted: false,
     error: INVALID_CATEGORY_SUBMIT_MESSAGE,
   };
+}
+
+async function resolveCategoryPathFromIds(categoryId: string | null | undefined, subcategoryId: string | null | undefined) {
+  const rootId = categoryId?.trim();
+  const leafId = subcategoryId?.trim() || rootId;
+  if (!rootId || !leafId) return '';
+
+  const nodes = await loadCategoryHierarchyNodesWithFallback(prisma);
+  const lookup = new Map(nodes.map((node) => [node.id, node]));
+  let current = lookup.get(leafId) ?? null;
+  const seen = new Set<string>();
+  const path: string[] = [];
+  while (current && !seen.has(current.id)) {
+    seen.add(current.id);
+    path.push(current.name);
+    current = current.parentId ? (lookup.get(current.parentId) ?? null) : null;
+  }
+  return path.reverse().join(' > ');
 }
 
 function resolveSubmittedPackageDetails(data: ProductUpdateInput) {
@@ -438,6 +461,26 @@ export async function POST(
       data.productAttributes === undefined ? existing.productAttributes : parseJsonOrNull(data.productAttributes),
       packageDetails.shippingClass,
     );
+    const nextTitle = data.title ?? existing.title;
+    const nextDescription = data.description ?? existing.description;
+    const nextCondition = data.condition ?? existing.condition;
+    const nextCategoryName = resolvedCategorySelection.submitted
+      ? (resolvedCategorySelection.categoryName || existing.category)
+      : existing.category;
+    const nextCategoryPath = resolvedCategorySelection.submitted
+      ? (resolvedCategorySelection.categoryPath || nextCategoryName)
+      : (await resolveCategoryPathFromIds(existing.categoryId, existing.subcategoryId)) || existing.category;
+    const nextBrand = typeof nextProductAttributes.brand === 'string' ? nextProductAttributes.brand : null;
+    nextProductAttributes.searchableText = buildProductSearchableText({
+      title: nextTitle,
+      description: nextDescription,
+      brand: nextBrand,
+      condition: nextCondition,
+      categoryName: nextCategoryName,
+      categoryPath: nextCategoryPath,
+      tags: nextProductAttributes.tags,
+      keywords: nextProductAttributes.keywords,
+    });
     const nextProductAttributesValue =
       Object.keys(nextProductAttributes).length === 0
         ? Prisma.JsonNull
@@ -453,9 +496,7 @@ export async function POST(
           ...(data.price && { priceCents: cents(data.price) }),
           ...(data.shipping !== undefined && { shippingCents: cents(data.shipping || '0') }),
           ...(data.shippingMode && (SHIPPING_MODES as readonly string[]).includes(data.shippingMode) && { shippingMode: data.shippingMode }),
-          ...(resolvedCategorySelection.submitted && resolvedCategorySelection.categoryName && {
-            category: resolvedCategorySelection.categoryName,
-          }),
+          ...(resolvedCategorySelection.submitted && nextCategoryName && { category: nextCategoryName }),
           ...(data.condition && { condition: data.condition }),
           ...(data.inventory && { inventory: Number(data.inventory) }),
           pickupAvailable: data.pickupAvailable === 'true',
@@ -622,6 +663,26 @@ export async function PATCH(
       parsedAttributes,
       data.shippingClass !== undefined ? packageDetails.shippingClass : getShippingClass(parsedAttributes),
     );
+    const nextTitle = data.title ?? existing.title;
+    const nextDescription = data.description ?? existing.description;
+    const nextCondition = data.condition ?? existing.condition;
+    const nextCategoryName = resolvedCategorySelection.submitted
+      ? (resolvedCategorySelection.categoryName || existing.category)
+      : existing.category;
+    const nextCategoryPath = resolvedCategorySelection.submitted
+      ? (resolvedCategorySelection.categoryPath || nextCategoryName)
+      : (await resolveCategoryPathFromIds(existing.categoryId, existing.subcategoryId)) || existing.category;
+    const nextBrand = typeof nextProductAttributes.brand === 'string' ? nextProductAttributes.brand : null;
+    nextProductAttributes.searchableText = buildProductSearchableText({
+      title: nextTitle,
+      description: nextDescription,
+      brand: nextBrand,
+      condition: nextCondition,
+      categoryName: nextCategoryName,
+      categoryPath: nextCategoryPath,
+      tags: nextProductAttributes.tags,
+      keywords: nextProductAttributes.keywords,
+    });
     const nextProductAttributesValue =
       Object.keys(nextProductAttributes).length === 0
         ? Prisma.JsonNull
@@ -637,9 +698,7 @@ export async function PATCH(
           ...(data.price && { priceCents: cents(data.price) }),
           ...(data.shipping !== undefined && { shippingCents: cents(data.shipping || '0') }),
           ...(data.shippingMode && (SHIPPING_MODES as readonly string[]).includes(data.shippingMode) && { shippingMode: data.shippingMode }),
-          ...(resolvedCategorySelection.submitted && resolvedCategorySelection.categoryName && {
-            category: resolvedCategorySelection.categoryName,
-          }),
+          ...(resolvedCategorySelection.submitted && nextCategoryName && { category: nextCategoryName }),
           ...(data.condition && { condition: data.condition }),
           imageUrl: mainImage,
           images: resolvedImages,

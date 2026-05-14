@@ -12,6 +12,12 @@ import { BadgeCheck, CreditCard, ShieldCheck, Truck } from 'lucide-react';
 import { getSellerResponseStatsForSellers } from '@/lib/messages';
 import { authOptions } from '@/lib/auth-options';
 import { getRoleDefaultPath, normalizeExperienceRole } from '@/lib/role-experience';
+import {
+  buildProductSearchableText,
+  normalizeSearchText,
+  searchTextMatchesQuery,
+  searchTextMatchesQueryWithoutFuzzy,
+} from '@/lib/smart-search';
 
 export const dynamic = 'force-dynamic';
 
@@ -82,25 +88,10 @@ function getUniqueSellerIds(products: Array<{ sellerId: string }>) {
   return Array.from(new Set(products.map((product) => product.sellerId)));
 }
 
-function collectStringValues(value: unknown, strings: string[]) {
-  if (typeof value === 'string') {
-    strings.push(value);
-    return;
-  }
-  if (Array.isArray(value)) {
-    for (const item of value) collectStringValues(item, strings);
-    return;
-  }
-  if (value && typeof value === 'object') {
-    for (const nestedValue of Object.values(value as Record<string, unknown>)) {
-      collectStringValues(nestedValue, strings);
-    }
-  }
-}
-
 type SearchableProduct = {
   title: string;
   description: string;
+  condition: string;
   category: string;
   productAttributes: unknown;
   categoryRef?: {
@@ -121,27 +112,51 @@ type SearchableProduct = {
   } | null;
 };
 
-function productMatchesSearch(product: SearchableProduct, query?: string) {
-  const normalizedQuery = query?.trim().toLocaleLowerCase();
+function getSearchableTextFromAttributes(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return '';
+  return typeof (value as Record<string, unknown>).searchableText === 'string'
+    ? String((value as Record<string, unknown>).searchableText)
+    : '';
+}
+
+function getCategoryPathForSearch(product: SearchableProduct) {
+  const candidates = [
+    product.categoryRef?.name,
+    product.subcategoryRef?.parent?.parent?.name,
+    product.subcategoryRef?.parent?.name,
+    product.subcategoryRef?.name,
+  ].filter((value): value is string => typeof value === 'string' && value.length > 0);
+  const path = candidates.filter((value, index) => candidates.indexOf(value) === index);
+
+  return path.length > 0 ? path.join(' > ') : product.category;
+}
+
+function productMatchesSearch(product: SearchableProduct, query?: string, useFuzzy = false) {
+  const normalizedQuery = normalizeSearchText(query);
   if (!normalizedQuery) return true;
 
-  const searchableValues: string[] = [
-    product.title,
-    product.description,
-    product.category,
-    product.categoryRef?.name,
-    ...(product.categoryRef?.aliases ?? []),
-    product.subcategoryRef?.name,
-    ...(product.subcategoryRef?.aliases ?? []),
-    product.subcategoryRef?.parent?.name,
-    ...(product.subcategoryRef?.parent?.aliases ?? []),
-    product.subcategoryRef?.parent?.parent?.name,
-    ...(product.subcategoryRef?.parent?.parent?.aliases ?? []),
-  ].filter((value): value is string => typeof value === 'string' && value.length > 0);
+  const attributes =
+    product.productAttributes && typeof product.productAttributes === 'object' && !Array.isArray(product.productAttributes)
+      ? (product.productAttributes as Record<string, unknown>)
+      : {};
+  const existingSearchableText = getSearchableTextFromAttributes(product.productAttributes);
 
-  collectStringValues(product.productAttributes, searchableValues);
+  const fallbackSearchableText = buildProductSearchableText({
+    title: product.title,
+    description: product.description,
+    brand: typeof attributes.brand === 'string' ? attributes.brand : null,
+    condition: product.condition,
+    categoryName: product.category,
+    categoryPath: getCategoryPathForSearch(product),
+    tags: attributes.tags,
+    keywords: attributes.keywords,
+  });
 
-  return searchableValues.some((value) => value.toLocaleLowerCase().includes(normalizedQuery));
+  const searchableText = existingSearchableText || fallbackSearchableText;
+  if (!useFuzzy) {
+    return searchTextMatchesQueryWithoutFuzzy(searchableText, normalizedQuery);
+  }
+  return searchTextMatchesQuery(searchableText, normalizedQuery);
 }
 
 async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?: Record<string, string | number>) => string }) {
@@ -321,7 +336,15 @@ async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?
         },
       },
     });
-    products = products.filter((product: any) => productMatchesSearch(product, sp.q));
+    console.log('rawQuery', sp.q ?? '');
+    console.log('normalizedQuery', normalizeSearchText(sp.q));
+    const normalizedQuery = normalizeSearchText(sp.q);
+    const allProducts = products;
+    products = allProducts.filter((product: any) => productMatchesSearch(product, sp.q, false));
+    if (normalizedQuery && products.length === 0) {
+      products = allProducts.filter((product: any) => productMatchesSearch(product, sp.q, true));
+    }
+    console.log('matchedProducts', products.length);
     const promotionIds = products
       .map((product: any) => product.promotions[0]?.id)
       .filter(Boolean);
