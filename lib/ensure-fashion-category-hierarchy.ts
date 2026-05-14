@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client';
+import { Prisma, type PrismaClient } from '@prisma/client';
 import { DEFAULT_CATEGORY_TREE, type DefaultCategoryNode } from '@/lib/default-categories';
 
 type CategoryWriter = Pick<PrismaClient, 'category'>;
@@ -12,6 +12,11 @@ export async function ensureFashionCategoryHierarchy(db: CategoryWriter) {
   if (!ensurePromise) {
     ensurePromise = (async () => {
       async function upsertNode(entry: DefaultCategoryNode, parentId: string | null) {
+        const attributeSchemaValue =
+          entry.attributeSchema === null
+            ? Prisma.JsonNull
+            : (entry.attributeSchema as Prisma.InputJsonValue);
+
         const record = await db.category.upsert({
           where: { slug: entry.slug },
           update: {
@@ -21,7 +26,7 @@ export async function ensureFashionCategoryHierarchy(db: CategoryWriter) {
             level: entry.level,
             icon: entry.icon,
             sortOrder: entry.sortOrder,
-            attributeSchema: entry.attributeSchema as any,
+            attributeSchema: attributeSchemaValue,
           },
           create: {
             name: entry.name,
@@ -31,7 +36,7 @@ export async function ensureFashionCategoryHierarchy(db: CategoryWriter) {
             level: entry.level,
             icon: entry.icon,
             sortOrder: entry.sortOrder,
-            attributeSchema: entry.attributeSchema as any,
+            attributeSchema: attributeSchemaValue,
           },
         });
 

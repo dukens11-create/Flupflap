@@ -119,7 +119,7 @@ export const DEFAULT_CATEGORY_TREE: DefaultCategoryNode[] = [
       node({ id: 'fashion-women-dresses', name: 'Dresses', slug: 'fashion-women-dresses', aliases: [], parentId: 'fashion-women', level: 2, icon: null, sortOrder: 2, attributeSchema: CLOTHING_FIELDS }),
       node({ id: 'fashion-women-pants', name: 'Pants', slug: 'fashion-women-pants', aliases: ['trousers'], parentId: 'fashion-women', level: 2, icon: null, sortOrder: 3, attributeSchema: CLOTHING_FIELDS }),
       node({ id: 'fashion-women-handbags', name: 'Handbags', slug: 'fashion-women-handbags', aliases: [], parentId: 'fashion-women', level: 2, icon: null, sortOrder: 5, attributeSchema: CLOTHING_FIELDS }),
-      node({ id: 'fashion-women-perfume', name: 'Perfume & Fragrance', slug: 'fashion-women-perfume', aliases: ['perfume', 'perfum', 'fragrance', 'cologne', 'body mist', 'scent'], parentId: 'fashion-women', level: 2, icon: '🌸', sortOrder: 6, attributeSchema: PERFUME_FIELDS }),
+      node({ id: 'fashion-women-perfume', name: 'Perfume & Fragrance', slug: 'fashion-women-perfume', aliases: ['perfume', 'fragrance', 'cologne', 'body mist', 'scent'], parentId: 'fashion-women', level: 2, icon: '🌸', sortOrder: 6, attributeSchema: PERFUME_FIELDS }),
       node({ id: 'fashion-women-shoes', name: 'Shoes', slug: 'fashion-women-shoes', aliases: ['shoes', 'footwear', 'heels', 'sneakers', 'sandals'], parentId: 'fashion-women', level: 2, icon: '👠', sortOrder: 4, attributeSchema: SHOE_FIELDS }),
       node({ id: 'fashion-women-jewelry', name: 'Jewelry', slug: 'fashion-women-jewelry', aliases: ['jewelry', 'jewellery', 'necklaces', 'bracelets', 'rings'], parentId: 'fashion-women', level: 2, icon: '💍', sortOrder: 7, attributeSchema: CLOTHING_FIELDS }),
     ] }),

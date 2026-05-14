@@ -80,6 +80,10 @@ export default function BrowseFilters() {
   const [isCategoryMenuOpen, setIsCategoryMenuOpen] = useState(false);
   const [categorySearch, setCategorySearch] = useState('');
   const categoryMenuRef = useRef<HTMLDivElement | null>(null);
+  const browseCategoriesLabel = t('filters.browseCategories');
+  const searchCategoriesPlaceholder = t('filters.searchCategories');
+  const noMatchingCategoriesLabel = t('filters.noMatchingCategories');
+  const selectedCategoryLabel = t('filters.selectedCategory');
 
   // Fetch categories once
   useEffect(() => {
@@ -108,7 +112,7 @@ export default function BrowseFilters() {
   useEffect(() => {
     if (!isCategoryMenuOpen) return;
 
-    const handlePointerDown = (event: MouseEvent) => {
+    const handleMouseDown = (event: MouseEvent) => {
       if (!categoryMenuRef.current?.contains(event.target as Node)) {
         setIsCategoryMenuOpen(false);
       }
@@ -120,10 +124,10 @@ export default function BrowseFilters() {
       }
     };
 
-    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('mousedown', handleMouseDown);
     document.addEventListener('keydown', handleEscape);
     return () => {
-      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('mousedown', handleMouseDown);
       document.removeEventListener('keydown', handleEscape);
     };
   }, [isCategoryMenuOpen]);
@@ -299,7 +303,7 @@ export default function BrowseFilters() {
             <div className="absolute inset-x-0 bottom-0 top-auto flex max-h-full flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-2xl transition-all duration-200 sm:relative sm:top-0 sm:max-h-[28rem]">
               <div className="sticky top-0 z-10 space-y-3 border-b border-slate-100 bg-white px-3 py-3 sm:px-4">
                 <div className="flex items-center justify-between gap-3 sm:hidden">
-                  <p className="text-sm font-semibold text-slate-900">Browse categories</p>
+                  <p className="text-sm font-semibold text-slate-900">{browseCategoriesLabel}</p>
                   <button
                     type="button"
                     className="rounded-full p-1 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
@@ -313,7 +317,7 @@ export default function BrowseFilters() {
                   <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
                     className="input rounded-2xl pl-9"
-                    placeholder="Search categories"
+                    placeholder={searchCategoriesPlaceholder}
                     value={categorySearch}
                     onChange={(event) => setCategorySearch(event.target.value)}
                   />
@@ -322,7 +326,7 @@ export default function BrowseFilters() {
                   <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 shadow-sm">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Selected</p>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{selectedCategoryLabel}</p>
                         <p className="truncate text-sm font-semibold text-slate-900">
                           {selectedCategoryOption.icon ?? '🛍️'} {selectedCategoryOption.path.map((entry) => entry.name).join(' › ')}
                         </p>
@@ -353,7 +357,7 @@ export default function BrowseFilters() {
                 </button>
 
                 {filteredCategoryOptions.length === 0 ? (
-                  <div className="px-3 py-8 text-center text-sm text-slate-500">No matching categories found.</div>
+                  <div className="px-3 py-8 text-center text-sm text-slate-500">{noMatchingCategoriesLabel}</div>
                 ) : (
                   filteredCategoryOptions.map((option) => {
                     const isSelected = selectedCategoryOption?.id === option.id;
