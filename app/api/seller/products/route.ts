@@ -13,7 +13,7 @@ import {
   shouldRecommendFraudReview,
 } from '@/lib/fraud-detection';
 import { parseJsonOrNull } from '@/lib/parse-json';
-import { loadCategoryHierarchyNodes, validateCategorySelection } from '@/lib/category-hierarchy';
+import { loadCategoryHierarchyNodesWithFallback, validateCategorySelection } from '@/lib/category-hierarchy';
 import {
   convertWeightToOunces,
   normalizeWeightUnit,
@@ -295,7 +295,7 @@ export async function POST(req: Request) {
           ? undefined
           : (attributes as Prisma.InputJsonValue);
 
-    const categoryNodes = await loadCategoryHierarchyNodes(prisma);
+    const categoryNodes = await loadCategoryHierarchyNodesWithFallback(prisma);
     if (data.categoryStale === 'true') {
       return jsonError(INVALID_CATEGORY_SUBMIT_MESSAGE, 400);
     }
