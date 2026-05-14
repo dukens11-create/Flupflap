@@ -52,7 +52,6 @@ const sellerNav: RoleNavItem[] = [
   { label: 'Payouts', href: '/seller#payouts' },
   { label: 'Promotions', href: '/seller#promotion-status' },
   { label: 'Verification Status', href: '/seller#verification-status' },
-  { label: 'Messages', href: '/messages' },
 ];
 
 const adminNav: RoleNavItem[] = [
