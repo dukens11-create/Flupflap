@@ -41,7 +41,7 @@ export async function ensureFashionCategoryHierarchy(db: CategoryWriter) {
         create: {
           name: 'T-Shirts',
           slug: 'fashion-men-tshirts',
-          aliases: ['tshirts', 't-shirt', 'tee'],
+          aliases: ['t-shirts', 'tshirts', 't-shirt', 'tee'],
           parentId: men.id,
           level: 2,
           sortOrder: 1,

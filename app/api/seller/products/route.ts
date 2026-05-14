@@ -73,9 +73,6 @@ const schema = z.object({
   categoryId: z.string().trim().optional(),
   subcategoryId: z.string().trim().optional(),
   parentCategoryId: z.string().trim().optional(),
-  categoryName: z.string().trim().optional(),
-  categorySlug: z.string().trim().optional(),
-  categoryPath: z.string().trim().optional(),
   categoryStale: z.string().trim().optional(),
   productAttributes: z.string().optional(), // JSON string
   mediaEnhancements: z.string().optional(),
@@ -205,6 +202,9 @@ export async function POST(req: Request) {
     const incomingBody = toLogSafeObject(form.entries());
     console.info('[seller/products POST] incoming request body', incomingBody);
     const rawEntries = Object.fromEntries(form.entries());
+    const submittedCategoryName = typeof rawEntries.categoryName === 'string' ? rawEntries.categoryName.trim() : '';
+    const submittedCategorySlug = typeof rawEntries.categorySlug === 'string' ? rawEntries.categorySlug.trim() : '';
+    const submittedCategoryPath = typeof rawEntries.categoryPath === 'string' ? rawEntries.categoryPath.trim() : '';
     // Collect multiple "images" values from form (MediaUpload uses multiple hidden inputs)
     const imagesRaw = form.getAll('images').map(String).filter(Boolean);
     const imageUrlsRaw = form.getAll('imageUrls').map(String).filter(Boolean);
@@ -228,9 +228,9 @@ export async function POST(req: Request) {
         categoryId: data.categoryId ?? null,
         subcategoryId: data.subcategoryId ?? null,
         parentCategoryId: data.parentCategoryId ?? null,
-        categoryName: data.categoryName ?? null,
-        categorySlug: data.categorySlug ?? null,
-        categoryPath: data.categoryPath ?? null,
+        categoryName: submittedCategoryName || null,
+        categorySlug: submittedCategorySlug || null,
+        categoryPath: submittedCategoryPath || null,
         categoryLabel: data.category ?? data.refineCategory ?? data.subcategory ?? null,
       });
     }
