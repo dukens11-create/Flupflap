@@ -128,6 +128,10 @@
   "filters": {
     "searchPlaceholder": "Rechercher des produits…",
     "allCategories": "Toutes les catégories",
+    "browseCategories": "Parcourir les catégories",
+    "searchCategories": "Rechercher des catégories",
+    "noMatchingCategories": "Aucune catégorie correspondante trouvée.",
+    "selectedCategory": "Sélectionnée",
     "anyCondition": "Tout état",
     "minPrice": "Min $",
     "maxPrice": "Max $",

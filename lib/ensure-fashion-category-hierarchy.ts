@@ -1,52 +1,53 @@
-import type { PrismaClient } from '@prisma/client';
+import { Prisma, type PrismaClient } from '@prisma/client';
+import { DEFAULT_CATEGORY_TREE, type DefaultCategoryNode } from '@/lib/default-categories';
 
 type CategoryWriter = Pick<PrismaClient, 'category'>;
 let ensurePromise: Promise<void> | null = null;
 
 /**
- * Ensures the Fashion > Men > T-Shirts branch exists for environments that
+ * Ensures the default marketplace hierarchy exists for environments that
  * have not run the latest seed script yet. Safe to call repeatedly.
  */
 export async function ensureFashionCategoryHierarchy(db: CategoryWriter) {
   if (!ensurePromise) {
     ensurePromise = (async () => {
-      const fashion = await db.category.upsert({
-        where: { slug: 'fashion' },
-        update: {},
-        create: {
-          name: 'Fashion',
-          slug: 'fashion',
-          level: 0,
-          icon: '👗',
-          sortOrder: 2,
-          parentId: null,
-        },
-      });
+      async function upsertNode(entry: DefaultCategoryNode, parentId: string | null) {
+        const attributeSchemaValue =
+          entry.attributeSchema === null
+            ? Prisma.JsonNull
+            : (entry.attributeSchema as Prisma.InputJsonValue);
 
-      const men = await db.category.upsert({
-        where: { slug: 'fashion-men' },
-        update: {},
-        create: {
-          name: 'Men',
-          slug: 'fashion-men',
-          parentId: fashion.id,
-          level: 1,
-          sortOrder: 1,
-        },
-      });
+        const record = await db.category.upsert({
+          where: { slug: entry.slug },
+          update: {
+            name: entry.name,
+            aliases: entry.aliases,
+            parentId,
+            level: entry.level,
+            icon: entry.icon,
+            sortOrder: entry.sortOrder,
+            attributeSchema: attributeSchemaValue,
+          },
+          create: {
+            name: entry.name,
+            slug: entry.slug,
+            aliases: entry.aliases,
+            parentId,
+            level: entry.level,
+            icon: entry.icon,
+            sortOrder: entry.sortOrder,
+            attributeSchema: attributeSchemaValue,
+          },
+        });
 
-      await db.category.upsert({
-        where: { slug: 'fashion-men-tshirts' },
-        update: {},
-        create: {
-          name: 'T-Shirts',
-          slug: 'fashion-men-tshirts',
-          aliases: ['t-shirts', 'tshirts', 't-shirt', 'tee'],
-          parentId: men.id,
-          level: 2,
-          sortOrder: 1,
-        },
-      });
+        for (const child of entry.children) {
+          await upsertNode(child, record.id);
+        }
+      }
+
+      for (const root of DEFAULT_CATEGORY_TREE) {
+        await upsertNode(root, null);
+      }
     })();
   }
 
