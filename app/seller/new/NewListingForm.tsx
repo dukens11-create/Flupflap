@@ -70,7 +70,7 @@ export default function NewListingForm() {
     const resolvedImages = images.length > 0 ? images : (fallbackImage ? [fallbackImage] : []);
 
     if (!title) nextErrors.title = 'Please enter a product title.';
-    if (!category && !categoryId) nextErrors.category = 'Please select a category.';
+    if (!category && !categoryId) nextErrors.category = 'Please select a valid category before submitting.';
     if (!condition) nextErrors.condition = 'Please select an item condition.';
 
     const price = Number(priceRaw);

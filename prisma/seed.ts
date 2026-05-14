@@ -220,17 +220,21 @@ async function seedCategories() {
 
   // Fashion → Men children
   await prisma.category.createMany({ data: [
-    { name: 'Shoes', slug: 'fashion-men-shoes', parentId: men.id, level: 2, sortOrder: 1, attributeSchema: SHOE_FIELDS },
-    { name: 'Watches', slug: 'fashion-men-watches', parentId: men.id, level: 2, sortOrder: 2, attributeSchema: CLOTHING_FIELDS },
-    { name: 'Jackets', slug: 'fashion-men-jackets', parentId: men.id, level: 2, sortOrder: 3, attributeSchema: CLOTHING_FIELDS },
-    { name: 'Shirts', slug: 'fashion-men-shirts', parentId: men.id, level: 2, sortOrder: 4, attributeSchema: CLOTHING_FIELDS },
-    { name: 'Trousers', slug: 'fashion-men-trousers', parentId: men.id, level: 2, sortOrder: 5, attributeSchema: CLOTHING_FIELDS },
+    { name: 'T-Shirts', slug: 'fashion-men-tshirts', aliases: ['tshirts', 't-shirt', 'tee'], parentId: men.id, level: 2, sortOrder: 1, attributeSchema: CLOTHING_FIELDS },
+    { name: 'Shirts', slug: 'fashion-men-shirts', parentId: men.id, level: 2, sortOrder: 2, attributeSchema: CLOTHING_FIELDS },
+    { name: 'Pants', slug: 'fashion-men-trousers', aliases: ['pants', 'trousers'], parentId: men.id, level: 2, sortOrder: 3, attributeSchema: CLOTHING_FIELDS },
+    { name: 'Shoes', slug: 'fashion-men-shoes', parentId: men.id, level: 2, sortOrder: 4, attributeSchema: SHOE_FIELDS },
+    { name: 'Watches', slug: 'fashion-men-watches', parentId: men.id, level: 2, sortOrder: 5, attributeSchema: CLOTHING_FIELDS },
+    { name: 'Jackets', slug: 'fashion-men-jackets', parentId: men.id, level: 2, sortOrder: 6, attributeSchema: CLOTHING_FIELDS },
   ]});
 
   // Fashion → Women children
   await prisma.category.createMany({ data: [
-    { name: 'Dresses', slug: 'fashion-women-dresses', parentId: women.id, level: 2, sortOrder: 1, attributeSchema: CLOTHING_FIELDS },
-    { name: 'Handbags', slug: 'fashion-women-handbags', parentId: women.id, level: 2, sortOrder: 2, attributeSchema: CLOTHING_FIELDS },
+    { name: 'Tops', slug: 'fashion-women-tops', parentId: women.id, level: 2, sortOrder: 1, attributeSchema: CLOTHING_FIELDS },
+    { name: 'Dresses', slug: 'fashion-women-dresses', parentId: women.id, level: 2, sortOrder: 2, attributeSchema: CLOTHING_FIELDS },
+    { name: 'Pants', slug: 'fashion-women-pants', aliases: ['trousers'], parentId: women.id, level: 2, sortOrder: 3, attributeSchema: CLOTHING_FIELDS },
+    { name: 'Shoes', slug: 'fashion-women-shoes', parentId: women.id, level: 2, sortOrder: 4, attributeSchema: SHOE_FIELDS },
+    { name: 'Handbags', slug: 'fashion-women-handbags', parentId: women.id, level: 2, sortOrder: 5, attributeSchema: CLOTHING_FIELDS },
     {
       name: 'Perfume & Fragrance',
       // Keep legacy slug to avoid breaking condition mappings tied to this category slug.
@@ -238,25 +242,33 @@ async function seedCategories() {
       aliases: ['perfume', 'perfum', 'fragrance', 'cologne', 'body mist', 'scent'],
       parentId: women.id,
       level: 2,
-      sortOrder: 3,
+      sortOrder: 6,
       attributeSchema: PERFUME_FIELDS,
     },
-    { name: 'Shoes', slug: 'fashion-women-shoes', parentId: women.id, level: 2, sortOrder: 4, attributeSchema: SHOE_FIELDS },
-    { name: 'Jewelry', slug: 'fashion-women-jewelry', parentId: women.id, level: 2, sortOrder: 5, attributeSchema: CLOTHING_FIELDS },
+    { name: 'Jewelry', slug: 'fashion-women-jewelry', parentId: women.id, level: 2, sortOrder: 7, attributeSchema: CLOTHING_FIELDS },
   ]});
 
   // Fashion → Kids children
   await prisma.category.createMany({ data: [
     {
-      name: 'Clothing',
-      slug: 'fashion-kids-clothing',
-      aliases: ['clothing', 'cloth', 'clothes', 'apparel'],
+      name: 'T-Shirts',
+      slug: 'fashion-kids-tshirts',
+      aliases: ['tshirts', 't-shirt', 'tee'],
       parentId: kids.id,
       level: 2,
       sortOrder: 1,
       attributeSchema: CLOTHING_FIELDS,
     },
-    { name: 'Shoes', slug: 'fashion-kids-shoes', parentId: kids.id, level: 2, sortOrder: 2, attributeSchema: SHOE_FIELDS },
+    {
+      name: 'Clothing Sets',
+      slug: 'fashion-kids-clothing',
+      aliases: ['clothing', 'cloth', 'clothes', 'apparel', 'clothing sets'],
+      parentId: kids.id,
+      level: 2,
+      sortOrder: 2,
+      attributeSchema: CLOTHING_FIELDS,
+    },
+    { name: 'Shoes', slug: 'fashion-kids-shoes', parentId: kids.id, level: 2, sortOrder: 3, attributeSchema: SHOE_FIELDS },
   ]});
 
   // Fashion → Unisex children

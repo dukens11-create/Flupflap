@@ -72,9 +72,12 @@ const schema = z.object({
   categoryId: z.string().trim().optional(),
   subcategoryId: z.string().trim().optional(),
   parentCategoryId: z.string().trim().optional(),
+  categoryStale: z.string().trim().optional(),
   productAttributes: z.string().optional(), // JSON string
   mediaEnhancements: z.string().optional(),
 });
+
+const INVALID_CATEGORY_SUBMIT_MESSAGE = 'Please select a valid category before submitting.';
 
 function jsonError(message: string, status: number) {
   return NextResponse.json({ success: false, message }, { status });
@@ -293,6 +296,9 @@ export async function POST(req: Request) {
           : (attributes as Prisma.InputJsonValue);
 
     const categoryNodes = await loadCategoryHierarchyNodes(prisma);
+    if (data.categoryStale === 'true') {
+      return jsonError(INVALID_CATEGORY_SUBMIT_MESSAGE, 400);
+    }
     const validatedCategory = validateCategorySelection(categoryNodes, {
       categoryId: data.categoryId,
       subcategoryId: data.subcategoryId,
@@ -300,7 +306,14 @@ export async function POST(req: Request) {
       categoryLabel: data.category ?? data.refineCategory ?? data.subcategory ?? '',
     });
     if (!validatedCategory.ok) {
-      return jsonError(validatedCategory.message, 400);
+      console.warn('[seller/products POST] invalid category selection', {
+        categoryId: data.categoryId ?? null,
+        subcategoryId: data.subcategoryId ?? null,
+        parentCategoryId: data.parentCategoryId ?? null,
+        categoryLabel: data.category ?? data.refineCategory ?? data.subcategory ?? null,
+        message: validatedCategory.message,
+      });
+      return jsonError(INVALID_CATEGORY_SUBMIT_MESSAGE, 400);
     }
     const category = validatedCategory.displayName;
 
