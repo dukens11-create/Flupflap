@@ -1,16 +1,21 @@
 import 'package:flutter/material.dart';
 
 class AppTheme {
-  // Brand colours — mirrors the FlupFlap website palette
-  static const Color primary = Color(0xFF6366F1);    // indigo-500
-  static const Color primaryDark = Color(0xFF4F46E5); // indigo-600
-  static const Color accent = Color(0xFF10B981);      // emerald-500
-  static const Color danger = Color(0xFFEF4444);      // red-500
-  static const Color warning = Color(0xFFF59E0B);     // amber-500
-  static const Color surface = Color(0xFFF8FAFC);     // slate-50
-  static const Color textPrimary = Color(0xFF1E293B); // slate-800
+  // Brand colours — FlupFlap marketplace palette
+  static const Color primary = Color(0xFF1B3A6B);       // navy blue
+  static const Color primaryDark = Color(0xFF0F2748);   // deep navy
+  static const Color accent = Color(0xFFFF6520);        // vibrant orange
+  static const Color logoGreen = Color(0xFF10B981);     // emerald (logo use only)
+  static const Color danger = Color(0xFFEF4444);        // red-500
+  static const Color warning = Color(0xFFF59E0B);       // amber-500
+  static const Color surface = Color(0xFFF5F5F7);       // light gray background
+  static const Color textPrimary = Color(0xFF1E293B);   // slate-800
   static const Color textSecondary = Color(0xFF64748B); // slate-500
-  static const Color border = Color(0xFFE2E8F0);      // slate-200
+  static const Color border = Color(0xFFE2E8F0);        // slate-200
+
+  // Trust-badge icon colours
+  static const Color trustBlue = Color(0xFF3B82F6);    // blue-500
+  static const Color trustPurple = Color(0xFF8B5CF6);  // violet-500
 
   static ThemeData get lightTheme {
     return ThemeData(
@@ -25,32 +30,34 @@ class AppTheme {
       ),
       scaffoldBackgroundColor: surface,
       appBarTheme: const AppBarTheme(
-        backgroundColor: Colors.white,
-        foregroundColor: textPrimary,
+        backgroundColor: primary,
+        foregroundColor: Colors.white,
         elevation: 0,
-        scrolledUnderElevation: 1,
+        scrolledUnderElevation: 0,
+        iconTheme: IconThemeData(color: Colors.white),
         titleTextStyle: TextStyle(
-          color: textPrimary,
+          color: Colors.white,
           fontWeight: FontWeight.w800,
           fontSize: 18,
         ),
       ),
       cardTheme: CardTheme(
         color: Colors.white,
-        elevation: 0,
+        elevation: 2,
+        shadowColor: Color(0x18000000),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: const BorderSide(color: border),
+          borderRadius: BorderRadius.circular(14),
         ),
-        margin: const EdgeInsets.all(0),
+        margin: EdgeInsets.zero,
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: primary,
           foregroundColor: Colors.white,
           minimumSize: const Size(double.infinity, 48),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+          elevation: 0,
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -58,7 +65,7 @@ class AppTheme {
           foregroundColor: primary,
           minimumSize: const Size(double.infinity, 48),
           side: const BorderSide(color: primary),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
         ),
       ),
@@ -72,19 +79,19 @@ class AppTheme {
         filled: true,
         fillColor: Colors.white,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: border),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: border),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: primary, width: 2),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: danger),
         ),
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
