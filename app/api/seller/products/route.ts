@@ -334,7 +334,9 @@ export async function POST(req: Request) {
       validatedCategory.path.find((node) => node.level >= 2)?.name
       ?? data.refineCategory
       ?? null;
-    console.log('Submitting categoryId:', safeCategoryId);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('Submitting categoryId:', safeCategoryId);
+    }
     const categoryRecord = await prisma.category.findUnique({
       where: { id: safeCategoryId },
       select: { id: true, name: true, slug: true, parentId: true, level: true },

@@ -410,6 +410,8 @@ export default function CategoryPicker({
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    const staleCategoryStorageVersionKey = 'flupflap_seller_category_storage_cleanup_v1';
+    if (window.sessionStorage.getItem(staleCategoryStorageVersionKey) === 'done') return;
     const staleCategoryStorageKeys = [
       'flupflap_seller_category_selection',
       'flupflap_seller_category_id',
@@ -420,6 +422,7 @@ export default function CategoryPicker({
       window.sessionStorage.removeItem(key);
       window.localStorage.removeItem(key);
     }
+    window.sessionStorage.setItem(staleCategoryStorageVersionKey, 'done');
   }, []);
 
   useEffect(() => {
