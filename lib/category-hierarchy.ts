@@ -73,17 +73,15 @@ export async function loadCategoryHierarchyNodesWithFallback(
   db: CategoryHierarchyReader,
 ): Promise<CategoryHierarchyNode[]> {
   const dbNodes = await loadCategoryHierarchyNodes(db);
-  const defaultNodes = flattenDefaultCategoryNodes(DEFAULT_CATEGORY_TREE);
 
   if (dbNodes.length === 0) {
     // No categories in DB — use the static default tree for validation.
-    return defaultNodes;
+    return flattenDefaultCategoryNodes(DEFAULT_CATEGORY_TREE);
   }
 
-  // Merge: DB nodes take precedence; add default nodes for any IDs not in DB.
-  const existingIds = new Set(dbNodes.map((node) => node.id));
-  const fallbacks = defaultNodes.filter((node) => !existingIds.has(node.id));
-  return [...dbNodes, ...fallbacks];
+  // When the DB has categories, validate only against DB-backed IDs to avoid
+  // accepting static fallback IDs that are not persisted.
+  return dbNodes;
 }
 
 function normalizeTerm(value: string | null | undefined): string {

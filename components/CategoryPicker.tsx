@@ -49,6 +49,7 @@ interface Props {
 export interface SelectedCategoryState {
   categoryId: string;
   categoryName: string;
+  categorySlug: string;
   categoryPath: string;
   leafCategoryId: string;
   parentCategoryId: string;
@@ -69,6 +70,7 @@ const FUZZY_MATCH_TOLERANCE_RATIO = 0.35;
 const STRONG_FUZZY_MATCH_RATIO = 0.25;
 const STRONG_MATCH_SCORE_THRESHOLD = 65;
 const INVALID_CATEGORY_MESSAGE = 'Please select a valid category before submitting.';
+const CATEGORY_STORAGE_CLEANUP_VERSION_KEY = 'flupflap_seller_category_storage_cleanup_v1';
 
 function normalizeSearchTerm(value: string): string {
   return value
@@ -408,6 +410,22 @@ export default function CategoryPicker({
   }, [defaultAttributes]);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (window.sessionStorage.getItem(CATEGORY_STORAGE_CLEANUP_VERSION_KEY) === 'done') return;
+    const staleCategoryStorageKeys = [
+      'flupflap_seller_category_selection',
+      'flupflap_seller_category_id',
+      'flupflap_seller_subcategory_id',
+      'flupflap_seller_category_path',
+    ];
+    for (const key of staleCategoryStorageKeys) {
+      window.sessionStorage.removeItem(key);
+      window.localStorage.removeItem(key);
+    }
+    window.sessionStorage.setItem(CATEGORY_STORAGE_CLEANUP_VERSION_KEY, 'done');
+  }, []);
+
+  useEffect(() => {
     let mounted = true;
 
     async function loadCategories() {
@@ -538,6 +556,7 @@ export default function CategoryPicker({
     onSelectionChange?.({
       categoryId: submittedCategoryId ?? '',
       categoryName: leafName,
+      categorySlug: leafSlug,
       categoryPath,
       leafCategoryId: leafCategoryId ?? '',
       parentCategoryId: parentCategoryId ?? '',
@@ -549,6 +568,7 @@ export default function CategoryPicker({
     categoryStale,
     leafCategoryId,
     leafName,
+    leafSlug,
     onSelectionChange,
     parentCategoryId,
     submittedCategoryId,
@@ -807,6 +827,7 @@ export default function CategoryPicker({
       <input type="hidden" name="parentCategoryId" value={parentCategoryId ?? ''} />
       <input type="hidden" name="category" value={leafName} />
       <input type="hidden" name="categoryName" value={leafName} />
+      <input type="hidden" name="categorySlug" value={leafSlug} />
       <input type="hidden" name="categoryPath" value={categoryPath} />
       <input type="hidden" name="productAttributes" value={JSON.stringify(attrs)} />
       <input type="hidden" name="categoryStale" value={categoryStale ? 'true' : ''} />
