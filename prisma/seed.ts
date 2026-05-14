@@ -409,6 +409,7 @@ async function ensureBeautyCategory() {
 }
 
 async function ensureFashionCategoryHierarchy() {
+  const clothingSchema = JSON.parse(CLOTHING_FIELDS);
   const fashion = await prisma.category.upsert({
     where: { slug: 'fashion' },
     update: {
@@ -451,7 +452,7 @@ async function ensureFashionCategoryHierarchy() {
       parentId: men.id,
       level: 2,
       sortOrder: 1,
-      attributeSchema: JSON.parse(CLOTHING_FIELDS),
+      attributeSchema: clothingSchema,
     },
     create: {
       name: 'T-Shirts',
@@ -460,7 +461,7 @@ async function ensureFashionCategoryHierarchy() {
       parentId: men.id,
       level: 2,
       sortOrder: 1,
-      attributeSchema: JSON.parse(CLOTHING_FIELDS),
+      attributeSchema: clothingSchema,
     },
   });
 
@@ -471,7 +472,7 @@ async function ensureFashionCategoryHierarchy() {
       parentId: men.id,
       level: 2,
       sortOrder: 2,
-      attributeSchema: JSON.parse(CLOTHING_FIELDS),
+      attributeSchema: clothingSchema,
     },
     create: {
       name: 'Shirts',
@@ -479,7 +480,7 @@ async function ensureFashionCategoryHierarchy() {
       parentId: men.id,
       level: 2,
       sortOrder: 2,
-      attributeSchema: JSON.parse(CLOTHING_FIELDS),
+      attributeSchema: clothingSchema,
     },
   });
 
