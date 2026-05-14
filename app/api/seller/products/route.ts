@@ -319,7 +319,7 @@ export async function POST(req: Request) {
       categoryId: data.categoryId,
       subcategoryId: data.subcategoryId,
       parentCategoryId: data.parentCategoryId,
-      categoryLabel: data.categoryName ?? data.category ?? data.refineCategory ?? data.subcategory ?? '',
+      categoryLabel: data.category ?? data.refineCategory ?? data.subcategory ?? '',
     });
     if (!validatedCategory.ok) {
       console.warn('[seller/products POST] invalid category selection', {

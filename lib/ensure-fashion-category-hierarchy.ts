@@ -47,11 +47,13 @@ export async function ensureFashionCategoryHierarchy(db: CategoryWriter) {
           sortOrder: 1,
         },
       });
-    })().catch((error) => {
-      ensurePromise = null;
-      throw error;
-    });
+    })();
   }
 
-  await ensurePromise;
+  try {
+    await ensurePromise;
+  } catch (error) {
+    ensurePromise = null;
+    throw error;
+  }
 }
