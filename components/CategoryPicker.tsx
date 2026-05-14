@@ -57,6 +57,7 @@ const WEAK_MATCH_BASE_SCORE = 10;
 const FUZZY_MATCH_TOLERANCE_RATIO = 0.35;
 const STRONG_FUZZY_MATCH_RATIO = 0.25;
 const STRONG_MATCH_SCORE_THRESHOLD = 65;
+const INVALID_CATEGORY_MESSAGE = 'Please select a valid category before submitting.';
 
 function normalizeSearchTerm(value: string): string {
   return value
@@ -417,7 +418,7 @@ export default function CategoryPicker({
           setSubId(null);
           setChildId(null);
           setCategoryStale(true);
-          setCategoryError('');
+          setCategoryError(INVALID_CATEGORY_MESSAGE);
         } else if (nextPath.mainId || nextPath.subId || nextPath.childId) {
           setMainId(nextPath.mainId);
           setSubId(nextPath.subId);
@@ -440,6 +441,17 @@ export default function CategoryPicker({
       mounted = false;
     };
   }, [defaultCategoryId, defaultSubcategoryId, reloadToken]);
+
+  useEffect(() => {
+    if (!mainId) return;
+    if (findNodeById(categories, mainId)) return;
+    setMainId(null);
+    setSubId(null);
+    setChildId(null);
+    setAttrs({});
+    setCategoryStale(true);
+    setCategoryError(INVALID_CATEGORY_MESSAGE);
+  }, [categories, mainId]);
 
   const mainNode = mainId ? findNodeById(categories, mainId) : null;
   const subNode = subId ? findNodeById(categories, subId) : null;
@@ -574,12 +586,9 @@ export default function CategoryPicker({
     if (!form) return;
 
     function handleSubmit(event: Event) {
-      // Only block submission if no category is selected AND it's not a
-      // stale-category situation (stale allows submit without category so
-      // unrelated edits like shipping updates are not blocked).
-      if (!mainId && !categoryStale) {
+      if (!mainId || categoryStale) {
         event.preventDefault();
-        setCategoryError('Please select a category.');
+        setCategoryError(INVALID_CATEGORY_MESSAGE);
       }
     }
 
@@ -764,7 +773,7 @@ export default function CategoryPicker({
       {/* Warning shown when the stored category no longer maps to the current category tree */}
       {categoryStale && (
         <p className="rounded-xl border border-yellow-300 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
-          ⚠️ The previously selected category is no longer available. You can save unrelated changes now, or select a new category below.
+          ⚠️ The previously selected category is no longer available. Please select a valid category before submitting.
         </p>
       )}
 

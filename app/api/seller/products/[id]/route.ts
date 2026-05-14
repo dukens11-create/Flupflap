@@ -70,10 +70,12 @@ const updateSchema = z.object({
   categoryId: z.string().optional(),
   subcategoryId: z.string().optional(),
   parentCategoryId: z.string().optional(),
+  categoryStale: z.string().optional(),
   productAttributes: z.string().optional(), // JSON string
 });
 
 type ProductUpdateInput = z.infer<typeof updateSchema>;
+const INVALID_CATEGORY_SUBMIT_MESSAGE = 'Please select a valid category before submitting.';
 
 type ExistingProduct = NonNullable<Awaited<ReturnType<typeof getOwnedSellerProduct>>['product']>;
 
@@ -159,6 +161,16 @@ function hasSubmittedCategorySelection(data: ProductUpdateInput) {
 }
 
 async function resolveSubmittedCategorySelection(data: ProductUpdateInput) {
+  if (data.categoryStale === 'true') {
+    return {
+      submitted: false,
+      categoryId: null,
+      subcategoryId: null,
+      categoryName: '',
+      error: INVALID_CATEGORY_SUBMIT_MESSAGE,
+    };
+  }
+
   const submitted = hasSubmittedCategorySelection(data);
   const fallback = {
     submitted,
@@ -188,8 +200,6 @@ async function resolveSubmittedCategorySelection(data: ProductUpdateInput) {
   }
 
   // Validation failed — attempt legacy resolution before blocking the save.
-  // This allows stale/reorganised category IDs to be repaired progressively
-  // without hard-blocking unrelated edits (e.g. shipping updates).
   const legacyResolution = resolveLegacyCategorySelection(categoryNodes, {
     categoryId: data.categoryId,
     subcategoryId: data.subcategoryId,
@@ -213,8 +223,7 @@ async function resolveSubmittedCategorySelection(data: ProductUpdateInput) {
     };
   }
 
-  // Legacy resolution also failed. Return with submitted=false so the caller
-  // preserves the existing product category rather than hard-blocking the save.
+  // Legacy resolution also failed. Require a valid active category selection.
   console.warn('[resolveSubmittedCategorySelection] could not resolve submitted category — preserving existing', {
     categoryId: data.categoryId ?? null,
     subcategoryId: data.subcategoryId ?? null,
@@ -224,7 +233,7 @@ async function resolveSubmittedCategorySelection(data: ProductUpdateInput) {
   return {
     ...fallback,
     submitted: false,
-    error: null,
+    error: INVALID_CATEGORY_SUBMIT_MESSAGE,
   };
 }
 
