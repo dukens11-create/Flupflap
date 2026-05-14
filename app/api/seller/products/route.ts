@@ -14,6 +14,7 @@ import {
 } from '@/lib/fraud-detection';
 import { parseJsonOrNull } from '@/lib/parse-json';
 import { loadCategoryHierarchyNodesWithFallback, validateCategorySelection } from '@/lib/category-hierarchy';
+import { ensureFashionCategoryHierarchy } from '@/lib/ensure-fashion-category-hierarchy';
 import {
   convertWeightToOunces,
   normalizeWeightUnit,
@@ -201,6 +202,9 @@ export async function POST(req: Request) {
     const incomingBody = toLogSafeObject(form.entries());
     console.info('[seller/products POST] incoming request body', incomingBody);
     const rawEntries = Object.fromEntries(form.entries());
+    const submittedCategoryName = typeof rawEntries.categoryName === 'string' ? rawEntries.categoryName.trim() : '';
+    const submittedCategorySlug = typeof rawEntries.categorySlug === 'string' ? rawEntries.categorySlug.trim() : '';
+    const submittedCategoryPath = typeof rawEntries.categoryPath === 'string' ? rawEntries.categoryPath.trim() : '';
     // Collect multiple "images" values from form (MediaUpload uses multiple hidden inputs)
     const imagesRaw = form.getAll('images').map(String).filter(Boolean);
     const imageUrlsRaw = form.getAll('imageUrls').map(String).filter(Boolean);
@@ -219,6 +223,17 @@ export async function POST(req: Request) {
       return jsonError(parsed.error.issues[0]?.message ?? 'Invalid input.', 400);
     }
     const data = parsed.data;
+    if (process.env.NODE_ENV !== 'production') {
+      console.info('[seller/products POST] parsed category fields', {
+        categoryId: data.categoryId ?? null,
+        subcategoryId: data.subcategoryId ?? null,
+        parentCategoryId: data.parentCategoryId ?? null,
+        categoryName: submittedCategoryName || null,
+        categorySlug: submittedCategorySlug || null,
+        categoryPath: submittedCategoryPath || null,
+        categoryLabel: data.category ?? data.refineCategory ?? data.subcategory ?? null,
+      });
+    }
 
     // Resolve images array: prefer multi-images/imageUrls, fall back to legacy imageUrl
     const resolvedImages: string[] = imagesRaw.length
@@ -295,6 +310,7 @@ export async function POST(req: Request) {
           ? undefined
           : (attributes as Prisma.InputJsonValue);
 
+    await ensureFashionCategoryHierarchy(prisma);
     const categoryNodes = await loadCategoryHierarchyNodesWithFallback(prisma);
     if (data.categoryStale === 'true') {
       return jsonError(INVALID_CATEGORY_SUBMIT_MESSAGE, 400);
@@ -341,6 +357,13 @@ export async function POST(req: Request) {
       where: { id: safeCategoryId },
       select: { id: true, name: true, slug: true, parentId: true, level: true },
     });
+    if (process.env.NODE_ENV !== 'production') {
+      console.info('[seller/products POST] category existence lookup', {
+        requestedCategoryId: safeCategoryId,
+        found: Boolean(categoryRecord),
+        categoryRecord,
+      });
+    }
     if (!categoryRecord) {
       return jsonError('Selected category does not exist. Please reselect a category and try again.', 400);
     }
@@ -349,6 +372,13 @@ export async function POST(req: Request) {
         where: { id: safeSubcategoryId },
         select: { id: true, name: true, slug: true, parentId: true, level: true },
       });
+      if (process.env.NODE_ENV !== 'production') {
+        console.info('[seller/products POST] subcategory existence lookup', {
+          requestedSubcategoryId: safeSubcategoryId,
+          found: Boolean(subcategoryRecord),
+          subcategoryRecord,
+        });
+      }
       if (!subcategoryRecord) {
         return jsonError('Selected subcategory does not exist. Please reselect a category and try again.', 400);
       }

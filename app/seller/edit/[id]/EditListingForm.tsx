@@ -190,10 +190,18 @@ export default function EditListingForm({
         enhancedImages: formData.getAll('enhancedImages').map(String).filter(Boolean),
         imageThumbnails: formData.getAll('imageThumbnails').map(String).filter(Boolean),
       };
-      console.log('selectedCategory', selectedCategory);
-      console.log('categoryId', submittedCategoryId);
-      console.log('categoryPath', categoryPath);
-      console.log('payload', payload);
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('selectedCategory', selectedCategory);
+        console.log('hiddenCategoryInputs', {
+          categoryId: submittedCategoryId,
+          subcategoryId: String(formData.get('subcategoryId') ?? '').trim(),
+          parentCategoryId: String(formData.get('parentCategoryId') ?? '').trim(),
+          leafCategoryId: String(formData.get('leafCategoryId') ?? '').trim(),
+        });
+        console.log('categoryId', submittedCategoryId);
+        console.log('categoryPath', categoryPath);
+        console.log('payload', payload);
+      }
       const res = await fetch(`/api/seller/products/${id}`, {
         method: 'POST',
         headers: { Accept: 'application/json' },

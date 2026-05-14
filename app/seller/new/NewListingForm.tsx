@@ -154,10 +154,18 @@ export default function NewListingForm() {
     setErrors({});
     setSubmitting(true);
     try {
-      console.log('selectedCategory', selectedCategory);
-      console.log('categoryId', categoryId);
-      console.log('categoryPath', categoryPath);
-      console.log('payload', payload);
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('selectedCategory', selectedCategory);
+        console.log('hiddenCategoryInputs', {
+          categoryId,
+          subcategoryId: String(formData.get('subcategoryId') ?? '').trim(),
+          parentCategoryId: String(formData.get('parentCategoryId') ?? '').trim(),
+          leafCategoryId: String(formData.get('leafCategoryId') ?? '').trim(),
+        });
+        console.log('categoryId', categoryId);
+        console.log('categoryPath', categoryPath);
+        console.log('payload', payload);
+      }
       const res = await fetch('/api/seller/products', {
         method: 'POST',
         headers: { Accept: 'application/json' },

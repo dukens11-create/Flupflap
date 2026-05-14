@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { DEFAULT_CATEGORY_TREE } from '@/lib/default-categories';
 import { normalizePerfumeAttributeSchema } from '@/lib/category-attribute-schema';
 import { isDatabaseConfigured, prisma } from '@/lib/db';
+import { ensureFashionCategoryHierarchy } from '@/lib/ensure-fashion-category-hierarchy';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,6 +48,7 @@ export async function GET() {
   }
 
   try {
+    await ensureFashionCategoryHierarchy(prisma);
     const cats = await prisma.category.findMany({
       orderBy: [{ level: 'asc' }, { sortOrder: 'asc' }],
       select: { id: true, name: true, slug: true, aliases: true, parentId: true, level: true, icon: true, sortOrder: true, attributeSchema: true },
