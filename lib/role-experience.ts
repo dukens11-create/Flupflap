@@ -39,10 +39,7 @@ export type RoleNavItem = {
 
 const buyerNav: RoleNavItem[] = [
   { label: 'Browse', href: '/' },
-  { label: 'Cart', href: '/cart' },
   { label: 'Orders', href: '/orders' },
-  { label: 'Messages', href: '/messages' },
-  { label: 'Notifications', href: '/notifications' },
   { label: 'Account', href: '/account' },
 ];
 

@@ -2,7 +2,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { signOut, useSession } from 'next-auth/react';
-import { ShoppingCart, Package, LogIn, UserPlus, LogOut, User, MessageCircle, Bell, Menu, X, ChevronDown } from 'lucide-react';
+import { ShoppingCart, LogIn, UserPlus, LogOut, User, MessageCircle, Bell, Menu, X, ChevronDown } from 'lucide-react';
 import LanguageSelector from '@/components/LanguageSelector';
 import { useI18n } from '@/components/I18nProvider';
 import { useEffect, useState } from 'react';
@@ -112,10 +112,13 @@ export default function Navbar() {
   const { t } = useI18n();
   const navLinkClass = 'rounded-full px-3 py-2 transition-colors hover:bg-slate-100 link-hover-navy';
   const actionLinkClass = 'relative flex items-center gap-1 rounded-full px-3 py-2 transition-colors hover:bg-slate-100 link-hover-navy';
+  const iconButtonClass = 'relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-600 transition-all hover:bg-slate-100 active:scale-[0.98] link-hover-navy';
+  const iconBadgeClass = 'absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] font-bold text-white';
   const callbackPathname = pathname && pathname !== '/' ? pathname : null;
   const loginHref = callbackPathname ? `/login?callbackUrl=${encodeURIComponent(callbackPathname)}` : '/login';
   const signupHref = callbackPathname ? `/signup?callbackUrl=${encodeURIComponent(callbackPathname)}` : '/signup';
   const localSellersHref = '/?pickup=1';
+  const formatBadgeCount = (count: number) => (count > 99 ? '99+' : String(count));
 
   return (
     <header className="sticky top-0 z-30 border-b border-slate-200 bg-white">
@@ -129,18 +132,48 @@ export default function Navbar() {
                 width={614}
                 height={255}
                 priority
-                className="h-14 w-auto sm:h-16"
+                className="h-10 w-auto sm:h-12"
               />
             </Link>
-            <button
-              type="button"
-              className="inline-flex items-center justify-center rounded-full border border-slate-200 p-2 text-slate-600 md:hidden"
-              onClick={() => setMobileOpen((open) => !open)}
-              aria-label="Toggle mobile menu"
-              aria-expanded={mobileOpen}
-            >
-              {mobileOpen ? <X size={18} /> : <Menu size={18} />}
-            </button>
+            <div className="flex items-center gap-1 md:hidden">
+              {session?.user && experienceRole === 'buyer' && (
+                <>
+                  <Link href="/cart" className={iconButtonClass} aria-label={t('nav.cart')}>
+                    <ShoppingCart size={17} />
+                    {cartCount > 0 && (
+                      <span className={`${iconBadgeClass} bg-amber-500`}>
+                        {formatBadgeCount(cartCount)}
+                      </span>
+                    )}
+                  </Link>
+                  <Link href="/messages" className={iconButtonClass} aria-label={t('nav.messages')}>
+                    <MessageCircle size={17} />
+                    {unreadMessages > 0 && (
+                      <span className={`${iconBadgeClass} bg-emerald-500`}>
+                        {formatBadgeCount(unreadMessages)}
+                      </span>
+                    )}
+                  </Link>
+                  <Link href="/notifications" className={iconButtonClass} aria-label={t('nav.notifications')}>
+                    <Bell size={17} />
+                    {unreadNotifications > 0 && (
+                      <span className={`${iconBadgeClass} bg-emerald-500`}>
+                        {formatBadgeCount(unreadNotifications)}
+                      </span>
+                    )}
+                  </Link>
+                </>
+              )}
+              <button
+                type="button"
+                className={iconButtonClass}
+                onClick={() => setMobileOpen((open) => !open)}
+                aria-label="Toggle mobile menu"
+                aria-expanded={mobileOpen}
+              >
+                {mobileOpen ? <X size={18} /> : <Menu size={18} />}
+              </button>
+            </div>
           </div>
 
           <div className="hidden flex-1 flex-col gap-3 md:flex lg:flex-row lg:items-center">
@@ -238,35 +271,32 @@ export default function Navbar() {
                 <>
                   {experienceRole === 'buyer' && (
                     <>
-                      <Link href="/cart" className={actionLinkClass}>
-                        <ShoppingCart size={16} /> {t('nav.cart')}
+                      <Link href="/cart" className={iconButtonClass} aria-label={t('nav.cart')}>
+                        <ShoppingCart size={17} />
                         {cartCount > 0 && (
-                          <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-amber-500 px-1 text-xs font-bold text-white">
-                            {cartCount}
+                          <span className={`${iconBadgeClass} bg-amber-500`}>
+                            {formatBadgeCount(cartCount)}
                           </span>
                         )}
                       </Link>
-                      <Link href="/orders" className={actionLinkClass}>
-                        <Package size={16} /> {t('nav.orders')}
-                      </Link>
-                      <Link href="/messages" className={actionLinkClass}>
-                        <MessageCircle size={16} /> {t('nav.messages')}
+                      <Link href="/messages" className={iconButtonClass} aria-label={t('nav.messages')}>
+                        <MessageCircle size={17} />
                         {unreadMessages > 0 && (
-                          <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-emerald-500 px-1 text-xs font-bold text-white">
-                            {unreadMessages}
+                          <span className={`${iconBadgeClass} bg-emerald-500`}>
+                            {formatBadgeCount(unreadMessages)}
                           </span>
                         )}
                       </Link>
-                      <Link href="/notifications" className={actionLinkClass}>
-                        <Bell size={16} /> {t('nav.notifications')}
+                      <Link href="/notifications" className={iconButtonClass} aria-label={t('nav.notifications')}>
+                        <Bell size={17} />
                         {unreadNotifications > 0 && (
-                          <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-emerald-500 px-1 text-xs font-bold text-white">
-                            {unreadNotifications}
+                          <span className={`${iconBadgeClass} bg-emerald-500`}>
+                            {formatBadgeCount(unreadNotifications)}
                           </span>
                         )}
                       </Link>
-                      <Link href="/account" className={actionLinkClass}>
-                        <User size={16} /> {t('nav.account')}
+                      <Link href="/account" className={iconButtonClass} aria-label={t('nav.account')}>
+                        <User size={17} />
                       </Link>
                     </>
                   )}
