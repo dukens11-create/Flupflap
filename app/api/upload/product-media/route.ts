@@ -8,8 +8,8 @@ import {
   logCloudinaryConfigStatus,
 } from '@/lib/cloudinary';
 import {
+  getCloudinaryProductsFolder,
   getProductMediaKind,
-  getProductMediaFolderByKind,
   getProductMediaMaxBytes,
   getProductMediaUploadError,
 } from '@/lib/product-media';
@@ -88,7 +88,7 @@ export async function POST(req: Request) {
   }
 
   const timestamp = Math.floor(Date.now() / 1000);
-  const folder = getProductMediaFolderByKind(mediaKind);
+  const folder = getCloudinaryProductsFolder();
   const cloudinaryEnv = getCloudinaryEnvConfig();
   if (!cloudinaryEnv) {
     return NextResponse.json(
@@ -102,7 +102,6 @@ export async function POST(req: Request) {
   }
 
   const paramsToSign = {
-    backup: 'true',
     folder,
     timestamp,
   };
@@ -114,7 +113,6 @@ export async function POST(req: Request) {
     return NextResponse.json({
       success: true,
       apiKey: cloudinaryEnv.apiKey,
-      backup: true,
       folder,
       timestamp,
       signature,
