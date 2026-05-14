@@ -162,9 +162,6 @@ export default function Navbar() {
                       </span>
                     )}
                   </Link>
-                  <Link href="/account" className={iconButtonClass} aria-label={t('nav.account')}>
-                    <User size={17} />
-                  </Link>
                 </>
               )}
               <button
