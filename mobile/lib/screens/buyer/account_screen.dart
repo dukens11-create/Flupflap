@@ -138,7 +138,7 @@ class AccountScreen extends StatelessWidget {
               icon: Icons.phone_outlined,
               title: 'Phone & Security',
               trailing: user?.phoneVerified == true
-                  ? const Icon(Icons.verified, color: AppTheme.accent, size: 18)
+                  ? const Icon(Icons.verified, color: AppTheme.logoGreen, size: 18)
                   : null,
               onTap: () {
                 // TODO: implement phone verification
