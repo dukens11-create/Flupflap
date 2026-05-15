@@ -97,6 +97,11 @@ Set these in **Environment → Environment Variables** in the Render dashboard:
 | `NEXT_PUBLIC_APP_URL` | Same as `NEXTAUTH_URL` |
 | `NEXT_PUBLIC_SITE_URL` | Primary public site URL used for redirects and absolute links (e.g. `https://www.flupflap.com`) |
 | `NEXT_PUBLIC_API_URL` | Optional API base for external/mobile integrations; set to your backend URL if different from the site domain |
+| `NEXT_PUBLIC_FIREBASE_API_KEY` | Firebase Web API key (seller signup phone OTP) |
+| `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | Firebase auth domain |
+| `NEXT_PUBLIC_FIREBASE_PROJECT_ID` | Firebase project ID |
+| `NEXT_PUBLIC_FIREBASE_APP_ID` | Firebase web app ID |
+| `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | Firebase messaging sender ID |
 | `STRIPE_SECRET_KEY` | Stripe secret key |
 | `STRIPE_PUBLISHABLE_KEY` | Stripe publishable key |
 | `STRIPE_WEBHOOK_SECRET` | Secret from your Stripe webhook endpoint |

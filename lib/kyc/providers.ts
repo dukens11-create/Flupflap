@@ -21,10 +21,9 @@ export type SellerKycChecks = {
 const DEFAULT_PROVIDER_REJECTION_REASON = 'Provider verification failed.';
 
 export function resolveAutomatedKycStatus(checks: SellerKycChecks): SellerVerificationStatus {
-  // Identity verification (government ID + selfie) is the primary KYC gate.
-  // Address and phone checks from Stripe Connect are supplementary and are not
-  // required to unlock selling features.
-  if (checks.governmentIdVerified && checks.selfieVerified) {
+  // Identity verification (government ID + selfie) and phone verification are
+  // required before sellers are auto-approved.
+  if (checks.governmentIdVerified && checks.selfieVerified && checks.phoneVerified) {
     return SellerVerificationStatus.APPROVED;
   }
   return SellerVerificationStatus.PENDING;
@@ -108,18 +107,31 @@ export async function applyAutomatedKycResult(input: {
   forcedStatus?: SellerVerificationStatus;
   rejectionReason?: string | null;
 }) {
-  const status = input.forcedStatus ?? resolveAutomatedKycStatus(input.checks);
   const now = new Date();
   const [seller, existingVerification] = await Promise.all([
     prisma.user.findUnique({
       where: { id: input.sellerId },
-      select: { phone: true },
+      select: { phone: true, phoneVerified: true },
     }),
     prisma.sellerVerification.findUnique({
       where: { sellerId: input.sellerId },
       select: { status: true },
     }),
   ]);
+  const isPhoneVerified = Boolean(seller?.phoneVerified);
+  const checksWithPhoneRequirement: SellerKycChecks = {
+    ...input.checks,
+    phoneVerified: isPhoneVerified,
+  };
+  let status = resolveAutomatedKycStatus(checksWithPhoneRequirement);
+  if (input.forcedStatus) {
+    status = input.forcedStatus;
+    // Forced provider/admin approvals still require phone verification to prevent
+    // any seller approval path from bypassing the verified-phone gate.
+    if (status === SellerVerificationStatus.APPROVED && !isPhoneVerified) {
+      status = SellerVerificationStatus.PENDING;
+    }
+  }
 
   await prisma.sellerVerification.upsert({
     where: { sellerId: input.sellerId },
@@ -134,11 +146,11 @@ export async function applyAutomatedKycResult(input: {
         status === 'REJECTED'
           ? input.rejectionReason ?? DEFAULT_PROVIDER_REJECTION_REASON
           : null,
-      governmentIdVerified: input.checks.governmentIdVerified,
-      selfieVerified: input.checks.selfieVerified,
-      addressVerified: input.checks.addressVerified,
-      phoneVerified: input.checks.phoneVerified,
-      phoneVerificationStatus: input.checks.phoneVerified
+      governmentIdVerified: checksWithPhoneRequirement.governmentIdVerified,
+      selfieVerified: checksWithPhoneRequirement.selfieVerified,
+      addressVerified: checksWithPhoneRequirement.addressVerified,
+      phoneVerified: checksWithPhoneRequirement.phoneVerified,
+      phoneVerificationStatus: checksWithPhoneRequirement.phoneVerified
         ? SellerPhoneVerificationStatus.VERIFIED
         : SellerPhoneVerificationStatus.PENDING,
       providerReviewedAt: now,
@@ -164,12 +176,12 @@ export async function applyAutomatedKycResult(input: {
         status === 'REJECTED'
           ? input.rejectionReason ?? DEFAULT_PROVIDER_REJECTION_REASON
           : null,
-      governmentIdVerified: input.checks.governmentIdVerified,
-      selfieVerified: input.checks.selfieVerified,
-      addressVerified: input.checks.addressVerified,
-      phoneVerified: input.checks.phoneVerified,
+      governmentIdVerified: checksWithPhoneRequirement.governmentIdVerified,
+      selfieVerified: checksWithPhoneRequirement.selfieVerified,
+      addressVerified: checksWithPhoneRequirement.addressVerified,
+      phoneVerified: checksWithPhoneRequirement.phoneVerified,
       phoneNumber: seller?.phone ?? '',
-      phoneVerificationStatus: input.checks.phoneVerified
+      phoneVerificationStatus: checksWithPhoneRequirement.phoneVerified
         ? SellerPhoneVerificationStatus.VERIFIED
         : SellerPhoneVerificationStatus.PENDING,
       street: '',
