@@ -5,57 +5,10 @@ import { useRouter } from 'next/navigation';
 import type { ConfirmationResult } from 'firebase/auth';
 import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 import { getFirebaseClientAuth } from '@/lib/firebase/client';
+import { getFirebasePhoneAuthErrorMessage } from '@/lib/firebase/phone-auth-errors';
 import { normalizePhone } from '@/lib/phone';
 
 const OTP_CODE_LENGTH = 6;
-
-function getFirebaseErrorCode(error: unknown): string | undefined {
-  if (typeof error === 'object' && error !== null && 'code' in error) {
-    const value = (error as { code?: unknown }).code;
-    return typeof value === 'string' ? value : undefined;
-  }
-  return undefined;
-}
-
-function mapFirebasePhoneAuthError(code?: string) {
-  if (code === 'auth/missing-phone-number') {
-    return 'Please enter your phone number before requesting a code.';
-  }
-  if (code === 'auth/invalid-verification-code') {
-    return 'Invalid OTP code. Please check the code and try again.';
-  }
-  if (code === 'auth/code-expired') {
-    return 'This OTP has expired. Please request a new code.';
-  }
-  if (code === 'auth/too-many-requests') {
-    return 'Too many attempts. Please wait a moment before trying again.';
-  }
-  if (code === 'auth/invalid-phone-number') {
-    return 'Invalid phone number. Please include your country code (e.g. +1).';
-  }
-  if (code === 'auth/quota-exceeded') {
-    return 'SMS quota exceeded right now. Please try again later.';
-  }
-  if (code === 'auth/captcha-check-failed' || code === 'auth/invalid-app-credential') {
-    return 'Security check failed. Please refresh and try again.';
-  }
-  if (code === 'firebase/not-configured') {
-    return 'Phone verification is not configured right now. Please contact support.';
-  }
-  if (!code) {
-    return 'Phone verification is unavailable right now. Please check your connection and try again.';
-  }
-  if (code === 'auth/operation-not-allowed') {
-    return 'Phone sign-in is not enabled for this app. Please contact support.';
-  }
-  if (code === 'auth/unauthorized-domain') {
-    return 'This domain is not authorized for phone sign-in. Please contact support.';
-  }
-  if (code === 'auth/network-request-failed') {
-    return 'Network error. Please check your connection and try again.';
-  }
-  return 'Phone verification failed. Please try again.';
-}
 
 export default function SellerPhoneVerificationCard() {
   const router = useRouter();
@@ -67,6 +20,7 @@ export default function SellerPhoneVerificationCard() {
   const [success, setSuccess] = useState('');
   const confirmationResultRef = useRef<ConfirmationResult | null>(null);
   const recaptchaRef = useRef<RecaptchaVerifier | null>(null);
+  const recaptchaContainerId = 'seller-verification-recaptcha';
 
   function resetRecaptchaVerifier() {
     if (!recaptchaRef.current) return;
@@ -94,7 +48,7 @@ export default function SellerPhoneVerificationCard() {
       }
       const auth = getFirebaseClientAuth();
       if (!recaptchaRef.current) {
-        recaptchaRef.current = new RecaptchaVerifier(auth, 'seller-verification-recaptcha', {
+        recaptchaRef.current = new RecaptchaVerifier(auth, recaptchaContainerId, {
           size: 'invisible',
         });
       }
@@ -102,7 +56,7 @@ export default function SellerPhoneVerificationCard() {
       confirmationResultRef.current = confirmation;
       setOtpSent(true);
     } catch (err: unknown) {
-      setError(mapFirebasePhoneAuthError(getFirebaseErrorCode(err)));
+      setError(getFirebasePhoneAuthErrorMessage(err));
       resetRecaptchaVerifier();
     } finally {
       setLoading(false);
@@ -153,7 +107,7 @@ export default function SellerPhoneVerificationCard() {
       setOtpCode('');
       router.refresh();
     } catch (err: unknown) {
-      setError(mapFirebasePhoneAuthError(getFirebaseErrorCode(err)));
+      setError(getFirebasePhoneAuthErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -177,7 +131,7 @@ export default function SellerPhoneVerificationCard() {
           disabled={loading}
           required
         />
-        <div id="seller-verification-recaptcha" className="hidden" />
+        <div id={recaptchaContainerId} className="hidden" />
         {!otpSent ? (
           <button type="button" className="btn-primary text-sm" onClick={sendCode} disabled={loading || !phone.trim()}>
             {loading ? 'Sending…' : 'Send Code'}

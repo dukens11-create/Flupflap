@@ -5,6 +5,7 @@ import * as Sentry from '@sentry/nextjs';
 import type { ConfirmationResult } from 'firebase/auth';
 import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 import { getFirebaseClientAuth } from '@/lib/firebase/client';
+import { getFirebasePhoneAuthErrorMessage } from '@/lib/firebase/phone-auth-errors';
 import { normalizePhone } from '@/lib/phone';
 
 type SellerPhoneVerificationProps = {
@@ -14,55 +15,6 @@ type SellerPhoneVerificationProps = {
   onVerified: (verifiedPhoneNumber: string, firebaseIdToken: string) => void;
   onResetVerification: () => void;
 };
-
-function getErrorCode(err: unknown): string | undefined {
-  if (typeof err === 'object' && err !== null && 'code' in err) {
-    const value = (err as { code?: unknown }).code;
-    return typeof value === 'string' ? value : undefined;
-  }
-  return undefined;
-}
-
-function getPhoneVerificationErrorMessage(err: unknown) {
-  const code = getErrorCode(err);
-  if (code === 'auth/missing-phone-number') {
-    return 'Please enter your phone number before requesting a code.';
-  }
-  if (code === 'auth/invalid-verification-code') {
-    return 'Invalid OTP code. Please check the code and try again.';
-  }
-  if (code === 'auth/code-expired') {
-    return 'This OTP has expired. Please request a new code.';
-  }
-  if (code === 'auth/too-many-requests') {
-    return 'Too many attempts. Please wait a moment before trying again.';
-  }
-  if (code === 'auth/invalid-phone-number') {
-    return 'Invalid phone number. Please include your country code (e.g. +1).';
-  }
-  if (code === 'auth/quota-exceeded') {
-    return 'SMS quota exceeded right now. Please try again later.';
-  }
-  if (code === 'auth/captcha-check-failed' || code === 'auth/invalid-app-credential') {
-    return 'Security check failed. Please refresh and try again.';
-  }
-  if (code === 'auth/operation-not-allowed') {
-    return 'Phone sign-in is not enabled for this app. Please contact support.';
-  }
-  if (code === 'auth/unauthorized-domain') {
-    return 'This domain is not authorized for phone sign-in. Please contact support.';
-  }
-  if (code === 'auth/network-request-failed') {
-    return 'Network error. Please check your connection and try again.';
-  }
-  if (code === 'firebase/not-configured') {
-    return 'Phone verification is not configured right now. Please contact support.';
-  }
-  if (!code) {
-    return 'Phone verification is unavailable right now. Please check your connection and try again.';
-  }
-  return 'Phone verification failed. Please try again.';
-}
 
 export default function SellerPhoneVerification({
   phone,
@@ -112,7 +64,7 @@ export default function SellerPhoneVerification({
       confirmationResultRef.current = confirmation;
       setOtpSent(true);
     } catch (err: unknown) {
-      setPhoneOtpError(getPhoneVerificationErrorMessage(err));
+      setPhoneOtpError(getFirebasePhoneAuthErrorMessage(err));
       resetRecaptchaVerifier();
     } finally {
       setPhoneOtpLoading(false);
@@ -149,7 +101,7 @@ export default function SellerPhoneVerification({
         });
       });
     } catch (err: unknown) {
-      setPhoneOtpError(getPhoneVerificationErrorMessage(err));
+      setPhoneOtpError(getFirebasePhoneAuthErrorMessage(err));
     } finally {
       setPhoneOtpLoading(false);
     }
