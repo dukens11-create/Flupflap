@@ -3,7 +3,7 @@ function getFirebaseErrorCode(error: unknown): string | undefined {
     const value = (error as { code?: unknown }).code;
     return typeof value === 'string' ? value : undefined;
   }
-  return typeof error === 'string' ? error : undefined;
+  return undefined;
 }
 
 export function getFirebasePhoneAuthErrorMessage(error: unknown) {

@@ -102,7 +102,7 @@ Set these in **Environment → Environment Variables** in the Render dashboard:
 | `NEXT_PUBLIC_FIREBASE_PROJECT_ID` | Firebase project ID |
 | `NEXT_PUBLIC_FIREBASE_APP_ID` | Firebase web app ID |
 | `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | Firebase messaging sender ID |
-| `NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID` | Optional Firebase Analytics measurement ID; Analytics is initialized only when this is set |
+| `NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID` | Optional Firebase analytics measurement ID; analytics is initialized only when this is set |
 | `FIREBASE_API_KEY` | Server-side Firebase API key for validating phone-verified ID tokens (can be the same value as `NEXT_PUBLIC_FIREBASE_API_KEY`; if omitted, the public key is used as fallback) |
 | `STRIPE_SECRET_KEY` | Stripe secret key |
 | `STRIPE_PUBLISHABLE_KEY` | Stripe publishable key |
