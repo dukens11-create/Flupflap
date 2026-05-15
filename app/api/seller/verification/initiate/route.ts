@@ -27,6 +27,7 @@ export async function POST() {
         select: {
           id: true,
           phone: true,
+          phoneVerified: true,
           stripeAccountId: true,
         },
       }),
@@ -76,8 +77,11 @@ export async function POST() {
         eligibleToListAt: null,
         kycStartedAt,
         phoneNumber: user.phone ?? '',
+        phoneVerified: Boolean(user.phoneVerified && user.phone),
         phoneVerificationStatus: user.phone
-          ? SellerPhoneVerificationStatus.PENDING
+          ? (user.phoneVerified
+            ? SellerPhoneVerificationStatus.VERIFIED
+            : SellerPhoneVerificationStatus.PENDING)
           : SellerPhoneVerificationStatus.NOT_STARTED,
       },
       create: {
@@ -88,8 +92,11 @@ export async function POST() {
         providerVerificationId,
         status: SellerVerificationStatus.PENDING,
         phoneNumber: user.phone ?? '',
+        phoneVerified: Boolean(user.phoneVerified && user.phone),
         phoneVerificationStatus: user.phone
-          ? SellerPhoneVerificationStatus.PENDING
+          ? (user.phoneVerified
+            ? SellerPhoneVerificationStatus.VERIFIED
+            : SellerPhoneVerificationStatus.PENDING)
           : SellerPhoneVerificationStatus.NOT_STARTED,
         street: '',
         city: '',

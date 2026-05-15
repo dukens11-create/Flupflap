@@ -91,7 +91,7 @@ export async function POST(
     const { id } = await params;
     const seller = await prisma.user.findUnique({
       where: { id },
-      select: { id: true, role: true },
+      select: { id: true, role: true, phoneVerified: true },
     });
 
     if (!seller || seller.role !== 'SELLER') {
@@ -106,6 +106,15 @@ export async function POST(
       ]),
     );
     const data = schema.parse(raw);
+
+    if (data.status === SellerVerificationStatus.APPROVED && !seller.phoneVerified) {
+      const errUrl = new URL('/admin/sellers', req.url);
+      errUrl.searchParams.set(
+        'error',
+        'Seller phone is not verified yet. Approvals are blocked until phone verification is complete.',
+      );
+      return NextResponse.redirect(errUrl, 302);
+    }
 
     const verification = await prisma.sellerVerification.findUnique({
       where: { sellerId: id },
