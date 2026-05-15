@@ -1,6 +1,7 @@
 'use client';
 
 import { FirebaseApp, getApp, getApps, initializeApp } from 'firebase/app';
+import { getAnalytics, isSupported } from 'firebase/analytics';
 import { Auth, getAuth } from 'firebase/auth';
 
 type FirebaseClientConfig = {
@@ -9,7 +10,10 @@ type FirebaseClientConfig = {
   projectId: string;
   appId: string;
   messagingSenderId?: string;
+  measurementId?: string;
 };
+
+let analyticsInitializationStarted = false;
 
 function getFirebaseClientConfig(): FirebaseClientConfig {
   const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY?.trim() ?? '';
@@ -17,6 +21,7 @@ function getFirebaseClientConfig(): FirebaseClientConfig {
   const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID?.trim() ?? '';
   const appId = process.env.NEXT_PUBLIC_FIREBASE_APP_ID?.trim() ?? '';
   const messagingSenderId = process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID?.trim() ?? '';
+  const measurementId = process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID?.trim() ?? '';
 
   if (!apiKey || !authDomain || !projectId || !appId) {
     throw new Error(
@@ -30,14 +35,29 @@ function getFirebaseClientConfig(): FirebaseClientConfig {
     projectId,
     appId,
     messagingSenderId: messagingSenderId || undefined,
+    measurementId: measurementId || undefined,
   };
 }
 
+function initializeFirebaseAnalyticsIfEnabled(app: FirebaseApp) {
+  if (analyticsInitializationStarted || typeof window === 'undefined') return;
+  if (!process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID?.trim()) return;
+  analyticsInitializationStarted = true;
+  isSupported()
+    .then((supported) => {
+      if (supported) {
+        getAnalytics(app);
+      }
+    })
+    .catch(() => {
+      analyticsInitializationStarted = false;
+    });
+}
+
 function getFirebaseApp(): FirebaseApp {
-  if (getApps().length > 0) {
-    return getApp();
-  }
-  return initializeApp(getFirebaseClientConfig());
+  const app = getApps().length > 0 ? getApp() : initializeApp(getFirebaseClientConfig());
+  initializeFirebaseAnalyticsIfEnabled(app);
+  return app;
 }
 
 export function getFirebaseClientAuth(): Auth {
