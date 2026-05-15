@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import type { ConfirmationResult } from 'firebase/auth';
 import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 import { getFirebaseClientAuth } from '@/lib/firebase/client';
+import { normalizePhone } from '@/lib/phone';
 
 const OTP_CODE_LENGTH = 6;
 
@@ -44,6 +45,15 @@ function mapFirebasePhoneAuthError(code?: string) {
   if (!code) {
     return 'Phone verification is unavailable right now. Please check your connection and try again.';
   }
+  if (code === 'auth/operation-not-allowed') {
+    return 'Phone sign-in is not enabled for this app. Please contact support.';
+  }
+  if (code === 'auth/unauthorized-domain') {
+    return 'This domain is not authorized for phone sign-in. Please contact support.';
+  }
+  if (code === 'auth/network-request-failed') {
+    return 'Network error. Please check your connection and try again.';
+  }
   return 'Phone verification failed. Please try again.';
 }
 
@@ -76,13 +86,19 @@ export default function SellerPhoneVerificationCard() {
     setSuccess('');
     setLoading(true);
     try {
+      const normalizedPhoneForFirebase = normalizePhone(phone);
+      if (!normalizedPhoneForFirebase) {
+        setError('Invalid phone number. Please include your country code (e.g. +1 for US/Canada).');
+        setLoading(false);
+        return;
+      }
       const auth = getFirebaseClientAuth();
       if (!recaptchaRef.current) {
         recaptchaRef.current = new RecaptchaVerifier(auth, 'seller-verification-recaptcha', {
           size: 'invisible',
         });
       }
-      const confirmation = await signInWithPhoneNumber(auth, phone, recaptchaRef.current);
+      const confirmation = await signInWithPhoneNumber(auth, normalizedPhoneForFirebase, recaptchaRef.current);
       confirmationResultRef.current = confirmation;
       setOtpSent(true);
     } catch (err: unknown) {
@@ -111,6 +127,9 @@ export default function SellerPhoneVerificationCard() {
       }
       const confirmation = await confirmationResultRef.current.confirm(normalizedOtpCode);
       const idToken = await confirmation.user.getIdToken(true);
+      await getFirebaseClientAuth().signOut().catch((signOutErr) => {
+        console.error('[seller-phone-verify] Firebase signOut failed after OTP confirmation', signOutErr);
+      });
       const res = await fetch('/api/seller/phone/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

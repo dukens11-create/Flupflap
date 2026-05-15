@@ -5,6 +5,7 @@ import * as Sentry from '@sentry/nextjs';
 import type { ConfirmationResult } from 'firebase/auth';
 import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 import { getFirebaseClientAuth } from '@/lib/firebase/client';
+import { normalizePhone } from '@/lib/phone';
 
 type SellerPhoneVerificationProps = {
   phone: string;
@@ -14,8 +15,16 @@ type SellerPhoneVerificationProps = {
   onResetVerification: () => void;
 };
 
-function getPhoneVerificationErrorMessage(err: { code?: string; message?: string } | null | undefined) {
-  const code = err?.code;
+function getErrorCode(err: unknown): string | undefined {
+  if (typeof err === 'object' && err !== null && 'code' in err) {
+    const value = (err as { code?: unknown }).code;
+    return typeof value === 'string' ? value : undefined;
+  }
+  return undefined;
+}
+
+function getPhoneVerificationErrorMessage(err: unknown) {
+  const code = getErrorCode(err);
   if (code === 'auth/missing-phone-number') {
     return 'Please enter your phone number before requesting a code.';
   }
@@ -36,6 +45,15 @@ function getPhoneVerificationErrorMessage(err: { code?: string; message?: string
   }
   if (code === 'auth/captcha-check-failed' || code === 'auth/invalid-app-credential') {
     return 'Security check failed. Please refresh and try again.';
+  }
+  if (code === 'auth/operation-not-allowed') {
+    return 'Phone sign-in is not enabled for this app. Please contact support.';
+  }
+  if (code === 'auth/unauthorized-domain') {
+    return 'This domain is not authorized for phone sign-in. Please contact support.';
+  }
+  if (code === 'auth/network-request-failed') {
+    return 'Network error. Please check your connection and try again.';
   }
   if (code === 'firebase/not-configured') {
     return 'Phone verification is not configured right now. Please contact support.';
@@ -78,16 +96,22 @@ export default function SellerPhoneVerification({
     setPhoneOtpError('');
     setPhoneOtpLoading(true);
     try {
+      const normalizedPhoneForFirebase = normalizePhone(phone);
+      if (!normalizedPhoneForFirebase) {
+        setPhoneOtpError('Invalid phone number. Please include your country code (e.g. +1 for US/Canada).');
+        setPhoneOtpLoading(false);
+        return;
+      }
       const auth = getFirebaseClientAuth();
       if (!recaptchaRef.current) {
         recaptchaRef.current = new RecaptchaVerifier(auth, recaptchaContainerId, {
           size: 'invisible',
         });
       }
-      const confirmation = await signInWithPhoneNumber(auth, phone, recaptchaRef.current);
+      const confirmation = await signInWithPhoneNumber(auth, normalizedPhoneForFirebase, recaptchaRef.current);
       confirmationResultRef.current = confirmation;
       setOtpSent(true);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setPhoneOtpError(getPhoneVerificationErrorMessage(err));
       resetRecaptchaVerifier();
     } finally {
@@ -124,7 +148,7 @@ export default function SellerPhoneVerification({
           },
         });
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       setPhoneOtpError(getPhoneVerificationErrorMessage(err));
     } finally {
       setPhoneOtpLoading(false);
