@@ -157,6 +157,93 @@ original vs enhanced before submitting.
 
 ---
 
+## Firebase Phone Auth (seller signup verification)
+
+Firebase Phone Authentication is used during **seller account creation** to verify
+the seller's mobile number via OTP before the account is created.  A separate
+Twilio-based OTP is used at every seller **login** (see the next section).
+
+### How the signup flow works
+
+1. The seller fills in name, email, password, selects **Seller**, and enters
+   their phone number on `/signup`.
+2. They click **Send Code** — Firebase sends an SMS OTP to the phone number via
+   an invisible reCAPTCHA check.
+3. The seller enters the 6-digit code and clicks **Verify Code**.
+4. On success the verified phone number and a short-lived Firebase ID token are
+   stored in client state.
+5. When the seller submits the form, the API (`/api/auth/signup`) verifies the
+   Firebase ID token server-side and creates the account with
+   `phoneVerified = true` already set.
+
+Existing sellers who signed up before phone verification was required will see a
+**Phone verification required** card on their seller dashboard (`/seller`).  That
+card triggers the same Firebase OTP flow and calls `/api/seller/phone/verify` to
+persist the result.
+
+### Step 1 — Create / configure a Firebase project
+
+1. Go to <https://console.firebase.google.com> and create (or select) a project.
+2. In the project sidebar choose **Authentication → Sign-in method**.
+3. Enable **Phone** as a sign-in provider and click **Save**.
+4. In **Authentication → Settings → Authorized domains** add every domain that
+   will serve the signup page (e.g. `yourdomain.com`, `your-app.onrender.com`,
+   and any preview domains).  `localhost` is added by default.
+
+### Step 2 — Get your web app credentials
+
+1. In the Firebase console go to **Project Settings → General**.
+2. Under **Your apps** click **Add app → Web** (or select an existing web app).
+3. Copy the `firebaseConfig` object — you need the values for the env vars below.
+
+### Step 3 — Set environment variables
+
+Add the following to your hosting environment (e.g. Render → Environment):
+
+| Variable | Where to find it |
+|---|---|
+| `NEXT_PUBLIC_FIREBASE_API_KEY` | `firebaseConfig.apiKey` |
+| `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | `firebaseConfig.authDomain` |
+| `NEXT_PUBLIC_FIREBASE_PROJECT_ID` | `firebaseConfig.projectId` |
+| `NEXT_PUBLIC_FIREBASE_APP_ID` | `firebaseConfig.appId` |
+| `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | `firebaseConfig.messagingSenderId` (optional) |
+| `NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID` | `firebaseConfig.measurementId` — only if you want Analytics |
+| `FIREBASE_API_KEY` | Same value as `NEXT_PUBLIC_FIREBASE_API_KEY` — used for server-side token verification |
+
+> **Note:** `FIREBASE_API_KEY` is used on the server to verify the Firebase ID
+> token after OTP confirmation.  It must equal your Firebase Web API key.  If
+> omitted, the server falls back to `NEXT_PUBLIC_FIREBASE_API_KEY` automatically.
+
+Redeploy after adding the variables.
+
+### Testing Firebase Phone Auth locally
+
+Firebase provides **test phone numbers** that always receive a fixed OTP without
+actually sending an SMS — useful for local development and CI.
+
+1. In Firebase Console → **Authentication → Phone** scroll to
+   **Phone numbers for testing**.
+2. Add a test number, e.g. `+15005550005`, and assign it a code, e.g. `123456`.
+3. Use that number on `/signup` locally.  Firebase accepts the fixed code without
+   hitting the SMS network or consuming quota.
+
+> Real SMS is only sent when you use a real, non-whitelisted phone number and
+> your Firebase project has billing enabled (Blaze plan) or is within the free
+> SMS quota.
+
+### Troubleshooting Firebase Phone Auth
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| **"Phone verification is unavailable"** on Send Code | Firebase env vars missing or wrong | Check all `NEXT_PUBLIC_FIREBASE_*` vars are set and redeploy |
+| **"Security check failed"** on Send Code | Invisible reCAPTCHA blocked | Allow `gstatic.com`, `google.com`, and `googleapis.com` in any firewall/CSP; check for ad-blockers in the browser |
+| No SMS arrives | Phone Auth not enabled in Firebase | Enable **Phone** sign-in provider in Firebase Console → Authentication |
+| No SMS on staging/preview URL | Domain not authorized | Add the domain to **Firebase Console → Authentication → Authorized domains** |
+| Server returns **"Phone verification has expired"** | Firebase ID token expired (>1 h) | Ask the seller to request a fresh OTP code |
+| Server returns **"Firebase API key is not configured"** | `FIREBASE_API_KEY` not set | Set `FIREBASE_API_KEY` (or ensure `NEXT_PUBLIC_FIREBASE_API_KEY` is present as fallback) |
+
+---
+
 ## Seller two-factor authentication (phone OTP)
 
 When a seller signs in, FlupFlap sends a 6-digit one-time code to their
