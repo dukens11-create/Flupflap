@@ -92,7 +92,7 @@ export default function SellerPhoneVerification({
       setOtpSent(false);
       setOtpCode('');
       await getFirebaseClientAuth().signOut().catch((signOutError) => {
-        console.warn('[signup/phone-verification] Firebase signOut failed after OTP verification', signOutError);
+        console.warn('[phone-verification] Firebase signOut failed after OTP verification', signOutError);
         Sentry.captureException(signOutError, {
           tags: { area: 'auth', action: 'firebase_signout_after_phone_verify' },
           extra: {

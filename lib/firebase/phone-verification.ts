@@ -53,7 +53,10 @@ export async function verifyFirebasePhoneIdToken(idToken: string): Promise<Fireb
     }
 
     return { ok: true, phoneNumber };
-  } catch {
+  } catch (err) {
+    logError('Firebase phone lookup request failed.', err, {
+      tag: 'lib/firebase/phone-verification',
+    });
     return { ok: false, error: 'lookup_failed' };
   }
 }
