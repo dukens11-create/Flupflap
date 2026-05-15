@@ -18,17 +18,23 @@ function resolveRedirectPath(redirectTo: string | null | undefined) {
   return redirectTo;
 }
 
-function redirectWithMessage(req: Request, redirectTo: string, key: 'error' | 'success', message: string) {
-  const url = new URL(resolveRedirectPath(redirectTo), req.url);
-  url.searchParams.set(key, message);
-  return NextResponse.redirect(url, 303);
+function redirectWithMessage(redirectTo: string, key: 'error' | 'success', message: string) {
+  const path = resolveRedirectPath(redirectTo);
+  const searchParams = new URLSearchParams();
+  searchParams.set(key, message);
+  return new NextResponse(null, {
+    status: 303,
+    headers: {
+      Location: `${path}?${searchParams.toString()}`,
+    },
+  });
 }
 
 function respondError(req: Request, message: string, status: number, redirectTo = '/admin') {
   if (isJsonRequest(req)) {
     return NextResponse.json({ error: message }, { status });
   }
-  return redirectWithMessage(req, redirectTo, 'error', message);
+  return redirectWithMessage(redirectTo, 'error', message);
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -66,7 +72,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (isJsonRequest(req)) {
       return NextResponse.json({ success: true });
     }
-    return redirectWithMessage(req, redirectTo, 'success', 'Listing status updated.');
+    return redirectWithMessage(redirectTo, 'success', 'Listing status updated.');
   } catch (err) {
     console.error('[api/admin/products/[id] POST] unexpected error', err);
     return respondError(req, 'An unexpected error occurred.', 500);
