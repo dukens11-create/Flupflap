@@ -1,10 +1,39 @@
 "use client";
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import type { ConfirmationResult } from 'firebase/auth';
+import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 import { useI18n } from '@/components/I18nProvider';
 import { resolveRoleLoginDestination } from '@/lib/role-experience';
+import { getFirebaseClientAuth } from '@/lib/firebase/client';
+import { normalizePhone } from '@/lib/phone';
+
+const OTP_CODE_LENGTH = 6;
+
+function getFirebaseErrorMessage(error: unknown): string {
+  if (typeof error === 'object' && error !== null) {
+    const message = 'message' in error ? error.message : undefined;
+    if (typeof message === 'string' && message.trim()) {
+      return message.trim();
+    }
+    const code = 'code' in error ? error.code : undefined;
+    if (typeof code === 'string' && code.trim()) {
+      return code.trim();
+    }
+  }
+  if (error instanceof Error && error.message.trim()) {
+    return error.message.trim();
+  }
+  return 'Phone verification failed. Please try again.';
+}
+
+function maskPhone(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length < 4) return '****';
+  return `***-***-${digits.slice(-4)}`;
+}
 
 function LoginForm() {
   const { t } = useI18n();
@@ -23,6 +52,16 @@ function LoginForm() {
   // Hold credentials for later steps
   const [pendingEmail, setPendingEmail] = useState('');
   const [pendingPassword, setPendingPassword] = useState('');
+  const [pendingPhone, setPendingPhone] = useState('');
+  const confirmationResultRef = useRef<ConfirmationResult | null>(null);
+  const recaptchaRef = useRef<RecaptchaVerifier | null>(null);
+
+  useEffect(() => {
+    return () => {
+      recaptchaRef.current?.clear();
+      recaptchaRef.current = null;
+    };
+  }, []);
 
   async function redirectByRole() {
     setRedirecting(true);
@@ -40,9 +79,46 @@ function LoginForm() {
     router.refresh();
   }
 
-  /** Step 1 — validate credentials; send OTP to sellers. */
+  function getOrCreateRecaptchaVerifier() {
+    const auth = getFirebaseClientAuth();
+    if (!recaptchaRef.current) {
+      recaptchaRef.current = new RecaptchaVerifier(auth, 'recaptcha-container', {
+        size: 'invisible',
+      });
+    }
+    return { auth, verifier: recaptchaRef.current };
+  }
+
+  async function sendPhoneOtp(phoneNumber: string, phoneMask = maskPhone(phoneNumber)) {
+    const normalizedPhone = normalizePhone(phoneNumber);
+    if (!normalizedPhone) {
+      setError('Invalid phone number. Please include your country code (e.g. +1 for US/Canada).');
+      return false;
+    }
+
+    setPendingPhone(normalizedPhone);
+    setMaskedPhone(phoneMask);
+    setStep('otp');
+    setError('');
+    setLoading(true);
+
+    try {
+      const { auth, verifier } = getOrCreateRecaptchaVerifier();
+      confirmationResultRef.current = await signInWithPhoneNumber(auth, normalizedPhone, verifier);
+      return true;
+    } catch (err) {
+      confirmationResultRef.current = null;
+      setError(getFirebaseErrorMessage(err));
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  /** Step 1 — validate credentials; send Firebase OTP to sellers. */
   async function submitCredentials(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (loading) return;
     setError('');
     setLoading(true);
 
@@ -51,7 +127,7 @@ function LoginForm() {
     const password = form.get('password') as string;
 
     let res: Response;
-    let data: { step?: string; maskedPhone?: string; error?: string };
+    let data: { step?: string; phone?: string; maskedPhone?: string; error?: string };
     try {
       res = await fetch('/api/auth/otp/send', {
         method: 'POST',
@@ -74,15 +150,15 @@ function LoginForm() {
     }
 
     if (data.step === 'otp') {
-      // Seller: show OTP form
       setPendingEmail(email);
       setPendingPassword(password);
-      setMaskedPhone(data.maskedPhone ?? '');
-      setStep('otp');
+      if (data.phone) {
+        await sendPhoneOtp(data.phone, data.maskedPhone ?? maskPhone(data.phone));
+      }
     } else if (data.step === 'add_phone') {
-      // Seller without phone: show phone capture form
       setPendingEmail(email);
       setPendingPassword(password);
+      setPendingPhone('');
       setStep('add_phone');
     } else {
       // Non-seller: sign in directly
@@ -95,22 +171,20 @@ function LoginForm() {
     }
   }
 
-  /** Step 1b — seller has no phone; save phone and send OTP. */
+  /** Step 1b — seller has no phone; save phone and send Firebase OTP. */
   async function submitPhone(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (loading) return;
     setError('');
     setLoading(true);
 
-    const form = new FormData(e.currentTarget);
-    const phone = form.get('phone') as string;
-
     let res: Response;
-    let data: { step?: string; maskedPhone?: string; error?: string };
+    let data: { step?: string; phone?: string; maskedPhone?: string; error?: string };
     try {
       res = await fetch('/api/auth/otp/setup-phone', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: pendingEmail, password: pendingPassword, phone }),
+        body: JSON.stringify({ email: pendingEmail, password: pendingPassword, phone: pendingPhone }),
       });
       data = await res.json();
     } catch (err) {
@@ -127,89 +201,80 @@ function LoginForm() {
       return;
     }
 
-    if (data.step === 'signin') {
-      if (!pendingEmail || !pendingPassword) {
-        setError(t('login.missingLoginInfo'));
-        setStep('credentials');
-        return;
-      }
-      const result = await signIn('credentials', {
-        email: pendingEmail,
-        password: pendingPassword,
-        redirect: false,
-      });
-
-      if (result?.error) {
-        setError(t('login.invalidCredentials'));
-      } else {
-        await redirectByRole();
-      }
-      return;
+    if (data.step === 'otp' && data.phone) {
+      await sendPhoneOtp(data.phone, data.maskedPhone ?? maskPhone(data.phone));
     }
-
-    setMaskedPhone(data.maskedPhone ?? '');
-    setStep('otp');
   }
 
   /** Step 2 — submit OTP code; complete the seller sign-in. */
   async function submitOtp(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (loading) return;
+    if (!confirmationResultRef.current) {
+      setError('Please request a verification code first.');
+      return;
+    }
     setError('');
     setLoading(true);
 
     const form = new FormData(e.currentTarget);
     const otp = form.get('otp') as string;
+    const normalizedOtp = otp.replace(/\s+/g, '');
+    if (normalizedOtp.length !== OTP_CODE_LENGTH) {
+      setLoading(false);
+      setError(`Enter the ${OTP_CODE_LENGTH}-digit code sent to your phone.`);
+      return;
+    }
 
-    const result = await signIn('credentials', {
-      email: pendingEmail,
-      password: pendingPassword,
-      otp,
-      redirect: false,
-    });
+    try {
+      const confirmation = await confirmationResultRef.current.confirm(normalizedOtp);
+      const idToken = await confirmation.user.getIdToken(true);
+      const verifiedPhone = confirmation.user.phoneNumber ?? pendingPhone;
 
-    setLoading(false);
+      await getFirebaseClientAuth().signOut().catch((signOutError) => {
+        console.error('[login] Firebase signOut failed after OTP confirmation', signOutError);
+      });
 
-    if (result?.error) {
-      setError(t('login.invalidCode'));
-    } else {
-      await redirectByRole();
+      const result = await signIn('credentials', {
+        email: pendingEmail,
+        password: pendingPassword,
+        phone: verifiedPhone,
+        firebaseIdToken: idToken,
+        redirect: false,
+      });
+
+      if (result?.error) {
+        setError('Phone verification succeeded, but login could not be completed. Please request a new code and try again.');
+      } else {
+        await redirectByRole();
+      }
+    } catch (err) {
+      setError(getFirebaseErrorMessage(err));
+    } finally {
+      setLoading(false);
     }
   }
 
   /** Allow the seller to request a fresh code. */
   async function resendOtp() {
-    setError('');
-    setLoading(true);
-    let res: Response;
-    let data: { error?: string };
-    try {
-      res = await fetch('/api/auth/otp/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: pendingEmail, password: pendingPassword }),
-      });
-      data = await res.json();
-    } catch (err) {
-      console.error('[login] network error during OTP resend', err);
-      setLoading(false);
-      setError(t('login.failedResendCode'));
+    if (!pendingPhone) {
+      setError('Please enter your phone number first.');
       return;
     }
-    setLoading(false);
-    if (!res.ok) {
-      setError(data.error ?? t('login.failedResendCode'));
-    } else {
-      setError('');
-    }
+    await sendPhoneOtp(pendingPhone, maskedPhone || maskPhone(pendingPhone));
   }
 
   function handleBackToCredentials() {
     setStep('credentials');
     setError('');
+    setMaskedPhone('');
+    confirmationResultRef.current = null;
   }
 
+  let content: ReactNode;
+
   if (redirecting) {
-    return (
+    content = (
       <div className="card p-6 mt-6">
         <div className="flex items-center gap-3 text-slate-700">
           <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-blue-600" />
@@ -217,10 +282,8 @@ function LoginForm() {
         </div>
       </div>
     );
-  }
-
-  if (step === 'add_phone') {
-    return (
+  } else if (step === 'add_phone') {
+    content = (
       <form onSubmit={submitPhone} className="card p-6 mt-6 space-y-4">
         <p className="text-sm text-slate-600">
           {t('login.addPhoneIntro')}
@@ -232,13 +295,15 @@ function LoginForm() {
             type="tel"
             className="input"
             placeholder="+1 555 000 1234"
+            value={pendingPhone}
+            onChange={(e) => setPendingPhone(e.target.value)}
             required
           />
           <p className="text-xs text-slate-400 mt-1">
             {t('login.phoneHint')}
           </p>
         </div>
-        {error && <p className="text-red-600 text-sm">{error}</p>}
+        {error && <p className="text-red-600 text-sm break-words">{error}</p>}
         <button className="btn-primary w-full" disabled={loading}>
           {loading ? t('login.sendingCode') : t('login.sendVerificationCode')}
         </button>
@@ -253,10 +318,8 @@ function LoginForm() {
         </div>
       </form>
     );
-  }
-
-  if (step === 'otp') {
-    return (
+  } else if (step === 'otp') {
+    content = (
       <form onSubmit={submitOtp} className="card p-6 mt-6 space-y-4">
         <p className="text-sm text-slate-600">
           {t('login.otpIntro', { phone: maskedPhone || '***' })}
@@ -268,14 +331,14 @@ function LoginForm() {
             type="text"
             inputMode="numeric"
             pattern="[0-9]{6}"
-            maxLength={6}
+            maxLength={OTP_CODE_LENGTH}
             className="input tracking-widest text-center text-xl"
             placeholder="123456"
             autoComplete="one-time-code"
             required
           />
         </div>
-        {error && <p className="text-red-600 text-sm">{error}</p>}
+        {error && <p className="text-red-600 text-sm break-words">{error}</p>}
         <button className="btn-primary w-full" disabled={loading}>
           {loading ? t('login.verifying') : t('login.verifyAndSignIn')}
         </button>
@@ -298,43 +361,50 @@ function LoginForm() {
         </div>
       </form>
     );
+  } else {
+    content = (
+      <form onSubmit={submitCredentials} className="card p-6 mt-6 space-y-4">
+        <div>
+          <label className="label">{t('login.email')}</label>
+          <input name="email" type="email" className="input" placeholder="you@example.com" required />
+        </div>
+        <div>
+          <label className="label">{t('login.password')}</label>
+          <input
+            name="password"
+            type={showPassword ? 'text' : 'password'}
+            className="input"
+            placeholder={t('login.password')}
+            required
+          />
+          <label className="mt-1 inline-flex items-center gap-2 text-xs text-slate-500">
+            <input
+              type="checkbox"
+              checked={showPassword}
+              onChange={(e) => setShowPassword(e.target.checked)}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+            />
+            {showPassword ? 'Hide password' : 'Show password'}
+          </label>
+        </div>
+        {error && <p className="text-red-600 text-sm break-words">{error}</p>}
+        <button className="btn-primary w-full" disabled={loading}>
+          {loading ? t('login.signingIn') : t('login.signIn')}
+        </button>
+        <div className="text-center">
+          <Link href="/forgot-password" className="text-sm text-slate-500 hover:text-blue-600">
+            {t('login.forgotPassword')}
+          </Link>
+        </div>
+      </form>
+    );
   }
 
   return (
-    <form onSubmit={submitCredentials} className="card p-6 mt-6 space-y-4">
-      <div>
-        <label className="label">{t('login.email')}</label>
-        <input name="email" type="email" className="input" placeholder="you@example.com" required />
-      </div>
-      <div>
-        <label className="label">{t('login.password')}</label>
-        <input
-          name="password"
-          type={showPassword ? 'text' : 'password'}
-          className="input"
-          placeholder={t('login.password')}
-          required
-        />
-        <label className="mt-1 inline-flex items-center gap-2 text-xs text-slate-500">
-          <input
-            type="checkbox"
-            checked={showPassword}
-            onChange={(e) => setShowPassword(e.target.checked)}
-            aria-label={showPassword ? 'Hide password' : 'Show password'}
-          />
-          {showPassword ? 'Hide password' : 'Show password'}
-        </label>
-      </div>
-      {error && <p className="text-red-600 text-sm">{error}</p>}
-      <button className="btn-primary w-full" disabled={loading}>
-        {loading ? t('login.signingIn') : t('login.signIn')}
-      </button>
-      <div className="text-center">
-        <Link href="/forgot-password" className="text-sm text-slate-500 hover:text-blue-600">
-          {t('login.forgotPassword')}
-        </Link>
-      </div>
-    </form>
+    <>
+      {content}
+      <div id="recaptcha-container" role="presentation" aria-label="reCAPTCHA" />
+    </>
   );
 }
 

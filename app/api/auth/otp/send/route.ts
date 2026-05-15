@@ -1,32 +1,36 @@
 /**
  * POST /api/auth/otp/send
  *
- * Step 1 of seller login: validate email + password and, if the user is a
- * SELLER, send a one-time code to their registered phone.
+ * Step 1 of seller login: validate email + password and return the next client
+ * step for the Firebase phone-auth flow.
  *
  * Request body:
  *   { email: string; password: string }
  *
  * Response (200):
- *   { step: 'otp';    maskedPhone: string }   — seller; OTP sent
- *   { step: 'signin' }                        — non-seller; call signIn() directly
+ *   { step: 'otp'; phone: string; maskedPhone: string } — seller with phone
+ *   { step: 'signin' }                                   — non-seller; call signIn() directly
  *
  * Errors:
  *   401 — invalid credentials
  *   400 — validation error (e.g. seller has no phone on file)
- *   429 — resend rate-limited
- *   500 — SMS delivery failed
+ *   429 — too many requests
  */
 
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
-import { createAndSendOtp } from '@/lib/otp';
-import { isSmsOtpEnabled, SELLER_OTP_FORCE_DISABLED } from '@/lib/feature-flags';
+import { normalizePhone } from '@/lib/phone';
 import { safeComparePassword } from '@/lib/password';
 import { applyRateLimit } from '@/lib/security';
 import { logError, logInfo, logWarn } from '@/lib/logger';
+
+function maskPhone(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length < 4) return '****';
+  return `***-***-${digits.slice(-4)}`;
+}
 
 const schema = z.object({
   email: z.string().email(),
@@ -79,18 +83,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ step: 'signin' });
     }
 
-    if (SELLER_OTP_FORCE_DISABLED || !isSmsOtpEnabled()) {
-      logWarn('Seller OTP bypassed due to feature flags', {
-        tag: 'api/auth/otp/send',
-        userId: user.id,
-        role: user.role,
-        reason: SELLER_OTP_FORCE_DISABLED
-          ? 'SELLER_OTP_FORCE_DISABLED=true (pending Twilio A2P 10DLC approval)'
-          : 'feature flag ENABLE_SMS_OTP=false',
-      });
-      return NextResponse.json({ step: 'signin' });
-    }
-
     // Seller but no phone registered — route to phone setup flow.
     if (!user.phone) {
       logInfo('Seller requires phone setup before OTP', {
@@ -101,39 +93,28 @@ export async function POST(req: Request) {
       return NextResponse.json({ step: 'add_phone' });
     }
 
-    const result = await createAndSendOtp(user.id, user.phone);
-
-    if (!result.ok) {
-      if (result.error === 'rate_limited') {
-        logInfo('OTP blocked by resend cooldown', { tag: 'api/auth/otp/send', userId: user.id });
-        return NextResponse.json(
-          { error: 'Please wait 60 seconds before requesting another code.' },
-          { status: 429 },
-        );
-      }
-      if (result.error === 'invalid_phone') {
-        logWarn('OTP blocked due to invalid normalized phone', { tag: 'api/auth/otp/send', userId: user.id });
-        return NextResponse.json(
-          { error: 'Your phone number on file appears to be invalid. Please update it in account settings.' },
-          { status: 400 },
-        );
-      }
-      logError('OTP send failed after provider attempt', new Error('otp_send_failed'), {
+    const normalizedPhone = normalizePhone(user.phone);
+    if (!normalizedPhone) {
+      logWarn('Seller phone on file is invalid for Firebase login', {
         tag: 'api/auth/otp/send',
         userId: user.id,
       });
       return NextResponse.json(
-        { error: 'Failed to send verification code. Please check your phone number or contact support.' },
-        { status: 500 },
+        { error: 'Your phone number on file appears to be invalid. Please update it in account settings.' },
+        { status: 400 },
       );
     }
 
-    logInfo('OTP send succeeded', {
+    logInfo('Seller login prepared for Firebase OTP', {
       tag: 'api/auth/otp/send',
       userId: user.id,
-      maskedPhone: result.maskedPhone,
+      maskedPhone: maskPhone(normalizedPhone),
     });
-    return NextResponse.json({ step: 'otp', maskedPhone: result.maskedPhone });
+    return NextResponse.json({
+      step: 'otp',
+      phone: normalizedPhone,
+      maskedPhone: maskPhone(normalizedPhone),
+    });
   } catch (err: any) {
     if (err?.name === 'ZodError') {
       return NextResponse.json({ error: 'Invalid input.' }, { status: 400 });

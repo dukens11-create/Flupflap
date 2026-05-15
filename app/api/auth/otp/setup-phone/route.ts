@@ -2,33 +2,35 @@
  * POST /api/auth/otp/setup-phone
  *
  * Called during seller login when the seller has no phone on file.
- * Validates credentials, saves the provided phone, and sends an OTP to it.
- * After calling this endpoint the seller should be redirected to the normal
- * OTP step so they can complete sign-in.
+ * Validates credentials, saves the provided phone, and returns the Firebase
+ * phone-auth step metadata so the client can send the OTP.
  *
  * Request body:
  *   { email: string; password: string; phone: string }
  *
  * Response (200):
- *   { step: 'otp'; maskedPhone: string }
+ *   { step: 'otp'; phone: string; maskedPhone: string }
  *
  * Errors:
  *   400 — validation error or not a seller account
  *   401 — invalid credentials
- *   429 — resend rate-limited
- *   500 — SMS delivery failed
+ *   429 — too many requests
  */
 
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
-import { createAndSendOtp } from '@/lib/otp';
 import { normalizePhone } from '@/lib/phone';
-import { isSmsOtpEnabled, SELLER_OTP_FORCE_DISABLED } from '@/lib/feature-flags';
 import { safeComparePassword } from '@/lib/password';
 import { applyRateLimit } from '@/lib/security';
 import { logError, logInfo, logWarn } from '@/lib/logger';
+
+function maskPhone(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length < 4) return '****';
+  return `***-***-${digits.slice(-4)}`;
+}
 
 const schema = z.object({
   email: z.string().email(),
@@ -90,19 +92,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Phone setup is only available for seller accounts.' }, { status: 400 });
     }
 
-    if (SELLER_OTP_FORCE_DISABLED || !isSmsOtpEnabled()) {
-      logWarn('Seller OTP bypassed due to feature flags', {
-        tag: 'api/auth/otp/setup-phone',
-        userId: user.id,
-        role: user.role,
-        reason: SELLER_OTP_FORCE_DISABLED
-          ? 'SELLER_OTP_FORCE_DISABLED=true (pending Twilio A2P 10DLC approval)'
-          : 'feature flag ENABLE_SMS_OTP=false',
-      });
-      return NextResponse.json({ step: 'signin' });
-    }
-
-    // Normalize to E.164 before saving and sending.
+    // Normalize to E.164 before saving.
     const normalizedPhone = normalizePhone(phone);
     if (!normalizedPhone) {
       const digitsOnly = phone.replace(/\D/g, '');
@@ -124,35 +114,16 @@ export async function POST(req: Request) {
       data: { phone: normalizedPhone, phoneVerified: false },
     });
 
-    const result = await createAndSendOtp(user.id, normalizedPhone);
-
-    if (!result.ok) {
-      if (result.error === 'rate_limited') {
-        logInfo('OTP blocked by resend cooldown after setup-phone', {
-          tag: 'api/auth/otp/setup-phone',
-          userId: user.id,
-        });
-        return NextResponse.json(
-          { error: 'Please wait 60 seconds before requesting another code.' },
-          { status: 429 },
-        );
-      }
-      logError('OTP send failed after phone save', new Error('otp_send_failed_after_phone_save'), {
-        tag: 'api/auth/otp/setup-phone',
-        userId: user.id,
-      });
-      return NextResponse.json(
-        { error: 'Failed to send verification code. Please check your phone number and try again.' },
-        { status: 500 },
-      );
-    }
-
-    logInfo('OTP send succeeded after phone setup', {
+    logInfo('Seller phone saved for Firebase login OTP', {
       tag: 'api/auth/otp/setup-phone',
       userId: user.id,
-      maskedPhone: result.maskedPhone,
+      maskedPhone: maskPhone(normalizedPhone),
     });
-    return NextResponse.json({ step: 'otp', maskedPhone: result.maskedPhone });
+    return NextResponse.json({
+      step: 'otp',
+      phone: normalizedPhone,
+      maskedPhone: maskPhone(normalizedPhone),
+    });
   } catch (err: any) {
     if (err?.name === 'ZodError') {
       return NextResponse.json({ error: err.errors[0]?.message || 'Invalid input.' }, { status: 400 });

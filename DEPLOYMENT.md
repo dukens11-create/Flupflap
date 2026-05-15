@@ -157,23 +157,23 @@ original vs enhanced before submitting.
 
 ---
 
-## Firebase Phone Auth (seller signup + seller dashboard phone verification)
+## Firebase Phone Auth (seller signup + seller login + seller dashboard phone verification)
 
-Firebase Phone Authentication is used during **seller account creation** to verify
-the seller's mobile number via OTP before the account is created. Existing sellers
-who signed up before this requirement will also see a verification card on the
-seller dashboard (`/seller`) that uses the same Firebase OTP flow.
-
-A separate Twilio-based OTP is used at every seller **login** (see the next
-section).
+Firebase Phone Authentication is used during **seller account creation**, every
+seller **login**, and seller dashboard (`/seller`) phone verification. The same
+Firebase project, web app credentials, invisible reCAPTCHA, and SMS delivery
+setup power all of those flows.
 
 ### How the flow works
 
-1. Seller enters phone number and clicks **Send Code**.
+1. Seller enters a phone number (signup / seller dashboard) or email + password
+   first (seller login).
 2. Firebase sends OTP using `signInWithPhoneNumber` + invisible reCAPTCHA.
-3. Seller enters the 6-digit code and clicks **Verify Code**.
-4. The app stores the verified phone and a short-lived Firebase ID token.
-5. Server verifies that token and persists phone verification.
+3. The page stores `confirmationResult` and the seller enters the 6-digit code.
+4. The app confirms the code, gets a short-lived Firebase ID token, and submits
+   that token to the server.
+5. The server verifies that token before persisting phone verification or
+   granting seller sign-in.
 
 ### Step 1 — Create / configure a Firebase project
 
@@ -212,7 +212,7 @@ Firebase test phone numbers let you verify OTP flows without sending real SMS:
 
 1. Firebase Console → **Authentication → Sign-in method → Phone → Phone numbers for testing**.
 2. Add a phone number (e.g. `+15005550005`) with a fixed code (e.g. `123456`).
-3. Use that number/code in signup or seller dashboard verification.
+3. Use that number/code in signup, seller login, or seller dashboard verification.
 
 ### Troubleshooting Firebase Phone Auth
 
@@ -225,101 +225,35 @@ Firebase test phone numbers let you verify OTP flows without sending real SMS:
 | No SMS on real number | Provider not enabled, domain not authorized, or quota/billing issue | Verify provider/domain and Firebase SMS quota/billing |
 | Server rejects token / "expired" | ID token expired or project mismatch | Request new OTP; ensure `FIREBASE_API_KEY` matches the same Firebase project |
 
-> Firebase OTP (signup/dashboard verification) is separate from Twilio OTP (seller login).
-
 ---
 
-## Seller two-factor authentication (phone OTP)
+## Seller login phone verification
 
-When a seller signs in, FlupFlap sends a 6-digit one-time code to their
-registered mobile number.  They must enter this code before the authenticated
-session is granted.  The feature is **scoped to SELLER accounts only** — buyers
-and admins use the normal single-factor login.
+When a seller signs in, FlupFlap validates email + password first and then uses
+Firebase Phone Authentication to send a 6-digit code to the seller's registered
+mobile number. They must enter this code before the authenticated session is
+granted. The feature is **scoped to SELLER accounts only** — buyers and admins
+use the normal single-factor login.
 
 ### How it works
 
 1. Seller enters their email and password on the login page.
-2. The server validates the credentials and sends a 6-digit SMS code.
-3. Seller enters the code on the second step of the login page.
-4. The server verifies the code (10-minute expiry, 5-attempt limit, 60-second
-   resend cooldown) and grants the session.
-
-### Step 1 — Create a Twilio account
-
-Sign up for free at <https://www.twilio.com>.  You will need:
-
-- A **verified phone number** (Twilio trial) or a purchased number.
-- The **Account SID** and **Auth Token** from the
-  [Twilio Console](https://console.twilio.com).
-
-### Step 2 — Get a Twilio phone number
-
-In the Twilio Console go to **Phone Numbers → Manage → Buy a number** (or use
-your trial number for testing).  Copy the number in E.164 format, e.g.
-`+15005550006`.
-
-### Step 3 — Add the variables to Render
-
-| Variable | Value |
-|---|---|
-| `TWILIO_ACCOUNT_SID` | `ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` |
-| `TWILIO_AUTH_TOKEN` | your auth token |
-| `TWILIO_FROM_NUMBER` | your Twilio number in E.164 format, e.g. `+15005550006` |
-
-Redeploy once after adding the variables.
-
-### Dev / mock mode (no Twilio)
-
-If any of the three Twilio variables are absent, the app runs in **mock mode**:
-the OTP is logged to the server console (`[OTP DEV MODE]`) instead of being
-sent by SMS.  This lets you develop and test locally without a Twilio account.
-
-> **Important:** when `NODE_ENV=production` (which Render sets automatically),
-> the app will throw a startup error if any `TWILIO_*` variable is missing,
-> preventing sellers from bypassing the second factor.  Always set all three
-> `TWILIO_*` variables in the Render environment before going live.
-
-### SMS OTP rollout / temporary disable switch
-
-Twilio-based seller OTP is now the default login behavior.  You can still
-temporarily allow sellers to sign in with email + password only by setting:
-
-```
-ENABLE_SMS_OTP=false
-```
-
-This bypasses the SMS challenge entirely so sellers are not locked out during a
-provider outage.  The entire OTP code path remains in the codebase — no code
-changes are needed to re-enable it.
-
-**To keep or restore Twilio-backed SMS OTP:**
-
-1. In your Render dashboard (or hosting environment), leave `ENABLE_SMS_OTP`
-   unset or set it to `"true"`.
-2. Redeploy the app (or restart the process so the new env var takes effect).
-3. Sellers will be prompted for an SMS code on their next login.
-
-> If `ENABLE_SMS_OTP` is unset it defaults to **enabled**. Set it explicitly to
-> `false` only when you need the temporary bypass. Quoted values like `"false"`
-> are also supported.
+2. The client calls a lightweight server endpoint to determine whether the user
+   is a seller and whether a phone number needs to be added first.
+3. The login page creates one invisible `RecaptchaVerifier` and calls
+   `signInWithPhoneNumber(auth, phoneNumber, appVerifier)`.
+4. The page stores `confirmationResult`, confirms the 6-digit code, and submits
+   the resulting Firebase ID token with the normal credentials sign-in.
+5. The server verifies that Firebase token before creating the seller session.
 
 ### Testing seller sign-in locally
 
-1. Create a seller account (`role: SELLER`) via the signup page.  Supply any
-   phone number.
+1. Create a seller account (`role: SELLER`) via the signup page, or use an
+   existing seller account with a mobile number on file.
 2. Sign in with the seller's email and password.
-3. Watch the server console for the line:
-
-   ```
-   [OTP DEV MODE] To: +15005550006  Message: Your FlupFlap verification code is: 123456. …
-   ```
-
+3. If using Firebase test numbers, enter the configured fixed code. Otherwise
+   use the real SMS code sent by Firebase.
 4. Enter that 6-digit code on the verification screen to complete sign-in.
-
-> When `ENABLE_SMS_OTP=false`, steps 3–4 are skipped and the seller is signed
-> in immediately after entering their email and password.  In the default
-> enabled state, local development still works because the OTP is logged to the
-> server console when Twilio credentials are absent.
 
 ---
 
@@ -441,17 +375,15 @@ Demo accounts created by seed:
 | Stripe webhook `400` errors | `STRIPE_WEBHOOK_SECRET` missing or wrong | Re-copy the signing secret from Stripe and update the env var |
 | App loads but images are broken | Image host not in `next.config.js` | Add the hostname to `remotePatterns` in `next.config.js` |
 | Image upload returns "not configured" error | Cloudinary env vars missing or app not redeployed after adding them | Add `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` in Render → Environment, redeploy, and verify logs contain `Cloudinary config exists` with all values `true` |
-| **Firebase phone OTP (signup / seller dashboard)** | | |
-| "This domain is not authorized for phone sign-in" at seller signup or seller dashboard | Deployment domain not in Firebase authorized domains | Add the domain in Firebase Console → Authentication → Settings → Authorized domains |
-| "Phone sign-in is not enabled" at seller signup | Phone provider disabled in Firebase | Enable Phone in Firebase Console → Authentication → Sign-in method |
+| **Firebase phone OTP (signup / seller login / seller dashboard)** | | |
+| "This domain is not authorized for phone sign-in" at seller signup, login, or seller dashboard | Deployment domain not in Firebase authorized domains | Add the domain in Firebase Console → Authentication → Settings → Authorized domains |
+| "Phone sign-in is not enabled" at seller signup or login | Phone provider disabled in Firebase | Enable Phone in Firebase Console → Authentication → Sign-in method |
 | Firebase OTP sends successfully but seller creation fails with "Phone verification has expired" | Client and server Firebase vars point at different projects | Set `FIREBASE_API_KEY` to the same value as `NEXT_PUBLIC_FIREBASE_API_KEY` |
-| **Seller login OTP (Twilio)** | | |
-| Seller login returns `step: "signin"` from `/api/auth/otp/send` | OTP feature disabled or account is not a seller | Check server logs for `[otp/send] OTP skipped: ...`; set `ENABLE_SMS_OTP=true` (or unset) to require seller OTP |
+| Seller login returns `step: "signin"` from `/api/auth/otp/send` | Account is not a seller | Check the user's role in the database / admin UI |
 | Seller login returns `step: "add_phone"` from `/api/auth/otp/send` | Seller account has no phone on file | Complete `/api/auth/otp/setup-phone`; logs show `[otp/send] Seller requires phone setup before OTP` |
-| Seller OTP send returns 400 invalid phone | Saved seller phone fails normalization | Update seller phone in E.164 format; logs include `[otp/send] OTP blocked: invalid normalized phone` |
-| Seller OTP code never arrives | Twilio env vars missing or wrong | Set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` in Render → Environment and redeploy |
-| Seller OTP arrives in server logs only | App running in mock/dev mode | Set all three `TWILIO_*` env vars in Render → Environment so real SMS is sent |
-| Seller OTP send fails with 500 | Twilio config/API failure | Review `[SMS] Twilio is not configured...`, `[SMS] Failed to send message`, or `[SMS] Message accepted by Twilio` log events |
+| Seller OTP send returns 400 invalid phone | Saved seller phone fails normalization | Update seller phone in E.164 format; logs include `[otp/send] Seller phone on file is invalid for Firebase login` |
+| Seller OTP code never arrives | Firebase phone provider disabled, domain not authorized, or SMS quota/billing issue | Verify Firebase Phone auth setup, authorized domains, and SMS quota/billing |
+| Seller OTP verify fails after entering the code | `confirmationResult` expired or stale, or the wrong code was entered | Request a new OTP, then enter the latest code exactly as received |
 
 ---
 
