@@ -107,6 +107,12 @@ Set these in **Environment → Environment Variables** in the Render dashboard:
 | `STRIPE_WEBHOOK_SECRET` | Secret from your Stripe webhook endpoint |
 | `SHIPPO_API_TOKEN` | Shippo API token for shipping rates + label purchase |
 | `NEXT_PUBLIC_MAPBOX_TOKEN` | Public Mapbox token used only in the checkout address autocomplete UI |
+| `NEXT_PUBLIC_FIREBASE_API_KEY` | Firebase Web API key used by seller-signup phone OTP verification |
+| `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | Firebase Auth domain (e.g. `your-project.firebaseapp.com`) |
+| `NEXT_PUBLIC_FIREBASE_PROJECT_ID` | Firebase project ID |
+| `NEXT_PUBLIC_FIREBASE_APP_ID` | Firebase web app ID |
+| `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | Firebase messaging sender ID |
+| `FIREBASE_API_KEY` | Server-side Firebase API key used to validate phone-verified ID tokens during seller signup |
 | `PLATFORM_FEE_PERCENT` | Legacy bootstrap env var (the app normalizes commission snapshots to `7`) |
 
 URL precedence for app redirects/absolute links: `NEXT_PUBLIC_SITE_URL` → `NEXT_PUBLIC_APP_URL` → `NEXTAUTH_URL`.
