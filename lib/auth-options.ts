@@ -1,13 +1,13 @@
 import { PrismaAdapter } from '@next-auth/prisma-adapter';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { prisma } from './db';
-import { verifyOtp } from './otp';
-import { isSmsOtpEnabled, SELLER_OTP_FORCE_DISABLED } from './feature-flags';
 import { recordLoginActivity } from './login-security';
 import { safeComparePassword } from './password';
 import type { NextAuthOptions } from 'next-auth';
 import type { Role } from '@prisma/client';
 import { getSiteUrl } from './seo';
+import { verifyFirebasePhoneIdToken } from './firebase/server';
+import { normalizePhone } from './phone';
 
 type AuthSessionUser = {
   id: string;
@@ -43,9 +43,10 @@ export const authOptions: NextAuthOptions = {
     CredentialsProvider({
       name: 'Email and password',
       credentials: {
-        email:    { label: 'Email',    type: 'email' },
-        password: { label: 'Password', type: 'password' },
-        otp:      { label: 'Code',     type: 'text' },
+        email:           { label: 'Email',              type: 'email' },
+        password:        { label: 'Password',           type: 'password' },
+        phone:           { label: 'Phone number',       type: 'text' },
+        firebaseIdToken: { label: 'Firebase ID token',  type: 'text' },
       },
       async authorize(credentials, request) {
         if (!credentials?.email || !credentials.password) return null;
@@ -70,27 +71,35 @@ export const authOptions: NextAuthOptions = {
         const ok = await safeComparePassword(credentials.password, user.password, 'authorize');
         if (!ok) return null;
 
-        // Sellers must supply a valid one-time code (when SMS OTP is enabled).
+        // Sellers must supply a Firebase phone-auth token that matches their phone.
         if (user.role === 'SELLER') {
-          if (SELLER_OTP_FORCE_DISABLED || !isSmsOtpEnabled()) {
-            console.warn('[auth] Seller OTP forcibly bypassed: pending Twilio A2P 10DLC approval', {
-              userId: user.id,
-              role: user.role,
-              reason: SELLER_OTP_FORCE_DISABLED
-                ? 'SELLER_OTP_FORCE_DISABLED=true (pending Twilio A2P 10DLC approval)'
-                : 'feature flag ENABLE_SMS_OTP=false',
-            });
-          } else {
-            if (!credentials.otp) return null;
-            const result = await verifyOtp(user.id, credentials.otp);
-            if (!result.ok) return null;
-            // Mark phone as verified on first successful OTP sign-in.
-            if (user.phone && !user.phoneVerified) {
+          if (!credentials.firebaseIdToken) return null;
+          try {
+            const firebasePhone = await verifyFirebasePhoneIdToken(credentials.firebaseIdToken);
+            const verifiedPhone = normalizePhone(firebasePhone?.phoneNumber ?? '');
+            const submittedPhone = normalizePhone(credentials.phone ?? '');
+            const expectedPhone = normalizePhone(user.phone ?? '') || submittedPhone;
+
+            if (!verifiedPhone || (expectedPhone && verifiedPhone !== expectedPhone)) {
+              return null;
+            }
+
+            if (!user.phoneVerified || !user.phone || normalizePhone(user.phone) !== verifiedPhone) {
               await prisma.user.update({
                 where: { id: user.id },
-                data: { phoneVerified: true, phoneVerifiedAt: new Date() },
+                data: {
+                  phone: verifiedPhone,
+                  phoneVerified: true,
+                  phoneVerifiedAt: new Date(),
+                },
               }).catch(() => null);
             }
+          } catch (error) {
+            console.error('[auth] failed to verify firebase phone token', {
+              userId: user.id,
+              error,
+            });
+            return null;
           }
         }
 
