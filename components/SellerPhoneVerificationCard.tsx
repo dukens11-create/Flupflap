@@ -111,7 +111,9 @@ export default function SellerPhoneVerificationCard() {
       }
       const confirmation = await confirmationResultRef.current.confirm(normalizedOtpCode);
       const idToken = await confirmation.user.getIdToken(true);
-      await getFirebaseClientAuth().signOut().catch(() => null);
+      await getFirebaseClientAuth().signOut().catch((signOutErr) => {
+        console.error('[seller-phone-verify] Firebase signOut failed after OTP confirmation', signOutErr);
+      });
       const res = await fetch('/api/seller/phone/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

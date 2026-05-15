@@ -283,7 +283,7 @@ export default function SignupPage() {
               }}
               disabled={!!phoneVerifiedNumber}
             />
-            <div id="seller-signup-recaptcha" />
+            <div id="seller-signup-recaptcha" role="presentation" aria-label="reCAPTCHA" />
             {phoneVerifiedNumber ? (
               <p className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700">
                 Phone verified: {phoneVerifiedNumber}
