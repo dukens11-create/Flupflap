@@ -26,6 +26,7 @@ import KycVerifyButton from '@/components/KycVerifyButton';
 import StripeConnectButton from '@/components/StripeConnectButton';
 import SellerStockEditor from '@/components/SellerStockEditor';
 import SellerShopProfileForm from '@/components/SellerShopProfileForm';
+import SellerPhoneVerificationCard from '@/components/SellerPhoneVerificationCard';
 import {
   formatPackageDisplay,
   getEffectivePackageDetails,
@@ -487,7 +488,10 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                   Your verification is pending while Stripe Identity checks finish syncing.
                 </p>
               )}
-              {!verificationApproved && (
+              {!verificationApproved && !dbUser?.phoneVerified && (
+                <SellerPhoneVerificationCard />
+              )}
+              {!verificationApproved && dbUser?.phoneVerified && (
                 <KycVerifyButton isRejected={verificationSubmission?.status === 'REJECTED'} />
               )}
             </div>
