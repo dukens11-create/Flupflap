@@ -20,6 +20,21 @@ export type SellerKycChecks = {
 
 const DEFAULT_PROVIDER_REJECTION_REASON = 'Provider verification failed.';
 
+function determinePhoneVerificationStatus(phone: string | null | undefined, phoneVerified: boolean) {
+  if (phoneVerified) return SellerPhoneVerificationStatus.VERIFIED;
+  return phone ? SellerPhoneVerificationStatus.PENDING : SellerPhoneVerificationStatus.NOT_STARTED;
+}
+
+function resolveVerificationStatus(
+  initialStatus: SellerVerificationStatus,
+  userPhoneVerified: boolean,
+) {
+  if (initialStatus === SellerVerificationStatus.APPROVED && !userPhoneVerified) {
+    return SellerVerificationStatus.PENDING;
+  }
+  return initialStatus;
+}
+
 export function resolveAutomatedKycStatus(checks: SellerKycChecks): SellerVerificationStatus {
   // Identity verification (government ID + selfie) is the primary KYC gate.
   // Address and phone checks from Stripe Connect are supplementary and are not
@@ -122,9 +137,7 @@ export async function applyAutomatedKycResult(input: {
   ]);
   const userPhoneVerified = Boolean(seller?.phone && seller.phoneVerified);
   const combinedPhoneVerified = Boolean(input.checks.phoneVerified || userPhoneVerified);
-  const resolvedStatus = status === SellerVerificationStatus.APPROVED && !userPhoneVerified
-    ? SellerVerificationStatus.PENDING
-    : status;
+  const resolvedStatus = resolveVerificationStatus(status, userPhoneVerified);
 
   await prisma.sellerVerification.upsert({
     where: { sellerId: input.sellerId },
@@ -143,9 +156,7 @@ export async function applyAutomatedKycResult(input: {
       selfieVerified: input.checks.selfieVerified,
       addressVerified: input.checks.addressVerified,
       phoneVerified: combinedPhoneVerified,
-      phoneVerificationStatus: combinedPhoneVerified
-        ? SellerPhoneVerificationStatus.VERIFIED
-        : (seller?.phone ? SellerPhoneVerificationStatus.PENDING : SellerPhoneVerificationStatus.NOT_STARTED),
+      phoneVerificationStatus: determinePhoneVerificationStatus(seller?.phone, combinedPhoneVerified),
       providerReviewedAt: now,
       eligibleToListAt: resolvedStatus === 'APPROVED' ? now : null,
       verifiedAt: resolvedStatus === 'APPROVED' ? now : null,
@@ -174,9 +185,7 @@ export async function applyAutomatedKycResult(input: {
       addressVerified: input.checks.addressVerified,
       phoneVerified: combinedPhoneVerified,
       phoneNumber: seller?.phone ?? '',
-      phoneVerificationStatus: combinedPhoneVerified
-        ? SellerPhoneVerificationStatus.VERIFIED
-        : (seller?.phone ? SellerPhoneVerificationStatus.PENDING : SellerPhoneVerificationStatus.NOT_STARTED),
+      phoneVerificationStatus: determinePhoneVerificationStatus(seller?.phone, combinedPhoneVerified),
       street: '',
       city: '',
       state: '',

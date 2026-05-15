@@ -10,6 +10,16 @@ import { ConfirmationResult, RecaptchaVerifier, signInWithPhoneNumber, signOut }
 import { firebaseAuth } from '@/lib/firebase/client';
 import { normalizePhone } from '@/lib/phone';
 
+const OTP_CODE_LENGTH = 6;
+const OTP_CODE_PATTERN = new RegExp(`^\\d{${OTP_CODE_LENGTH}}$`);
+const MASKED_PHONE_PLACEHOLDER = '********';
+
+function maskPhone(phoneNumber: string) {
+  const digits = phoneNumber.replace(/\D/g, '');
+  const lastTwo = digits.slice(-2);
+  return lastTwo ? `${MASKED_PHONE_PLACEHOLDER}${lastTwo}` : MASKED_PHONE_PLACEHOLDER;
+}
+
 function mapFirebasePhoneError(code?: string) {
   if (code === 'auth/invalid-verification-code') return 'Invalid code. Please try again.';
   if (code === 'auth/code-expired') return 'Code expired. Please request a new code.';
@@ -42,6 +52,7 @@ export default function SignupPage() {
   useEffect(() => () => {
     recaptchaRef.current?.clear();
     recaptchaRef.current = null;
+    signOut(firebaseAuth).catch(() => void 0);
   }, []);
 
   function resetSellerPhoneVerificationState() {
@@ -85,11 +96,11 @@ export default function SignupPage() {
       const result = await signInWithPhoneNumber(firebaseAuth, normalized, recaptcha);
       confirmationRef.current = result;
       setSellerPhone(normalized);
-      setMaskedPhone(`***-***-${normalized.replace(/\D/g, '').slice(-4)}`);
+      setMaskedPhone(maskPhone(normalized));
       setOtpStep('otp_sent');
       setPhoneVerificationSuccess('Verification code sent. Enter the 6-digit code to continue.');
     } catch (err: any) {
-      setPhoneVerificationError(mapFirebasePhoneError(err?.code));
+      setPhoneVerificationError(`Failed to send verification code. ${mapFirebasePhoneError(err?.code)}`);
       recaptchaRef.current?.clear();
       recaptchaRef.current = null;
     } finally {
@@ -106,7 +117,7 @@ export default function SignupPage() {
       return;
     }
     const code = otpCode.trim();
-    if (!/^\d{6}$/.test(code)) {
+    if (!OTP_CODE_PATTERN.test(code)) {
       setPhoneVerificationError('Enter the 6-digit code sent to your phone.');
       return;
     }
@@ -123,7 +134,7 @@ export default function SignupPage() {
       setSellerPhone(verifiedPhone);
       setPhoneVerificationIdToken(idToken);
       setOtpStep('verified');
-      setPhoneVerificationSuccess(`Phone verified (${verifiedPhone}).`);
+      setPhoneVerificationSuccess(`Phone verified (${maskPhone(verifiedPhone)}).`);
       await signOut(firebaseAuth).catch(() => null);
     } catch (err: any) {
       setPhoneVerificationError(mapFirebasePhoneError(err?.code));
@@ -303,8 +314,9 @@ export default function SignupPage() {
                   autoComplete="one-time-code"
                   className="input"
                   placeholder="123456"
+                  aria-label="One-time verification code"
                   value={otpCode}
-                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, OTP_CODE_LENGTH))}
                 />
                 <button
                   type="button"

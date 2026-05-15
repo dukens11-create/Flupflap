@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { getMarketplaceSettings } from '@/lib/commission';
 import { SellerStatus } from '@prisma/client';
 import { applyRateLimit, sanitizeTextInput } from '@/lib/security';
-import { logError } from '@/lib/logger';
+import { logError, logWarn } from '@/lib/logger';
 import { verifyFirebasePhoneIdToken } from '@/lib/firebase/phone-verification';
 import { normalizePhone } from '@/lib/phone';
 
@@ -84,6 +84,11 @@ export async function POST(req: Request) {
       const normalizedVerified = normalizePhone(verification.phoneNumber);
       const normalizedInput = normalizePhone(sanitizedPhone ?? '');
       if (!normalizedVerified || !normalizedInput || normalizedVerified !== normalizedInput) {
+        logWarn('Seller signup phone mismatch between Firebase verification and submitted phone.', {
+          tag: 'api/auth/signup',
+          normalizedInputPresent: Boolean(normalizedInput),
+          normalizedVerifiedPresent: Boolean(normalizedVerified),
+        });
         return NextResponse.json(
           { error: 'The verified phone number does not match the number entered.' },
           { status: 400 },
@@ -111,17 +116,17 @@ export async function POST(req: Request) {
         password,
         role: data.role,
         phone: data.role === 'SELLER' ? verifiedPhoneForSeller : null,
-        phoneVerified: data.role === 'SELLER' ? true : false,
+        phoneVerified: data.role === 'SELLER',
         phoneVerifiedAt: data.role === 'SELLER' ? now : null,
         ...(data.role === 'SELLER'
           ? {
-              sellerStatus: SellerStatus.PENDING,
-              hasFreePromotion: !!settings?.freePromotionEnabled,
-              freePromotionStart: settings?.freePromotionEnabled ? now : null,
-              freePromotionEnd,
-              freePromotionGrantedAt: settings?.freePromotionEnabled ? now : null,
-              freePromotionExpiresAt: freePromotionEnd,
-            }
+            sellerStatus: SellerStatus.PENDING,
+            hasFreePromotion: !!settings?.freePromotionEnabled,
+            freePromotionStart: settings?.freePromotionEnabled ? now : null,
+            freePromotionEnd,
+            freePromotionGrantedAt: settings?.freePromotionEnabled ? now : null,
+            freePromotionExpiresAt: freePromotionEnd,
+          }
           : {}),
       },
     });

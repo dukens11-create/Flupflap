@@ -1,3 +1,5 @@
+import { logError } from '@/lib/logger';
+
 type FirebaseLookupResponse = {
   users?: Array<{
     phoneNumber?: string;
@@ -12,11 +14,7 @@ export type FirebasePhoneVerificationResult =
   | { ok: false; error: 'missing_config' | 'invalid_token' | 'lookup_failed' };
 
 function getFirebaseApiKey() {
-  return (
-    process.env.FIREBASE_API_KEY
-    ?? process.env.NEXT_PUBLIC_FIREBASE_API_KEY
-    ?? ''
-  ).trim();
+  return process.env.FIREBASE_API_KEY?.trim() ?? '';
 }
 
 export async function verifyFirebasePhoneIdToken(idToken: string): Promise<FirebasePhoneVerificationResult> {
@@ -34,7 +32,17 @@ export async function verifyFirebasePhoneIdToken(idToken: string): Promise<Fireb
       },
     );
 
-    const data = (await response.json().catch(() => null)) as FirebaseLookupResponse | null;
+    const data = (await response
+      .json()
+      .catch((err) => {
+        logError('Failed to parse Firebase phone lookup response JSON.', err, {
+          tag: 'lib/firebase/phone-verification',
+        });
+        return null;
+      })) as FirebaseLookupResponse | null;
+    if (!data) {
+      return { ok: false, error: 'lookup_failed' };
+    }
     const phoneNumber = data?.users?.[0]?.phoneNumber?.trim();
     if (!response.ok || !phoneNumber) {
       const message = data?.error?.message ?? '';
