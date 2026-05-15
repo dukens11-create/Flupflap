@@ -3,6 +3,7 @@ import { Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import type { ChangeEvent, ClipboardEvent, KeyboardEvent } from 'react';
 import type { ConfirmationResult } from 'firebase/auth';
 import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 import { useI18n } from '@/components/I18nProvider';
@@ -35,6 +36,10 @@ function maskPhone(phone: string): string {
   return `***-***-${digits.slice(-4)}`;
 }
 
+function formatOtpValue(value: string): string {
+  return value.replace(/\D/g, '').slice(0, OTP_CODE_LENGTH);
+}
+
 function LoginForm() {
   const { t } = useI18n();
   const router = useRouter();
@@ -53,6 +58,7 @@ function LoginForm() {
   const [pendingEmail, setPendingEmail] = useState('');
   const [pendingPassword, setPendingPassword] = useState('');
   const [pendingPhone, setPendingPhone] = useState('');
+  const [otpCode, setOtpCode] = useState('');
   const confirmationResultRef = useRef<ConfirmationResult | null>(null);
   const recaptchaRef = useRef<RecaptchaVerifier | null>(null);
 
@@ -99,6 +105,7 @@ function LoginForm() {
     setPendingPhone(normalizedPhone);
     setMaskedPhone(phoneMask);
     setStep('otp');
+    setOtpCode('');
     setError('');
     setLoading(true);
 
@@ -206,6 +213,36 @@ function LoginForm() {
     }
   }
 
+  function handleOtpChange(e: ChangeEvent<HTMLInputElement>) {
+    setOtpCode(formatOtpValue(e.target.value));
+  }
+
+  function handleOtpPaste(e: ClipboardEvent<HTMLInputElement>) {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text');
+    setOtpCode(formatOtpValue(pasted));
+  }
+
+  function handleOtpKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    const allowedNavigationKeys = new Set([
+      'Backspace',
+      'Delete',
+      'ArrowLeft',
+      'ArrowRight',
+      'Tab',
+      'Home',
+      'End',
+    ]);
+
+    if (allowedNavigationKeys.has(e.key)) {
+      return;
+    }
+
+    if (!/^[0-9]$/.test(e.key)) {
+      e.preventDefault();
+    }
+  }
+
   /** Step 2 — submit OTP code; complete the seller sign-in. */
   async function submitOtp(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -217,9 +254,7 @@ function LoginForm() {
     setError('');
     setLoading(true);
 
-    const form = new FormData(e.currentTarget);
-    const otp = form.get('otp') as string;
-    const normalizedOtp = otp.replace(/\s+/g, '');
+    const normalizedOtp = formatOtpValue(otpCode);
     if (normalizedOtp.length !== OTP_CODE_LENGTH) {
       setLoading(false);
       setError(`Enter the ${OTP_CODE_LENGTH}-digit code sent to your phone.`);
@@ -268,6 +303,7 @@ function LoginForm() {
     setStep('credentials');
     setError('');
     setMaskedPhone('');
+    setOtpCode('');
     confirmationResultRef.current = null;
   }
 
@@ -328,13 +364,18 @@ function LoginForm() {
           <label className="label">{t('login.verificationCode')}</label>
           <input
             name="otp"
-            type="text"
+            type="password"
             inputMode="numeric"
+            enterKeyHint="done"
             pattern="[0-9]{6}"
             maxLength={OTP_CODE_LENGTH}
-            className="input tracking-widest text-center text-xl"
-            placeholder="123456"
+            className="input text-center text-xl [letter-spacing:0.6em]"
+            placeholder="••••••"
             autoComplete="one-time-code"
+            value={otpCode}
+            onChange={handleOtpChange}
+            onPaste={handleOtpPaste}
+            onKeyDown={handleOtpKeyDown}
             required
           />
         </div>
