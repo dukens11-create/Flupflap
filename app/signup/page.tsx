@@ -1,11 +1,14 @@
 "use client";
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useI18n } from '@/components/I18nProvider';
 import { resolveRoleLoginDestination } from '@/lib/role-experience';
 import * as Sentry from '@sentry/nextjs';
+import type { ConfirmationResult } from 'firebase/auth';
+import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
+import { getFirebaseClientAuth } from '@/lib/firebase/client';
 
 export default function SignupPage() {
   const { t } = useI18n();
@@ -17,6 +20,90 @@ export default function SignupPage() {
   const [redirecting, setRedirecting] = useState(false);
   const [role, setRole] = useState('CUSTOMER');
   const [showPassword, setShowPassword] = useState(false);
+  const [phone, setPhone] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+  const [phoneOtpLoading, setPhoneOtpLoading] = useState(false);
+  const [phoneOtpError, setPhoneOtpError] = useState('');
+  const [phoneVerifiedNumber, setPhoneVerifiedNumber] = useState('');
+  const [phoneVerificationToken, setPhoneVerificationToken] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const confirmationResultRef = useRef<ConfirmationResult | null>(null);
+  const recaptchaRef = useRef<RecaptchaVerifier | null>(null);
+
+  useEffect(() => {
+    return () => {
+      recaptchaRef.current?.clear();
+      recaptchaRef.current = null;
+    };
+  }, []);
+
+  function mapFirebasePhoneAuthError(code?: string) {
+    if (code === 'auth/invalid-verification-code') {
+      return 'Invalid OTP code. Please check the code and try again.';
+    }
+    if (code === 'auth/code-expired') {
+      return 'This OTP has expired. Please request a new code.';
+    }
+    if (code === 'auth/too-many-requests') {
+      return 'Too many attempts. Please wait a moment before trying again.';
+    }
+    if (code === 'auth/invalid-phone-number') {
+      return 'Invalid phone number. Please include your country code (e.g. +1).';
+    }
+    return 'Phone verification failed. Please try again.';
+  }
+
+  async function sendSellerOtp() {
+    if (phoneOtpLoading) return;
+    setPhoneOtpError('');
+    setPhoneOtpLoading(true);
+    try {
+      const auth = getFirebaseClientAuth();
+      if (!recaptchaRef.current) {
+        recaptchaRef.current = new RecaptchaVerifier(auth, 'seller-signup-recaptcha', {
+          size: 'invisible',
+        });
+      }
+      const confirmation = await signInWithPhoneNumber(auth, phone, recaptchaRef.current);
+      confirmationResultRef.current = confirmation;
+      setOtpSent(true);
+    } catch (err: any) {
+      setPhoneOtpError(mapFirebasePhoneAuthError(err?.code));
+      recaptchaRef.current?.clear();
+      recaptchaRef.current = null;
+    } finally {
+      setPhoneOtpLoading(false);
+    }
+  }
+
+  async function verifySellerOtp() {
+    if (phoneOtpLoading) return;
+    if (!confirmationResultRef.current) {
+      setPhoneOtpError('Please request an OTP first.');
+      return;
+    }
+    setPhoneOtpError('');
+    setPhoneOtpLoading(true);
+    try {
+      const confirmation = await confirmationResultRef.current.confirm(otpCode.trim());
+      const idToken = await confirmation.user.getIdToken(true);
+      const verifiedPhone = confirmation.user.phoneNumber ?? '';
+      if (!verifiedPhone) {
+        setPhoneOtpError('Unable to verify phone number. Please try again.');
+        setPhoneOtpLoading(false);
+        return;
+      }
+      setPhoneVerifiedNumber(verifiedPhone);
+      setPhoneVerificationToken(idToken);
+      setOtpSent(false);
+      setOtpCode('');
+      await getFirebaseClientAuth().signOut().catch(() => null);
+    } catch (err: any) {
+      setPhoneOtpError(mapFirebasePhoneAuthError(err?.code));
+    } finally {
+      setPhoneOtpLoading(false);
+    }
+  }
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -29,8 +116,15 @@ export default function SignupPage() {
       email: String(form.get('email') ?? ''),
       password: String(form.get('password') ?? ''),
       role: String(form.get('role') ?? 'CUSTOMER'),
-      phone: form.get('phone') ? String(form.get('phone')) : undefined,
+      phone: role === 'SELLER' ? phoneVerifiedNumber : undefined,
+      firebaseIdToken: role === 'SELLER' ? phoneVerificationToken : undefined,
     };
+
+    if (payload.role === 'SELLER' && (!payload.phone || !payload.firebaseIdToken)) {
+      setError('Please verify your phone number before creating a seller account.');
+      setLoading(false);
+      return;
+    }
 
     try {
       const res = await fetch('/api/auth/signup', {
@@ -131,17 +225,68 @@ export default function SignupPage() {
           </select>
         </div>
         {role === 'SELLER' && (
-          <div>
+          <div className="space-y-3">
             <label className="label">{t('signup.mobilePhone')}</label>
             <input
-              name="phone"
               type="text"
               inputMode="tel"
               autoComplete="tel"
               className="input"
               placeholder="+1 555 000 1234"
               required
+              value={phone}
+              onChange={(e) => {
+                const nextPhone = e.target.value;
+                setPhone(nextPhone);
+                if (phoneVerifiedNumber && nextPhone !== phoneVerifiedNumber) {
+                  setPhoneVerifiedNumber('');
+                  setPhoneVerificationToken('');
+                }
+              }}
+              disabled={!!phoneVerifiedNumber}
             />
+            <div id="seller-signup-recaptcha" />
+            {phoneVerifiedNumber ? (
+              <p className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700">
+                Phone verified: {phoneVerifiedNumber}
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {otpSent && (
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    className="input"
+                    placeholder="Enter 6-digit OTP"
+                    value={otpCode}
+                    onChange={(e) => setOtpCode(e.target.value)}
+                    maxLength={6}
+                  />
+                )}
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <button
+                    type="button"
+                    className="btn-outline text-sm"
+                    disabled={phoneOtpLoading || !phone.trim()}
+                    onClick={sendSellerOtp}
+                  >
+                    {phoneOtpLoading ? 'Sending…' : otpSent ? 'Resend OTP' : 'Send OTP'}
+                  </button>
+                  {otpSent && (
+                    <button
+                      type="button"
+                      className="btn-primary text-sm"
+                      disabled={phoneOtpLoading || otpCode.trim().length !== 6}
+                      onClick={verifySellerOtp}
+                    >
+                      {phoneOtpLoading ? 'Verifying…' : 'Verify OTP'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+            {phoneOtpError && <p className="text-xs text-red-600">{phoneOtpError}</p>}
             <p className="text-xs text-slate-500 mt-1">
               {t('signup.phoneHelp')}
             </p>

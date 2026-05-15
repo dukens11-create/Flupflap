@@ -27,6 +27,7 @@ export async function POST() {
         select: {
           id: true,
           phone: true,
+          phoneVerified: true,
           stripeAccountId: true,
         },
       }),
@@ -42,6 +43,15 @@ export async function POST() {
     ]);
     if (!user) {
       return NextResponse.json({ error: 'Seller not found.' }, { status: 404 });
+    }
+    if (!user.phone || !user.phoneVerified) {
+      return NextResponse.json(
+        {
+          error: 'Verify your phone number from signup/account settings before starting identity verification.',
+          code: 'PHONE_VERIFICATION_REQUIRED',
+        },
+        { status: 400 },
+      );
     }
     if (
       existingVerification?.status === SellerVerificationStatus.APPROVED
@@ -76,9 +86,10 @@ export async function POST() {
         eligibleToListAt: null,
         kycStartedAt,
         phoneNumber: user.phone ?? '',
-        phoneVerificationStatus: user.phone
-          ? SellerPhoneVerificationStatus.PENDING
-          : SellerPhoneVerificationStatus.NOT_STARTED,
+        phoneVerified: user.phoneVerified,
+        phoneVerificationStatus: user.phoneVerified
+          ? SellerPhoneVerificationStatus.VERIFIED
+          : SellerPhoneVerificationStatus.PENDING,
       },
       create: {
         sellerId: session.user.id,
@@ -88,8 +99,9 @@ export async function POST() {
         providerVerificationId,
         status: SellerVerificationStatus.PENDING,
         phoneNumber: user.phone ?? '',
-        phoneVerificationStatus: user.phone
-          ? SellerPhoneVerificationStatus.PENDING
+        phoneVerified: user.phoneVerified,
+        phoneVerificationStatus: user.phoneVerified
+          ? SellerPhoneVerificationStatus.VERIFIED
           : SellerPhoneVerificationStatus.NOT_STARTED,
         street: '',
         city: '',
