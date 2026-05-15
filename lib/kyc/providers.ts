@@ -20,26 +20,10 @@ export type SellerKycChecks = {
 
 const DEFAULT_PROVIDER_REJECTION_REASON = 'Provider verification failed.';
 
-function determinePhoneVerificationStatus(phone: string | null | undefined, phoneVerified: boolean) {
-  if (phoneVerified) return SellerPhoneVerificationStatus.VERIFIED;
-  return phone ? SellerPhoneVerificationStatus.PENDING : SellerPhoneVerificationStatus.NOT_STARTED;
-}
-
-function resolveVerificationStatus(
-  initialStatus: SellerVerificationStatus,
-  userPhoneVerified: boolean,
-) {
-  if (initialStatus === SellerVerificationStatus.APPROVED && !userPhoneVerified) {
-    return SellerVerificationStatus.PENDING;
-  }
-  return initialStatus;
-}
-
 export function resolveAutomatedKycStatus(checks: SellerKycChecks): SellerVerificationStatus {
-  // Identity verification (government ID + selfie) is the primary KYC gate.
-  // Address and phone checks from Stripe Connect are supplementary and are not
-  // required to unlock selling features.
-  if (checks.governmentIdVerified && checks.selfieVerified) {
+  // Identity verification (government ID + selfie) and phone verification are
+  // required before sellers are auto-approved.
+  if (checks.governmentIdVerified && checks.selfieVerified && checks.phoneVerified) {
     return SellerVerificationStatus.APPROVED;
   }
   return SellerVerificationStatus.PENDING;
@@ -123,7 +107,6 @@ export async function applyAutomatedKycResult(input: {
   forcedStatus?: SellerVerificationStatus;
   rejectionReason?: string | null;
 }) {
-  const status = input.forcedStatus ?? resolveAutomatedKycStatus(input.checks);
   const now = new Date();
   const [seller, existingVerification] = await Promise.all([
     prisma.user.findUnique({
@@ -135,9 +118,20 @@ export async function applyAutomatedKycResult(input: {
       select: { status: true },
     }),
   ]);
-  const userPhoneVerified = Boolean(seller?.phone && seller.phoneVerified);
-  const combinedPhoneVerified = Boolean(input.checks.phoneVerified || userPhoneVerified);
-  const resolvedStatus = resolveVerificationStatus(status, userPhoneVerified);
+  const isPhoneVerified = Boolean(seller?.phoneVerified);
+  const checksWithPhoneRequirement: SellerKycChecks = {
+    ...input.checks,
+    phoneVerified: isPhoneVerified,
+  };
+  let status = resolveAutomatedKycStatus(checksWithPhoneRequirement);
+  if (input.forcedStatus) {
+    status = input.forcedStatus;
+    // Forced provider/admin approvals still require phone verification to prevent
+    // any seller approval path from bypassing the verified-phone gate.
+    if (status === SellerVerificationStatus.APPROVED && !isPhoneVerified) {
+      status = SellerVerificationStatus.PENDING;
+    }
+  }
 
   await prisma.sellerVerification.upsert({
     where: { sellerId: input.sellerId },
@@ -147,21 +141,23 @@ export async function applyAutomatedKycResult(input: {
       providerAccountId: input.providerAccountId ?? undefined,
       providerInquiryId: input.providerInquiryId ?? undefined,
       providerVerificationId: input.providerVerificationId ?? undefined,
-      status: resolvedStatus,
+      status,
       rejectionReason:
-        resolvedStatus === 'REJECTED'
+        status === 'REJECTED'
           ? input.rejectionReason ?? DEFAULT_PROVIDER_REJECTION_REASON
           : null,
-      governmentIdVerified: input.checks.governmentIdVerified,
-      selfieVerified: input.checks.selfieVerified,
-      addressVerified: input.checks.addressVerified,
-      phoneVerified: combinedPhoneVerified,
-      phoneVerificationStatus: determinePhoneVerificationStatus(seller?.phone, combinedPhoneVerified),
+      governmentIdVerified: checksWithPhoneRequirement.governmentIdVerified,
+      selfieVerified: checksWithPhoneRequirement.selfieVerified,
+      addressVerified: checksWithPhoneRequirement.addressVerified,
+      phoneVerified: checksWithPhoneRequirement.phoneVerified,
+      phoneVerificationStatus: checksWithPhoneRequirement.phoneVerified
+        ? SellerPhoneVerificationStatus.VERIFIED
+        : SellerPhoneVerificationStatus.PENDING,
       providerReviewedAt: now,
-      eligibleToListAt: resolvedStatus === 'APPROVED' ? now : null,
-      verifiedAt: resolvedStatus === 'APPROVED' ? now : null,
+      eligibleToListAt: status === 'APPROVED' ? now : null,
+      verifiedAt: status === 'APPROVED' ? now : null,
       adminFallbackStatus:
-        resolvedStatus === 'APPROVED'
+        status === 'APPROVED'
           ? SellerAdminFallbackStatus.NOT_REQUIRED
           : SellerAdminFallbackStatus.PENDING_REVIEW,
       adminFallbackReason: null,
@@ -175,17 +171,19 @@ export async function applyAutomatedKycResult(input: {
       providerAccountId: input.providerAccountId ?? null,
       providerInquiryId: input.providerInquiryId ?? null,
       providerVerificationId: input.providerVerificationId ?? null,
-      status: resolvedStatus,
+      status,
       rejectionReason:
-        resolvedStatus === 'REJECTED'
+        status === 'REJECTED'
           ? input.rejectionReason ?? DEFAULT_PROVIDER_REJECTION_REASON
           : null,
-      governmentIdVerified: input.checks.governmentIdVerified,
-      selfieVerified: input.checks.selfieVerified,
-      addressVerified: input.checks.addressVerified,
-      phoneVerified: combinedPhoneVerified,
+      governmentIdVerified: checksWithPhoneRequirement.governmentIdVerified,
+      selfieVerified: checksWithPhoneRequirement.selfieVerified,
+      addressVerified: checksWithPhoneRequirement.addressVerified,
+      phoneVerified: checksWithPhoneRequirement.phoneVerified,
       phoneNumber: seller?.phone ?? '',
-      phoneVerificationStatus: determinePhoneVerificationStatus(seller?.phone, combinedPhoneVerified),
+      phoneVerificationStatus: checksWithPhoneRequirement.phoneVerified
+        ? SellerPhoneVerificationStatus.VERIFIED
+        : SellerPhoneVerificationStatus.PENDING,
       street: '',
       city: '',
       state: '',
@@ -196,10 +194,10 @@ export async function applyAutomatedKycResult(input: {
       selfieImagePublicId: '',
       kycStartedAt: now,
       providerReviewedAt: now,
-      eligibleToListAt: resolvedStatus === 'APPROVED' ? now : null,
-      verifiedAt: resolvedStatus === 'APPROVED' ? now : null,
+      eligibleToListAt: status === 'APPROVED' ? now : null,
+      verifiedAt: status === 'APPROVED' ? now : null,
       adminFallbackStatus:
-        resolvedStatus === 'APPROVED'
+        status === 'APPROVED'
           ? SellerAdminFallbackStatus.NOT_REQUIRED
           : SellerAdminFallbackStatus.PENDING_REVIEW,
       webhookLastEventId: input.webhookEventId ?? null,
@@ -212,8 +210,8 @@ export async function applyAutomatedKycResult(input: {
 
   // Sync canonical kycStatus (and sellerStatus on approval) onto the User record
   // so dashboard counts stay consistent with the SellerVerification table.
-  if (previousStatus !== resolvedStatus) {
-    if (resolvedStatus === SellerVerificationStatus.APPROVED) {
+  if (previousStatus !== status) {
+    if (status === SellerVerificationStatus.APPROVED) {
       await prisma.user.update({
         where: { id: input.sellerId },
         data: {
@@ -223,12 +221,12 @@ export async function applyAutomatedKycResult(input: {
           approvedAt: now,
         },
       });
-    } else if (resolvedStatus === SellerVerificationStatus.REJECTED) {
+    } else if (status === SellerVerificationStatus.REJECTED) {
       await prisma.user.update({
         where: { id: input.sellerId },
         data: { kycStatus: KycStatus.REJECTED },
       });
-    } else if (resolvedStatus === SellerVerificationStatus.PENDING) {
+    } else if (status === SellerVerificationStatus.PENDING) {
       await prisma.user.update({
         where: { id: input.sellerId },
         data: { kycStatus: KycStatus.PENDING_REVIEW },
@@ -236,8 +234,8 @@ export async function applyAutomatedKycResult(input: {
     }
   }
 
-  if (previousStatus !== resolvedStatus) {
-    if (resolvedStatus === SellerVerificationStatus.APPROVED) {
+  if (previousStatus !== status) {
+    if (status === SellerVerificationStatus.APPROVED) {
       // Use a stable dedupeKey so repeated webhooks for the same approval don't
       // stack up multiple notifications; the upsert resets readAt each time.
       await createNotification({
@@ -248,7 +246,7 @@ export async function applyAutomatedKycResult(input: {
         link: '/seller',
         dedupeKey: `kyc-approved:${input.sellerId}`,
       });
-    } else if (resolvedStatus === SellerVerificationStatus.REJECTED) {
+    } else if (status === SellerVerificationStatus.REJECTED) {
       const reason = input.rejectionReason ?? DEFAULT_PROVIDER_REJECTION_REASON;
       // Use the webhookEventId as the dedupeKey to prevent duplicate notifications
       // from the same Stripe event being retried. When no event ID is available

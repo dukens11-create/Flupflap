@@ -5,9 +5,9 @@ import { z } from 'zod';
 import { getMarketplaceSettings } from '@/lib/commission';
 import { SellerStatus } from '@prisma/client';
 import { applyRateLimit, sanitizeTextInput } from '@/lib/security';
-import { logError, logWarn } from '@/lib/logger';
-import { verifyFirebasePhoneIdToken } from '@/lib/firebase/phone-verification';
+import { logError } from '@/lib/logger';
 import { normalizePhone } from '@/lib/phone';
+import { verifyFirebasePhoneIdToken } from '@/lib/firebase/server';
 
 const schema = z.object({
   name: z.string().min(1).max(80),
@@ -15,7 +15,7 @@ const schema = z.object({
   password: z.string().min(8),
   role: z.enum(['CUSTOMER', 'SELLER']).default('CUSTOMER'),
   phone: z.string().max(20).optional(),
-  phoneVerificationIdToken: z.string().min(1).optional(),
+  firebaseIdToken: z.string().min(1).optional(),
 });
 
 export async function POST(req: Request) {
@@ -37,16 +37,10 @@ export async function POST(req: Request) {
     const data = schema.parse(body);
     const sanitizedName = sanitizeTextInput(data.name, 80);
     const sanitizedPhone = data.phone ? sanitizeTextInput(data.phone, 20) : undefined;
+    let verifiedPhone: string | null = null;
 
     if (!sanitizedName) {
       return NextResponse.json({ error: 'Name is required.' }, { status: 400 });
-    }
-
-    if (data.role === 'SELLER' && !data.phoneVerificationIdToken?.trim()) {
-      return NextResponse.json(
-        { error: 'Phone verification is required for seller accounts.' },
-        { status: 400 },
-      );
     }
 
     if (data.role === 'SELLER' && !sanitizedPhone?.trim()) {
@@ -55,46 +49,39 @@ export async function POST(req: Request) {
         { status: 400 },
       );
     }
-
-    let verifiedPhoneForSeller: string | null = null;
     if (data.role === 'SELLER') {
-      const verification = await verifyFirebasePhoneIdToken(data.phoneVerificationIdToken!.trim());
-      if (!verification.ok) {
-        if (verification.error === 'missing_config') {
-          logError('Firebase phone verification is not configured for seller signup.', null, {
-            tag: 'api/auth/signup',
-          });
-          return NextResponse.json(
-            { error: 'Phone verification is temporarily unavailable. Please try again shortly.' },
-            { status: 503 },
-          );
-        }
-        if (verification.error === 'invalid_token') {
-          return NextResponse.json(
-            { error: 'Phone verification expired. Please verify your phone number again.' },
-            { status: 400 },
-          );
-        }
+      const firebaseIdToken = data.firebaseIdToken;
+      if (!firebaseIdToken) {
         return NextResponse.json(
-          { error: 'Unable to verify phone number right now. Please try again.' },
-          { status: 502 },
-        );
-      }
-
-      const normalizedVerified = normalizePhone(verification.phoneNumber);
-      const normalizedInput = normalizePhone(sanitizedPhone ?? '');
-      if (!normalizedVerified || !normalizedInput || normalizedVerified !== normalizedInput) {
-        logWarn('Seller signup phone mismatch between Firebase verification and submitted phone.', {
-          tag: 'api/auth/signup',
-          normalizedInputPresent: Boolean(normalizedInput),
-          normalizedVerifiedPresent: Boolean(normalizedVerified),
-        });
-        return NextResponse.json(
-          { error: 'The verified phone number does not match the number entered.' },
+          { error: 'Please verify your phone number with OTP before creating a seller account.' },
           { status: 400 },
         );
       }
-      verifiedPhoneForSeller = normalizedVerified;
+      const normalizedSubmittedPhone = normalizePhone(sanitizedPhone ?? '');
+      if (!normalizedSubmittedPhone) {
+        return NextResponse.json(
+          { error: 'Invalid phone number. Please include your country code (e.g. +1 for US/Canada).' },
+          { status: 400 },
+        );
+      }
+
+      const firebasePhone = await verifyFirebasePhoneIdToken(firebaseIdToken);
+      if (!firebasePhone?.phoneNumber) {
+        return NextResponse.json(
+          { error: 'Phone verification has expired. Please request and verify a new OTP.' },
+          { status: 400 },
+        );
+      }
+
+      const normalizedFirebasePhone = normalizePhone(firebasePhone.phoneNumber);
+      if (!normalizedFirebasePhone || normalizedFirebasePhone !== normalizedSubmittedPhone) {
+        return NextResponse.json(
+          { error: 'The verified phone number does not match the number entered on signup.' },
+          { status: 400 },
+        );
+      }
+
+      verifiedPhone = normalizedFirebasePhone;
     }
 
     const existing = await prisma.user.findUnique({ where: { email: data.email.toLowerCase() } });
@@ -115,18 +102,18 @@ export async function POST(req: Request) {
         email: data.email.toLowerCase(),
         password,
         role: data.role,
-        phone: data.role === 'SELLER' ? verifiedPhoneForSeller : null,
-        phoneVerified: data.role === 'SELLER',
-        phoneVerifiedAt: data.role === 'SELLER' ? now : null,
+        phone: data.role === 'SELLER' ? verifiedPhone : null,
         ...(data.role === 'SELLER'
           ? {
-            sellerStatus: SellerStatus.PENDING,
-            hasFreePromotion: !!settings?.freePromotionEnabled,
-            freePromotionStart: settings?.freePromotionEnabled ? now : null,
-            freePromotionEnd,
-            freePromotionGrantedAt: settings?.freePromotionEnabled ? now : null,
-            freePromotionExpiresAt: freePromotionEnd,
-          }
+          sellerStatus: SellerStatus.PENDING,
+              phoneVerified: true,
+              phoneVerifiedAt: now,
+              hasFreePromotion: !!settings?.freePromotionEnabled,
+              freePromotionStart: settings?.freePromotionEnabled ? now : null,
+              freePromotionEnd,
+              freePromotionGrantedAt: settings?.freePromotionEnabled ? now : null,
+              freePromotionExpiresAt: freePromotionEnd,
+            }
           : {}),
       },
     });

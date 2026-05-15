@@ -1,5 +1,6 @@
 import {
   SellerAdminFallbackStatus,
+  SellerPhoneVerificationStatus,
   SellerVerificationStatus,
   NotificationType,
   KycStatus,
@@ -91,7 +92,7 @@ export async function POST(
     const { id } = await params;
     const seller = await prisma.user.findUnique({
       where: { id },
-      select: { id: true, role: true, phoneVerified: true },
+      select: { id: true, role: true, phone: true, phoneVerified: true },
     });
 
     if (!seller || seller.role !== 'SELLER') {
@@ -107,21 +108,29 @@ export async function POST(
     );
     const data = schema.parse(raw);
 
-    if (data.status === SellerVerificationStatus.APPROVED && !seller.phoneVerified) {
-      const errUrl = new URL('/admin/sellers', req.url);
-      errUrl.searchParams.set(
-        'error',
-        'Seller phone is not verified yet. Approvals are blocked until phone verification is complete.',
-      );
-      return NextResponse.redirect(errUrl, 302);
-    }
-
     const verification = await prisma.sellerVerification.findUnique({
       where: { sellerId: id },
-      select: { sellerId: true },
+      select: { sellerId: true, phoneVerified: true, phoneNumber: true },
     });
     if (!verification) {
       return NextResponse.json({ error: 'Verification submission not found.' }, { status: 404 });
+    }
+
+    if (data.status === SellerVerificationStatus.APPROVED && !seller.phoneVerified) {
+      const errUrl = new URL('/admin/sellers', req.url);
+      errUrl.searchParams.set('error', 'Seller phone verification is required before approval.');
+      return NextResponse.redirect(errUrl, 302);
+    }
+
+    if (seller.phoneVerified && !verification.phoneVerified) {
+      await prisma.sellerVerification.update({
+        where: { sellerId: id },
+        data: {
+          phoneVerified: true,
+          phoneNumber: seller.phone ?? verification.phoneNumber,
+          phoneVerificationStatus: SellerPhoneVerificationStatus.VERIFIED,
+        },
+      });
     }
 
     await prisma.sellerVerification.update({

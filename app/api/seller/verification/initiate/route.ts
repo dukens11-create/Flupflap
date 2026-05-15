@@ -44,6 +44,15 @@ export async function POST() {
     if (!user) {
       return NextResponse.json({ error: 'Seller not found.' }, { status: 404 });
     }
+    if (!user.phone || !user.phoneVerified) {
+      return NextResponse.json(
+        {
+          error: 'Verify your phone number during seller signup (or from account phone settings) before starting identity verification.',
+          code: 'PHONE_VERIFICATION_REQUIRED',
+        },
+        { status: 400 },
+      );
+    }
     if (
       existingVerification?.status === SellerVerificationStatus.APPROVED
       && (existingVerification.eligibleToListAt || existingVerification.adminFallbackStatus === SellerAdminFallbackStatus.APPROVED)
@@ -77,12 +86,10 @@ export async function POST() {
         eligibleToListAt: null,
         kycStartedAt,
         phoneNumber: user.phone ?? '',
-        phoneVerified: Boolean(user.phoneVerified && user.phone),
-        phoneVerificationStatus: user.phone
-          ? (user.phoneVerified
-            ? SellerPhoneVerificationStatus.VERIFIED
-            : SellerPhoneVerificationStatus.PENDING)
-          : SellerPhoneVerificationStatus.NOT_STARTED,
+        phoneVerified: user.phoneVerified,
+        phoneVerificationStatus: user.phoneVerified
+          ? SellerPhoneVerificationStatus.VERIFIED
+          : SellerPhoneVerificationStatus.PENDING,
       },
       create: {
         sellerId: session.user.id,
@@ -92,11 +99,9 @@ export async function POST() {
         providerVerificationId,
         status: SellerVerificationStatus.PENDING,
         phoneNumber: user.phone ?? '',
-        phoneVerified: Boolean(user.phoneVerified && user.phone),
-        phoneVerificationStatus: user.phone
-          ? (user.phoneVerified
-            ? SellerPhoneVerificationStatus.VERIFIED
-            : SellerPhoneVerificationStatus.PENDING)
+        phoneVerified: user.phoneVerified,
+        phoneVerificationStatus: user.phoneVerified
+          ? SellerPhoneVerificationStatus.VERIFIED
           : SellerPhoneVerificationStatus.NOT_STARTED,
         street: '',
         city: '',
