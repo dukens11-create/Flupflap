@@ -49,14 +49,14 @@ export async function POST(req: Request) {
         { status: 400 },
       );
     }
-    if (data.role === 'SELLER' && !data.firebaseIdToken) {
-      return NextResponse.json(
-        { error: 'Please verify your phone number with OTP before creating a seller account.' },
-        { status: 400 },
-      );
-    }
-
     if (data.role === 'SELLER') {
+      const firebaseIdToken = data.firebaseIdToken;
+      if (!firebaseIdToken) {
+        return NextResponse.json(
+          { error: 'Please verify your phone number with OTP before creating a seller account.' },
+          { status: 400 },
+        );
+      }
       const normalizedSubmittedPhone = normalizePhone(sanitizedPhone ?? '');
       if (!normalizedSubmittedPhone) {
         return NextResponse.json(
@@ -65,7 +65,7 @@ export async function POST(req: Request) {
         );
       }
 
-      const firebasePhone = await verifyFirebasePhoneIdToken(data.firebaseIdToken ?? '');
+      const firebasePhone = await verifyFirebasePhoneIdToken(firebaseIdToken);
       if (!firebasePhone?.phoneNumber) {
         return NextResponse.json(
           { error: 'Phone verification has expired. Please request and verify a new OTP.' },

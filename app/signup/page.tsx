@@ -60,6 +60,7 @@ export default function SignupPage() {
     try {
       const auth = getFirebaseClientAuth();
       if (!recaptchaRef.current) {
+        // Recreate verifier when absent (initial load or after a previous auth error clear).
         recaptchaRef.current = new RecaptchaVerifier(auth, 'seller-signup-recaptcha', {
           size: 'invisible',
         });
@@ -97,7 +98,15 @@ export default function SignupPage() {
       setPhoneVerificationToken(idToken);
       setOtpSent(false);
       setOtpCode('');
-      await getFirebaseClientAuth().signOut().catch(() => null);
+      await getFirebaseClientAuth().signOut().catch((signOutError) => {
+        Sentry.captureException(signOutError, {
+          tags: { area: 'auth', action: 'firebase_signout_after_phone_verify' },
+          extra: {
+            message: signOutError?.message ?? null,
+            code: signOutError?.code ?? null,
+          },
+        });
+      });
     } catch (err: any) {
       setPhoneOtpError(mapFirebasePhoneAuthError(err?.code));
     } finally {

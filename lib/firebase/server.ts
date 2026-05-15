@@ -33,7 +33,12 @@ export async function verifyFirebasePhoneIdToken(idToken: string) {
     return null;
   }
 
-  const payload = (await response.json()) as FirebaseLookupResponse;
+  let payload: FirebaseLookupResponse;
+  try {
+    payload = (await response.json()) as FirebaseLookupResponse;
+  } catch {
+    return null;
+  }
   const phoneNumber = payload.users?.[0]?.phoneNumber ?? null;
   if (!phoneNumber) {
     return null;

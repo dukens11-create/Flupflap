@@ -47,7 +47,7 @@ export async function POST() {
     if (!user.phone || !user.phoneVerified) {
       return NextResponse.json(
         {
-          error: 'Verify your phone number from signup/account settings before starting identity verification.',
+          error: 'Verify your phone number during seller signup (or from account phone settings) before starting identity verification.',
           code: 'PHONE_VERIFICATION_REQUIRED',
         },
         { status: 400 },

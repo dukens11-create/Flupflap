@@ -118,16 +118,20 @@ export async function applyAutomatedKycResult(input: {
       select: { status: true },
     }),
   ]);
-  const sellerPhoneVerified = Boolean(seller?.phoneVerified);
+  const isPhoneVerified = Boolean(seller?.phoneVerified);
   const checksWithPhoneRequirement: SellerKycChecks = {
     ...input.checks,
-    phoneVerified: sellerPhoneVerified,
+    phoneVerified: isPhoneVerified,
   };
-  const status = input.forcedStatus
-    ? (input.forcedStatus === SellerVerificationStatus.APPROVED && !sellerPhoneVerified
-      ? SellerVerificationStatus.PENDING
-      : input.forcedStatus)
-    : resolveAutomatedKycStatus(checksWithPhoneRequirement);
+  let status = resolveAutomatedKycStatus(checksWithPhoneRequirement);
+  if (input.forcedStatus) {
+    status = input.forcedStatus;
+    // Forced provider/admin approvals still require phone verification to prevent
+    // any seller approval path from bypassing the verified-phone gate.
+    if (status === SellerVerificationStatus.APPROVED && !isPhoneVerified) {
+      status = SellerVerificationStatus.PENDING;
+    }
+  }
 
   await prisma.sellerVerification.upsert({
     where: { sellerId: input.sellerId },
