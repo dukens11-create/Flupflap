@@ -2,6 +2,7 @@
 
 import { FirebaseApp, getApp, getApps, initializeApp } from 'firebase/app';
 import { Auth, getAuth } from 'firebase/auth';
+import * as Sentry from '@sentry/nextjs';
 
 type FirebaseClientConfig = {
   apiKey: string;
@@ -9,6 +10,7 @@ type FirebaseClientConfig = {
   projectId: string;
   appId: string;
   messagingSenderId?: string;
+  measurementId?: string;
 };
 
 function getFirebaseClientConfig(): FirebaseClientConfig {
@@ -17,6 +19,7 @@ function getFirebaseClientConfig(): FirebaseClientConfig {
   const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID?.trim() ?? '';
   const appId = process.env.NEXT_PUBLIC_FIREBASE_APP_ID?.trim() ?? '';
   const messagingSenderId = process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID?.trim() ?? '';
+  const measurementId = process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID?.trim() ?? '';
 
   if (!apiKey || !authDomain || !projectId || !appId) {
     throw new Error(
@@ -30,14 +33,41 @@ function getFirebaseClientConfig(): FirebaseClientConfig {
     projectId,
     appId,
     messagingSenderId: messagingSenderId || undefined,
+    measurementId: measurementId || undefined,
   };
+}
+
+let analyticsInitPromise: Promise<void> | null = null;
+
+function initializeFirebaseAnalyticsIfEnabled(app: FirebaseApp) {
+  if (typeof window === 'undefined') return;
+  if (analyticsInitPromise) return;
+  const measurementId = process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID?.trim() ?? '';
+  if (!measurementId) return;
+
+  analyticsInitPromise = (async () => {
+    const analyticsModule = await import('firebase/analytics');
+    const supported = await analyticsModule.isSupported();
+    if (supported) {
+      analyticsModule.getAnalytics(app);
+    }
+  })().catch((error) => {
+    Sentry.captureException(error, {
+      tags: { area: 'auth', action: 'firebase_analytics_init' },
+      extra: { message: error instanceof Error ? error.message : String(error) },
+    });
+  });
 }
 
 function getFirebaseApp(): FirebaseApp {
   if (getApps().length > 0) {
-    return getApp();
+    const existing = getApp();
+    initializeFirebaseAnalyticsIfEnabled(existing);
+    return existing;
   }
-  return initializeApp(getFirebaseClientConfig());
+  const app = initializeApp(getFirebaseClientConfig());
+  initializeFirebaseAnalyticsIfEnabled(app);
+  return app;
 }
 
 export function getFirebaseClientAuth(): Auth {

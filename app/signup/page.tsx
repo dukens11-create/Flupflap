@@ -38,6 +38,9 @@ export default function SignupPage() {
   }, []);
 
   function mapFirebasePhoneAuthError(code?: string) {
+    if (code === 'auth/missing-phone-number') {
+      return 'Please enter your phone number before requesting a code.';
+    }
     if (code === 'auth/invalid-verification-code') {
       return 'Invalid OTP code. Please check the code and try again.';
     }
@@ -49,6 +52,12 @@ export default function SignupPage() {
     }
     if (code === 'auth/invalid-phone-number') {
       return 'Invalid phone number. Please include your country code (e.g. +1).';
+    }
+    if (code === 'auth/quota-exceeded') {
+      return 'SMS quota exceeded right now. Please try again later.';
+    }
+    if (code === 'auth/captcha-check-failed' || code === 'auth/invalid-app-credential') {
+      return 'Security check failed. Please refresh and try again.';
     }
     return 'Phone verification failed. Please try again.';
   }
@@ -69,7 +78,11 @@ export default function SignupPage() {
       confirmationResultRef.current = confirmation;
       setOtpSent(true);
     } catch (err: any) {
-      setPhoneOtpError(mapFirebasePhoneAuthError(err?.code));
+      if (!err?.code) {
+        setPhoneOtpError('Phone verification is unavailable right now. Please check your connection and try again.');
+      } else {
+        setPhoneOtpError(mapFirebasePhoneAuthError(err?.code));
+      }
       recaptchaRef.current?.clear();
       recaptchaRef.current = null;
     } finally {
@@ -254,7 +267,7 @@ export default function SignupPage() {
               }}
               disabled={!!phoneVerifiedNumber}
             />
-            <div id="seller-signup-recaptcha" />
+            <div id="seller-signup-recaptcha" className="hidden" aria-hidden="true" />
             {phoneVerifiedNumber ? (
               <p className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700">
                 Phone verified: {phoneVerifiedNumber}
@@ -280,7 +293,7 @@ export default function SignupPage() {
                     disabled={phoneOtpLoading || !phone.trim()}
                     onClick={sendSellerOtp}
                   >
-                    {phoneOtpLoading ? 'Sending…' : otpSent ? 'Resend OTP' : 'Send OTP'}
+                    {phoneOtpLoading ? 'Sending...' : otpSent ? 'Resend Code' : 'Send Code'}
                   </button>
                   {otpSent && (
                     <button
@@ -289,7 +302,7 @@ export default function SignupPage() {
                       disabled={phoneOtpLoading || otpCode.trim().length !== 6}
                       onClick={verifySellerOtp}
                     >
-                      {phoneOtpLoading ? 'Verifying…' : 'Verify OTP'}
+                      {phoneOtpLoading ? 'Verifying...' : 'Verify Code'}
                     </button>
                   )}
                 </div>
