@@ -59,7 +59,7 @@ export default function SellerPhoneVerification({
   const [phoneOtpError, setPhoneOtpError] = useState('');
   const confirmationResultRef = useRef<ConfirmationResult | null>(null);
   const recaptchaRef = useRef<RecaptchaVerifier | null>(null);
-  const recaptchaContainerId = 'seller-signup-recaptcha';
+  const recaptchaContainerId = 'phone-verification-recaptcha';
 
   useEffect(() => {
     return () => {
@@ -94,7 +94,7 @@ export default function SellerPhoneVerification({
   async function verifyCode() {
     if (phoneOtpLoading) return;
     if (!confirmationResultRef.current) {
-      setPhoneOtpError('Please request a code first.');
+      setPhoneOtpError('Verification session expired. Please request a new code.');
       return;
     }
     setPhoneOtpError('');

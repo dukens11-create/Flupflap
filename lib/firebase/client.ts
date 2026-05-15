@@ -26,7 +26,7 @@ function getFirebaseClientConfig(): FirebaseClientConfig {
   if (!apiKey || !authDomain || !projectId || !appId) {
     throw Object.assign(
       new Error(
-        'Firebase phone auth is not configured. Set NEXT_PUBLIC_FIREBASE_API_KEY, NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN, NEXT_PUBLIC_FIREBASE_PROJECT_ID, and NEXT_PUBLIC_FIREBASE_APP_ID.',
+        'Firebase is not configured. Set NEXT_PUBLIC_FIREBASE_API_KEY, NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN, NEXT_PUBLIC_FIREBASE_PROJECT_ID, and NEXT_PUBLIC_FIREBASE_APP_ID.',
       ),
       { code: 'firebase/not-configured' },
     );
