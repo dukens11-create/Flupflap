@@ -6,6 +6,16 @@ import type { ConfirmationResult } from 'firebase/auth';
 import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 import { getFirebaseClientAuth } from '@/lib/firebase/client';
 
+const OTP_CODE_LENGTH = 6;
+
+function getFirebaseErrorCode(error: unknown): string | undefined {
+  if (typeof error === 'object' && error !== null && 'code' in error) {
+    const value = (error as { code?: unknown }).code;
+    return typeof value === 'string' ? value : undefined;
+  }
+  return undefined;
+}
+
 function mapFirebasePhoneAuthError(code?: string) {
   if (code === 'auth/invalid-verification-code') {
     return 'Invalid OTP code. Please check the code and try again.';
@@ -55,8 +65,8 @@ export default function SellerPhoneVerificationCard() {
       const confirmation = await signInWithPhoneNumber(auth, phone, recaptchaRef.current);
       confirmationResultRef.current = confirmation;
       setOtpSent(true);
-    } catch (err: any) {
-      setError(mapFirebasePhoneAuthError(err?.code));
+    } catch (err: unknown) {
+      setError(mapFirebasePhoneAuthError(getFirebaseErrorCode(err)));
       recaptchaRef.current?.clear();
       recaptchaRef.current = null;
     } finally {
@@ -74,7 +84,13 @@ export default function SellerPhoneVerificationCard() {
     setSuccess('');
     setLoading(true);
     try {
-      const confirmation = await confirmationResultRef.current.confirm(otpCode.trim());
+      const normalizedOtpCode = otpCode.replace(/\s+/g, '');
+      if (normalizedOtpCode.length !== OTP_CODE_LENGTH) {
+        setError(`Enter the ${OTP_CODE_LENGTH}-digit code sent to your phone.`);
+        setLoading(false);
+        return;
+      }
+      const confirmation = await confirmationResultRef.current.confirm(normalizedOtpCode);
       const idToken = await confirmation.user.getIdToken(true);
       const res = await fetch('/api/seller/phone/verify', {
         method: 'POST',
@@ -84,7 +100,12 @@ export default function SellerPhoneVerificationCard() {
           firebaseIdToken: idToken,
         }),
       });
-      const data = await res.json().catch(() => null);
+      let data: { error?: string } | null = null;
+      try {
+        data = await res.json();
+      } catch (parseErr) {
+        console.error('[seller-phone-verify] failed to parse API response', parseErr);
+      }
       if (!res.ok) {
         setError(data?.error ?? 'Unable to save verified phone number.');
         return;
@@ -92,10 +113,9 @@ export default function SellerPhoneVerificationCard() {
       setSuccess('Phone number verified and saved.');
       setOtpSent(false);
       setOtpCode('');
-      await getFirebaseClientAuth().signOut().catch(() => null);
       router.refresh();
-    } catch (err: any) {
-      setError(mapFirebasePhoneAuthError(err?.code));
+    } catch (err: unknown) {
+      setError(mapFirebasePhoneAuthError(getFirebaseErrorCode(err)));
     } finally {
       setLoading(false);
     }
@@ -132,12 +152,12 @@ export default function SellerPhoneVerificationCard() {
               className="input tracking-widest text-center text-xl"
               placeholder="123456"
               value={otpCode}
-              onChange={(e) => setOtpCode(e.target.value)}
-              maxLength={6}
+              onChange={(e) => setOtpCode(e.target.value.replace(/\s+/g, ''))}
+              maxLength={OTP_CODE_LENGTH}
               disabled={loading}
             />
             <div className="flex gap-2">
-              <button type="button" className="btn-primary text-sm" onClick={verifyCode} disabled={loading || otpCode.trim().length !== 6}>
+              <button type="button" className="btn-primary text-sm" onClick={verifyCode} disabled={loading || otpCode.trim().length !== OTP_CODE_LENGTH}>
                 {loading ? 'Verifying…' : 'Verify Code'}
               </button>
               <button type="button" className="btn-outline text-sm" onClick={sendCode} disabled={loading || !phone.trim()}>

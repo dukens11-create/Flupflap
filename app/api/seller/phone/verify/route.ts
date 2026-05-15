@@ -14,11 +14,13 @@ const schema = z.object({
 });
 
 export async function POST(req: Request) {
+  let sellerId: string | null = null;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user || session.user.role !== 'SELLER' || !session.user.id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+    sellerId = session.user.id;
 
     const body = await req.json();
     const data = schema.parse(body);
@@ -48,31 +50,42 @@ export async function POST(req: Request) {
     }
 
     const now = new Date();
-    await prisma.$transaction([
-      prisma.user.update({
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({
         where: { id: session.user.id },
         data: {
           phone: normalizedFirebasePhone,
           phoneVerified: true,
           phoneVerifiedAt: now,
         },
-      }),
-      prisma.sellerVerification.updateMany({
+      });
+
+      const verification = await tx.sellerVerification.findUnique({
         where: { sellerId: session.user.id },
-        data: {
-          phoneNumber: normalizedFirebasePhone,
-          phoneVerified: true,
-          phoneVerificationStatus: SellerPhoneVerificationStatus.VERIFIED,
-        },
-      }),
-    ]);
+        select: { sellerId: true },
+      });
+
+      if (verification) {
+        await tx.sellerVerification.update({
+          where: { sellerId: session.user.id },
+          data: {
+            phoneNumber: normalizedFirebasePhone,
+            phoneVerified: true,
+            phoneVerificationStatus: SellerPhoneVerificationStatus.VERIFIED,
+          },
+        });
+      }
+    });
 
     return NextResponse.json({ ok: true, phoneNumber: normalizedFirebasePhone });
-  } catch (err: any) {
-    if (err?.name === 'ZodError') {
+  } catch (err: unknown) {
+    if (err instanceof z.ZodError) {
       return NextResponse.json({ error: 'Invalid input.' }, { status: 400 });
     }
-    console.error('[seller/phone/verify]', err);
+    console.error('[seller/phone/verify] unexpected error', {
+      sellerId,
+      err,
+    });
     return NextResponse.json({ error: 'Unable to verify phone number right now.' }, { status: 500 });
   }
 }
