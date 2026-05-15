@@ -80,7 +80,7 @@ export const authOptions: NextAuthOptions = {
             const submittedPhone = normalizePhone(credentials.phone ?? '');
             const expectedPhone = normalizePhone(user.phone ?? '') || submittedPhone;
 
-            if (!verifiedPhone || (expectedPhone && verifiedPhone !== expectedPhone)) {
+            if (!verifiedPhone || !expectedPhone || verifiedPhone !== expectedPhone) {
               return null;
             }
 
