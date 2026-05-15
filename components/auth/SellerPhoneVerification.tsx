@@ -16,6 +16,9 @@ type SellerPhoneVerificationProps = {
 
 function getPhoneVerificationErrorMessage(err: { code?: string; message?: string } | null | undefined) {
   const code = err?.code;
+  if (code === 'auth/missing-phone-number') {
+    return 'Please enter your phone number before requesting a code.';
+  }
   if (code === 'auth/invalid-verification-code') {
     return 'Invalid OTP code. Please check the code and try again.';
   }
@@ -28,8 +31,17 @@ function getPhoneVerificationErrorMessage(err: { code?: string; message?: string
   if (code === 'auth/invalid-phone-number') {
     return 'Invalid phone number. Please include your country code (e.g. +1).';
   }
+  if (code === 'auth/quota-exceeded') {
+    return 'SMS quota exceeded right now. Please try again later.';
+  }
+  if (code === 'auth/captcha-check-failed' || code === 'auth/invalid-app-credential') {
+    return 'Security check failed. Please refresh and try again.';
+  }
   if (code === 'firebase/not-configured') {
     return 'Phone verification is not configured right now. Please contact support.';
+  }
+  if (!code) {
+    return 'Phone verification is unavailable right now. Please check your connection and try again.';
   }
   return 'Phone verification failed. Please try again.';
 }

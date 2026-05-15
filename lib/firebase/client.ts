@@ -1,8 +1,8 @@
 'use client';
 
 import { FirebaseApp, getApp, getApps, initializeApp } from 'firebase/app';
-import { getAnalytics, isSupported } from 'firebase/analytics';
 import { Auth, getAuth } from 'firebase/auth';
+import * as Sentry from '@sentry/nextjs';
 
 type FirebaseClientConfig = {
   apiKey: string;
@@ -45,20 +45,30 @@ function getFirebaseClientConfig(): FirebaseClientConfig {
 function initializeFirebaseAnalyticsIfEnabled(app: FirebaseApp) {
   if (typeof window === 'undefined') return;
   if (analyticsInitializationPromise) return;
-  if (!process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID?.trim()) return;
-  analyticsInitializationPromise = isSupported()
-    .then((supported) => {
-      if (supported) {
-        getAnalytics(app);
-      }
-    })
-    .catch((err) => {
-      console.warn('[firebase] Analytics initialization failed', err);
+  const measurementId = process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID?.trim() ?? '';
+  if (!measurementId) return;
+
+  analyticsInitializationPromise = (async () => {
+    const analyticsModule = await import('firebase/analytics');
+    const supported = await analyticsModule.isSupported();
+    if (supported) {
+      analyticsModule.getAnalytics(app);
+    }
+  })().catch((error) => {
+    Sentry.captureException(error, {
+      tags: { area: 'auth', action: 'firebase_analytics_init' },
+      extra: { message: error instanceof Error ? error.message : String(error) },
     });
+  });
 }
 
 function getFirebaseApp(): FirebaseApp {
-  const app = getApps().length > 0 ? getApp() : initializeApp(getFirebaseClientConfig());
+  if (getApps().length > 0) {
+    const existing = getApp();
+    initializeFirebaseAnalyticsIfEnabled(existing);
+    return existing;
+  }
+  const app = initializeApp(getFirebaseClientConfig());
   initializeFirebaseAnalyticsIfEnabled(app);
   return app;
 }
