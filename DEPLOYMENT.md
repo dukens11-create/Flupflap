@@ -157,69 +157,75 @@ original vs enhanced before submitting.
 
 ---
 
-## Firebase Phone Auth setup (seller signup and seller dashboard phone verification)
+## Firebase Phone Auth (seller signup + seller dashboard phone verification)
 
-Seller phone verification at signup and on the seller dashboard uses **Firebase Phone Authentication** (not Twilio). You must configure the Firebase project correctly before OTP codes will be sent.
+Firebase Phone Authentication is used during **seller account creation** to verify
+the seller's mobile number via OTP before the account is created. Existing sellers
+who signed up before this requirement will also see a verification card on the
+seller dashboard (`/seller`) that uses the same Firebase OTP flow.
 
-### Step 1 — Enable the Phone sign-in provider
+A separate Twilio-based OTP is used at every seller **login** (see the next
+section).
 
-1. Open the [Firebase Console](https://console.firebase.google.com) and select your project.
-2. Go to **Authentication → Sign-in method**.
-3. Click **Phone** and enable it.
-4. Save.
+### How the flow works
 
-### Step 2 — Add authorized domains
+1. Seller enters phone number and clicks **Send Code**.
+2. Firebase sends OTP using `signInWithPhoneNumber` + invisible reCAPTCHA.
+3. Seller enters the 6-digit code and clicks **Verify Code**.
+4. The app stores the verified phone and a short-lived Firebase ID token.
+5. Server verifies that token and persists phone verification.
 
-Firebase blocks `signInWithPhoneNumber` calls from domains that are not explicitly allowed.
+### Step 1 — Create / configure a Firebase project
 
-1. In **Authentication → Settings → Authorized domains**, click **Add domain**.
-2. Add every hostname where the app runs:
-   - `localhost` (for local development)
-   - your Render service hostname, e.g. `flupflap.onrender.com`
-   - your custom domain, e.g. `www.flupflap.com`
-3. Save.
+1. Go to <https://console.firebase.google.com> and create (or select) a project.
+2. In **Authentication → Sign-in method**, enable **Phone**.
+3. In **Authentication → Settings → Authorized domains**, add every hostname that
+   serves signup/seller pages (e.g. `localhost`, Render domain, custom domain).
 
-> **If this step is skipped**, Firebase rejects all OTP send requests with `auth/unauthorized-domain` and the seller phone verification UI shows "This domain is not authorized for phone sign-in."
+> If the domain is missing, OTP send fails with `auth/unauthorized-domain`.
 
-### Step 3 — Set the environment variables
+### Step 2 — Get web app credentials
 
-Add these to Render → Environment (or your `.env.local` for local development):
+1. Open **Project Settings → General**.
+2. Under **Your apps**, create/select a **Web app**.
+3. Copy values from `firebaseConfig`.
+
+### Step 3 — Set environment variables
+
+Add these to your hosting environment (Render → Environment) and local env:
 
 | Variable | Where to find it |
 |---|---|
-| `NEXT_PUBLIC_FIREBASE_API_KEY` | Firebase Console → Project Settings → General → Web API key |
-| `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | Project Settings → General → `<project-id>.firebaseapp.com` |
-| `NEXT_PUBLIC_FIREBASE_PROJECT_ID` | Project Settings → General → Project ID |
-| `NEXT_PUBLIC_FIREBASE_APP_ID` | Project Settings → General → Your apps → App ID |
-| `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | Project Settings → General → Messaging sender ID |
-| `FIREBASE_API_KEY` | Same value as `NEXT_PUBLIC_FIREBASE_API_KEY` (used server-side to validate ID tokens; falls back to the public key if omitted) |
+| `NEXT_PUBLIC_FIREBASE_API_KEY` | `firebaseConfig.apiKey` |
+| `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | `firebaseConfig.authDomain` |
+| `NEXT_PUBLIC_FIREBASE_PROJECT_ID` | `firebaseConfig.projectId` |
+| `NEXT_PUBLIC_FIREBASE_APP_ID` | `firebaseConfig.appId` |
+| `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | `firebaseConfig.messagingSenderId` |
+| `NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID` | `firebaseConfig.measurementId` (optional; Analytics only) |
+| `FIREBASE_API_KEY` | Same value as `NEXT_PUBLIC_FIREBASE_API_KEY` for server-side ID token verification (falls back to public key if omitted) |
 
-### Testing Firebase phone OTP locally
+Redeploy after setting variables.
 
-Firebase Phone Auth works locally once `localhost` is in the authorized domains list and the env vars are set.
+### Testing locally
 
-**Using real SMS (recommended for full testing):**
-Set all env vars above and use a real phone number in E.164 format (e.g. `+15550001234`). Firebase will send a real SMS.
+Firebase test phone numbers let you verify OTP flows without sending real SMS:
 
-**Using Firebase test phone numbers (no real SMS required):**
-1. In Firebase Console → **Authentication → Sign-in method → Phone → Phone numbers for testing**.
-2. Add a test phone number (e.g. `+15550001234`) and a fixed verification code (e.g. `123456`).
-3. Use that number and code in the seller signup or seller dashboard phone verification UI. No real SMS is sent.
+1. Firebase Console → **Authentication → Sign-in method → Phone → Phone numbers for testing**.
+2. Add a phone number (e.g. `+15005550005`) with a fixed code (e.g. `123456`).
+3. Use that number/code in signup or seller dashboard verification.
 
-> Test phone numbers only work in development — they are ignored by Firebase in production unless the test environment is explicitly configured.
+### Troubleshooting Firebase Phone Auth
 
-### Troubleshooting Firebase phone OTP
-
-| Symptom | Cause | Fix |
+| Symptom | Likely cause | Fix |
 |---|---|---|
-| "This domain is not authorized for phone sign-in" | Current hostname not in Firebase authorized domains | Add the domain in Firebase Console → Authentication → Settings → Authorized domains |
-| "Phone sign-in is not enabled for this app" | Phone provider disabled in Firebase | Enable Phone in Firebase Console → Authentication → Sign-in method |
-| "Security check failed. Please refresh and try again." | reCAPTCHA failed, usually due to an ad-blocker or browser extension | Test in an incognito window without extensions, or use a test phone number |
-| "Phone verification failed" with no other details | Firebase env vars missing or wrong | Verify all `NEXT_PUBLIC_FIREBASE_*` vars are set and match the correct Firebase project |
-| OTP request succeeds but server rejects the ID token | Client and server Firebase vars point at different projects | Set `FIREBASE_API_KEY` to the same value as `NEXT_PUBLIC_FIREBASE_API_KEY` |
-| Seller dashboard phone verification shows "Phone sign-in is not enabled" | Same as above — Phone provider not enabled | Enable Phone in Firebase Console |
+| "This domain is not authorized for phone sign-in" | Hostname not in authorized domains | Add domain in Firebase Authentication settings |
+| "Phone sign-in is not enabled for this app" | Phone provider disabled | Enable Phone provider |
+| "Phone verification is unavailable" | Missing/incorrect Firebase env vars | Verify all `NEXT_PUBLIC_FIREBASE_*` variables and redeploy |
+| "Security check failed" | reCAPTCHA blocked | Disable blockers, allow Google domains, retry in clean browser session |
+| No SMS on real number | Provider not enabled, domain not authorized, or quota/billing issue | Verify provider/domain and Firebase SMS quota/billing |
+| Server rejects token / "expired" | ID token expired or project mismatch | Request new OTP; ensure `FIREBASE_API_KEY` matches the same Firebase project |
 
-> **Note:** Firebase phone OTP (used at seller signup and on the seller dashboard) is separate from the Twilio SMS OTP used at seller login. Both are required for the full seller flow. See the next section for Twilio setup.
+> Firebase OTP (signup/dashboard verification) is separate from Twilio OTP (seller login).
 
 ---
 
