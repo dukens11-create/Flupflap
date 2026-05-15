@@ -11,6 +11,7 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
+import { SellerPhoneVerificationStatus } from '@prisma/client';
 
 const MAX_ATTEMPTS = 5;
 
@@ -60,10 +61,28 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid code. Please try again.' }, { status: 400 });
     }
 
-    // Success: update user's phone and mark as verified
-    await prisma.user.update({
-      where: { id: session.user.id },
-      data: { phone: record.phone, phoneVerified: true, phoneVerifiedAt: new Date() },
+    // Success: update user's phone and mark as verified.
+    // Also sync SellerVerification if one exists for this user (sellers only).
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: session.user.id },
+        data: { phone: record.phone, phoneVerified: true, phoneVerifiedAt: new Date() },
+      });
+
+      const existingVerification = await tx.sellerVerification.findUnique({
+        where: { sellerId: session.user.id },
+        select: { sellerId: true },
+      });
+      if (existingVerification) {
+        await tx.sellerVerification.update({
+          where: { sellerId: session.user.id },
+          data: {
+            phoneNumber: record.phone,
+            phoneVerified: true,
+            phoneVerificationStatus: SellerPhoneVerificationStatus.VERIFIED,
+          },
+        });
+      }
     });
     await prisma.phoneVerificationToken.delete({ where: { userId: session.user.id } }).catch(() => null);
 

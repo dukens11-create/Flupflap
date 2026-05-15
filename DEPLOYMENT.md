@@ -157,6 +157,72 @@ original vs enhanced before submitting.
 
 ---
 
+## Firebase Phone Auth setup (seller signup and seller dashboard phone verification)
+
+Seller phone verification at signup and on the seller dashboard uses **Firebase Phone Authentication** (not Twilio). You must configure the Firebase project correctly before OTP codes will be sent.
+
+### Step 1 — Enable the Phone sign-in provider
+
+1. Open the [Firebase Console](https://console.firebase.google.com) and select your project.
+2. Go to **Authentication → Sign-in method**.
+3. Click **Phone** and enable it.
+4. Save.
+
+### Step 2 — Add authorized domains
+
+Firebase blocks `signInWithPhoneNumber` calls from domains that are not explicitly allowed.
+
+1. In **Authentication → Settings → Authorized domains**, click **Add domain**.
+2. Add every hostname where the app runs:
+   - `localhost` (for local development)
+   - your Render service hostname, e.g. `flupflap.onrender.com`
+   - your custom domain, e.g. `www.flupflap.com`
+3. Save.
+
+> **If this step is skipped**, Firebase rejects all OTP send requests with `auth/unauthorized-domain` and the seller phone verification UI shows "This domain is not authorized for phone sign-in."
+
+### Step 3 — Set the environment variables
+
+Add these to Render → Environment (or your `.env.local` for local development):
+
+| Variable | Where to find it |
+|---|---|
+| `NEXT_PUBLIC_FIREBASE_API_KEY` | Firebase Console → Project Settings → General → Web API key |
+| `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | Project Settings → General → `<project-id>.firebaseapp.com` |
+| `NEXT_PUBLIC_FIREBASE_PROJECT_ID` | Project Settings → General → Project ID |
+| `NEXT_PUBLIC_FIREBASE_APP_ID` | Project Settings → General → Your apps → App ID |
+| `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | Project Settings → General → Messaging sender ID |
+| `FIREBASE_API_KEY` | Same value as `NEXT_PUBLIC_FIREBASE_API_KEY` (used server-side to validate ID tokens; falls back to the public key if omitted) |
+
+### Testing Firebase phone OTP locally
+
+Firebase Phone Auth works locally once `localhost` is in the authorized domains list and the env vars are set.
+
+**Using real SMS (recommended for full testing):**
+Set all env vars above and use a real phone number in E.164 format (e.g. `+15550001234`). Firebase will send a real SMS.
+
+**Using Firebase test phone numbers (no real SMS required):**
+1. In Firebase Console → **Authentication → Sign-in method → Phone → Phone numbers for testing**.
+2. Add a test phone number (e.g. `+15550001234`) and a fixed verification code (e.g. `123456`).
+3. Use that number and code in the seller signup or seller dashboard phone verification UI. No real SMS is sent.
+
+> Test phone numbers only work in development — they are ignored by Firebase in production unless the test environment is explicitly configured.
+
+### Troubleshooting Firebase phone OTP
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| "This domain is not authorized for phone sign-in" | Current hostname not in Firebase authorized domains | Add the domain in Firebase Console → Authentication → Settings → Authorized domains |
+| "Phone sign-in is not enabled for this app" | Phone provider disabled in Firebase | Enable Phone in Firebase Console → Authentication → Sign-in method |
+| "Security check failed. Please refresh and try again." | reCAPTCHA failed, usually due to an ad-blocker or browser extension | Test in an incognito window without extensions, or use a test phone number |
+| "Phone verification failed" with no other details | Firebase env vars missing or wrong | Verify all `NEXT_PUBLIC_FIREBASE_*` vars are set and match the correct Firebase project |
+| OTP request succeeds but server rejects the ID token | Client and server Firebase vars point at different projects | Set `FIREBASE_API_KEY` to the same value as `NEXT_PUBLIC_FIREBASE_API_KEY` |
+| Seller dashboard phone verification shows "Phone sign-in is not enabled" | Same as above — Phone provider not enabled | Enable Phone in Firebase Console |
+
+> **Note:** Firebase phone OTP (used at seller signup and on the seller dashboard) is separate from the Twilio SMS OTP used at seller login. Both are required for the full seller flow. See the next section for Twilio setup.
+
+---
+
 ## Seller two-factor authentication (phone OTP)
 
 When a seller signs in, FlupFlap sends a 6-digit one-time code to their
@@ -369,6 +435,11 @@ Demo accounts created by seed:
 | Stripe webhook `400` errors | `STRIPE_WEBHOOK_SECRET` missing or wrong | Re-copy the signing secret from Stripe and update the env var |
 | App loads but images are broken | Image host not in `next.config.js` | Add the hostname to `remotePatterns` in `next.config.js` |
 | Image upload returns "not configured" error | Cloudinary env vars missing or app not redeployed after adding them | Add `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` in Render → Environment, redeploy, and verify logs contain `Cloudinary config exists` with all values `true` |
+| **Firebase phone OTP (signup / seller dashboard)** | | |
+| "This domain is not authorized for phone sign-in" at seller signup or seller dashboard | Deployment domain not in Firebase authorized domains | Add the domain in Firebase Console → Authentication → Settings → Authorized domains |
+| "Phone sign-in is not enabled" at seller signup | Phone provider disabled in Firebase | Enable Phone in Firebase Console → Authentication → Sign-in method |
+| Firebase OTP sends successfully but seller creation fails with "Phone verification has expired" | Client and server Firebase vars point at different projects | Set `FIREBASE_API_KEY` to the same value as `NEXT_PUBLIC_FIREBASE_API_KEY` |
+| **Seller login OTP (Twilio)** | | |
 | Seller login returns `step: "signin"` from `/api/auth/otp/send` | OTP feature disabled or account is not a seller | Check server logs for `[otp/send] OTP skipped: ...`; set `ENABLE_SMS_OTP=true` (or unset) to require seller OTP |
 | Seller login returns `step: "add_phone"` from `/api/auth/otp/send` | Seller account has no phone on file | Complete `/api/auth/otp/setup-phone`; logs show `[otp/send] Seller requires phone setup before OTP` |
 | Seller OTP send returns 400 invalid phone | Saved seller phone fails normalization | Update seller phone in E.164 format; logs include `[otp/send] OTP blocked: invalid normalized phone` |

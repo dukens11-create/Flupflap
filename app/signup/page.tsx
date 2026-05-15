@@ -9,6 +9,7 @@ import * as Sentry from '@sentry/nextjs';
 import type { ConfirmationResult } from 'firebase/auth';
 import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 import { getFirebaseClientAuth } from '@/lib/firebase/client';
+import { normalizePhone } from '@/lib/phone';
 
 export default function SignupPage() {
   const { t } = useI18n();
@@ -59,6 +60,15 @@ export default function SignupPage() {
     if (code === 'auth/captcha-check-failed' || code === 'auth/invalid-app-credential') {
       return 'Security check failed. Please refresh and try again.';
     }
+    if (code === 'auth/operation-not-allowed') {
+      return 'Phone sign-in is not enabled for this app. Please contact support.';
+    }
+    if (code === 'auth/unauthorized-domain') {
+      return 'This domain is not authorized for phone sign-in. Please contact support.';
+    }
+    if (code === 'auth/network-request-failed') {
+      return 'Network error. Please check your connection and try again.';
+    }
     return 'Phone verification failed. Please try again.';
   }
 
@@ -67,6 +77,12 @@ export default function SignupPage() {
     setPhoneOtpError('');
     setPhoneOtpLoading(true);
     try {
+      const normalizedPhoneForFirebase = normalizePhone(phone);
+      if (!normalizedPhoneForFirebase) {
+        setPhoneOtpError('Invalid phone number. Please include your country code (e.g. +1 for US/Canada).');
+        setPhoneOtpLoading(false);
+        return;
+      }
       const auth = getFirebaseClientAuth();
       if (!recaptchaRef.current) {
         // Recreate verifier when absent (initial load or after a previous auth error clear).
@@ -74,7 +90,7 @@ export default function SignupPage() {
           size: 'invisible',
         });
       }
-      const confirmation = await signInWithPhoneNumber(auth, phone, recaptchaRef.current);
+      const confirmation = await signInWithPhoneNumber(auth, normalizedPhoneForFirebase, recaptchaRef.current);
       confirmationResultRef.current = confirmation;
       setOtpSent(true);
     } catch (err: any) {
@@ -267,7 +283,7 @@ export default function SignupPage() {
               }}
               disabled={!!phoneVerifiedNumber}
             />
-            <div id="seller-signup-recaptcha" className="hidden" aria-hidden="true" />
+            <div id="seller-signup-recaptcha" />
             {phoneVerifiedNumber ? (
               <p className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700">
                 Phone verified: {phoneVerifiedNumber}
