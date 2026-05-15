@@ -13,7 +13,7 @@ type FirebaseClientConfig = {
   measurementId?: string;
 };
 
-let analyticsInitializationStarted = false;
+let analyticsInitializationPromise: Promise<void> | null = null;
 
 function getFirebaseClientConfig(): FirebaseClientConfig {
   const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY?.trim() ?? '';
@@ -24,8 +24,11 @@ function getFirebaseClientConfig(): FirebaseClientConfig {
   const measurementId = process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID?.trim() ?? '';
 
   if (!apiKey || !authDomain || !projectId || !appId) {
-    throw new Error(
-      'Firebase phone auth is not configured. Set NEXT_PUBLIC_FIREBASE_API_KEY, NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN, NEXT_PUBLIC_FIREBASE_PROJECT_ID, and NEXT_PUBLIC_FIREBASE_APP_ID.',
+    throw Object.assign(
+      new Error(
+        'Firebase phone auth is not configured. Set NEXT_PUBLIC_FIREBASE_API_KEY, NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN, NEXT_PUBLIC_FIREBASE_PROJECT_ID, and NEXT_PUBLIC_FIREBASE_APP_ID.',
+      ),
+      { code: 'firebase/not-configured' },
     );
   }
 
@@ -40,17 +43,17 @@ function getFirebaseClientConfig(): FirebaseClientConfig {
 }
 
 function initializeFirebaseAnalyticsIfEnabled(app: FirebaseApp) {
-  if (analyticsInitializationStarted || typeof window === 'undefined') return;
+  if (typeof window === 'undefined') return;
+  if (analyticsInitializationPromise) return;
   if (!process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID?.trim()) return;
-  analyticsInitializationStarted = true;
-  isSupported()
+  analyticsInitializationPromise = isSupported()
     .then((supported) => {
       if (supported) {
         getAnalytics(app);
       }
     })
-    .catch(() => {
-      analyticsInitializationStarted = false;
+    .catch((err) => {
+      console.warn('[firebase] Analytics initialization failed', err);
     });
 }
 

@@ -14,7 +14,7 @@ type SellerPhoneVerificationProps = {
   onResetVerification: () => void;
 };
 
-function mapFirebasePhoneAuthError(err: { code?: string; message?: string } | null | undefined) {
+function getPhoneVerificationErrorMessage(err: { code?: string; message?: string } | null | undefined) {
   const code = err?.code;
   if (code === 'auth/invalid-verification-code') {
     return 'Invalid OTP code. Please check the code and try again.';
@@ -28,7 +28,7 @@ function mapFirebasePhoneAuthError(err: { code?: string; message?: string } | nu
   if (code === 'auth/invalid-phone-number') {
     return 'Invalid phone number. Please include your country code (e.g. +1).';
   }
-  if (err?.message?.includes('Firebase phone auth is not configured')) {
+  if (code === 'firebase/not-configured') {
     return 'Phone verification is not configured right now. Please contact support.';
   }
   return 'Phone verification failed. Please try again.';
@@ -71,7 +71,7 @@ export default function SellerPhoneVerification({
       confirmationResultRef.current = confirmation;
       setOtpSent(true);
     } catch (err: any) {
-      setPhoneOtpError(mapFirebasePhoneAuthError(err));
+      setPhoneOtpError(getPhoneVerificationErrorMessage(err));
       recaptchaRef.current?.clear();
       recaptchaRef.current = null;
     } finally {
@@ -109,7 +109,7 @@ export default function SellerPhoneVerification({
         });
       });
     } catch (err: any) {
-      setPhoneOtpError(mapFirebasePhoneAuthError(err));
+      setPhoneOtpError(getPhoneVerificationErrorMessage(err));
     } finally {
       setPhoneOtpLoading(false);
     }
@@ -135,7 +135,7 @@ export default function SellerPhoneVerification({
         }}
         disabled={!!verifiedPhoneNumber}
       />
-      <div id={recaptchaContainerId} className="hidden" aria-hidden />
+      <div id={recaptchaContainerId} className="hidden" aria-hidden="true" role="presentation" />
       {verifiedPhoneNumber ? (
         <div className="space-y-2">
           <p className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700">
