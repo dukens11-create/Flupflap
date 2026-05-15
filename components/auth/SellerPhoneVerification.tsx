@@ -61,10 +61,15 @@ export default function SellerPhoneVerification({
   const recaptchaRef = useRef<RecaptchaVerifier | null>(null);
   const recaptchaContainerId = 'phone-verification-recaptcha';
 
+  function resetRecaptchaVerifier() {
+    if (!recaptchaRef.current) return;
+    recaptchaRef.current.clear();
+    recaptchaRef.current = null;
+  }
+
   useEffect(() => {
     return () => {
-      recaptchaRef.current?.clear();
-      recaptchaRef.current = null;
+      resetRecaptchaVerifier();
     };
   }, []);
 
@@ -84,8 +89,7 @@ export default function SellerPhoneVerification({
       setOtpSent(true);
     } catch (err: any) {
       setPhoneOtpError(getPhoneVerificationErrorMessage(err));
-      recaptchaRef.current?.clear();
-      recaptchaRef.current = null;
+      resetRecaptchaVerifier();
     } finally {
       setPhoneOtpLoading(false);
     }
@@ -147,7 +151,7 @@ export default function SellerPhoneVerification({
         }}
         disabled={!!verifiedPhoneNumber}
       />
-      <div id={recaptchaContainerId} className="hidden" aria-hidden="true" />
+      <div id={recaptchaContainerId} className="hidden" />
       {verifiedPhoneNumber ? (
         <div className="space-y-2">
           <p className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700">

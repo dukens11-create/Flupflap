@@ -58,10 +58,15 @@ export default function SellerPhoneVerificationCard() {
   const confirmationResultRef = useRef<ConfirmationResult | null>(null);
   const recaptchaRef = useRef<RecaptchaVerifier | null>(null);
 
+  function resetRecaptchaVerifier() {
+    if (!recaptchaRef.current) return;
+    recaptchaRef.current.clear();
+    recaptchaRef.current = null;
+  }
+
   useEffect(() => {
     return () => {
-      recaptchaRef.current?.clear();
-      recaptchaRef.current = null;
+      resetRecaptchaVerifier();
     };
   }, []);
 
@@ -82,8 +87,7 @@ export default function SellerPhoneVerificationCard() {
       setOtpSent(true);
     } catch (err: unknown) {
       setError(mapFirebasePhoneAuthError(getFirebaseErrorCode(err)));
-      recaptchaRef.current?.clear();
-      recaptchaRef.current = null;
+      resetRecaptchaVerifier();
     } finally {
       setLoading(false);
     }
@@ -154,7 +158,7 @@ export default function SellerPhoneVerificationCard() {
           disabled={loading}
           required
         />
-        <div id="seller-verification-recaptcha" className="hidden" aria-hidden="true" />
+        <div id="seller-verification-recaptcha" className="hidden" />
         {!otpSent ? (
           <button type="button" className="btn-primary text-sm" onClick={sendCode} disabled={loading || !phone.trim()}>
             {loading ? 'Sending…' : 'Send Code'}
