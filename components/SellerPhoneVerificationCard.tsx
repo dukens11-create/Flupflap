@@ -9,7 +9,6 @@ import { getFirebasePhoneAuthErrorMessage } from '@/lib/firebase/phone-auth-erro
 import { normalizePhone } from '@/lib/phone';
 
 const OTP_CODE_LENGTH = 6;
-
 export default function SellerPhoneVerificationCard() {
   const router = useRouter();
   const [phone, setPhone] = useState('');
