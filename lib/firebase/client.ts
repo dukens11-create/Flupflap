@@ -13,7 +13,19 @@ type FirebaseClientConfig = {
   measurementId?: string;
 };
 
+type FirebaseConfigurationError = Error & {
+  code: 'firebase/not-configured';
+};
+
 let analyticsInitializationPromise: Promise<void> | null = null;
+
+function createFirebaseConfigurationError(): FirebaseConfigurationError {
+  const error = new Error(
+    'Firebase is not configured. Set NEXT_PUBLIC_FIREBASE_API_KEY, NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN, NEXT_PUBLIC_FIREBASE_PROJECT_ID, and NEXT_PUBLIC_FIREBASE_APP_ID.',
+  ) as FirebaseConfigurationError;
+  error.code = 'firebase/not-configured';
+  return error;
+}
 
 function getFirebaseClientConfig(): FirebaseClientConfig {
   const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY?.trim() ?? '';
@@ -24,12 +36,7 @@ function getFirebaseClientConfig(): FirebaseClientConfig {
   const measurementId = process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID?.trim() ?? '';
 
   if (!apiKey || !authDomain || !projectId || !appId) {
-    throw Object.assign(
-      new Error(
-        'Firebase is not configured. Set NEXT_PUBLIC_FIREBASE_API_KEY, NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN, NEXT_PUBLIC_FIREBASE_PROJECT_ID, and NEXT_PUBLIC_FIREBASE_APP_ID.',
-      ),
-      { code: 'firebase/not-configured' },
-    );
+    throw createFirebaseConfigurationError();
   }
 
   return {

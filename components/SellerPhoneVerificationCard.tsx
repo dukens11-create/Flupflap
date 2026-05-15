@@ -154,7 +154,7 @@ export default function SellerPhoneVerificationCard() {
           disabled={loading}
           required
         />
-        <div id="seller-verification-recaptcha" className="hidden" aria-hidden="true" role="presentation" />
+        <div id="seller-verification-recaptcha" className="hidden" aria-hidden="true" />
         {!otpSent ? (
           <button type="button" className="btn-primary text-sm" onClick={sendCode} disabled={loading || !phone.trim()}>
             {loading ? 'Sending…' : 'Send Code'}
