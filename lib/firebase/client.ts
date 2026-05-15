@@ -2,6 +2,7 @@
 
 import { FirebaseApp, getApp, getApps, initializeApp } from 'firebase/app';
 import { Auth, getAuth } from 'firebase/auth';
+import * as Sentry from '@sentry/nextjs';
 
 type FirebaseClientConfig = {
   apiKey: string;
@@ -50,7 +51,12 @@ function initializeFirebaseAnalyticsIfEnabled(app: FirebaseApp) {
     if (supported) {
       analyticsModule.getAnalytics(app);
     }
-  })().catch(() => undefined);
+  })().catch((error) => {
+    Sentry.captureException(error, {
+      tags: { area: 'auth', action: 'firebase_analytics_init' },
+      extra: { message: error instanceof Error ? error.message : String(error) },
+    });
+  });
 }
 
 function getFirebaseApp(): FirebaseApp {

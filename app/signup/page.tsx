@@ -78,9 +78,8 @@ export default function SignupPage() {
       confirmationResultRef.current = confirmation;
       setOtpSent(true);
     } catch (err: any) {
-      const message = typeof err?.message === 'string' ? err.message : '';
-      if (message.includes('Firebase phone auth is not configured')) {
-        setPhoneOtpError('Phone verification is unavailable right now. Please contact support.');
+      if (!err?.code) {
+        setPhoneOtpError('Phone verification is unavailable right now. Please check your connection and try again.');
       } else {
         setPhoneOtpError(mapFirebasePhoneAuthError(err?.code));
       }
@@ -294,7 +293,7 @@ export default function SignupPage() {
                     disabled={phoneOtpLoading || !phone.trim()}
                     onClick={sendSellerOtp}
                   >
-                    {phoneOtpLoading ? 'Sending…' : otpSent ? 'Resend Code' : 'Send Code'}
+                    {phoneOtpLoading ? 'Sending...' : otpSent ? 'Resend Code' : 'Send Code'}
                   </button>
                   {otpSent && (
                     <button
@@ -303,7 +302,7 @@ export default function SignupPage() {
                       disabled={phoneOtpLoading || otpCode.trim().length !== 6}
                       onClick={verifySellerOtp}
                     >
-                      {phoneOtpLoading ? 'Verifying…' : 'Verify Code'}
+                      {phoneOtpLoading ? 'Verifying...' : 'Verify Code'}
                     </button>
                   )}
                 </div>
