@@ -49,7 +49,7 @@ function LoginForm() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
+  const [hidePassword, setHidePassword] = useState(true);
 
   // Multi-step seller flow: credentials → (add_phone?) → otp
   const [step, setStep] = useState<'credentials' | 'add_phone' | 'otp'>('credentials');
@@ -413,7 +413,7 @@ function LoginForm() {
           <label className="label">{t('login.password')}</label>
           <input
             name="password"
-            type={showPassword ? 'text' : 'password'}
+            type={hidePassword ? 'password' : 'text'}
             className="input"
             placeholder={t('login.password')}
             required
@@ -421,11 +421,11 @@ function LoginForm() {
           <label className="mt-1 inline-flex items-center gap-2 text-xs text-slate-500">
             <input
               type="checkbox"
-              checked={showPassword}
-              onChange={(e) => setShowPassword(e.target.checked)}
-              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              checked={hidePassword}
+              onChange={(e) => setHidePassword(e.target.checked)}
+              aria-label="Hide password"
             />
-            {showPassword ? 'Hide password' : 'Show password'}
+            Hide password
           </label>
         </div>
         {error && <p className="text-red-600 text-sm break-words">{error}</p>}
@@ -466,7 +466,7 @@ function SignupPrompt() {
 export default function LoginPage() {
   const { t } = useI18n();
   return (
-    <main className="mx-auto max-w-md px-4 py-10">
+    <main className="mx-auto max-w-md px-4 py-10 pb-28 sm:pb-10">
       <h1 className="text-3xl font-black">{t('login.title')}</h1>
       <Suspense fallback={<div className="card p-6 mt-6 h-48 animate-pulse bg-slate-100 rounded-2xl" />}>
         <LoginForm />

@@ -569,9 +569,9 @@ async function ensureCulturalMarketplaceCategories() {
 }
 async function main(){
   const pass = await bcrypt.hash('password123', 10);
-  await prisma.user.upsert({ where:{email:'guest@flupflap.local'}, update:{}, create:{name:'Guest Buyer',email:'guest@flupflap.local',password:'',role:Role.CUSTOMER} });
-  const admin = await prisma.user.upsert({ where:{email:'admin@flupflap.com'}, update:{}, create:{name:'FlupFlap Admin',email:'admin@flupflap.com',password:pass,role:Role.ADMIN} });
-  const seller = await prisma.user.upsert({ where:{email:'seller@flupflap.com'}, update:{}, create:{name:'Demo Seller',email:'seller@flupflap.com',password:pass,role:Role.SELLER,phone:'+15005550006'} });
+  await prisma.user.upsert({ where:{email:'guest@flupflap.local'}, update:{}, create:{name:'Guest Buyer',email:'guest@flupflap.local',password:'',role:Role.CUSTOMER,roles:[Role.CUSTOMER]} });
+  const admin = await prisma.user.upsert({ where:{email:'admin@flupflap.com'}, update:{}, create:{name:'FlupFlap Admin',email:'admin@flupflap.com',password:pass,role:Role.ADMIN,roles:[Role.ADMIN]} });
+  const seller = await prisma.user.upsert({ where:{email:'seller@flupflap.com'}, update:{}, create:{name:'Demo Seller',email:'seller@flupflap.com',password:pass,role:Role.SELLER,roles:[Role.SELLER],phone:'+15005550006'} });
   await prisma.sellerVerification.upsert({
     where: { sellerId: seller.id },
     update: {

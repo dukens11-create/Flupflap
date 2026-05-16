@@ -20,7 +20,7 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
   const [role, setRole] = useState('CUSTOMER');
-  const [showPassword, setShowPassword] = useState(false);
+  const [hidePassword, setHidePassword] = useState(true);
   const [phone, setPhone] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [phoneOtpLoading, setPhoneOtpLoading] = useState(false);
@@ -224,7 +224,7 @@ export default function SignupPage() {
   const loginHref = callbackUrl ? `/login?callbackUrl=${encodeURIComponent(callbackUrl)}` : '/login';
 
   return (
-    <main className="mx-auto max-w-md px-4 py-10">
+    <main className="mx-auto max-w-md px-4 py-10 pb-28 sm:pb-10">
       <h1 className="text-3xl font-black">{t('signup.title')}</h1>
       <form onSubmit={submit} className="card p-6 mt-6 space-y-4">
         <div>
@@ -239,7 +239,7 @@ export default function SignupPage() {
           <label className="label">{t('signup.password')}</label>
           <input
             name="password"
-            type={showPassword ? 'text' : 'password'}
+            type={hidePassword ? 'password' : 'text'}
             className="input"
             placeholder={t('signup.passwordPlaceholder')}
             required
@@ -248,11 +248,11 @@ export default function SignupPage() {
           <label className="mt-1 inline-flex items-center gap-2 text-xs text-slate-500">
             <input
               type="checkbox"
-              checked={showPassword}
-              onChange={(e) => setShowPassword(e.target.checked)}
-              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              checked={hidePassword}
+              onChange={(e) => setHidePassword(e.target.checked)}
+              aria-label="Hide password"
             />
-            {showPassword ? 'Hide password' : 'Show password'}
+            Hide password
           </label>
         </div>
         <div>
