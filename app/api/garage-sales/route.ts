@@ -3,6 +3,9 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { z } from 'zod';
+import { appUrl, stripe } from '@/lib/stripe';
+import { calculateGarageSalePricing } from '@/lib/garage-sale-pricing';
+import { expireGarageSales, getGarageSalePricingSettings } from '@/lib/garage-sales';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,6 +18,7 @@ const createSchema = z.object({
   title: z.string().min(3).max(120),
   description: z.string().min(10).max(5000),
   saleType: z.enum(['GARAGE_SALE', 'YARD_SALE', 'ESTATE_SALE', 'MOVING_SALE']),
+  listingType: z.enum(['STANDARD', 'FEATURED']).default('STANDARD'),
   address: z.string().min(3).max(200),
   city: z.string().min(2).max(100),
   state: z.string().min(2).max(100),
@@ -29,11 +33,14 @@ const createSchema = z.object({
   sellerPhone: z.string().max(30).optional().nullable(),
   priceRangeMin: z.number().min(0).optional().nullable(),
   priceRangeMax: z.number().min(0).optional().nullable(),
-  isFeatured: z.boolean().default(false),
+  homepagePromotion: z.boolean().default(false),
+  topLocalSearchPlacement: z.boolean().default(false),
 });
 
 /** GET /api/garage-sales — public listing with search & filters */
 export async function GET(req: Request) {
+  await expireGarageSales();
+
   const url = new URL(req.url);
   const q = url.searchParams.get('q')?.trim() ?? '';
   const city = url.searchParams.get('city')?.trim() ?? '';
@@ -92,6 +99,7 @@ export async function GET(req: Request) {
   const where: Record<string, unknown> = {
     status: 'APPROVED',
     isSpam: false,
+    paymentStatus: 'PAID',
   };
 
   if (q) {
@@ -110,15 +118,12 @@ export async function GET(req: Request) {
   if (category && GARAGE_SALE_CATEGORIES.includes(category)) {
     where.categories = { has: category };
   }
-  // Build startDate range filter separately to avoid object mutation issues
   if (startAfter || startBefore) {
     const startDateFilter: { gte?: Date; lte?: Date } = {};
     if (startAfter) startDateFilter.gte = startAfter;
     if (startBefore) startDateFilter.lte = startBefore;
     where.startDate = startDateFilter;
   }
-  // endDate filter: always hide expired (>= now), but if endAfter is more restrictive use that
-  // endAfter comes from date filters like 'open_now' and 'weekend' where endAfter >= now
   where.endDate = { gte: endAfter != null && endAfter > now ? endAfter : now };
 
   let orderBy: Record<string, string> | Record<string, string>[];
@@ -129,7 +134,6 @@ export async function GET(req: Request) {
   } else if (sort === 'start_date') {
     orderBy = [{ isFeatured: 'desc' }, { startDate: 'asc' }];
   } else {
-    // newest (default)
     orderBy = [{ isFeatured: 'desc' }, { createdAt: 'desc' }];
   }
 
@@ -146,7 +150,6 @@ export async function GET(req: Request) {
     take: perPage,
   });
 
-  // Distance filter — post-process when coordinates provided
   if (!isNaN(lat) && !isNaN(lng) && radius < 250) {
     sales = sales.filter((s) => {
       if (s.latitude == null || s.longitude == null) return false;
@@ -167,8 +170,10 @@ export async function GET(req: Request) {
   return NextResponse.json({ sales, total, page, perPage });
 }
 
-/** POST /api/garage-sales — create a garage sale listing (any authenticated user) */
+/** POST /api/garage-sales — create a garage sale listing and payment checkout */
 export async function POST(req: Request) {
+  await expireGarageSales();
+
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -190,15 +195,15 @@ export async function POST(req: Request) {
   const start = new Date(data.startDate);
   const end = new Date(data.endDate);
 
-  if (end <= start) {
+  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start) {
     return NextResponse.json({ error: 'End date must be after start date' }, { status: 422 });
   }
 
-  // Rate-limit: max 5 active listings per user
   const activeCount = await prisma.garageSale.count({
     where: {
       sellerId: session.user.id,
-      status: { in: ['PENDING', 'APPROVED'] },
+      paymentStatus: { in: ['PENDING', 'PAID'] },
+      status: { in: ['PENDING', 'APPROVED', 'HIDDEN'] },
       endDate: { gte: new Date() },
     },
   });
@@ -206,12 +211,33 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Maximum 5 active garage sale listings allowed' }, { status: 429 });
   }
 
+  const [pricingSettings, paidGarageSaleCount] = await Promise.all([
+    getGarageSalePricingSettings(),
+    prisma.garageSale.count({ where: { sellerId: session.user.id, paymentStatus: 'PAID' } }),
+  ]);
+
+  const pricing = calculateGarageSalePricing({
+    listingType: data.listingType,
+    startDate: start,
+    endDate: end,
+    homepagePromotion: data.homepagePromotion,
+    topLocalSearchPlacement: data.topLocalSearchPlacement,
+    settings: pricingSettings,
+    isEligibleForFreeFirstListing: paidGarageSaleCount === 0,
+  });
+
+  if (pricing.durationDays <= 0) {
+    return NextResponse.json({ error: 'Invalid garage sale duration' }, { status: 422 });
+  }
+
+  const now = new Date();
   const sale = await prisma.garageSale.create({
     data: {
       sellerId: session.user.id,
       title: data.title,
       description: data.description,
       saleType: data.saleType,
+      listingType: data.listingType,
       address: data.address,
       city: data.city,
       state: data.state,
@@ -220,17 +246,109 @@ export async function POST(req: Request) {
       longitude: data.longitude ?? null,
       startDate: start,
       endDate: end,
+      expirationTimestamp: end,
+      durationDays: pricing.durationDays,
       photos: data.photos,
       videoUrl: data.videoUrl ?? null,
       categories: data.categories,
       sellerPhone: data.sellerPhone ?? null,
       priceRangeMin: data.priceRangeMin ?? null,
       priceRangeMax: data.priceRangeMax ?? null,
-      isFeatured: false, // featured is set by admin
+      isFeatured: data.listingType === 'FEATURED',
+      homepagePromoted: pricing.effectiveHomepagePromotion,
+      topSearchPromoted: pricing.effectiveTopLocalSearchPlacement,
+      pricePerDayCents: pricing.pricePerDayCents,
+      baseAmountCents: pricing.baseAmountCents,
+      addOnsAmountCents: pricing.addOnsAmountCents,
+      totalPaidCents: pricing.totalCents,
+      paymentStatus: pricing.totalCents === 0 ? 'PAID' : 'PENDING',
+      paidAt: pricing.totalCents === 0 ? now : null,
+      activatedAt: pricing.totalCents === 0 ? now : null,
+      status: pricing.totalCents === 0 ? 'APPROVED' : 'HIDDEN',
     },
   });
 
-  return NextResponse.json(sale, { status: 201 });
+  if (pricing.totalCents === 0) {
+    await prisma.garageSalePayment.create({
+      data: {
+        saleId: sale.id,
+        sellerId: session.user.id,
+        amountCents: 0,
+        status: 'PAID',
+      },
+    });
+    return NextResponse.json({ id: sale.id, checkoutUrl: null, requiresPayment: false }, { status: 201 });
+  }
+
+  const lineItems: Array<{ quantity: number; price_data: { currency: string; product_data: { name: string; description?: string }; unit_amount: number } }> = [
+    {
+      quantity: 1,
+      price_data: {
+        currency: 'usd',
+        product_data: {
+          name: `${data.listingType === 'FEATURED' ? 'Featured' : 'Standard'} Garage Sale Listing`,
+          description: `${pricing.durationDays} day${pricing.durationDays === 1 ? '' : 's'} at $${(pricing.pricePerDayCents / 100).toFixed(2)}/day`,
+        },
+        unit_amount: pricing.baseAmountCents,
+      },
+    },
+  ];
+
+  if (pricing.homepagePromotionCents > 0) {
+    lineItems.push({
+      quantity: 1,
+      price_data: {
+        currency: 'usd',
+        product_data: { name: 'Garage Sale Homepage Promotion' },
+        unit_amount: pricing.homepagePromotionCents,
+      },
+    });
+  }
+
+  if (pricing.topLocalSearchPlacementCents > 0) {
+    lineItems.push({
+      quantity: 1,
+      price_data: {
+        currency: 'usd',
+        product_data: { name: 'Garage Sale Top Local Search Placement' },
+        unit_amount: pricing.topLocalSearchPlacementCents,
+      },
+    });
+  }
+
+  const checkout = await stripe.checkout.sessions.create({
+    mode: 'payment',
+    payment_method_types: ['card'],
+    line_items: lineItems,
+    success_url: `${appUrl}/garage-sales/${sale.id}?paid=1`,
+    cancel_url: `${appUrl}/garage-sales/new?payment=cancelled`,
+    customer_email: session.user.email ?? undefined,
+    metadata: {
+      type: 'garage_sale_listing',
+      saleId: sale.id,
+      sellerId: session.user.id,
+      listingType: data.listingType,
+      durationDays: String(pricing.durationDays),
+    },
+  });
+
+  await prisma.$transaction([
+    prisma.garageSale.update({
+      where: { id: sale.id },
+      data: { stripeCheckoutId: checkout.id },
+    }),
+    prisma.garageSalePayment.create({
+      data: {
+        saleId: sale.id,
+        sellerId: session.user.id,
+        amountCents: pricing.totalCents,
+        status: 'PENDING',
+        stripeCheckoutId: checkout.id,
+      },
+    }),
+  ]);
+
+  return NextResponse.json({ id: sale.id, checkoutUrl: checkout.url, requiresPayment: true }, { status: 201 });
 }
 
 function haversineDistanceMiles(lat1: number, lng1: number, lat2: number, lng2: number): number {

@@ -71,9 +71,9 @@ export default function GarageSaleCard({ sale }: { sale: GarageSaleSummary }) {
       : null;
 
   return (
-    <div className={`group flex h-full flex-col overflow-hidden rounded-[28px] border bg-white shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-xl ${sale.isFeatured ? 'border-amber-200 ring-2 ring-amber-300' : 'border-slate-200'}`}>
+    <div className={`group flex h-full flex-col overflow-hidden rounded-[28px] border bg-white shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-xl ${sale.isFeatured ? 'border-amber-200 ring-2 ring-amber-300 sm:scale-[1.01]' : 'border-slate-200'}`}>
       {/* Photo */}
-      <div className="relative flex h-44 items-center justify-center overflow-hidden bg-slate-100 sm:h-48">
+      <div className={`relative flex items-center justify-center overflow-hidden bg-slate-100 ${sale.isFeatured ? 'h-52 sm:h-56' : 'h-44 sm:h-48'}`}>
         {mainPhoto ? (
           <Image
             src={mainPhoto}
@@ -124,7 +124,7 @@ export default function GarageSaleCard({ sale }: { sale: GarageSaleSummary }) {
           )}
         </div>
 
-        <h3 className="line-clamp-2 text-sm font-bold text-slate-900 sm:text-base">{sale.title}</h3>
+        <h3 className={`line-clamp-2 font-bold text-slate-900 ${sale.isFeatured ? 'text-base sm:text-lg' : 'text-sm sm:text-base'}`}>{sale.title}</h3>
 
         <div className="flex items-center gap-1 text-xs text-slate-500">
           <MapPin size={12} className="shrink-0 text-slate-400" />

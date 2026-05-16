@@ -2,11 +2,14 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
+import { expireGarageSales } from '@/lib/garage-sales';
 
 export const dynamic = 'force-dynamic';
 
 /** GET /api/admin/garage-sales — admin list of all garage sales */
 export async function GET(req: Request) {
+  await expireGarageSales();
+
   const session = await getServerSession(authOptions);
   if (!session?.user || session.user.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });

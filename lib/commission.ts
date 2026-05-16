@@ -3,6 +3,10 @@ import { prisma } from '@/lib/db';
 const FIXED_COMMISSION_PERCENT = 7;
 const MARKETPLACE_SETTINGS_ID = 1;
 const DEFAULT_FREE_PROMOTION_DAYS = 60;
+const DEFAULT_GARAGE_STANDARD_PRICE_CENTS = 299;
+const DEFAULT_GARAGE_FEATURED_PRICE_CENTS = 699;
+const DEFAULT_GARAGE_HOMEPAGE_PROMO_CENTS = 499;
+const DEFAULT_GARAGE_TOP_SEARCH_CENTS = 399;
 
 type SellerPlanLike = {
   code: string;
@@ -92,6 +96,13 @@ export async function getMarketplaceSettings() {
         defaultSellerCommissionBps: DEFAULT_BOOTSTRAP_COMMISSION_BPS,
         freePromotionEnabled: true,
         freePromotionDurationDays: DEFAULT_FREE_PROMOTION_DAYS,
+        garageStandardPriceCents: DEFAULT_GARAGE_STANDARD_PRICE_CENTS,
+        garageFeaturedPriceCents: DEFAULT_GARAGE_FEATURED_PRICE_CENTS,
+        garageHomepagePromoEnabled: true,
+        garageHomepagePromoCents: DEFAULT_GARAGE_HOMEPAGE_PROMO_CENTS,
+        garageTopSearchEnabled: true,
+        garageTopSearchCents: DEFAULT_GARAGE_TOP_SEARCH_CENTS,
+        garageFirstListingFree: false,
       },
     });
   }
@@ -99,6 +110,10 @@ export async function getMarketplaceSettings() {
   if (
     existing.defaultSellerCommissionBps !== DEFAULT_BOOTSTRAP_COMMISSION_BPS
     || existing.freePromotionDurationDays < 1
+    || existing.garageStandardPriceCents < 0
+    || existing.garageFeaturedPriceCents < 0
+    || existing.garageHomepagePromoCents < 0
+    || existing.garageTopSearchCents < 0
   ) {
     return prisma.marketplaceSettings.update({
       where: { id: MARKETPLACE_SETTINGS_ID },
@@ -106,6 +121,18 @@ export async function getMarketplaceSettings() {
         defaultSellerCommissionBps: DEFAULT_BOOTSTRAP_COMMISSION_BPS,
         ...(existing.freePromotionDurationDays < 1
           ? { freePromotionDurationDays: DEFAULT_FREE_PROMOTION_DAYS }
+          : {}),
+        ...(existing.garageStandardPriceCents < 0
+          ? { garageStandardPriceCents: DEFAULT_GARAGE_STANDARD_PRICE_CENTS }
+          : {}),
+        ...(existing.garageFeaturedPriceCents < 0
+          ? { garageFeaturedPriceCents: DEFAULT_GARAGE_FEATURED_PRICE_CENTS }
+          : {}),
+        ...(existing.garageHomepagePromoCents < 0
+          ? { garageHomepagePromoCents: DEFAULT_GARAGE_HOMEPAGE_PROMO_CENTS }
+          : {}),
+        ...(existing.garageTopSearchCents < 0
+          ? { garageTopSearchCents: DEFAULT_GARAGE_TOP_SEARCH_CENTS }
           : {}),
       },
     });

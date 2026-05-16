@@ -6,6 +6,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { MapPin, Calendar, Phone, Tag, Eye, Heart, Share2, ExternalLink } from 'lucide-react';
+import { expireGarageSales } from '@/lib/garage-sales';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,6 +41,7 @@ function isOpenNow(startDate: Date, endDate: Date) {
 
 export default async function GarageSaleDetailPage({ params }: Params) {
   const { id } = await params;
+  await expireGarageSales();
 
   const sale = await prisma.garageSale.findUnique({
     where: { id },
@@ -48,6 +50,10 @@ export default async function GarageSaleDetailPage({ params }: Params) {
         select: { id: true, name: true, shopName: true, profileImageUrl: true, phoneVerified: true, phone: true },
       },
       _count: { select: { favorites: true } },
+      payments: {
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+      },
     },
   });
 
@@ -284,6 +290,36 @@ export default async function GarageSaleDetailPage({ params }: Params) {
                 <Link href={`/admin/garage-sales`} className="btn-outline w-full text-center block text-xs">
                   Admin Panel
                 </Link>
+              )}
+              {(sale.status === 'EXPIRED' || sale.endDate < new Date()) && (
+                <form action={`/api/garage-sales/${sale.id}/repost`} method="POST">
+                  <button type="submit" className="btn-brand w-full text-xs">
+                    Repost &amp; Pay Again
+                  </button>
+                </form>
+              )}
+            </div>
+          )}
+
+          {(isOwner || isAdmin) && (
+            <div className="card p-4 space-y-2">
+              <h2 className="text-xs font-bold uppercase tracking-wide text-slate-500">Payment history</h2>
+              {sale.payments.length === 0 ? (
+                <p className="text-xs text-slate-500">No payments yet.</p>
+              ) : (
+                <ul className="space-y-2 text-xs">
+                  {sale.payments.map((payment) => (
+                    <li key={payment.id} className="rounded-lg border border-slate-200 p-2">
+                      <p className="font-semibold text-slate-800">{payment.status} · ${(payment.amountCents / 100).toFixed(2)}</p>
+                      <p className="text-slate-500">{new Date(payment.createdAt).toLocaleString()}</p>
+                      {payment.stripeReceiptUrl && (
+                        <a href={payment.stripeReceiptUrl} target="_blank" rel="noopener noreferrer" className="text-[var(--ff-primary-navy)] hover:underline">
+                          View receipt
+                        </a>
+                      )}
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
           )}

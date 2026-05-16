@@ -18,6 +18,9 @@ FlupFlap is a marketplace starter app like a small eBay: FlupFlap can sell items
 - Stripe Connect Express onboarding route for seller payouts
 - Configurable seller commission with Stripe Connect fee splitting
 - Stripe webhook route to mark orders paid and products sold
+- Garage sale pricing + Stripe checkout (standard/featured, add-ons, live calculator)
+- Garage sale payment activation, expiration/archive flow, and one-click repost checkout
+- Admin garage sale pricing controls (dynamic pricing, add-on toggles, first-listing-free)
 - Shippo shipping labels (live rates, label PDFs, auto tracking, buyer tracking links)
 - Order dashboard
 - Prisma PostgreSQL schema with users, products, orders, order items, addresses, auth sessions
@@ -107,7 +110,7 @@ Set these in **Environment → Environment Variables** in the Render dashboard:
 | `STRIPE_PUBLISHABLE_KEY` | Stripe publishable key |
 | `STRIPE_WEBHOOK_SECRET` | Secret from your Stripe webhook endpoint |
 | `SHIPPO_API_TOKEN` | Shippo API token for shipping rates + label purchase |
-| `NEXT_PUBLIC_MAPBOX_TOKEN` | Public Mapbox token used only in the checkout address autocomplete UI |
+| `NEXT_PUBLIC_MAPBOX_TOKEN` | Public Mapbox token used for map experiences (checkout address autocomplete and garage sale map view) |
 | `PLATFORM_FEE_PERCENT` | Legacy bootstrap env var (the app normalizes commission snapshots to `7`) |
 
 URL precedence for app redirects/absolute links: `NEXT_PUBLIC_SITE_URL` → `NEXT_PUBLIC_APP_URL` → `NEXTAUTH_URL`.
@@ -125,6 +128,7 @@ After deploying or while using Stripe CLI locally, point Stripe webhooks to:
 
 Listen for:
 - `checkout.session.completed`
+- `checkout.session.expired`
 - `account.updated`
 - `identity.verification_session.processing`
 - `identity.verification_session.verified`

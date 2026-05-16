@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { prisma, isDatabaseConfigured } from '@/lib/db';
 import GarageSaleCard from '@/components/GarageSaleCard';
 import GarageSaleBrowseClient from './GarageSaleBrowseClient';
+import { expireGarageSales } from '@/lib/garage-sales';
 
 export const dynamic = 'force-dynamic';
 
@@ -87,6 +88,7 @@ export default async function GarageSalesPage({
 
   if (isDatabaseConfigured()) {
     try {
+      await expireGarageSales();
       const where = buildWhere(sp, now);
       const orderBy = buildOrderBy(sp.sort ?? 'newest');
       [sales, total] = await Promise.all([
@@ -117,9 +119,14 @@ export default async function GarageSalesPage({
           <h1 className="text-2xl font-black text-slate-900 sm:text-3xl">🏡 Garage Sales Near You</h1>
           <p className="mt-1 text-sm text-slate-500">Find local garage, yard, estate, and moving sales</p>
         </div>
-        <Link href="/garage-sales/new" className="btn-brand shrink-0">
-          + Post a Sale
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/garage-sales/archived" className="btn-outline shrink-0 text-sm">
+            Archived
+          </Link>
+          <Link href="/garage-sales/new" className="btn-brand shrink-0">
+            + Post a Sale
+          </Link>
+        </div>
       </div>
 
       {/* Client-side search & map component */}
@@ -145,6 +152,7 @@ function buildWhere(sp: SearchParams, now: Date) {
   const where: Record<string, unknown> = {
     status: 'APPROVED',
     isSpam: false,
+    paymentStatus: 'PAID',
   };
 
   if (sp.q) {

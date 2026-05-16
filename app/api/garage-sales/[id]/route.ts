@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { z } from 'zod';
+import { calculateGarageSaleDurationDays } from '@/lib/garage-sale-pricing';
+import { expireGarageSales } from '@/lib/garage-sales';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,6 +12,7 @@ const updateSchema = z.object({
   title: z.string().min(3).max(120).optional(),
   description: z.string().min(10).max(5000).optional(),
   saleType: z.enum(['GARAGE_SALE', 'YARD_SALE', 'ESTATE_SALE', 'MOVING_SALE']).optional(),
+  listingType: z.enum(['STANDARD', 'FEATURED']).optional(),
   address: z.string().min(3).max(200).optional(),
   city: z.string().min(2).max(100).optional(),
   state: z.string().min(2).max(100).optional(),
@@ -30,6 +33,7 @@ type Params = { params: Promise<{ id: string }> };
 
 /** GET /api/garage-sales/[id] — get a single garage sale (public if approved) */
 export async function GET(_req: Request, { params }: Params) {
+  await expireGarageSales();
   const { id } = await params;
 
   const sale = await prisma.garageSale.findUnique({
@@ -76,6 +80,7 @@ export async function GET(_req: Request, { params }: Params) {
 
 /** PATCH /api/garage-sales/[id] — edit a garage sale (owner only) */
 export async function PATCH(req: Request, { params }: Params) {
+  await expireGarageSales();
   const { id } = await params;
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
@@ -107,6 +112,10 @@ export async function PATCH(req: Request, { params }: Params) {
   if (data.title !== undefined) updates.title = data.title;
   if (data.description !== undefined) updates.description = data.description;
   if (data.saleType !== undefined) updates.saleType = data.saleType;
+  if (data.listingType !== undefined) {
+    updates.listingType = data.listingType;
+    updates.isFeatured = data.listingType === 'FEATURED';
+  }
   if (data.address !== undefined) updates.address = data.address;
   if (data.city !== undefined) updates.city = data.city;
   if (data.state !== undefined) updates.state = data.state;
@@ -114,13 +123,25 @@ export async function PATCH(req: Request, { params }: Params) {
   if (data.latitude !== undefined) updates.latitude = data.latitude;
   if (data.longitude !== undefined) updates.longitude = data.longitude;
   if (data.startDate !== undefined) updates.startDate = new Date(data.startDate);
-  if (data.endDate !== undefined) updates.endDate = new Date(data.endDate);
+  if (data.endDate !== undefined) {
+    const parsedEnd = new Date(data.endDate);
+    updates.endDate = parsedEnd;
+    updates.expirationTimestamp = parsedEnd;
+  }
   if (data.photos !== undefined) updates.photos = data.photos;
   if (data.videoUrl !== undefined) updates.videoUrl = data.videoUrl;
   if (data.categories !== undefined) updates.categories = data.categories;
   if (data.sellerPhone !== undefined) updates.sellerPhone = data.sellerPhone;
   if (data.priceRangeMin !== undefined) updates.priceRangeMin = data.priceRangeMin;
   if (data.priceRangeMax !== undefined) updates.priceRangeMax = data.priceRangeMax;
+
+  const maybeStart = (updates.startDate as Date | undefined) ?? sale.startDate;
+  const maybeEnd = (updates.endDate as Date | undefined) ?? sale.endDate;
+  const durationDays = calculateGarageSaleDurationDays(maybeStart, maybeEnd);
+  if (durationDays <= 0) {
+    return NextResponse.json({ error: 'End date must be after start date' }, { status: 422 });
+  }
+  updates.durationDays = durationDays;
 
   // Re-pend if editing an approved listing
   if (sale.status === 'APPROVED' && session.user.role !== 'ADMIN') {
