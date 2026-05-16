@@ -59,33 +59,28 @@ export default function GarageSaleNewForm() {
     setUploading(true);
     setError(null);
     const uploads = Array.from(files).slice(0, 10 - photoUrls.length);
+    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+    if (!cloudName) {
+      setError('Photo uploads require Cloudinary to be configured (NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME).');
+      setUploading(false);
+      return;
+    }
     const results: string[] = [];
     for (const file of uploads) {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('upload_preset', 'flupflap_unsigned');
       try {
-        const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
-        if (cloudName) {
-          const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
-            method: 'POST',
-            body: formData,
-          });
-          if (res.ok) {
-            const data = await res.json();
-            results.push(data.secure_url as string);
-          }
-        } else {
-          // Fallback: use data URL for development
-          const url = await new Promise<string>((resolve) => {
-            const reader = new FileReader();
-            reader.onload = (e) => resolve(e.target?.result as string);
-            reader.readAsDataURL(file);
-          });
-          results.push(url);
+        const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+          method: 'POST',
+          body: formData,
+        });
+        if (res.ok) {
+          const data = await res.json();
+          results.push(data.secure_url as string);
         }
       } catch {
-        // skip failed uploads
+        // skip failed upload
       }
     }
     setPhotoUrls((prev) => [...prev, ...results]);

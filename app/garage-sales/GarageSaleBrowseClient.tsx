@@ -111,39 +111,23 @@ export default function GarageSaleBrowseClient({
     if (!token || !mapRef.current) return;
     mapInitialized.current = true;
 
-    // mapbox-gl is an optional peer dependency. The import is wrapped in a try/catch
-    // so the page continues to work when it is not installed — a placeholder is shown
-    // in the map container instead.
-    //
-    // To enable the map:
+    // mapbox-gl is an optional peer dependency. Show a placeholder until installed.
+    // To enable the full interactive map:
     //   1. npm install mapbox-gl
     //   2. Set NEXT_PUBLIC_MAPBOX_TOKEN in your environment
     const container = mapRef.current;
-    const saleSnapshots = initialSales.map((s) => ({
-      id: s.id,
-      title: s.title,
-      city: s.city,
-      state: s.state,
-      lat: s.latitude ?? null,
-      lng: s.longitude ?? null,
-    }));
+    const saleCount = initialSales.length;
 
-    void fetch('/api/garage-sales/map-ready', { method: 'HEAD' })
-      .catch(() => null)
-      .finally(() => {
-        // Placeholder: show sales as a static list inside the map div until
-        // mapbox-gl is installed as a proper dependency.
-        if (!container.firstChild) {
-          container.innerHTML = `
-            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:#64748b;text-align:center;padding:2rem;">
-              <div style="font-size:2.5rem;margin-bottom:0.5rem;">🗺️</div>
-              <p style="font-weight:600;margin:0 0 0.25rem">Interactive map requires mapbox-gl</p>
-              <p style="font-size:0.75rem;margin:0">Install it with <code style="background:#f1f5f9;padding:0.1em 0.4em;border-radius:4px">npm install mapbox-gl</code> and set <code style="background:#f1f5f9;padding:0.1em 0.4em;border-radius:4px">NEXT_PUBLIC_MAPBOX_TOKEN</code></p>
-              <p style="font-size:0.75rem;margin:0.5rem 0 0;color:#94a3b8">${saleSnapshots.length} sale${saleSnapshots.length !== 1 ? 's' : ''} would appear as pins</p>
-            </div>
-          `;
-        }
-      });
+    if (container && !container.firstChild) {
+      container.innerHTML = `
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:#64748b;text-align:center;padding:2rem;">
+          <div style="font-size:2.5rem;margin-bottom:0.5rem;">🗺️</div>
+          <p style="font-weight:600;margin:0 0 0.25rem">Interactive map requires mapbox-gl</p>
+          <p style="font-size:0.75rem;margin:0">Install it with <code style="background:#f1f5f9;padding:0.1em 0.4em;border-radius:4px">npm install mapbox-gl</code> and set <code style="background:#f1f5f9;padding:0.1em 0.4em;border-radius:4px">NEXT_PUBLIC_MAPBOX_TOKEN</code></p>
+          <p style="font-size:0.75rem;margin:0.5rem 0 0;color:#94a3b8">${saleCount} sale${saleCount !== 1 ? 's' : ''} would appear as pins</p>
+        </div>
+      `;
+    }
   }, [view, initialSales]);
 
   const page = initialPage;
