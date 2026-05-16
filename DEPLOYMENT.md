@@ -57,7 +57,7 @@ Set these values exactly:
 | **Runtime** | Node |
 | **Node Version** | `20` |
 | **Build Command** | `npm install && npm run build` |
-| **Pre-Deploy Command** | `if [ -n "$DATABASE_URL" ] && [ -d prisma/migrations ]; then npx prisma migrate deploy; else echo "Skipping Prisma migrate deploy — prisma/migrations not yet initialized. See DEPLOYMENT.md."; fi` |
+| **Pre-Deploy Command** | `if [ -n "$DATABASE_URL" ]; then npx prisma migrate deploy; else echo "Skipping prisma migrate deploy — DATABASE_URL is not set."; fi` |
 | **Start Command** | `npm run start` |
 | **Publish Directory** | *(leave completely empty)* |
 
@@ -97,7 +97,7 @@ Click **Create Web Service**. Render will:
 1. Clone the repository
 2. Install npm dependencies
 3. Run `prisma generate && next build`
-4. Run the pre-deploy command — applies committed Prisma migrations with `prisma migrate deploy` when `DATABASE_URL` is set and `prisma/migrations` exists; **skips safely** when migrations are absent (no `prisma/migrations` directory)
+4. Run the pre-deploy command — applies committed Prisma migrations with `prisma migrate deploy` when `DATABASE_URL` is set
 5. Start the server with `next start`
 
 A successful deploy shows the app live at your Render URL.
@@ -313,25 +313,19 @@ After creating the database, copy the connection string into the `DATABASE_URL` 
 
 ### Automatic schema setup (Blueprint / render.yaml)
 
-> **⚠️ Note: Prisma migrations are not yet initialized in this repository.**
-> There is no `prisma/migrations` directory. Running `prisma migrate deploy` against a
-> non-empty database fails with **error P3005**. The pre-deploy command in `render.yaml`
-> is guarded to skip migration when this directory is absent. A proper baseline migration
-> should be created locally and committed before enabling full migration-based deploys.
-
-When `DATABASE_URL` is set and a `prisma/migrations` directory exists, the pre-deploy
-command automatically applies committed Prisma migrations:
+When `DATABASE_URL` is set, the pre-deploy command automatically applies committed
+Prisma migrations:
 
 ```bash
-if [ -n "$DATABASE_URL" ] && [ -d prisma/migrations ]; then \
+if [ -n "$DATABASE_URL" ]; then \
   npx prisma migrate deploy; \
 else \
-  echo "Skipping Prisma migrate deploy — prisma/migrations not yet initialized. See DEPLOYMENT.md."; \
+  echo "Skipping prisma migrate deploy — DATABASE_URL is not set."; \
 fi
 ```
 
-If `DATABASE_URL` is missing or `prisma/migrations` is not present yet, migration
-deployment is skipped automatically (exits 0, deploy continues).
+If `DATABASE_URL` is missing, migration deployment is skipped automatically (exits 0,
+deploy continues).
 
 ### Manual schema setup (first deploy without Blueprint, or DATABASE_URL added after build)
 
@@ -341,9 +335,6 @@ skipped), run migration deployment manually when migrations are present:
 ```bash
 npx prisma migrate deploy
 ```
-
-If this repository still has no `prisma/migrations` directory, generate and commit an
-initial migration from a development environment first, then redeploy.
 
 You can run migration deployment from:
 - A **Shell** / **Exec** tab inside your Render Web Service (if your plan provides one)
@@ -369,7 +360,7 @@ Demo accounts created by seed:
 |---|---|---|
 | `Publish directory dist does not exist!` | Service is configured as Static Site | Delete the service and recreate it as a Web Service, or change the service type in Settings |
 | `PrismaClientInitializationError` | `DATABASE_URL` is missing or wrong | Set `DATABASE_URL` in Render → Environment |
-| Pre-deploy fails with `P3005` / "No migrations found" | `prisma migrate deploy` ran against a non-empty DB with no `prisma/migrations` directory | Use the guarded Pre-Deploy Command from this repo's `render.yaml` — it skips migration when no migrations directory exists. Do not set a bare `npx prisma migrate deploy` without the guard. |
+| Pre-deploy fails with migration SQL error | Migration SQL cannot be applied cleanly to the current DB state | Verify the database schema state, then apply the required migration manually (`npx prisma migrate deploy`) and redeploy |
 | Homepage shows "Database schema not yet initialized" | `DATABASE_URL` was added after the first build ran, or committed migrations are missing | Trigger a new deploy (the pre-deploy command applies migrations when migrations exist), or run `npx prisma migrate deploy` manually |
 | NextAuth errors / redirect loop | `NEXTAUTH_SECRET` or `NEXTAUTH_URL` missing | Set both env vars; `NEXTAUTH_URL` must match the public Render URL |
 | Stripe webhook `400` errors | `STRIPE_WEBHOOK_SECRET` missing or wrong | Re-copy the signing secret from Stripe and update the env var |

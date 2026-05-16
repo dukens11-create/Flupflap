@@ -81,7 +81,7 @@ If you prefer to create the service manually, use **exactly** these settings:
 | **Runtime** | Node |
 | **Node version** | `20` |
 | **Build command** | `npm install && npm run build` |
-| **Pre-Deploy command** | `if [ -n "$DATABASE_URL" ] && [ -d prisma/migrations ]; then npx prisma migrate deploy; else echo "Skipping Prisma migrate deploy — prisma/migrations not yet initialized. See DEPLOYMENT.md."; fi` |
+| **Pre-Deploy command** | `if [ -n "$DATABASE_URL" ]; then npx prisma migrate deploy; else echo "Skipping prisma migrate deploy — DATABASE_URL is not set."; fi` |
 | **Start command** | `npm run start` |
 | **Publish directory** | *(leave completely blank — do not enter anything here)* |
 
