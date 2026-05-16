@@ -59,14 +59,16 @@ export default function ProductCard({ p: product }:{p:any}){
 
   return (
     <div className={cardClasses}>
-      <div className="relative flex h-44 items-center justify-center bg-white sm:h-48">
-        <Image
-          src={product.imageUrl}
-          alt={product.title}
-          fill
-          sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
-          className="object-contain p-2"
-        />
+      <div className="relative flex h-44 items-center justify-center overflow-hidden bg-white sm:h-48">
+        <div className="absolute inset-3 sm:inset-4">
+          <Image
+            src={product.imageUrl}
+            alt={product.title}
+            fill
+            sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
+            className="object-contain object-center"
+          />
+        </div>
         {isFeatured && (
           <span className="absolute left-3 top-3 rounded-full bg-amber-400 px-2.5 py-1 text-[11px] font-bold text-amber-950 shadow-sm">{t('product.sponsored')}</span>
         )}

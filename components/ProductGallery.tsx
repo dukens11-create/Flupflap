@@ -27,13 +27,15 @@ export default function ProductGallery({ images, title, videoUrl }: ProductGalle
     <div className="flex flex-col gap-3">
       {/* Main image */}
       <div className="relative h-[320px] w-full overflow-hidden rounded-xl bg-white sm:h-[420px]">
-        <Image
-          src={images[currentIndex]}
-          alt={`${title} — image ${currentIndex + 1} of ${images.length}`}
-          fill
-          className="object-contain p-3"
-          priority={currentIndex === 0}
-        />
+        <div className="absolute inset-4 sm:inset-6 md:inset-8">
+          <Image
+            src={images[currentIndex]}
+            alt={`${title} — image ${currentIndex + 1} of ${images.length}`}
+            fill
+            className="object-contain object-center"
+            priority={currentIndex === 0}
+          />
+        </div>
 
         {/* Prev / Next arrows */}
         {images.length > 1 && (
