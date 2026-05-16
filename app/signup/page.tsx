@@ -205,7 +205,7 @@ export default function SignupPage() {
       if (signInResult?.error) {
         if (payload.role === 'SELLER') {
           setRequiresSignIn(true);
-          setError('Your account was created, but seller sign-in requires phone verification. Please sign in to continue.');
+          setError(t('signup.sellerSignInRequired'));
         } else {
           setError(t('login.invalidCredentials'));
         }

@@ -221,7 +221,8 @@
     "createAccount": "Create account",
     "alreadyHave": "Already have an account?",
     "signIn": "Sign in",
-    "signupFailed": "Signup failed"
+    "signupFailed": "Signup failed",
+    "sellerSignInRequired": "Your account was created, but seller sign-in requires phone verification. Please sign in to continue."
   },
   "notFound": {
     "metaTitle": "Page Not Found",
