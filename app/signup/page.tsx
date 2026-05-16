@@ -17,6 +17,7 @@ export default function SignupPage() {
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get('callbackUrl');
   const [error, setError] = useState('');
+  const [requiresSignIn, setRequiresSignIn] = useState(false);
   const [loading, setLoading] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
   const [role, setRole] = useState('CUSTOMER');
@@ -88,6 +89,7 @@ export default function SignupPage() {
         // Recreate verifier when absent (initial load or after a previous auth error clear).
         recaptchaRef.current = new RecaptchaVerifier(auth, 'seller-signup-recaptcha', {
           size: 'invisible',
+          badge: 'bottomleft',
         });
       }
       const confirmation = await signInWithPhoneNumber(auth, normalizedPhoneForFirebase, recaptchaRef.current);
@@ -147,6 +149,7 @@ export default function SignupPage() {
     e.preventDefault();
     if (loading) return;
     setError('');
+    setRequiresSignIn(false);
     setLoading(true);
     const form = new FormData(e.currentTarget);
     const payload = {
@@ -171,7 +174,7 @@ export default function SignupPage() {
         body: JSON.stringify(payload),
       });
       if (!res.ok) {
-        let errorData: { error?: string } = {};
+        let errorData: { error?: string; requiresSignIn?: boolean } = {};
         try {
           errorData = await res.json();
         } catch (parseErr) {
@@ -181,6 +184,7 @@ export default function SignupPage() {
             extra: { status: res.status, role: payload.role },
           });
         }
+        setRequiresSignIn(Boolean(errorData.requiresSignIn));
         setError(errorData.error || t('signup.signupFailed'));
         setLoading(false);
         return;
@@ -189,11 +193,22 @@ export default function SignupPage() {
       const signInResult = await signIn('credentials', {
         email: payload.email,
         password: payload.password,
+        ...(payload.role === 'SELLER'
+          ? {
+            phone: payload.phone,
+            firebaseIdToken: payload.firebaseIdToken,
+          }
+          : {}),
         redirect: false,
       });
 
       if (signInResult?.error) {
-        setError(t('login.invalidCredentials'));
+        if (payload.role === 'SELLER') {
+          setRequiresSignIn(true);
+          setError('Your account was created, but seller sign-in requires phone verification. Please sign in to continue.');
+        } else {
+          setError(t('login.invalidCredentials'));
+        }
         setLoading(false);
         return;
       }
@@ -201,8 +216,11 @@ export default function SignupPage() {
       setRedirecting(true);
       router.push(resolveRoleLoginDestination(payload.role, callbackUrl));
       router.refresh();
-    } catch {
-      setError(t('signup.signupFailed'));
+    } catch (err: unknown) {
+      const message = err instanceof Error && err.message.trim()
+        ? err.message
+        : t('signup.signupFailed');
+      setError(message);
       setLoading(false);
     }
   }
@@ -331,6 +349,15 @@ export default function SignupPage() {
           </div>
         )}
         {error && <p className="text-red-600 text-sm">{error}</p>}
+        {requiresSignIn && (
+          <p className="text-xs text-slate-600">
+            Use your existing account on the{' '}
+            <Link href={loginHref} className="text-blue-600 hover:underline">
+              sign-in page
+            </Link>
+            .
+          </p>
+        )}
         <button className="btn-primary w-full" disabled={loading}>
           {loading ? t('signup.creatingAccount') : t('signup.createAccount')}
         </button>

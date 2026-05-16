@@ -79,6 +79,7 @@ export default function SellerPhoneVerificationCard() {
       if (!recaptchaRef.current) {
         recaptchaRef.current = new RecaptchaVerifier(auth, 'seller-verification-recaptcha', {
           size: 'invisible',
+          badge: 'bottomleft',
         });
       }
       const confirmation = await signInWithPhoneNumber(auth, normalizedPhoneForFirebase, recaptchaRef.current);
