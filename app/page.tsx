@@ -424,7 +424,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   }
 
   return (
-    <main className="space-y-8 pb-28 md:pb-8">
+    <main className="space-y-8 pb-28 md:pb-0">
       <section id="search-marketplace" className="space-y-4">
         <div className="space-y-2">
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-amber-700">{t('home.searchSectionEyebrow')}</p>
