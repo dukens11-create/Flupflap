@@ -24,7 +24,7 @@ import { buildTrackingUrl } from '@/lib/shipping';
 import SellerShippingLabelForm from '@/components/SellerShippingLabelForm';
 import KycVerifyButton from '@/components/KycVerifyButton';
 import StripeConnectButton from '@/components/StripeConnectButton';
-import SellerStockEditor from '@/components/SellerStockEditor';
+import SellerListingsGrid from '@/components/SellerListingsGrid';
 import SellerShopProfileForm from '@/components/SellerShopProfileForm';
 import SellerPhoneVerificationCard from '@/components/SellerPhoneVerificationCard';
 import {
@@ -826,8 +826,9 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
             {emptyListingsMessage}
           </div>
         ) : (
-          <div className="space-y-3">
-            {products.map(p => {
+          <SellerListingsGrid
+            isRestricted={isRestricted}
+            listings={products.map(p => {
               const activePromo = p.promotions[0] ?? null;
               const cartAdds = p.cartInterest?.totalAdds ?? 0;
               const viewCount = p.viewCount ?? 0;
@@ -836,66 +837,30 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
               const conversionRate = calcConversionRate(productOrders, viewCount);
               const shippingSetupIncomplete = !hasStoredPackageDetails(p);
               const packageDetails = getEffectivePackageDetails(p);
-              return (
-                <div key={p.id} className="card p-4 flex items-center justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-semibold truncate">{p.title}</p>
-                      {activePromo && (
-                        <span className="badge badge-blue flex-shrink-0">Promoted until {activePromo.expiresAt ? activePromo.expiresAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}</span>
-                      )}
-                      {shippingSetupIncomplete && (
-                        <span className="badge badge-yellow flex-shrink-0">Shipping setup incomplete</span>
-                      )}
-                    </div>
-                    <p className="text-sm text-slate-500">{p.condition} · {p.category} · {dollars(p.priceCents)}</p>
-                    {packageDetails && (
-                      <p className="text-xs text-slate-500 mt-1">
-                        {formatPackageDisplay(packageDetails, shippingSetupIncomplete)}
-                      </p>
-                    )}
-                    <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-0.5">
-                      <p className="text-xs text-slate-500">
-                        Stock: <span className="font-semibold text-slate-700">{p.inventory}</span>
-                        {p.inventory <= 5 && p.inventory > 0 && p.status === 'APPROVED' && (
-                          <span className="ml-1 text-orange-600 font-medium">Low!</span>
-                        )}
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        Sold: <span className="font-semibold text-slate-700">{soldQty}</span>
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        Views: <span className="font-semibold text-slate-700">{viewCount.toLocaleString()}</span>
-                      </p>
-                      {conversionRate !== null && (
-                        <p className="text-xs text-slate-500">
-                          Conversion: <span className="font-semibold text-slate-700">{conversionRate}%</span>
-                        </p>
-                      )}
-                      <p className="text-xs text-slate-500">
-                        Cart: <span className="font-semibold text-slate-700">{cartAdds}</span>{cartAdds === 1 ? ' add' : ' adds'}
-                        {p.cartInterest?.lastAddedAt
-                          ? ` · last ${p.cartInterest.lastAddedAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
-                          : ''}
-                      </p>
-                    </div>
-                  </div>
-                  <span className={listingStatusBadgeClass(p.status, p.inventory)}>{listingStatusLabel(p.status, p.inventory)}</span>
-                  <div className="flex flex-wrap gap-2 flex-shrink-0 items-center">
-                    {!isRestricted && p.status !== 'SOLD' && (
-                      <SellerStockEditor productId={p.id} currentInventory={p.inventory} />
-                    )}
-                    {p.status === 'APPROVED' && !activePromo && !isRestricted && (
-                      <Link href={`/seller/promote/${p.id}`} className="btn bg-yellow-500 hover:bg-yellow-600 text-white text-xs py-1 px-2">Promote Listing</Link>
-                    )}
-                    {p.status !== 'SOLD' && (
-                      <Link href={`/seller/edit/${p.id}`} className="btn-outline text-xs py-1 px-2">Edit</Link>
-                    )}
-                  </div>
-                </div>
-              );
+              return {
+                id: p.id,
+                title: p.title,
+                category: p.category,
+                condition: p.condition,
+                priceCents: p.priceCents,
+                status: p.status,
+                inventory: p.inventory,
+                viewCount,
+                soldQty,
+                imageUrl: p.imageUrl ?? null,
+                cartAdds,
+                isPromoted: !!activePromo,
+                promotionLabel: activePromo
+                  ? `⭐ Promoted until ${activePromo.expiresAt ? activePromo.expiresAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}`
+                  : null,
+                conversionRate,
+                shippingIncomplete: shippingSetupIncomplete,
+                packageSummary: packageDetails
+                  ? formatPackageDisplay(packageDetails, shippingSetupIncomplete)
+                  : null,
+              };
             })}
-          </div>
+          />
         )}
       </section>
 
