@@ -3,12 +3,13 @@ import { prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { getMarketplaceSettings } from '@/lib/commission';
-import { SellerStatus } from '@prisma/client';
+import { Role, SellerStatus } from '@prisma/client';
 import { applyRateLimit, sanitizeTextInput } from '@/lib/security';
 import { logError } from '@/lib/logger';
 import { normalizePhone } from '@/lib/phone';
 import { verifyFirebasePhoneIdToken } from '@/lib/firebase/server';
 import { safeComparePassword } from '@/lib/password';
+import { addUserRole, hasUserRole, normalizeUserRoles } from '@/lib/user-roles';
 
 const schema = z.object({
   name: z.string().min(1).max(80),
@@ -91,10 +92,40 @@ export async function POST(req: Request) {
       ? new Date(now.getTime() + settings.freePromotionDurationDays * 24 * 60 * 60 * 1000)
       : null;
     const normalizedEmail = data.email.toLowerCase();
-    const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+    const existing = await prisma.user.findUnique({
+      where: { email: normalizedEmail },
+      select: {
+        id: true,
+        email: true,
+        password: true,
+        role: true,
+        roles: true,
+        phone: true,
+        sellerStatus: true,
+        phoneVerified: true,
+        phoneVerifiedAt: true,
+        hasFreePromotion: true,
+        freePromotionStart: true,
+        freePromotionEnd: true,
+        freePromotionGrantedAt: true,
+        freePromotionExpiresAt: true,
+      },
+    });
 
     if (existing) {
-      if (data.role === 'SELLER' && existing.role === 'CUSTOMER') {
+      const existingRoles = normalizeUserRoles(existing.roles, existing.role);
+      const hasBuyerRole = hasUserRole(existing.roles, existing.role, 'CUSTOMER');
+      const hasSellerRole = hasUserRole(existing.roles, existing.role, 'SELLER');
+      const requestedRole = data.role as Role;
+
+      if (hasBuyerRole && hasSellerRole) {
+        return NextResponse.json(
+          { error: 'This email already has buyer and seller access. Please sign in.', requiresSignIn: true },
+          { status: 409 },
+        );
+      }
+
+      if (requestedRole === 'SELLER' && !hasSellerRole) {
         const passwordOk = await safeComparePassword(data.password, existing.password, 'signup/upgrade-to-seller');
         if (!passwordOk) {
           return NextResponse.json(
@@ -107,6 +138,7 @@ export async function POST(req: Request) {
           where: { id: existing.id },
           data: {
             role: 'SELLER',
+            roles: addUserRole(existingRoles, existing.role, 'SELLER'),
             phone: verifiedPhone,
             sellerStatus: SellerStatus.PENDING,
             phoneVerified: true,
@@ -126,8 +158,27 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: true, upgradedToSeller: true });
       }
 
+      if (requestedRole === 'CUSTOMER' && !hasBuyerRole) {
+        const passwordOk = await safeComparePassword(data.password, existing.password, 'signup/upgrade-to-buyer');
+        if (!passwordOk) {
+          return NextResponse.json(
+            { error: 'This email is already in use. Please continue with your existing account password to enable buyer access.' },
+            { status: 409 },
+          );
+        }
+
+        await prisma.user.update({
+          where: { id: existing.id },
+          data: {
+            roles: addUserRole(existingRoles, existing.role, 'CUSTOMER'),
+          },
+        });
+
+        return NextResponse.json({ ok: true, upgradedToBuyer: true });
+      }
+
       return NextResponse.json(
-        { error: 'This email is already linked to a FlupFlap account. Please sign in and continue with the same email.' },
+        { error: 'This email is already linked to a FlupFlap account. Please sign in and continue with the same email.', requiresSignIn: true },
         { status: 409 },
       );
     }
@@ -140,6 +191,7 @@ export async function POST(req: Request) {
         email: normalizedEmail,
         password,
         role: data.role,
+        roles: [data.role as Role],
         phone: data.role === 'SELLER' ? verifiedPhone : null,
         ...(data.role === 'SELLER'
           ? {

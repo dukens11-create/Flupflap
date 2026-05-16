@@ -1,0 +1,27 @@
+import type { Role } from '@prisma/client';
+
+const ROLE_ORDER: Role[] = ['CUSTOMER', 'SELLER', 'ADMIN'];
+
+export function normalizeUserRoles(roles: Role[] | null | undefined, legacyRole: Role): Role[] {
+  const unique = new Set<Role>();
+  for (const role of roles ?? []) {
+    unique.add(role);
+  }
+  if (unique.size === 0) {
+    unique.add(legacyRole);
+  }
+  return ROLE_ORDER.filter((role) => unique.has(role));
+}
+
+export function addUserRole(roles: Role[] | null | undefined, legacyRole: Role, nextRole: Role): Role[] {
+  const normalized = normalizeUserRoles(roles, legacyRole);
+  if (!normalized.includes(nextRole)) {
+    normalized.push(nextRole);
+  }
+  return ROLE_ORDER.filter((role) => normalized.includes(role));
+}
+
+export function hasUserRole(roles: Role[] | null | undefined, legacyRole: Role, expectedRole: Role): boolean {
+  return normalizeUserRoles(roles, legacyRole).includes(expectedRole);
+}
+
