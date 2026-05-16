@@ -1,0 +1,91 @@
+import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth-options';
+import { prisma } from '@/lib/db';
+import { z } from 'zod';
+
+export const dynamic = 'force-dynamic';
+
+const actionSchema = z.object({
+  action: z.enum(['approve', 'reject', 'feature', 'unfeature', 'hide', 'mark_spam', 'unmark_spam']),
+  notes: z.string().max(1000).optional(),
+  promotionType: z.enum(['FEATURED', 'HOMEPAGE_BOOST', 'LOCAL_AREA_BOOST', 'WEEKEND_PROMOTION']).optional().nullable(),
+});
+
+type Params = { params: Promise<{ id: string }> };
+
+/** PATCH /api/admin/garage-sales/[id] — admin moderation actions */
+export async function PATCH(req: Request, { params }: Params) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user || session.user.role !== 'ADMIN') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
+  const { id } = await params;
+
+  const sale = await prisma.garageSale.findUnique({ where: { id } });
+  if (!sale) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+  }
+
+  const parsed = actionSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: 'Validation failed', issues: parsed.error.issues }, { status: 422 });
+  }
+
+  const { action, notes, promotionType } = parsed.data;
+
+  const updates: Record<string, unknown> = {};
+  if (notes !== undefined) updates.adminNotes = notes;
+
+  switch (action) {
+    case 'approve':
+      updates.status = 'APPROVED';
+      break;
+    case 'reject':
+      updates.status = 'REJECTED';
+      break;
+    case 'feature':
+      updates.isFeatured = true;
+      if (promotionType) updates.promotionType = promotionType;
+      break;
+    case 'unfeature':
+      updates.isFeatured = false;
+      updates.promotionType = null;
+      break;
+    case 'hide':
+      updates.status = 'HIDDEN';
+      break;
+    case 'mark_spam':
+      updates.isSpam = true;
+      updates.status = 'HIDDEN';
+      break;
+    case 'unmark_spam':
+      updates.isSpam = false;
+      break;
+  }
+
+  const updated = await prisma.garageSale.update({ where: { id }, data: updates });
+  return NextResponse.json(updated);
+}
+
+/** DELETE /api/admin/garage-sales/[id] — admin delete */
+export async function DELETE(_req: Request, { params }: Params) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user || session.user.role !== 'ADMIN') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
+  const { id } = await params;
+
+  const sale = await prisma.garageSale.findUnique({ where: { id } });
+  if (!sale) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+  await prisma.garageSale.delete({ where: { id } });
+  return NextResponse.json({ success: true });
+}
