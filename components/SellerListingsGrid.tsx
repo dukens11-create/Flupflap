@@ -188,13 +188,13 @@ function ListingCard({ item, isRestricted, onDelete }: CardProps) {
     <div className="card p-3 flex gap-3 min-w-0">
       {/* Thumbnail */}
       <div className="flex-shrink-0">
-        <div className="relative w-[80px] h-[80px] rounded-xl overflow-hidden bg-slate-100">
+        <div className="relative w-[80px] h-[80px] rounded-xl overflow-hidden bg-white border border-slate-100">
           {item.imageUrl ? (
             <Image
               src={item.imageUrl}
               alt={item.title}
               fill
-              className="object-cover"
+              className="object-contain p-0.5"
               sizes="80px"
             />
           ) : (

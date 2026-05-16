@@ -26,12 +26,12 @@ export default function ProductGallery({ images, title, videoUrl }: ProductGalle
   return (
     <div className="flex flex-col gap-3">
       {/* Main image */}
-      <div className="relative w-full aspect-square bg-slate-100 rounded-xl overflow-hidden">
+      <div className="relative w-full aspect-square bg-white rounded-xl overflow-hidden">
         <Image
           src={images[currentIndex]}
           alt={`${title} — image ${currentIndex + 1} of ${images.length}`}
           fill
-          className="object-cover"
+          className="object-contain p-2"
           priority={currentIndex === 0}
         />
 
@@ -75,12 +75,12 @@ export default function ProductGallery({ images, title, videoUrl }: ProductGalle
               key={url}
               type="button"
               onClick={() => setCurrentIndex(i)}
-              className={`relative flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition ${
+              className={`relative flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition bg-white ${
                 i === currentIndex ? 'border-blue-600' : 'border-slate-200 hover:border-slate-400'
               }`}
               aria-label={`View image ${i + 1}`}
             >
-              <Image src={url} alt={`${title} thumbnail ${i + 1}`} fill className="object-cover" />
+              <Image src={url} alt={`${title} thumbnail ${i + 1}`} fill className="object-contain p-0.5" />
             </button>
           ))}
         </div>
