@@ -221,7 +221,8 @@
     "createAccount": "Crear cuenta",
     "alreadyHave": "¿Ya tienes una cuenta?",
     "signIn": "Iniciar sesión",
-    "signupFailed": "Error al registrarse"
+    "signupFailed": "Error al registrarse",
+    "sellerSignInRequired": "Tu cuenta se creó, pero el inicio de sesión de vendedor requiere verificación telefónica. Inicia sesión para continuar."
   },
   "notFound": {
     "metaTitle": "Página no encontrada",

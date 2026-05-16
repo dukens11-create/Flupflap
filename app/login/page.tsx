@@ -90,6 +90,7 @@ function LoginForm() {
     if (!recaptchaRef.current) {
       recaptchaRef.current = new RecaptchaVerifier(auth, 'recaptcha-container', {
         size: 'invisible',
+        badge: 'bottomleft',
       });
     }
     return { auth, verifier: recaptchaRef.current };

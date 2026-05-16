@@ -221,7 +221,8 @@
     "createAccount": "Créer un compte",
     "alreadyHave": "Vous avez déjà un compte ?",
     "signIn": "Se connecter",
-    "signupFailed": "Échec de l'inscription"
+    "signupFailed": "Échec de l'inscription",
+    "sellerSignInRequired": "Votre compte a été créé, mais la connexion vendeur exige une vérification du téléphone. Veuillez vous connecter pour continuer."
   },
   "notFound": {
     "metaTitle": "Page introuvable",

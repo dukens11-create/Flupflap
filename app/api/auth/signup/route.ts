@@ -20,6 +20,27 @@ const schema = z.object({
   firebaseIdToken: z.string().min(1).optional(),
 });
 
+function getSignupFailureResponse(err: unknown) {
+  if (typeof err === 'object' && err !== null && 'code' in err) {
+    const code = (err as { code?: unknown }).code;
+    if (code === 'P2002') {
+      return NextResponse.json(
+        { error: 'This email is already linked to a FlupFlap account. Please sign in and continue with the same email.', requiresSignIn: true },
+        { status: 409 },
+      );
+    }
+  }
+
+  if (err instanceof Error && err.message.includes('Firebase API key is not configured')) {
+    return NextResponse.json(
+      { error: 'Seller phone verification is temporarily unavailable. Please try again in a moment.' },
+      { status: 503 },
+    );
+  }
+
+  return NextResponse.json({ error: 'Signup failed. Please try again.' }, { status: 500 });
+}
+
 export async function POST(req: Request) {
   try {
     const limit = applyRateLimit({
@@ -214,6 +235,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid input.' }, { status: 400 });
     }
     logError('Signup failed', err, { tag: 'api/auth/signup' });
-    return NextResponse.json({ error: 'Signup failed.' }, { status: 500 });
+    return getSignupFailureResponse(err);
   }
 }
