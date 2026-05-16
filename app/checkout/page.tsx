@@ -774,7 +774,7 @@ export default function CheckoutPage() {
               <img
                 src={item.imageUrl}
                 alt={item.title}
-                className="w-14 h-14 object-cover rounded-lg flex-shrink-0"
+                className="h-14 w-14 flex-shrink-0 rounded-lg border border-slate-200 bg-white object-contain p-1"
               />
               <div className="flex-1 min-w-0">
                 <p className="font-medium truncate">{item.title}</p>

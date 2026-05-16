@@ -194,7 +194,7 @@ export default function AdminListingsTable({ listings }: { listings: AdminListin
       <img
         src={src}
         alt={l.title}
-        className="w-10 h-10 object-cover rounded-lg flex-shrink-0 border border-slate-200"
+        className="h-10 w-10 flex-shrink-0 rounded-lg border border-slate-200 bg-white object-contain p-1"
       />
     ) : (
       <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400 text-xs flex-shrink-0 border border-slate-200">

@@ -210,12 +210,12 @@ export default function ConversationPage() {
 
       {/* Product context */}
       <div className="card p-4 flex gap-4 items-center">
-        <div className="relative w-14 h-14 flex-shrink-0 bg-slate-100 rounded-xl overflow-hidden">
+        <div className="relative h-14 w-14 flex-shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-white">
           <Image
             src={conv.product.imageUrl}
             alt={conv.product.title}
             fill
-            className="object-cover"
+            className="bg-white object-contain p-1"
           />
         </div>
         <div className="flex-1 min-w-0">

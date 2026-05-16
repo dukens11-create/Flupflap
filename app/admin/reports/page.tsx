@@ -174,7 +174,7 @@ export default async function AdminReportsPage({
                   <img
                     src={report.product.imageUrl}
                     alt={report.product.title ?? 'Untitled listing'}
-                    className="w-16 h-16 object-cover rounded-lg flex-shrink-0"
+                    className="h-16 w-16 flex-shrink-0 rounded-lg border border-slate-200 bg-white object-contain p-1"
                   />
                 ) : (
                   <div className="w-16 h-16 rounded-lg bg-slate-200 flex-shrink-0" aria-hidden="true" />
