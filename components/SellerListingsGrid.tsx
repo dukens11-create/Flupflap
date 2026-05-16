@@ -232,6 +232,7 @@ function ListingCard({ item, isRestricted, onDelete }: CardProps) {
           <p
             className="text-sm font-semibold text-slate-900 leading-snug line-clamp-2 flex-1 min-w-0"
             title={item.title}
+            aria-label={item.title}
           >
             {item.title}
           </p>
@@ -276,7 +277,7 @@ function ListingCard({ item, isRestricted, onDelete }: CardProps) {
               {item.inventory}
             </span>
             {item.inventory <= 5 && item.inventory > 0 && item.status === "APPROVED" && (
-              <span className="text-orange-600 font-medium"> Low</span>
+              <span className="text-orange-600 font-medium" aria-label="Low stock warning"> ⚠ Low</span>
             )}
           </span>
           <span className="mx-1 text-slate-300">•</span>
@@ -386,11 +387,18 @@ function StockEditorInline({ productId, currentInventory }: StockEditorProps) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+    };
+  }, []);
 
   async function save() {
     const value = parseInt(inputValue, 10);
     if (!Number.isInteger(value) || value < 0 || value > 9999) {
-      setError("0–9999");
+      setError("Inventory must be between 0 and 9999.");
       return;
     }
     setSaving(true);
@@ -408,7 +416,7 @@ function StockEditorInline({ productId, currentInventory }: StockEditorProps) {
         setInventory(value);
         setEditing(false);
         setSaved(true);
-        setTimeout(() => setSaved(false), 2500);
+        savedTimerRef.current = setTimeout(() => setSaved(false), 2500);
       }
     } catch {
       setError("Network error");
@@ -506,7 +514,7 @@ function DeleteDialog({ item, onCancel, onConfirm }: DeleteDialogProps) {
       <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6">
         <h3 className="font-bold text-slate-900 text-base mb-1">Delete listing?</h3>
         <p className="text-sm text-slate-600 mb-4 line-clamp-2">
-          &ldquo;{item.title}&rdquo; will be permanently deleted and cannot be
+          &quot;{item.title}&quot; will be permanently deleted and cannot be
           recovered.
         </p>
         {error && <p className="text-xs text-red-600 mb-3">{error}</p>}
