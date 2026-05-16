@@ -423,7 +423,7 @@ function LoginForm() {
               type="checkbox"
               checked={hidePassword}
               onChange={(e) => setHidePassword(e.target.checked)}
-              aria-label={hidePassword ? 'Hide password' : 'Show password'}
+              aria-label={hidePassword ? 'Show password' : 'Hide password'}
             />
             {hidePassword ? 'Hide password' : 'Show password'}
           </label>
