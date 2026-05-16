@@ -37,6 +37,7 @@ export async function GET(
         phone: true,
         phoneVerified: true,
         phoneVerifiedAt: true,
+        profileImageUrl: true,
         sellerStatus: true,
         sellerStatusReason: true,
         sellerStatusNotes: true,
@@ -95,6 +96,53 @@ export async function GET(
     return NextResponse.json({ user, orders, products, moderationLogs });
   } catch (err) {
     console.error('[admin/users/[id] GET]', err);
+    return NextResponse.json({ error: 'Server error.' }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (session.user.role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const { id } = await params;
+
+    const user = await prisma.user.findUnique({
+      where: { id },
+      select: { id: true, profileImageUrl: true, image: true },
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found.' }, { status: 404 });
+    }
+
+    await prisma.user.update({
+      where: { id },
+      data: {
+        profileImageUrl: null,
+        image: null,
+      },
+    });
+
+    await prisma.adminAccessLog.create({
+      data: {
+        adminId: session.user.id,
+        targetId: id,
+        action: 'remove_profile_image',
+      },
+    });
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    console.error('[admin/users/[id] DELETE]', error);
     return NextResponse.json({ error: 'Server error.' }, { status: 500 });
   }
 }

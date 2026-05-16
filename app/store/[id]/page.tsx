@@ -3,7 +3,8 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { prisma, isDatabaseConfigured } from '@/lib/db';
 import ProductCard from '@/components/ProductCard';
-import { ShieldCheck, Store } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
+import UserAvatar from '@/components/UserAvatar';
 
 export const dynamic = 'force-dynamic';
 
@@ -51,6 +52,7 @@ export default async function SellerStorePage({ params }: Props) {
     name: string;
     shopName: string | null;
     shopLogoUrl: string | null;
+    profileImageUrl: string | null;
     shopDescription: string | null;
     verificationSubmission: { status: string | null } | null;
   };
@@ -96,6 +98,7 @@ export default async function SellerStorePage({ params }: Props) {
         name: true,
         shopName: true,
         shopLogoUrl: true,
+        profileImageUrl: true,
         shopDescription: true,
         verificationSubmission: { select: { status: true } },
       },
@@ -109,10 +112,11 @@ export default async function SellerStorePage({ params }: Props) {
       include: {
         seller: {
           select: {
-            id: true,
-            name: true,
-            shopName: true,
-            phoneVerified: true,
+              id: true,
+              name: true,
+              shopName: true,
+              profileImageUrl: true,
+              phoneVerified: true,
             verificationSubmission: {
               select: {
                 status: true,
@@ -144,18 +148,13 @@ export default async function SellerStorePage({ params }: Props) {
     <main className="space-y-6 pb-6">
       <section className="rounded-[28px] border border-slate-200 bg-slate-50 px-5 py-6 shadow-sm sm:px-8 sm:py-8">
         <div className="flex items-center gap-4">
-          {seller.shopLogoUrl ? (
-            <img
-              src={seller.shopLogoUrl}
-              alt={`${sellerPublicName} logo`}
-              className="h-14 w-14 rounded-full object-cover"
-              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+          <div className="flex items-center justify-center rounded-full bg-slate-100 p-0.5">
+            <UserAvatar
+              imageUrl={seller.profileImageUrl ?? seller.shopLogoUrl}
+              name={sellerPublicName}
+              className="h-14 w-14"
             />
-          ) : (
-            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-200 text-slate-600">
-              <Store size={28} />
-            </div>
-          )}
+          </div>
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-black tracking-tight text-slate-900">{sellerPublicName}</h1>

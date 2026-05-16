@@ -20,6 +20,7 @@ import { expirePromotions } from '@/lib/promotions';
 import { getSellerResponseStats, SELLER_RESPONSE_WINDOW_HOURS } from '@/lib/messages';
 import { conditionBadgeClass } from '@/lib/condition-badge';
 import { absoluteUrl, BRAND_LOGO_PATH, DEFAULT_SEO_DESCRIPTION, MARKETPLACE_CURRENCY } from '@/lib/seo';
+import UserAvatar from '@/components/UserAvatar';
 
 export const dynamic = 'force-dynamic';
 
@@ -122,7 +123,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
     prisma.product.findUnique({
       where: { id },
       include: {
-        seller: { select: { id: true, name: true, shopName: true } },
+        seller: { select: { id: true, name: true, shopName: true, profileImageUrl: true } },
         promotions: {
           where: { status: 'ACTIVE', expiresAt: { gt: new Date() } },
           orderBy: { expiresAt: 'desc' },
@@ -230,7 +231,10 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
               </p>
             )}
             <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
-              <p>Sold by {sellerPublicName}</p>
+              <div className="flex items-center gap-2">
+                <UserAvatar imageUrl={product.seller.profileImageUrl} name={sellerPublicName} className="h-6 w-6" />
+                <p>Sold by {sellerPublicName}</p>
+              </div>
               {sellerResponseStats.responseRate !== null ? (
                 <span className="badge badge-green">
                   {sellerResponseStats.responseRate}% response rate

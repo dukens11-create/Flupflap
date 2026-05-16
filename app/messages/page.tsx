@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import type { Metadata } from 'next';
 import { getInboxConversations, getMessagePreview } from '@/lib/messages';
+import UserAvatar from '@/components/UserAvatar';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Messages' };
@@ -84,9 +85,14 @@ export default async function MessagesPage() {
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <p className="font-semibold text-sm truncate">{conv.product.title}</p>
-                      <p className="text-xs text-slate-500">
-                        {conv.buyerId === userId ? `Seller: ${conv.seller.name}` : `Buyer: ${conv.buyer.name}`}
-                      </p>
+                      {conv.buyerId === userId ? (
+                        <p className="text-xs text-slate-500">Seller: {conv.seller.name}</p>
+                      ) : (
+                        <div className="mt-0.5 flex items-center gap-1.5 text-xs text-slate-500">
+                          <UserAvatar imageUrl={conv.buyer.profileImageUrl} name={conv.buyer.name} className="h-5 w-5" />
+                          <span className="truncate">Buyer: {conv.buyer.name}</span>
+                        </div>
+                      )}
                     </div>
                     <div className="flex flex-col items-end gap-1 flex-shrink-0">
                       {lastMsg && (

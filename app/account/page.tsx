@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { ACCOUNT_DELETION_REASON_LABELS, type AccountDeletionReason } from '@/lib/account-deletion';
 import { STRIPE_ERROR_REASONS } from '@/lib/stripe';
 import StripeConnectButton from '@/components/StripeConnectButton';
+import AccountProfileImageSection from '@/components/AccountProfileImageSection';
 
 type SecurityLoginEntry = {
   id: string;
@@ -359,6 +360,8 @@ export default function AccountPage() {
       )}
 
       <div className="card p-6 space-y-5 mb-6">
+        <AccountProfileImageSection userName={sessionUser.name} />
+
         {/* Name */}
         <div>
           <p className="label">Name</p>

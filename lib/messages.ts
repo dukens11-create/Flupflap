@@ -44,8 +44,8 @@ export async function getInboxConversations(userId: string) {
       OR: [{ buyerId: userId }, { sellerId: userId }],
     },
     include: {
-      buyer: { select: { id: true, name: true } },
-      seller: { select: { id: true, name: true } },
+      buyer: { select: { id: true, name: true, profileImageUrl: true, image: true } },
+      seller: { select: { id: true, name: true, profileImageUrl: true, image: true } },
       product: { select: { id: true, title: true, imageUrl: true, status: true } },
       messages: {
         orderBy: { createdAt: 'desc' },
@@ -78,6 +78,14 @@ export async function getInboxConversations(userId: string) {
 
   return conversations.map((conversation) => ({
     ...conversation,
+    buyer: {
+      ...conversation.buyer,
+      profileImageUrl: conversation.buyer.profileImageUrl ?? conversation.buyer.image ?? null,
+    },
+    seller: {
+      ...conversation.seller,
+      profileImageUrl: conversation.seller.profileImageUrl ?? conversation.seller.image ?? null,
+    },
     unreadCount: unreadCountByConversationId.get(conversation.id) ?? 0,
     unread: (unreadCountByConversationId.get(conversation.id) ?? 0) > 0,
   }));
