@@ -1,10 +1,11 @@
 'use client';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ShieldCheck, Star, Store } from 'lucide-react';
+import { ShieldCheck, Star } from 'lucide-react';
 import { dollars } from '@/lib/money';
 import { useI18n } from '@/components/I18nProvider';
 import { conditionBadgeClass } from '@/lib/condition-badge';
+import UserAvatar from '@/components/UserAvatar';
 
 const TRENDING_THRESHOLD = 5;
 
@@ -97,7 +98,11 @@ export default function ProductCard({ p: product }:{p:any}){
 
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-sm text-slate-700">
-              <Store size={14} className="text-slate-400" />
+              <UserAvatar
+                imageUrl={product.seller?.profileImageUrl ?? null}
+                name={product.seller?.shopName?.trim() || product.seller?.name}
+                className="h-6 w-6"
+              />
               <span className="truncate font-semibold">{product.seller?.shopName?.trim() || t('product.sellerFallback')}</span>
             </div>
             <div className="flex items-center gap-2">

@@ -11,8 +11,9 @@ import {
   isSafeMessageAttachmentUrl,
   MESSAGE_ATTACHMENT_HELP_TEXT,
 } from '@/lib/message-attachments';
+import UserAvatar from '@/components/UserAvatar';
 
-type Sender = { id: string; name: string };
+type Sender = { id: string; name: string; profileImageUrl?: string | null };
 
 type Message = {
   id: string;
@@ -199,7 +200,6 @@ export default function ConversationPage() {
 
   const userId = session?.user?.id;
   const isBuyer = conv.buyerId === userId;
-  const otherUser = isBuyer ? conv.seller : conv.buyer;
 
   return (
     <main className="max-w-2xl mx-auto flex flex-col gap-4">
@@ -230,9 +230,14 @@ export default function ConversationPage() {
             <span className="badge-slate badge mt-0.5">Sold</span>
           )}
         </div>
-        <p className="text-xs text-slate-400 flex-shrink-0">
-          {isBuyer ? `Seller: ${conv.seller.name}` : `Buyer: ${conv.buyer.name}`}
-        </p>
+        {isBuyer ? (
+          <p className="text-xs text-slate-400 flex-shrink-0">Seller: {conv.seller.name}</p>
+        ) : (
+          <div className="flex items-center gap-1.5 text-xs text-slate-500 flex-shrink-0">
+            <UserAvatar imageUrl={conv.buyer.profileImageUrl} name={conv.buyer.name} className="h-5 w-5" />
+            <span className="truncate">Buyer: {conv.buyer.name}</span>
+          </div>
+        )}
       </div>
 
       {/* Message thread */}
@@ -250,26 +255,31 @@ export default function ConversationPage() {
                 key={msg.id}
                 className={`flex flex-col gap-0.5 ${isMe ? 'items-end' : 'items-start'}`}
               >
-                <div
-                  className={`max-w-[80%] px-4 py-2.5 rounded-2xl text-sm break-words ${
-                    isMe
-                      ? 'bg-blue-600 text-white rounded-br-sm'
-                      : 'bg-slate-100 text-slate-900 rounded-bl-sm'
-                  }`}
-                >
-                  {safeAttachmentUrl && (
-                    <a href={safeAttachmentUrl} target="_blank" rel="noreferrer" className="block mb-2">
-                      <img
-                        src={safeAttachmentUrl}
-                        alt="Shared attachment"
-                        className="max-h-56 w-auto rounded-xl border border-black/10 object-cover"
-                      />
-                    </a>
+                <div className={`flex items-end gap-2 ${isMe ? 'flex-row-reverse' : ''}`}>
+                  {!isMe && msg.senderId === conv.buyerId && (
+                    <UserAvatar imageUrl={msg.sender.profileImageUrl} name={msg.sender.name} className="h-6 w-6" />
                   )}
-                  {msg.body && <p>{msg.body}</p>}
-                  {!msg.body && safeAttachmentUrl && (
-                    <p className={`text-xs ${isMe ? 'text-blue-100' : 'text-slate-500'}`}>Photo attachment</p>
-                  )}
+                  <div
+                    className={`max-w-[80%] px-4 py-2.5 rounded-2xl text-sm break-words ${
+                      isMe
+                        ? 'bg-blue-600 text-white rounded-br-sm'
+                        : 'bg-slate-100 text-slate-900 rounded-bl-sm'
+                    }`}
+                  >
+                    {safeAttachmentUrl && (
+                      <a href={safeAttachmentUrl} target="_blank" rel="noreferrer" className="block mb-2">
+                        <img
+                          src={safeAttachmentUrl}
+                          alt="Shared attachment"
+                          className="max-h-56 w-auto rounded-xl border border-black/10 object-cover"
+                        />
+                      </a>
+                    )}
+                    {msg.body && <p>{msg.body}</p>}
+                    {!msg.body && safeAttachmentUrl && (
+                      <p className={`text-xs ${isMe ? 'text-blue-100' : 'text-slate-500'}`}>Photo attachment</p>
+                    )}
+                  </div>
                 </div>
                 <p className="text-xs text-slate-400 px-1">
                   {isMe ? 'You' : msg.sender.name} · {formatTime(msg.createdAt)}

@@ -5,6 +5,8 @@ import { prisma } from '@/lib/db';
 import { dollars } from '@/lib/money';
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import UserAvatar from '@/components/UserAvatar';
+import AdminRemoveProfileImageButton from '@/components/AdminRemoveProfileImageButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -69,6 +71,7 @@ export default async function AdminUserDetailPage({
       phone: true,
       phoneVerified: true,
       phoneVerifiedAt: true,
+      profileImageUrl: true,
       sellerStatus: true,
       sellerStatusReason: true,
       sellerStatusNotes: true,
@@ -125,10 +128,13 @@ export default async function AdminUserDetailPage({
   return (
     <main className="max-w-4xl mx-auto">
       <div className="mb-6 flex items-center justify-between">
-        <div>
+        <div className="flex items-center gap-3">
+          <UserAvatar imageUrl={user.profileImageUrl} name={user.name} className="h-12 w-12" />
+          <div>
           <Link href="/admin/users" className="text-sm text-slate-500 hover:text-blue-600">← User Management</Link>
           <h1 className="text-2xl font-black mt-1">{user.name}</h1>
           <p className="text-slate-500 text-sm">{user.email}</p>
+          </div>
         </div>
         <div className="text-right">
           <span className={`badge ${user.role === 'SELLER' ? 'badge-green' : user.role === 'ADMIN' ? 'badge-slate' : 'badge-blue'}`}>
@@ -170,6 +176,17 @@ export default async function AdminUserDetailPage({
                 {user.phoneVerified ? 'Verified' : 'Unverified'}
               </span>
             )}
+          </div>
+          <div>
+            <p className="label">Profile photo</p>
+            <div className="mt-1 flex flex-wrap items-center gap-3">
+              <UserAvatar imageUrl={user.profileImageUrl} name={user.name} className="h-10 w-10" />
+              {user.profileImageUrl ? (
+                <AdminRemoveProfileImageButton userId={user.id} />
+              ) : (
+                <p className="text-xs text-slate-400">Using default avatar</p>
+              )}
+            </div>
           </div>
           <div>
             <p className="label">Role</p>

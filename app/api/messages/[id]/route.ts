@@ -52,15 +52,15 @@ export async function GET(
         OR: [{ buyerId: userId }, { sellerId: userId }],
       },
       include: {
-        buyer: { select: { id: true, name: true } },
-        seller: { select: { id: true, name: true } },
+        buyer: { select: { id: true, name: true, profileImageUrl: true, image: true } },
+        seller: { select: { id: true, name: true, profileImageUrl: true, image: true } },
         product: {
           select: { id: true, title: true, imageUrl: true, priceCents: true, status: true },
         },
         messages: {
           orderBy: { createdAt: 'asc' },
           include: {
-            sender: { select: { id: true, name: true } },
+            sender: { select: { id: true, name: true, profileImageUrl: true, image: true } },
           },
         },
       },
@@ -82,7 +82,24 @@ export async function GET(
       });
     }
 
-    return NextResponse.json(conversation);
+    return NextResponse.json({
+      ...conversation,
+      buyer: {
+        ...conversation.buyer,
+        profileImageUrl: conversation.buyer.profileImageUrl ?? conversation.buyer.image ?? null,
+      },
+      seller: {
+        ...conversation.seller,
+        profileImageUrl: conversation.seller.profileImageUrl ?? conversation.seller.image ?? null,
+      },
+      messages: conversation.messages.map((message) => ({
+        ...message,
+        sender: {
+          ...message.sender,
+          profileImageUrl: message.sender.profileImageUrl ?? message.sender.image ?? null,
+        },
+      })),
+    });
   } catch (error) {
     console.error('[messages/[id] GET]', error);
     return NextResponse.json({ error: 'Failed to load conversation.' }, { status: 500 });

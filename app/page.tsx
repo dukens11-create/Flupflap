@@ -288,6 +288,7 @@ async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?
             id: true,
             name: true,
             shopName: true,
+            profileImageUrl: true,
             phoneVerified: true,
             verificationSubmission: {
               select: {
