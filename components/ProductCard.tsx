@@ -48,7 +48,7 @@ export default function ProductCard({ p: product }:{p:any}){
       : t('product.newSeller');
   const responseRate = typeof product.sellerResponseRate === 'number' ? product.sellerResponseRate : null;
   const filledStars = responseRate === null ? 0 : percentageToStarCount(responseRate);
-  const cardClasses = `group flex h-full flex-col overflow-hidden rounded-[28px] border bg-white shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-xl ${isFeatured ? 'border-amber-200 ring-2 ring-amber-300' : 'border-slate-200'}`;
+  const cardClasses = `flex h-full flex-col overflow-hidden rounded-[28px] border bg-white shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-xl ${isFeatured ? 'border-amber-200 ring-2 ring-amber-300' : 'border-slate-200'}`;
 
   const shippingText = (() => {
     const key = resolveShippingKey(product.shippingMode, product.shippingCents);
