@@ -8,6 +8,7 @@ import { applyRateLimit, sanitizeTextInput } from '@/lib/security';
 import { logError } from '@/lib/logger';
 import { normalizePhone } from '@/lib/phone';
 import { verifyFirebasePhoneIdToken } from '@/lib/firebase/server';
+import { safeComparePassword } from '@/lib/password';
 
 const schema = z.object({
   name: z.string().min(1).max(80),
@@ -84,22 +85,59 @@ export async function POST(req: Request) {
       verifiedPhone = normalizedFirebasePhone;
     }
 
-    const existing = await prisma.user.findUnique({ where: { email: data.email.toLowerCase() } });
-    if (existing) {
-      return NextResponse.json({ error: 'An account with this email already exists.' }, { status: 409 });
-    }
-
-    const password = await bcrypt.hash(data.password, 12);
     const now = new Date();
     const settings = data.role === 'SELLER' ? await getMarketplaceSettings() : null;
     const freePromotionEnd = settings && settings.freePromotionEnabled
       ? new Date(now.getTime() + settings.freePromotionDurationDays * 24 * 60 * 60 * 1000)
       : null;
+    const normalizedEmail = data.email.toLowerCase();
+    const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+
+    if (existing) {
+      if (data.role === 'SELLER' && existing.role === 'CUSTOMER') {
+        const passwordOk = await safeComparePassword(data.password, existing.password, 'signup/upgrade-to-seller');
+        if (!passwordOk) {
+          return NextResponse.json(
+            { error: 'This email is already in use. Please continue with your existing account password to enable seller access.' },
+            { status: 409 },
+          );
+        }
+
+        await prisma.user.update({
+          where: { id: existing.id },
+          data: {
+            role: 'SELLER',
+            phone: verifiedPhone,
+            sellerStatus: SellerStatus.PENDING,
+            phoneVerified: true,
+            phoneVerifiedAt: now,
+            hasFreePromotion: settings?.freePromotionEnabled ? true : existing.hasFreePromotion,
+            freePromotionStart:
+              settings?.freePromotionEnabled && !existing.freePromotionStart ? now : existing.freePromotionStart,
+            freePromotionEnd:
+              settings?.freePromotionEnabled && !existing.freePromotionEnd ? freePromotionEnd : existing.freePromotionEnd,
+            freePromotionGrantedAt:
+              settings?.freePromotionEnabled && !existing.freePromotionGrantedAt ? now : existing.freePromotionGrantedAt,
+            freePromotionExpiresAt:
+              settings?.freePromotionEnabled && !existing.freePromotionExpiresAt ? freePromotionEnd : existing.freePromotionExpiresAt,
+          },
+        });
+
+        return NextResponse.json({ ok: true, upgradedToSeller: true });
+      }
+
+      return NextResponse.json(
+        { error: 'This email is already linked to a FlupFlap account. Please sign in and continue with the same email.' },
+        { status: 409 },
+      );
+    }
+
+    const password = await bcrypt.hash(data.password, 12);
 
     await prisma.user.create({
       data: {
         name: sanitizedName,
-        email: data.email.toLowerCase(),
+        email: normalizedEmail,
         password,
         role: data.role,
         phone: data.role === 'SELLER' ? verifiedPhone : null,
