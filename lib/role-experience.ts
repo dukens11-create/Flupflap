@@ -39,6 +39,7 @@ export type RoleNavItem = {
 
 const buyerNav: RoleNavItem[] = [
   { label: 'Browse', href: '/' },
+  { label: 'Garage Sales', href: '/garage-sales' },
   { label: 'Orders', href: '/orders' },
   { label: 'Account', href: '/account' },
 ];
@@ -46,6 +47,7 @@ const buyerNav: RoleNavItem[] = [
 const sellerNav: RoleNavItem[] = [
   { label: 'Seller Dashboard', href: '/seller/dashboard' },
   { label: 'List Item', href: '/seller/new' },
+  { label: 'Garage Sales', href: '/garage-sales' },
   { label: 'My Listings', href: '/seller#my-listings' },
   { label: 'Sales', href: '/seller#sales-overview' },
   { label: 'Orders to Ship', href: '/seller#orders-to-ship' },
@@ -59,6 +61,7 @@ const adminNav: RoleNavItem[] = [
   { label: 'Users', href: '/admin/users' },
   { label: 'Sellers', href: '/admin/sellers' },
   { label: 'Products', href: '/admin#products-panel' },
+  { label: 'Garage Sales', href: '/admin/garage-sales' },
   { label: 'Orders', href: '/admin#orders-panel' },
   { label: 'Payments', href: '/admin#payments-panel' },
   { label: 'Reports', href: '/admin/reports' },
@@ -73,5 +76,5 @@ export function getRoleNavigation(role?: string | null): RoleNavItem[] {
   if (experienceRole === 'admin') return adminNav;
   if (experienceRole === 'seller') return sellerNav;
   if (experienceRole === 'buyer') return buyerNav;
-  return [{ label: 'Browse', href: '/' }];
+  return [{ label: 'Browse', href: '/' }, { label: 'Garage Sales', href: '/garage-sales' }];
 }

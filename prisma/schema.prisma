@@ -99,6 +99,30 @@ enum OrderStatus {
   PICKED_UP
 }
 
+// ── Garage Sales ──────────────────────────────────────────────────────────────
+
+enum GarageSaleType {
+  GARAGE_SALE
+  YARD_SALE
+  ESTATE_SALE
+  MOVING_SALE
+}
+
+enum GarageSaleStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+  HIDDEN
+}
+
+enum GarageSalePromotionType {
+  FEATURED
+  HOMEPAGE_BOOST
+  LOCAL_AREA_BOOST
+  WEEKEND_PROMOTION
+}
+
 model User {
   id                       String                    @id @default(cuid())
   name                     String
@@ -183,6 +207,8 @@ model User {
   shipFromZip                   String?
   shipFromCountry               String?
   shipFromPhone                 String?
+  // Garage sales
+  garageSales                   GarageSale[]  @relation("GarageSaleSeller")
 }
 
 model SellerOtp {
@@ -771,4 +797,86 @@ model SellerTaxReport {
   @@unique([sellerId, taxYear])
   @@index([sellerId])
   @@index([taxYear])
+}
+
+model GarageSale {
+  id               String               @id @default(cuid())
+  sellerId         String
+  seller           User                 @relation("GarageSaleSeller", fields: [sellerId], references: [id])
+  title            String
+  description      String
+  saleType         GarageSaleType       @default(GARAGE_SALE)
+  status           GarageSaleStatus     @default(PENDING)
+  // Location
+  address          String
+  city             String
+  state            String
+  zipCode          String
+  latitude         Float?
+  longitude        Float?
+  // Schedule
+  startDate        DateTime
+  endDate          DateTime
+  // Media
+  photos           String[]             @default([])
+  videoUrl         String?
+  // Categories (JSON array of strings from the predefined list)
+  categories       String[]             @default([])
+  // Contact
+  sellerPhone      String?
+  // Price range
+  priceRangeMin    Float?
+  priceRangeMax    Float?
+  // Features
+  isFeatured       Boolean              @default(false)
+  promotionType    GarageSalePromotionType?
+  promotionStart   DateTime?
+  promotionEnd     DateTime?
+  // Analytics
+  viewCount        Int                  @default(0)
+  // Moderation
+  adminNotes       String?
+  isSpam           Boolean              @default(false)
+  // Reports
+  reports          GarageSaleReport[]
+  // Favorites
+  favorites        GarageSaleFavorite[]
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  @@index([sellerId])
+  @@index([status])
+  @@index([city, state])
+  @@index([zipCode])
+  @@index([startDate, endDate])
+  @@index([isFeatured])
+  @@index([latitude, longitude])
+}
+
+model GarageSaleReport {
+  id           String      @id @default(cuid())
+  saleId       String
+  sale         GarageSale  @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  reporterId   String
+  reason       String
+  notes        String?
+  status       ReportStatus @default(OPEN)
+  adminNotes   String?
+  resolvedAt   DateTime?
+  createdAt    DateTime    @default(now())
+
+  @@unique([saleId, reporterId])
+  @@index([saleId])
+  @@index([status])
+}
+
+model GarageSaleFavorite {
+  id        String     @id @default(cuid())
+  saleId    String
+  sale      GarageSale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  userId    String
+  createdAt DateTime   @default(now())
+
+  @@unique([saleId, userId])
+  @@index([userId])
 }
