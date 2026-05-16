@@ -215,7 +215,7 @@ export default function ConversationPage() {
             src={conv.product.imageUrl}
             alt={conv.product.title}
             fill
-            className="bg-white object-contain p-1"
+            className="object-contain p-1"
           />
         </div>
         <div className="flex-1 min-w-0">

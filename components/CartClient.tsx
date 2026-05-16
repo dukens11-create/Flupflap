@@ -78,7 +78,7 @@ export default function CartClient() {
       {items.map(i => (
         <div className="card p-4 flex gap-4 items-center" key={i.id}>
           <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-white">
-            <Image src={i.imageUrl || DEFAULT_CART_IMAGE_PATH} alt={i.title || 'Cart item'} fill className="bg-white object-contain p-1" />
+            <Image src={i.imageUrl || DEFAULT_CART_IMAGE_PATH} alt={i.title || 'Cart item'} fill className="object-contain p-1" />
           </div>
           <div className="flex-1 min-w-0">
             <p className="font-semibold truncate">{i.title}</p>

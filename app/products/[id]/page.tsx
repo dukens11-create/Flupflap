@@ -191,7 +191,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             />
           ) : (
             <div className="relative h-[320px] w-full bg-white sm:h-[420px] md:min-h-[420px]">
-              <Image src={product.imageUrl} alt={product.title} fill className="bg-white object-contain p-3" />
+              <Image src={product.imageUrl} alt={product.title} fill className="object-contain p-3" />
             </div>
           )}
         </div>

@@ -797,7 +797,7 @@ export default function MediaUpload({
                   <img
                     src={getSafePreviewUrl(getSelectedImageUrl(image)) || image.safePreviewUrl}
                     alt={`Product image ${i + 1}`}
-                    className="h-40 w-full bg-white object-contain p-2"
+                    className="h-40 w-full object-contain p-2"
                   />
                   {i === 0 && (
                     <span className="absolute left-2 top-2 rounded bg-blue-600 px-2 py-1 text-[11px] font-semibold text-white">

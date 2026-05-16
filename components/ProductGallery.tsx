@@ -31,7 +31,7 @@ export default function ProductGallery({ images, title, videoUrl }: ProductGalle
           src={images[currentIndex]}
           alt={`${title} — image ${currentIndex + 1} of ${images.length}`}
           fill
-          className="bg-white object-contain p-3"
+          className="object-contain p-3"
           priority={currentIndex === 0}
         />
 
@@ -80,7 +80,7 @@ export default function ProductGallery({ images, title, videoUrl }: ProductGalle
               }`}
               aria-label={`View image ${i + 1}`}
             >
-              <Image src={url} alt={`${title} thumbnail ${i + 1}`} fill className="bg-white object-contain p-1" />
+              <Image src={url} alt={`${title} thumbnail ${i + 1}`} fill className="object-contain p-1" />
             </button>
           ))}
         </div>

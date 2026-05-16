@@ -65,7 +65,7 @@ export default function ProductCard({ p: product }:{p:any}){
           alt={product.title}
           fill
           sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
-          className="bg-white object-contain p-2"
+          className="object-contain p-2"
         />
         {isFeatured && (
           <span className="absolute left-3 top-3 rounded-full bg-amber-400 px-2.5 py-1 text-[11px] font-bold text-amber-950 shadow-sm">{t('product.sponsored')}</span>
