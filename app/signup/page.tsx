@@ -250,9 +250,9 @@ export default function SignupPage() {
               type="checkbox"
               checked={hidePassword}
               onChange={(e) => setHidePassword(e.target.checked)}
-              aria-label={hidePassword ? 'Show password' : 'Hide password'}
+              aria-label="Hide password"
             />
-            {hidePassword ? 'Hide password' : 'Show password'}
+            Hide password
           </label>
         </div>
         <div>

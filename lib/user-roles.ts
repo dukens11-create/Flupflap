@@ -1,5 +1,6 @@
 import type { Role } from '@prisma/client';
 
+// Keep buyer/seller/admin ordering stable for consistent serialization and comparisons.
 const ROLE_ORDER: Role[] = ['CUSTOMER', 'SELLER', 'ADMIN'];
 
 export function normalizeUserRoles(roles: Role[] | null | undefined, legacyRole: Role): Role[] {
@@ -24,4 +25,3 @@ export function addUserRole(roles: Role[] | null | undefined, legacyRole: Role, 
 export function hasUserRole(roles: Role[] | null | undefined, legacyRole: Role, expectedRole: Role): boolean {
   return normalizeUserRoles(roles, legacyRole).includes(expectedRole);
 }
-

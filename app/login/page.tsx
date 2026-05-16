@@ -423,9 +423,9 @@ function LoginForm() {
               type="checkbox"
               checked={hidePassword}
               onChange={(e) => setHidePassword(e.target.checked)}
-              aria-label={hidePassword ? 'Show password' : 'Hide password'}
+              aria-label="Hide password"
             />
-            {hidePassword ? 'Hide password' : 'Show password'}
+            Hide password
           </label>
         </div>
         {error && <p className="text-red-600 text-sm break-words">{error}</p>}
