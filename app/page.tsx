@@ -397,7 +397,7 @@ async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?
   const sellerResponseRates = await getSellerResponseStatsForSellers(sellerIds);
 
   return (
-    <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+    <div className="grid grid-cols-2 items-stretch gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">
       {products.map((p: any) => (
         <ProductCard
           key={p.id}
