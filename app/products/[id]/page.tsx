@@ -182,7 +182,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
       {!isOwnListing && !isAdmin && <ProductViewTracker productId={product.id} />}
       <Link href="/" className="text-sm text-blue-600 hover:underline mb-4 inline-block">← Back to browse</Link>
       <div className="card overflow-hidden flex flex-col md:flex-row gap-0">
-        <div className="w-full md:w-96 flex-shrink-0 bg-slate-100 p-0">
+        <div className="w-full md:w-96 flex-shrink-0 bg-white p-0">
           {product.images?.length ? (
             <ProductGallery
               images={product.images}
@@ -190,8 +190,8 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
               videoUrl={product.videoUrl}
             />
           ) : (
-            <div className="relative w-full h-72 md:h-full">
-              <Image src={product.imageUrl} alt={product.title} fill className="object-cover" />
+            <div className="relative w-full h-72 md:h-full bg-white">
+              <Image src={product.imageUrl} alt={product.title} fill className="object-contain p-2" />
             </div>
           )}
         </div>
