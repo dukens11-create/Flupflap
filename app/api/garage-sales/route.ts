@@ -92,7 +92,6 @@ export async function GET(req: Request) {
   const where: Record<string, unknown> = {
     status: 'APPROVED',
     isSpam: false,
-    endDate: { gte: now }, // hide expired
   };
 
   if (q) {
@@ -118,7 +117,9 @@ export async function GET(req: Request) {
     if (startBefore) startDateFilter.lte = startBefore;
     where.startDate = startDateFilter;
   }
-  if (endAfter) where.endDate = { gte: endAfter };
+  // endDate filter: always hide expired (>= now), but if endAfter is more restrictive use that
+  // endAfter comes from date filters like 'open_now' and 'weekend' where endAfter >= now
+  where.endDate = { gte: endAfter != null && endAfter > now ? endAfter : now };
 
   let orderBy: Record<string, string> | Record<string, string>[];
   if (sort === 'most_viewed') {

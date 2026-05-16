@@ -145,7 +145,6 @@ function buildWhere(sp: SearchParams, now: Date) {
   const where: Record<string, unknown> = {
     status: 'APPROVED',
     isSpam: false,
-    endDate: { gte: now },
   };
 
   if (sp.q) {
@@ -163,11 +162,13 @@ function buildWhere(sp: SearchParams, now: Date) {
   }
   if (sp.category) where.categories = { has: sp.category };
 
+  // Date-range filters — each branch sets both startDate and endDate together
+  // to avoid conflicting constraints from multiple assignments.
   if (sp.date === 'today') {
-    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
-    where.startDate = { gte: start, lte: end };
-    where.endDate = { gte: now };
+    const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const dayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+    where.startDate = { gte: dayStart, lte: dayEnd };
+    where.endDate = { gte: now }; // must not be expired
   } else if (sp.date === 'tomorrow') {
     const tomorrow = new Date(now);
     tomorrow.setDate(now.getDate() + 1);
@@ -175,6 +176,7 @@ function buildWhere(sp: SearchParams, now: Date) {
       gte: new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate()),
       lte: new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 23, 59, 59),
     };
+    where.endDate = { gte: now }; // must not be expired
   } else if (sp.date === 'weekend') {
     const day = now.getDay();
     const sat = new Date(now);
@@ -183,8 +185,10 @@ function buildWhere(sp: SearchParams, now: Date) {
     const sun = new Date(sat);
     sun.setDate(sat.getDate() + 1);
     sun.setHours(23, 59, 59, 999);
+    // Sale must start by end of Sunday and end on or after Saturday
     where.startDate = { lte: sun };
-    where.endDate = { gte: sat };
+    // endDate must be >= sat AND >= now (take the later of the two)
+    where.endDate = { gte: sat > now ? sat : now };
   } else if (sp.date === 'open_now') {
     where.startDate = { lte: now };
     where.endDate = { gte: now };
@@ -192,6 +196,10 @@ function buildWhere(sp: SearchParams, now: Date) {
     const soon = new Date(now);
     soon.setHours(now.getHours() + 24);
     where.startDate = { gte: now, lte: soon };
+    where.endDate = { gte: now }; // must not be expired
+  } else {
+    // Default: hide expired listings
+    where.endDate = { gte: now };
   }
 
   return where;
