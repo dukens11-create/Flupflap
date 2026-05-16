@@ -111,8 +111,13 @@ export async function GET(req: Request) {
   if (category && GARAGE_SALE_CATEGORIES.includes(category)) {
     where.categories = { has: category };
   }
-  if (startAfter) where.startDate = { ...(where.startDate as object ?? {}), gte: startAfter };
-  if (startBefore) where.startDate = { ...(where.startDate as object ?? {}), lte: startBefore };
+  // Build startDate range filter separately to avoid object mutation issues
+  if (startAfter || startBefore) {
+    const startDateFilter: { gte?: Date; lte?: Date } = {};
+    if (startAfter) startDateFilter.gte = startAfter;
+    if (startBefore) startDateFilter.lte = startBefore;
+    where.startDate = startDateFilter;
+  }
   if (endAfter) where.endDate = { gte: endAfter };
 
   let orderBy: Record<string, string> | Record<string, string>[];

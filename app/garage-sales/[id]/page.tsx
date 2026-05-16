@@ -69,9 +69,11 @@ export default async function GarageSaleDetailPage({ params }: Params) {
 
   const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${sale.address}, ${sale.city}, ${sale.state} ${sale.zipCode}`)}`;
 
-  // Increment view count (fire-and-forget)
+  // Increment view count (fire-and-forget, log errors)
   if (sale.status === 'APPROVED' && !isOwner) {
-    prisma.garageSale.update({ where: { id }, data: { viewCount: { increment: 1 } } }).catch(() => {});
+    prisma.garageSale.update({ where: { id }, data: { viewCount: { increment: 1 } } }).catch((err) => {
+      console.error('[garage-sales] view count increment failed', err);
+    });
   }
 
   return (

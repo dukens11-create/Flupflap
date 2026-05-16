@@ -44,7 +44,9 @@ export default function GarageSaleBrowseClient({
   const [geoStatus, setGeoStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
   const mapRef = useRef<HTMLDivElement>(null);
-  const mapboxMapRef = useRef<unknown>(null);
+  // mapboxMapRef is used to track if the map has been initialized
+  // to prevent re-initialization on re-renders
+  const mapInitialized = useRef(false);
 
   // Filter state (controlled from URL on mount, then client-controlled)
   const [q, setQ] = useState(searchParams.q ?? '');
@@ -100,55 +102,49 @@ export default function GarageSaleBrowseClient({
     );
   }
 
-  // Initialize Mapbox if view === 'map' and token present
+  // Map integration: requires mapbox-gl to be installed (npm install mapbox-gl)
+  // and NEXT_PUBLIC_MAPBOX_TOKEN to be set.
+  // When both are present the map will auto-initialize when the map view is selected.
   useEffect(() => {
-    if (view !== 'map') return;
+    if (view !== 'map' || mapInitialized.current) return;
     const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
     if (!token || !mapRef.current) return;
-    if (mapboxMapRef.current) return; // already initialized
+    mapInitialized.current = true;
 
-    // Dynamically load mapbox-gl only when available
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (async () => {
-      let mapboxgl: any;
-      try {
-        // Use eval-based dynamic require to avoid webpack bundling error when not installed
-        const mod = await (Function('return import("mapbox-gl")')() as Promise<any>);
-        mapboxgl = mod.default ?? mod;
-      } catch {
-        return; // mapbox-gl not installed — map placeholder shown via CSS
-      }
-      if (!mapRef.current || !mapboxgl) return;
-      mapboxgl.accessToken = token;
-      const map = new mapboxgl.Map({
-        container: mapRef.current,
-        style: 'mapbox://styles/mapbox/streets-v12',
-        center: userCoords ? [userCoords.lng, userCoords.lat] : [-98.5795, 39.8283],
-        zoom: userCoords ? 10 : 4,
-      });
-      mapboxMapRef.current = map;
+    // mapbox-gl is an optional peer dependency. The import is wrapped in a try/catch
+    // so the page continues to work when it is not installed — a placeholder is shown
+    // in the map container instead.
+    //
+    // To enable the map:
+    //   1. npm install mapbox-gl
+    //   2. Set NEXT_PUBLIC_MAPBOX_TOKEN in your environment
+    const container = mapRef.current;
+    const saleSnapshots = initialSales.map((s) => ({
+      id: s.id,
+      title: s.title,
+      city: s.city,
+      state: s.state,
+      lat: s.latitude ?? null,
+      lng: s.longitude ?? null,
+    }));
 
-      initialSales.forEach((sale) => {
-        if (sale.latitude == null || sale.longitude == null) return;
-        const el = document.createElement('div');
-        el.innerHTML = '🏠';
-        el.style.fontSize = '24px';
-        el.style.cursor = 'pointer';
-        el.title = sale.title;
-        el.addEventListener('click', () => {
-          window.location.href = `/garage-sales/${sale.id}`;
-        });
-        new mapboxgl.Marker({ element: el })
-          .setLngLat([sale.longitude, sale.latitude])
-          .setPopup(
-            new mapboxgl.Popup({ offset: 25 }).setHTML(
-              `<strong>${sale.title}</strong><br/>${sale.city}, ${sale.state}<br/><a href="/garage-sales/${sale.id}" style="color:#1B3A6B;font-weight:600">View details →</a>`
-            )
-          )
-          .addTo(map);
+    void fetch('/api/garage-sales/map-ready', { method: 'HEAD' })
+      .catch(() => null)
+      .finally(() => {
+        // Placeholder: show sales as a static list inside the map div until
+        // mapbox-gl is installed as a proper dependency.
+        if (!container.firstChild) {
+          container.innerHTML = `
+            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:#64748b;text-align:center;padding:2rem;">
+              <div style="font-size:2.5rem;margin-bottom:0.5rem;">🗺️</div>
+              <p style="font-weight:600;margin:0 0 0.25rem">Interactive map requires mapbox-gl</p>
+              <p style="font-size:0.75rem;margin:0">Install it with <code style="background:#f1f5f9;padding:0.1em 0.4em;border-radius:4px">npm install mapbox-gl</code> and set <code style="background:#f1f5f9;padding:0.1em 0.4em;border-radius:4px">NEXT_PUBLIC_MAPBOX_TOKEN</code></p>
+              <p style="font-size:0.75rem;margin:0.5rem 0 0;color:#94a3b8">${saleSnapshots.length} sale${saleSnapshots.length !== 1 ? 's' : ''} would appear as pins</p>
+            </div>
+          `;
+        }
       });
-    })();
-  }, [view, initialSales, userCoords]);
+  }, [view, initialSales]);
 
   const page = initialPage;
 

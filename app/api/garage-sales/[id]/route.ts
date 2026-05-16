@@ -61,12 +61,14 @@ export async function GET(_req: Request, { params }: Params) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  // Increment view count (fire-and-forget)
+  // Increment view count (fire-and-forget, log errors)
   if (sale.status === 'APPROVED' && !isOwner) {
     prisma.garageSale.update({
       where: { id },
       data: { viewCount: { increment: 1 } },
-    }).catch(() => {});
+    }).catch((err) => {
+      console.error('[garage-sales/id GET] view count increment failed', err);
+    });
   }
 
   return NextResponse.json(sale);
