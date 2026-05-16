@@ -71,7 +71,7 @@ export default async function OrdersPage() {
                   {order.items.map(item => (
                     <div key={item.id} className="flex items-center gap-3">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={item.product.imageUrl} alt={item.product.title} className="w-12 h-12 object-cover rounded-lg flex-shrink-0" />
+                      <img src={item.product.imageUrl} alt={item.product.title} className="h-12 w-12 flex-shrink-0 rounded-lg border border-slate-200 bg-white object-contain p-1" />
                       <div>
                         <a href={`/products/${item.product.id}`} className="text-sm font-medium hover:text-blue-600">{item.product.title}</a>
                         <p className="text-xs text-slate-500">Qty: {item.quantity} · {dollars(item.priceCents)}</p>

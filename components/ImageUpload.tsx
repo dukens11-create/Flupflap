@@ -72,7 +72,7 @@ export default function ImageUpload({ defaultValue = '', required }: ImageUpload
         <img
           src={imageUrl}
           alt="Product preview"
-          className="h-28 w-28 rounded object-cover border border-slate-200"
+          className="h-28 w-28 rounded border border-slate-200 bg-white object-contain p-1"
         />
       )}
 

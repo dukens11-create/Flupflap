@@ -362,7 +362,7 @@ export default async function AdminPage({
               <div key={p.id} className="card p-4">
                 <div className="flex gap-4 items-start">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={p.imageUrl} alt={p.title} className="w-20 h-20 object-cover rounded-xl flex-shrink-0" />
+                  <img src={p.imageUrl} alt={p.title} className="h-20 w-20 flex-shrink-0 rounded-xl border border-slate-200 bg-white object-contain p-1.5" />
                   <div className="flex-1 min-w-0">
                     <p className="font-bold">{p.title}</p>
                     <p className="text-sm text-slate-500">{p.condition} · {p.category} · {dollars(p.priceCents)}</p>

@@ -72,12 +72,12 @@ export default async function MessagesPage() {
                 className={`card p-4 flex gap-4 items-start hover:border-blue-300 transition-colors ${unread ? 'border-blue-200 bg-blue-50' : ''}`}
               >
                 {/* Product image */}
-                <div className="relative w-14 h-14 flex-shrink-0 bg-slate-100 rounded-xl overflow-hidden">
+                <div className="relative h-14 w-14 flex-shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-white">
                   <Image
                     src={conv.product.imageUrl}
                     alt={conv.product.title}
                     fill
-                    className="object-cover"
+                    className="object-contain p-1"
                   />
                 </div>
 

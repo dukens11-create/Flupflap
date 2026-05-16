@@ -193,7 +193,7 @@ export default async function AdminPromotionsPage({
               <div key={promo.id} className="card p-4 flex items-center gap-4">
                 {promo.product.imageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={promo.product.imageUrl} alt={promo.product.title ?? 'Listing'} className="w-12 h-12 object-cover rounded-lg flex-shrink-0" />
+                  <img src={promo.product.imageUrl} alt={promo.product.title ?? 'Listing'} className="h-12 w-12 flex-shrink-0 rounded-lg border border-slate-200 bg-white object-contain p-1" />
                 ) : (
                   <div className="w-12 h-12 rounded-lg bg-slate-100 flex-shrink-0" aria-hidden="true" />
                 )}

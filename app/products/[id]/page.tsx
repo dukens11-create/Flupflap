@@ -190,8 +190,8 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
               videoUrl={product.videoUrl}
             />
           ) : (
-            <div className="relative w-full h-72 md:h-full bg-white">
-              <Image src={product.imageUrl} alt={product.title} fill className="object-contain p-2" />
+            <div className="relative h-[320px] w-full bg-white sm:h-[420px] md:min-h-[420px]">
+              <Image src={product.imageUrl} alt={product.title} fill className="object-contain p-3" />
             </div>
           )}
         </div>

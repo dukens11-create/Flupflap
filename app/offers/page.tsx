@@ -53,7 +53,7 @@ function OfferCard({
         <img
           src={offer.product.imageUrl}
           alt={offer.product.title}
-          className="w-20 h-20 rounded-xl object-cover flex-shrink-0"
+          className="h-20 w-20 flex-shrink-0 rounded-xl border border-slate-200 bg-white object-contain p-1.5"
         />
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-start justify-between gap-2">

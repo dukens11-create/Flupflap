@@ -792,12 +792,12 @@ export default function MediaUpload({
                 aria-label={`Product image ${i + 1}. Drag to reorder or use arrow keys and move buttons.`}
                 className={`rounded-xl border bg-white p-3 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-200 ${draggedImageId === image.id ? 'border-blue-400' : 'border-slate-200'}`}
               >
-                <div className="relative overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                <div className="relative overflow-hidden rounded-lg border border-slate-200 bg-white">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={getSafePreviewUrl(getSelectedImageUrl(image)) || image.safePreviewUrl}
                     alt={`Product image ${i + 1}`}
-                    className="h-40 w-full object-cover"
+                    className="h-40 w-full object-contain p-2"
                   />
                   {i === 0 && (
                     <span className="absolute left-2 top-2 rounded bg-blue-600 px-2 py-1 text-[11px] font-semibold text-white">

@@ -94,7 +94,7 @@ export default async function OrderDetailPage({
               <img
                 src={item.product.imageUrl}
                 alt={item.product.title}
-                className="w-14 h-14 object-cover rounded-lg flex-shrink-0"
+                className="h-14 w-14 flex-shrink-0 rounded-lg border border-slate-200 bg-white object-contain p-1"
               />
               <div className="flex-1 min-w-0">
                 <Link href={`/products/${item.product.id}`} className="font-medium hover:text-blue-600 truncate block">

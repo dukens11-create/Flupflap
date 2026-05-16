@@ -96,7 +96,7 @@ export default async function SellerPromotePage({
       {/* Product preview */}
       <div className="card p-4 mb-6 flex items-center gap-4">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={product.imageUrl} alt={product.title} className="w-16 h-16 object-cover rounded-xl flex-shrink-0" />
+        <img src={product.imageUrl} alt={product.title} className="h-16 w-16 flex-shrink-0 rounded-xl border border-slate-200 bg-white object-contain p-1" />
         <div className="flex-1 min-w-0">
           <p className="font-semibold truncate">{product.title}</p>
           <p className="text-sm text-slate-500">{product.condition} · {product.category} · {dollars(product.priceCents)}</p>
