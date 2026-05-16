@@ -16,6 +16,8 @@ type AdminSale = {
   endDate: string;
   isFeatured: boolean;
   isSpam: boolean;
+  paymentStatus: string;
+  totalPaidCents: number;
   viewCount: number;
   createdAt: string;
   seller: { id: string; name: string; email: string };
@@ -114,6 +116,7 @@ export default function AdminGarageSalesClient({ sales: initialSales, total, pag
                   <th className="px-4 py-3 text-left">Seller</th>
                   <th className="px-4 py-3 text-left">Status</th>
                   <th className="px-4 py-3 text-left">Dates</th>
+                  <th className="px-4 py-3 text-left">Payment</th>
                   <th className="px-4 py-3 text-center">Views</th>
                   <th className="px-4 py-3 text-center">Reports</th>
                   <th className="px-4 py-3 text-right">Actions</th>
@@ -140,6 +143,10 @@ export default function AdminGarageSalesClient({ sales: initialSales, total, pag
                     <td className="px-4 py-3 text-xs text-slate-500">
                       <p>{new Date(sale.startDate).toLocaleDateString()}</p>
                       <p>→ {new Date(sale.endDate).toLocaleDateString()}</p>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-slate-600">
+                      <p className="font-semibold">{sale.paymentStatus}</p>
+                      <p>${(sale.totalPaidCents / 100).toFixed(2)}</p>
                     </td>
                     <td className="px-4 py-3 text-center text-xs text-slate-600">{sale.viewCount}</td>
                     <td className="px-4 py-3 text-center">
@@ -209,6 +216,16 @@ export default function AdminGarageSalesClient({ sales: initialSales, total, pag
                             className="flex items-center gap-1 rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-200 disabled:opacity-50"
                           >
                             <EyeOff size={13} /> Hide
+                          </button>
+                        )}
+                        {sale.paymentStatus === 'PAID' && (
+                          <button
+                            onClick={() => doAction(sale.id, 'refund')}
+                            disabled={loading === sale.id + 'refund'}
+                            title="Refund latest payment"
+                            className="flex items-center gap-1 rounded-lg bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+                          >
+                            Refund
                           </button>
                         )}
                         <button

@@ -123,6 +123,18 @@ enum GarageSalePromotionType {
   WEEKEND_PROMOTION
 }
 
+enum GarageSaleListingType {
+  STANDARD
+  FEATURED
+}
+
+enum GarageSalePaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
 model User {
   id                       String                    @id @default(cuid())
   name                     String
@@ -209,6 +221,7 @@ model User {
   shipFromPhone                 String?
   // Garage sales
   garageSales                   GarageSale[]  @relation("GarageSaleSeller")
+  garageSalePayments            GarageSalePayment[] @relation("GarageSalePaymentSeller")
 }
 
 model SellerOtp {
@@ -691,6 +704,13 @@ model MarketplaceSettings {
   defaultSellerCommissionBps Int      @default(700)
   freePromotionEnabled       Boolean  @default(true)
   freePromotionDurationDays  Int      @default(60)
+  garageStandardPriceCents   Int      @default(299)
+  garageFeaturedPriceCents   Int      @default(699)
+  garageHomepagePromoEnabled Boolean  @default(true)
+  garageHomepagePromoCents   Int      @default(499)
+  garageTopSearchEnabled     Boolean  @default(true)
+  garageTopSearchCents       Int      @default(399)
+  garageFirstListingFree     Boolean  @default(false)
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
 }
@@ -806,6 +826,7 @@ model GarageSale {
   title            String
   description      String
   saleType         GarageSaleType       @default(GARAGE_SALE)
+  listingType      GarageSaleListingType @default(STANDARD)
   status           GarageSaleStatus     @default(PENDING)
   // Location
   address          String
@@ -817,6 +838,8 @@ model GarageSale {
   // Schedule
   startDate        DateTime
   endDate          DateTime
+  expirationTimestamp DateTime
+  durationDays     Int                  @default(1)
   // Media
   photos           String[]             @default([])
   videoUrl         String?
@@ -832,6 +855,23 @@ model GarageSale {
   promotionType    GarageSalePromotionType?
   promotionStart   DateTime?
   promotionEnd     DateTime?
+  homepagePromoted Boolean              @default(false)
+  topSearchPromoted Boolean             @default(false)
+  pricePerDayCents Int                  @default(299)
+  baseAmountCents  Int                  @default(0)
+  addOnsAmountCents Int                 @default(0)
+  totalPaidCents   Int                  @default(0)
+  paymentStatus    GarageSalePaymentStatus @default(PENDING)
+  stripeCheckoutId String?              @unique
+  stripePaymentId  String?
+  paidAt           DateTime?
+  activatedAt      DateTime?
+  archivedAt       DateTime?
+  isArchived       Boolean              @default(false)
+  repostOfId       String?
+  repostOf         GarageSale?          @relation("GarageSaleReposts", fields: [repostOfId], references: [id])
+  reposts          GarageSale[]         @relation("GarageSaleReposts")
+  payments         GarageSalePayment[]
   // Analytics
   viewCount        Int                  @default(0)
   // Moderation
@@ -846,11 +886,32 @@ model GarageSale {
 
   @@index([sellerId])
   @@index([status])
+  @@index([paymentStatus])
   @@index([city, state])
   @@index([zipCode])
   @@index([startDate, endDate])
+  @@index([expirationTimestamp])
   @@index([isFeatured])
   @@index([latitude, longitude])
+}
+
+model GarageSalePayment {
+  id              String                 @id @default(cuid())
+  saleId          String
+  sale            GarageSale             @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  sellerId        String
+  seller          User                   @relation("GarageSalePaymentSeller", fields: [sellerId], references: [id], onDelete: Cascade)
+  amountCents     Int
+  status          GarageSalePaymentStatus @default(PENDING)
+  stripeCheckoutId String?               @unique
+  stripePaymentId String?
+  stripeReceiptUrl String?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  @@index([saleId])
+  @@index([sellerId])
+  @@index([status])
 }
 
 model GarageSaleReport {

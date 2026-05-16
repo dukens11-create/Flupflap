@@ -1,7 +1,13 @@
 'use client';
-import { useState, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Upload, X, MapPin, AlertCircle } from 'lucide-react';
+import {
+  calculateGarageSalePricing,
+  centsToDollars,
+  DEFAULT_GARAGE_SALE_PRICING_SETTINGS,
+  type GarageSalePricingSettings,
+} from '@/lib/garage-sale-pricing';
 
 const SALE_TYPES = [
   { label: 'Garage Sale', value: 'GARAGE_SALE' },
@@ -29,10 +35,20 @@ const US_STATES = [
   'OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY',
 ];
 
+const LISTING_TYPES = [
+  { label: 'Standard Listing', value: 'STANDARD', description: '$2.99/day' },
+  { label: 'Featured Listing', value: 'FEATURED', description: '$6.99/day · highlighted + higher ranking' },
+];
+
 export default function GarageSaleNewForm() {
   const router = useRouter();
 
+  const [listingType, setListingType] = useState<'STANDARD' | 'FEATURED'>('STANDARD');
   const [saleType, setSaleType] = useState('GARAGE_SALE');
+  const [homepagePromotion, setHomepagePromotion] = useState(false);
+  const [topLocalSearchPlacement, setTopLocalSearchPlacement] = useState(false);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [categories, setCategories] = useState<string[]>([]);
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
   const [photoInputs, setPhotoInputs] = useState<string[]>(['']);
@@ -40,9 +56,45 @@ export default function GarageSaleNewForm() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [geoStatus, setGeoStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
+  const [pricingSettings, setPricingSettings] = useState<GarageSalePricingSettings>(DEFAULT_GARAGE_SALE_PRICING_SETTINGS);
+  const [pricingReady, setPricingReady] = useState(false);
+  const [isEligibleForFreeFirstListing, setIsEligibleForFreeFirstListing] = useState(false);
   const latRef = useRef<HTMLInputElement>(null);
   const lngRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/garage-sales/pricing')
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (!data || cancelled) return;
+        setPricingSettings(data.settings ?? DEFAULT_GARAGE_SALE_PRICING_SETTINGS);
+        setIsEligibleForFreeFirstListing(Boolean(data.isEligibleForFreeFirstListing));
+        setPricingReady(true);
+      })
+      .catch(() => {
+        if (!cancelled) setPricingReady(true);
+      });
+
+    return () => { cancelled = true; };
+  }, []);
+
+  const pricingEstimate = useMemo(() => {
+    if (!startDate || !endDate) return null;
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start) return null;
+    return calculateGarageSalePricing({
+      listingType,
+      startDate: start,
+      endDate: end,
+      homepagePromotion,
+      topLocalSearchPlacement,
+      settings: pricingSettings,
+      isEligibleForFreeFirstListing,
+    });
+  }, [endDate, homepagePromotion, isEligibleForFreeFirstListing, listingType, pricingSettings, startDate, topLocalSearchPlacement]);
 
   function toggleCategory(cat: string) {
     setCategories((prev) =>
@@ -117,20 +169,23 @@ export default function GarageSaleNewForm() {
       title: fd.get('title') as string,
       description: fd.get('description') as string,
       saleType,
+      listingType,
       address: fd.get('address') as string,
       city: fd.get('city') as string,
       state: fd.get('state') as string,
       zipCode: fd.get('zipCode') as string,
       latitude: latRef.current?.value ? parseFloat(latRef.current.value) : null,
       longitude: lngRef.current?.value ? parseFloat(lngRef.current.value) : null,
-      startDate: fd.get('startDate') as string,
-      endDate: fd.get('endDate') as string,
+      startDate: new Date(startDate).toISOString(),
+      endDate: new Date(endDate).toISOString(),
       photos: photoUrls,
       videoUrl: (fd.get('videoUrl') as string) || null,
       categories,
       sellerPhone: (fd.get('sellerPhone') as string) || null,
       priceRangeMin: fd.get('priceRangeMin') ? parseFloat(fd.get('priceRangeMin') as string) : null,
       priceRangeMax: fd.get('priceRangeMax') ? parseFloat(fd.get('priceRangeMax') as string) : null,
+      homepagePromotion,
+      topLocalSearchPlacement,
     };
 
     // Basic client validation
@@ -159,7 +214,11 @@ export default function GarageSaleNewForm() {
         setSubmitting(false);
         return;
       }
-      router.push(`/garage-sales/${data.id}?created=1`);
+      if (data.checkoutUrl) {
+        window.location.href = data.checkoutUrl;
+        return;
+      }
+      router.push(`/garage-sales/${data.id}?created=1&paid=1`);
     } catch {
       setError('Network error. Please try again.');
       setSubmitting(false);
@@ -178,6 +237,23 @@ export default function GarageSaleNewForm() {
       {/* Basic info */}
       <div className="card p-5 space-y-4">
         <h2 className="font-bold text-slate-900">Sale Information</h2>
+
+        <div>
+          <label className="label">Listing Type *</label>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {LISTING_TYPES.map((t) => (
+              <button
+                key={t.value}
+                type="button"
+                onClick={() => setListingType(t.value as 'STANDARD' | 'FEATURED')}
+                className={`rounded-xl border p-3 text-left transition-colors ${listingType === t.value ? 'border-[var(--ff-primary-navy)] bg-[#EEF2FF]' : 'border-slate-300 hover:bg-slate-50'}`}
+              >
+                <p className="text-sm font-bold text-slate-900">{t.label}</p>
+                <p className="mt-0.5 text-xs text-slate-500">{t.description}</p>
+              </button>
+            ))}
+          </div>
+        </div>
 
         <div>
           <label className="label">Title *</label>
@@ -290,11 +366,25 @@ export default function GarageSaleNewForm() {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className="label">Start Date &amp; Time *</label>
-            <input name="startDate" type="datetime-local" className="input" required />
+            <input
+              name="startDate"
+              type="datetime-local"
+              className="input"
+              required
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
           </div>
           <div>
             <label className="label">End Date &amp; Time *</label>
-            <input name="endDate" type="datetime-local" className="input" required />
+            <input
+              name="endDate"
+              type="datetime-local"
+              className="input"
+              required
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+            />
           </div>
         </div>
       </div>
@@ -361,12 +451,71 @@ export default function GarageSaleNewForm() {
         </div>
       </div>
 
+      {/* Promotion add-ons + pricing */}
+      <div className="card p-5 space-y-4">
+        <h2 className="font-bold text-slate-900">Pricing &amp; Checkout</h2>
+        <div className="space-y-2">
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="mt-0.5 accent-[var(--ff-primary-navy)]"
+              checked={homepagePromotion}
+              onChange={(e) => setHomepagePromotion(e.target.checked)}
+              disabled={!pricingSettings.homepagePromoEnabled}
+            />
+            <span>
+              Homepage Promotion (+${centsToDollars(pricingSettings.homepagePromoCents)} one-time)
+              {!pricingSettings.homepagePromoEnabled && <span className="ml-1 text-xs text-slate-500">(currently disabled)</span>}
+            </span>
+          </label>
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="mt-0.5 accent-[var(--ff-primary-navy)]"
+              checked={topLocalSearchPlacement}
+              onChange={(e) => setTopLocalSearchPlacement(e.target.checked)}
+              disabled={!pricingSettings.topSearchEnabled}
+            />
+            <span>
+              Top Local Search Placement (+${centsToDollars(pricingSettings.topSearchCents)} one-time)
+              {!pricingSettings.topSearchEnabled && <span className="ml-1 text-xs text-slate-500">(currently disabled)</span>}
+            </span>
+          </label>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
+          {!pricingReady ? (
+            <p className="text-slate-500">Loading pricing…</p>
+          ) : !pricingEstimate ? (
+            <p className="text-slate-500">Select start and end times to see your live total.</p>
+          ) : (
+            <div className="space-y-1.5">
+              <p className="font-semibold text-slate-800">
+                {listingType === 'FEATURED' ? 'Featured' : 'Standard'} Garage Sale · {pricingEstimate.durationDays} day{pricingEstimate.durationDays === 1 ? '' : 's'}
+              </p>
+              <p className="text-slate-600">Price per day: ${centsToDollars(pricingEstimate.pricePerDayCents)}</p>
+              <p className="text-slate-600">Base: ${centsToDollars(pricingEstimate.baseAmountCents)}</p>
+              {pricingEstimate.homepagePromotionCents > 0 && (
+                <p className="text-slate-600">Homepage Promotion: +${centsToDollars(pricingEstimate.homepagePromotionCents)}</p>
+              )}
+              {pricingEstimate.topLocalSearchPlacementCents > 0 && (
+                <p className="text-slate-600">Top Local Search Placement: +${centsToDollars(pricingEstimate.topLocalSearchPlacementCents)}</p>
+              )}
+              {pricingEstimate.discountCents > 0 && (
+                <p className="font-semibold text-emerald-700">First listing discount: -${centsToDollars(pricingEstimate.discountCents)}</p>
+              )}
+              <p className="pt-1 text-base font-black text-slate-900">Total: ${centsToDollars(pricingEstimate.totalCents)}</p>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Submit */}
       <div className="flex items-center gap-3">
         <button type="submit" disabled={submitting || uploading} className="btn-brand px-8 py-3 text-base">
-          {submitting ? 'Posting…' : 'Post Sale'}
+          {submitting ? 'Preparing checkout…' : pricingEstimate?.totalCents === 0 ? 'Publish Free Listing' : 'Continue to Secure Checkout'}
         </button>
-        <p className="text-xs text-slate-400">Your listing will be reviewed before going live.</p>
+        <p className="text-xs text-slate-400">Your listing activates instantly after successful payment.</p>
       </div>
     </form>
   );

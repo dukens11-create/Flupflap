@@ -3,11 +3,12 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { z } from 'zod';
+import { stripe } from '@/lib/stripe';
 
 export const dynamic = 'force-dynamic';
 
 const actionSchema = z.object({
-  action: z.enum(['approve', 'reject', 'feature', 'unfeature', 'hide', 'mark_spam', 'unmark_spam']),
+  action: z.enum(['approve', 'reject', 'feature', 'unfeature', 'hide', 'mark_spam', 'unmark_spam', 'refund']),
   notes: z.string().max(1000).optional(),
   promotionType: z.enum(['FEATURED', 'HOMEPAGE_BOOST', 'LOCAL_AREA_BOOST', 'WEEKEND_PROMOTION']).optional().nullable(),
 });
@@ -68,6 +69,40 @@ export async function PATCH(req: Request, { params }: Params) {
     case 'unmark_spam':
       updates.isSpam = false;
       break;
+    case 'refund': {
+      const latestPaid = await prisma.garageSalePayment.findFirst({
+        where: {
+          saleId: sale.id,
+          status: 'PAID',
+          stripePaymentId: { not: null },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (!latestPaid?.stripePaymentId) {
+        return NextResponse.json({ error: 'No refundable payment found' }, { status: 400 });
+      }
+      await stripe.refunds.create({
+        payment_intent: latestPaid.stripePaymentId,
+      });
+      await prisma.$transaction([
+        prisma.garageSalePayment.update({
+          where: { id: latestPaid.id },
+          data: { status: 'REFUNDED' },
+        }),
+        prisma.garageSale.update({
+          where: { id: sale.id },
+          data: {
+            paymentStatus: 'REFUNDED',
+            status: 'HIDDEN',
+            isArchived: true,
+            archivedAt: new Date(),
+            isFeatured: false,
+          },
+        }),
+      ]);
+      const refunded = await prisma.garageSale.findUnique({ where: { id: sale.id } });
+      return NextResponse.json(refunded);
+    }
   }
 
   const updated = await prisma.garageSale.update({ where: { id }, data: updates });
