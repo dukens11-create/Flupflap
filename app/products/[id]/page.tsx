@@ -73,7 +73,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     },
   });
 
-  if (!product || product.status !== 'APPROVED') {
+  if (!product || !['APPROVED', 'ACTIVE'].includes(product.status)) {
     return {
       title: 'Product not found',
       description: DEFAULT_SEO_DESCRIPTION,
@@ -134,7 +134,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
     getServerSession(authOptions),
   ]);
 
-  if (!product || product.status !== 'APPROVED') notFound();
+  if (!product || !['APPROVED', 'ACTIVE'].includes(product.status)) notFound();
 
   // Hide the message button if the viewer is the seller of this product
   const isOwnListing = session?.user?.id === product.seller.id;

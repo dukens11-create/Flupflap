@@ -80,3 +80,17 @@ services:
       - key: SENTRY_AUTH_TOKEN
         sync: false
     healthCheckPath: /
+
+  - type: cron
+    name: flupflap-scheduled-listing-publisher
+    runtime: node
+    schedule: "*/5 * * * *"
+    buildCommand: npm install
+    startCommand: npx tsx scripts/publish-scheduled-listings.ts
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "20"
+      - key: DATABASE_URL
+        sync: false

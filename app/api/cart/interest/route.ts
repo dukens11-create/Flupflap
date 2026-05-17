@@ -15,7 +15,7 @@ export async function POST(req: Request) {
       select: { id: true, status: true },
     });
 
-    if (!product || product.status !== 'APPROVED') {
+    if (!product || (product.status !== 'APPROVED' && product.status !== 'ACTIVE')) {
       return NextResponse.json({ error: 'Product not found.' }, { status: 404 });
     }
 
