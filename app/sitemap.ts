@@ -55,7 +55,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   try {
     const [products, sellers] = await Promise.all([
       prisma.product.findMany({
-        where: { status: 'APPROVED' },
+        where: { status: { in: ['APPROVED', 'ACTIVE'] } },
         select: { id: true, updatedAt: true },
         // Limit to a manageable page size; for very large catalogues a
         // sitemap-index with multiple sitemap files should be used instead.
@@ -67,7 +67,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
           role: 'SELLER',
           sellerStatus: 'ACTIVE',
           deletedAt: null,
-          products: { some: { status: 'APPROVED' } },
+          products: { some: { status: { in: ['APPROVED', 'ACTIVE'] } } },
         },
         select: { id: true },
       }),

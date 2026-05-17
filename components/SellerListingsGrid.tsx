@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { toSellerLifecycleStatus } from "@/lib/listing-status";
 
 export interface SellerListingItem {
   id: string;
@@ -20,6 +21,8 @@ export interface SellerListingItem {
   conversionRate: string | null;
   shippingIncomplete: boolean;
   packageSummary: string | null;
+  scheduledFor?: string | null;
+  publishedAt?: string | null;
 }
 
 interface Props {
@@ -30,7 +33,7 @@ interface Props {
   searchPlaceholder?: string;
 }
 
-type FilterTab = "all" | "active" | "pending" | "outofstock" | "sold";
+type FilterTab = "all" | "drafts" | "scheduled" | "active" | "sold" | "archived";
 
 function dollars(cents: number) {
   return (cents / 100).toLocaleString("en-US", {
@@ -40,12 +43,13 @@ function dollars(cents: number) {
 }
 
 function statusLabel(status: string, inventory: number): string {
-  if (status === "APPROVED" && inventory > 0) return "Active";
-  if (status === "APPROVED" && inventory === 0) return "Out of Stock";
-  if (status === "HIDDEN") return "Delisted";
-  if (status === "SOLD") return "Sold";
-  if (status === "PENDING") return "Pending";
-  if (status === "REJECTED") return "Rejected";
+  const lifecycle = toSellerLifecycleStatus(status);
+  if (lifecycle === "DRAFT") return "Draft";
+  if (lifecycle === "SCHEDULED") return "Scheduled";
+  if (lifecycle === "ACTIVE" && inventory === 0) return "Out of Stock";
+  if (lifecycle === "ACTIVE") return "Active";
+  if (lifecycle === "SOLD") return "Sold";
+  if (lifecycle === "ARCHIVED") return "Archived";
   return status
     .split("_")
     .map((w) => w.charAt(0) + w.slice(1).toLowerCase())
@@ -53,22 +57,24 @@ function statusLabel(status: string, inventory: number): string {
 }
 
 function statusBadgeClass(status: string, inventory: number): string {
-  if (status === "APPROVED" && inventory > 0) return "badge-green";
-  if (status === "APPROVED" && inventory === 0) return "badge-yellow";
-  if (status === "HIDDEN") return "badge-red";
-  if (status === "SOLD") return "badge-slate";
-  if (status === "PENDING") return "badge-yellow";
-  if (status === "REJECTED") return "badge-red";
+  const lifecycle = toSellerLifecycleStatus(status);
+  if (lifecycle === "ACTIVE" && inventory > 0) return "badge-green";
+  if (lifecycle === "ACTIVE" && inventory === 0) return "badge-yellow";
+  if (lifecycle === "SCHEDULED") return "badge-blue";
+  if (lifecycle === "DRAFT") return "badge-yellow";
+  if (lifecycle === "SOLD") return "badge-slate";
+  if (lifecycle === "ARCHIVED") return "badge-red";
   return "badge-slate";
 }
 
 function matchesFilter(item: SellerListingItem, tab: FilterTab): boolean {
+  const lifecycle = toSellerLifecycleStatus(item.status);
   if (tab === "all") return true;
-  if (tab === "active") return item.status === "APPROVED" && item.inventory > 0;
-  if (tab === "pending") return item.status === "PENDING" || item.status === "REJECTED";
-  if (tab === "outofstock")
-    return (item.status === "APPROVED" && item.inventory === 0) || item.status === "SOLD";
-  if (tab === "sold") return item.status === "SOLD";
+  if (tab === "drafts") return lifecycle === "DRAFT";
+  if (tab === "scheduled") return lifecycle === "SCHEDULED";
+  if (tab === "active") return lifecycle === "ACTIVE";
+  if (tab === "sold") return lifecycle === "SOLD";
+  if (tab === "archived") return lifecycle === "ARCHIVED";
   return true;
 }
 
@@ -93,7 +99,7 @@ function OverflowMenu({ item, isRestricted, onDelete }: OverflowMenuProps) {
   }, [open]);
 
   const canPromote =
-    !isRestricted && item.status === "APPROVED" && !item.isPromoted;
+    !isRestricted && toSellerLifecycleStatus(item.status) === "ACTIVE" && !item.isPromoted;
 
   return (
     <div className="relative" ref={ref}>
@@ -121,7 +127,7 @@ function OverflowMenu({ item, isRestricted, onDelete }: OverflowMenuProps) {
           className="absolute right-0 z-50 mt-1 w-44 rounded-xl bg-white shadow-lg border border-slate-200 py-1 text-sm"
           role="menu"
         >
-          {item.status !== "SOLD" && (
+          {toSellerLifecycleStatus(item.status) !== "SOLD" && (
             <Link
               href={`/seller/edit/${item.id}`}
               className="flex items-center gap-2 px-3 py-2 text-slate-700 hover:bg-slate-50 transition-colors"
@@ -132,7 +138,7 @@ function OverflowMenu({ item, isRestricted, onDelete }: OverflowMenuProps) {
               Edit Listing
             </Link>
           )}
-          {!isRestricted && item.status !== "SOLD" && (
+          {!isRestricted && toSellerLifecycleStatus(item.status) === "ACTIVE" && (
             <Link
               href={`/seller/edit/${item.id}#stock`}
               className="flex items-center gap-2 px-3 py-2 text-slate-700 hover:bg-slate-50 transition-colors"
@@ -154,7 +160,7 @@ function OverflowMenu({ item, isRestricted, onDelete }: OverflowMenuProps) {
               Promote
             </Link>
           )}
-          {item.status !== "SOLD" && (
+          {toSellerLifecycleStatus(item.status) !== "SOLD" && (
             <button
               className="flex w-full items-center gap-2 px-3 py-2 text-red-600 hover:bg-red-50 transition-colors"
               role="menuitem"
@@ -183,6 +189,31 @@ interface CardProps {
 
 function ListingCard({ item, isRestricted, onDelete }: CardProps) {
   const [expanded, setExpanded] = useState(false);
+  const [actionBusy, setActionBusy] = useState(false);
+  const [actionError, setActionError] = useState("");
+  const lifecycle = toSellerLifecycleStatus(item.status);
+
+  async function runWorkflowAction(payload: Record<string, unknown>) {
+    setActionBusy(true);
+    setActionError("");
+    try {
+      const res = await fetch(`/api/seller/products/${item.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setActionError(data.error ?? "Unable to update listing workflow.");
+        return;
+      }
+      window.location.reload();
+    } catch {
+      setActionError("Network error. Please try again.");
+    } finally {
+      setActionBusy(false);
+    }
+  }
 
   const hasExtraDetails =
     item.packageSummary || item.cartAdds > 0 || item.conversionRate !== null;
@@ -259,7 +290,7 @@ function ListingCard({ item, isRestricted, onDelete }: CardProps) {
           <span className={`badge ${statusBadgeClass(item.status, item.inventory)}`}>
             {statusLabel(item.status, item.inventory)}
           </span>
-          {item.shippingIncomplete && item.status !== "SOLD" && (
+          {item.shippingIncomplete && lifecycle === "ACTIVE" && (
             <span className="badge badge-yellow">⚠ Shipping</span>
           )}
         </div>
@@ -279,7 +310,7 @@ function ListingCard({ item, isRestricted, onDelete }: CardProps) {
             >
               {item.inventory}
             </span>
-            {item.inventory <= 5 && item.inventory > 0 && item.status === "APPROVED" && (
+            {item.inventory <= 5 && item.inventory > 0 && lifecycle === "ACTIVE" && (
               <span className="text-orange-600 font-medium" aria-label="Low stock warning"> ⚠ Low</span>
             )}
           </span>
@@ -356,7 +387,7 @@ function ListingCard({ item, isRestricted, onDelete }: CardProps) {
           >
             View
           </Link>
-          {item.status !== "SOLD" && (
+          {lifecycle !== "SOLD" && (
             <Link
               href={`/seller/edit/${item.id}`}
               className="inline-flex items-center justify-center px-2.5 py-1 rounded-lg border border-slate-300 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors"
@@ -364,13 +395,57 @@ function ListingCard({ item, isRestricted, onDelete }: CardProps) {
               Edit
             </Link>
           )}
-          {!isRestricted && item.status !== "SOLD" && (
+          {!isRestricted && lifecycle === "ACTIVE" && (
             <StockEditorInline
               productId={item.id}
               currentInventory={item.inventory}
             />
           )}
+          {!isRestricted && lifecycle === "DRAFT" && (
+            <Link
+              href={`/seller/edit/${item.id}`}
+              className="inline-flex items-center justify-center px-2.5 py-1 rounded-lg border border-slate-300 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+            >
+              Schedule
+            </Link>
+          )}
+          {!isRestricted && lifecycle === "DRAFT" && (
+            <button
+              disabled={actionBusy}
+              onClick={() => runWorkflowAction({ workflowAction: "PUBLISH_NOW" })}
+              className="inline-flex items-center justify-center px-2.5 py-1 rounded-lg border border-slate-300 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+            >
+              Publish now
+            </button>
+          )}
+          {!isRestricted && lifecycle === "SCHEDULED" && (
+            <button
+              disabled={actionBusy}
+              onClick={() => runWorkflowAction({ workflowAction: "PUBLISH_NOW" })}
+              className="inline-flex items-center justify-center px-2.5 py-1 rounded-lg border border-slate-300 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+            >
+              Publish now
+            </button>
+          )}
+          {!isRestricted && lifecycle === "SCHEDULED" && (
+            <Link
+              href={`/seller/edit/${item.id}`}
+              className="inline-flex items-center justify-center px-2.5 py-1 rounded-lg border border-slate-300 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+            >
+              Reschedule
+            </Link>
+          )}
+          {!isRestricted && lifecycle === "SCHEDULED" && (
+            <button
+              disabled={actionBusy}
+              onClick={() => runWorkflowAction({ workflowAction: "CANCEL_SCHEDULE" })}
+              className="inline-flex items-center justify-center px-2.5 py-1 rounded-lg border border-slate-300 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+            >
+              Cancel schedule
+            </button>
+          )}
         </div>
+        {actionError && <p className="mt-1 text-xs text-red-600">{actionError}</p>}
       </div>
     </div>
   );
@@ -546,10 +621,11 @@ function DeleteDialog({ item, onCancel, onConfirm }: DeleteDialogProps) {
 
 const FILTER_TABS: { key: FilterTab; label: string }[] = [
   { key: "all", label: "All" },
+  { key: "drafts", label: "Drafts" },
+  { key: "scheduled", label: "Scheduled" },
   { key: "active", label: "Active" },
-  { key: "pending", label: "Pending" },
-  { key: "outofstock", label: "Out of Stock" },
   { key: "sold", label: "Sold" },
+  { key: "archived", label: "Archived" },
 ];
 
 export default function SellerListingsGrid({

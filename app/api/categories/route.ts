@@ -79,7 +79,7 @@ export async function GET() {
         select: { id: true, name: true, slug: true, aliases: true, parentId: true, level: true, icon: true, sortOrder: true, attributeSchema: true },
       }),
       prisma.product.findMany({
-        where: { status: 'APPROVED', inventory: { gt: 0 } },
+        where: { status: { in: ['APPROVED', 'ACTIVE'] }, inventory: { gt: 0 } },
         select: { categoryId: true, subcategoryId: true },
       }),
     ]);

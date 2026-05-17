@@ -52,7 +52,7 @@ export async function POST(req: Request) {
     if (!product || product.sellerId !== sellerId) {
       return NextResponse.json({ error: 'Product not found.' }, { status: 404 });
     }
-    if (product.status !== 'APPROVED') {
+    if (product.status !== 'APPROVED' && product.status !== 'ACTIVE') {
       return NextResponse.json({ error: 'Only approved products can be promoted.' }, { status: 400 });
     }
 

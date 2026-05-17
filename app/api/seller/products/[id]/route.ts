@@ -20,8 +20,10 @@ import {
   normalizeWeightUnit,
   setShippingClass,
   SHIPPING_PACKAGE_DETAILS_REQUIRED_MESSAGE,
+  hasStoredPackageDetails,
 } from '@/lib/product-package';
 import { getSiteUrl } from '@/lib/seo';
+import { toSellerLifecycleStatus } from '@/lib/listing-status';
 
 const optionalInputString = z.preprocess((value) => {
   if (value === undefined || value === null) return undefined;
@@ -77,6 +79,7 @@ const updateSchema = z.object({
 
 type ProductUpdateInput = z.infer<typeof updateSchema>;
 const INVALID_CATEGORY_SUBMIT_MESSAGE = 'Please select a valid category before submitting.';
+type WorkflowAction = 'SAVE_DRAFT' | 'SCHEDULE' | 'PUBLISH_NOW' | 'CANCEL_SCHEDULE';
 
 type ExistingProduct = NonNullable<Awaited<ReturnType<typeof getOwnedSellerProduct>>['product']>;
 
@@ -131,6 +134,32 @@ function parsePositiveNumber(value?: string | null) {
 function getErrorMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
   return 'Unknown error.';
+}
+
+function parseWorkflowAction(value: unknown): WorkflowAction | null {
+  if (value === 'SAVE_DRAFT' || value === 'SCHEDULE' || value === 'PUBLISH_NOW' || value === 'CANCEL_SCHEDULE') {
+    return value;
+  }
+  return null;
+}
+
+function parseWorkflowSchedule(value: unknown) {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date;
+}
+
+function validateProductReadyForPublish(product: ExistingProduct): string | null {
+  if (!product.title?.trim()) return 'Title is required before publishing.';
+  if (!product.description?.trim()) return 'Description is required before publishing.';
+  if (!product.condition?.trim()) return 'Condition is required before publishing.';
+  if (!product.category?.trim()) return 'Category is required before publishing.';
+  if (!product.images?.length && !product.imageUrl?.trim()) return 'At least one image is required before publishing.';
+  if (product.priceCents <= 0) return 'Price must be greater than 0 before publishing.';
+  if (product.inventory < 1) return 'Inventory must be at least 1 before publishing.';
+  if (!hasStoredPackageDetails(product)) return SHIPPING_PACKAGE_DETAILS_REQUIRED_MESSAGE;
+  return null;
 }
 
 /** Returns the trimmed string if non-empty, otherwise null. */
@@ -384,6 +413,7 @@ export async function POST(
     }
 
     const form = await req.formData();
+    const submitAction = parseWorkflowAction(form.get('submitAction'));
     const method = (form.get('_method') as string)?.toLowerCase();
 
     if (method === 'delete') {
@@ -407,6 +437,10 @@ export async function POST(
       enhancedImages: enhancedImagesRaw.length ? enhancedImagesRaw : undefined,
       imageThumbnails: imageThumbnailsRaw.length ? imageThumbnailsRaw : undefined,
     });
+    const scheduledForInput = parseWorkflowSchedule(form.get('scheduledFor'));
+    if (submitAction === 'SCHEDULE' && (!scheduledForInput || scheduledForInput <= new Date())) {
+      return respondWithError(id, 'Choose a future date/time to schedule this listing.', acceptsJson, 400);
+    }
 
     // Diagnostic logging for debugging failed saves
     console.log('[seller/products/[id] POST] parsed payload', {
@@ -486,6 +520,15 @@ export async function POST(
         ? Prisma.JsonNull
         : (nextProductAttributes as Prisma.InputJsonValue);
 
+    const nextStatus = submitAction === 'SAVE_DRAFT'
+      ? 'DRAFT'
+      : submitAction === 'SCHEDULE'
+        ? 'SCHEDULED'
+        : submitAction === 'PUBLISH_NOW'
+          ? 'ACTIVE'
+          : existing.status === 'DRAFT' || existing.status === 'SCHEDULED'
+            ? existing.status
+            : 'PENDING';
     let updated;
     try {
       updated = await prisma.product.update({
@@ -523,8 +566,9 @@ export async function POST(
           originalImages: resolvedOriginalImages,
           enhancedImages: resolvedEnhancedImages,
           imageThumbnails: resolvedImageThumbnails,
-          // Reset to PENDING on edit so admin can re-review
-          status: 'PENDING',
+          status: nextStatus,
+          scheduledFor: submitAction === 'SCHEDULE' ? scheduledForInput : (nextStatus === 'SCHEDULED' ? existing.scheduledFor : null),
+          publishedAt: submitAction === 'PUBLISH_NOW' ? new Date() : existing.publishedAt,
         },
       });
     } catch (dbError) {
@@ -597,8 +641,63 @@ export async function PATCH(
       return NextResponse.json({ error: 'Product not found.' }, { status: 404 });
     }
 
-    const body: unknown = await req.json();
+    const body: Record<string, unknown> = await req.json();
+    const workflowAction = parseWorkflowAction(body.workflowAction);
+    if (workflowAction) {
+      const currentLifecycle = toSellerLifecycleStatus(existing.status);
+      if (workflowAction === 'CANCEL_SCHEDULE') {
+        if (currentLifecycle !== 'SCHEDULED') {
+          return NextResponse.json({ error: 'Only scheduled listings can be moved back to draft.' }, { status: 400 });
+        }
+        const updated = await prisma.product.update({
+          where: { id },
+          data: { status: 'DRAFT', scheduledFor: null },
+        });
+        return NextResponse.json(updated);
+      }
+      if (workflowAction === 'SAVE_DRAFT') {
+        const updated = await prisma.product.update({
+          where: { id },
+          data: { status: 'DRAFT', scheduledFor: null },
+        });
+        return NextResponse.json(updated);
+      }
+      const publishValidationError = validateProductReadyForPublish(existing);
+      if (publishValidationError) {
+        return NextResponse.json({ error: publishValidationError }, { status: 400 });
+      }
+      if (workflowAction === 'PUBLISH_NOW') {
+        const updated = await prisma.product.update({
+          where: { id },
+          data: {
+            status: 'ACTIVE',
+            scheduledFor: null,
+            publishedAt: new Date(),
+          },
+        });
+        return NextResponse.json(updated);
+      }
+      const scheduledFor = parseWorkflowSchedule(body.scheduledFor);
+      if (!scheduledFor || scheduledFor <= new Date()) {
+        return NextResponse.json({ error: 'Choose a future date/time to schedule this listing.' }, { status: 400 });
+      }
+      const updated = await prisma.product.update({
+        where: { id },
+        data: {
+          status: 'SCHEDULED',
+          scheduledFor,
+          publishedAt: null,
+        },
+      });
+      return NextResponse.json(updated);
+    }
+
+    const submitAction = parseWorkflowAction(body.submitAction);
     const data = updateSchema.parse(body);
+    const scheduledForInput = parseWorkflowSchedule(body.scheduledFor);
+    if (submitAction === 'SCHEDULE' && (!scheduledForInput || scheduledForInput <= new Date())) {
+      return NextResponse.json({ error: 'Choose a future date/time to schedule this listing.' }, { status: 400 });
+    }
 
     // Diagnostic logging for debugging failed saves
     console.log('[seller/products/[id] PATCH] parsed payload', {
@@ -688,6 +787,15 @@ export async function PATCH(
         ? Prisma.JsonNull
         : (nextProductAttributes as Prisma.InputJsonValue);
 
+    const nextStatus = submitAction === 'SAVE_DRAFT'
+      ? 'DRAFT'
+      : submitAction === 'SCHEDULE'
+        ? 'SCHEDULED'
+        : submitAction === 'PUBLISH_NOW'
+          ? 'ACTIVE'
+          : existing.status === 'DRAFT' || existing.status === 'SCHEDULED'
+            ? existing.status
+            : 'PENDING';
     let updated;
     try {
       updated = await prisma.product.update({
@@ -725,7 +833,9 @@ export async function PATCH(
             subcategoryId: resolvedCategorySelection.subcategoryId,
           }),
           productAttributes: nextProductAttributesValue,
-          status: 'PENDING',
+          status: nextStatus,
+          scheduledFor: submitAction === 'SCHEDULE' ? scheduledForInput : (nextStatus === 'SCHEDULED' ? existing.scheduledFor : null),
+          publishedAt: submitAction === 'PUBLISH_NOW' ? new Date() : existing.publishedAt,
         },
       });
     } catch (dbError) {

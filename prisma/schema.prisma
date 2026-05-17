@@ -54,10 +54,14 @@ enum SellerAdminFallbackStatus {
 }
 
 enum ProductStatus {
+  DRAFT
+  SCHEDULED
+  ACTIVE
   PENDING
   APPROVED
   REJECTED
   SOLD
+  ARCHIVED
   HIDDEN
 }
 
@@ -272,6 +276,8 @@ model Product {
   inventory          Int             @default(1)
   shippingCents      Int             @default(0)
   status             ProductStatus   @default(PENDING)
+  scheduledFor       DateTime?
+  publishedAt        DateTime?
   sellerId           String
   seller             User            @relation(fields: [sellerId], references: [id])
   createdAt          DateTime        @default(now())

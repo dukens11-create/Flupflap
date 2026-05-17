@@ -50,7 +50,7 @@ export default async function SellerPromotePage({
     redirect('/seller');
   }
 
-  if (product.status !== 'APPROVED') {
+  if (product.status !== 'APPROVED' && product.status !== 'ACTIVE') {
     return (
       <main className="max-w-xl mx-auto">
         <div className="mb-6">

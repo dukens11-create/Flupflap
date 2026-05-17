@@ -34,7 +34,7 @@ export function resolveRoleLoginDestination(role: string | null | undefined, cal
 
 export type RoleNavItem = {
   label: string;
-  href?: string;
+  href: string;
   children?: RoleNavItem[];
   matchPrefixes?: string[];
 };
@@ -48,7 +48,7 @@ const buyerNav: RoleNavItem[] = [
 
 const sellerNav: RoleNavItem[] = [
   { label: 'Seller Dashboard', href: '/seller/dashboard' },
-  { label: 'Garage Sales', href: '/garage-sales' },
+  { label: 'Garage Sales', href: '/seller/garage-sales' },
   {
     label: 'My Listings',
     href: '/seller/listings',
@@ -62,11 +62,12 @@ const sellerNav: RoleNavItem[] = [
       { label: 'Archived', href: '/seller/listings/archived' },
     ],
   },
-  { label: 'Sales', href: '/seller#sales-overview' },
-  { label: 'Orders to Ship', href: '/seller#orders-to-ship' },
-  { label: 'Payouts', href: '/seller#payouts' },
-  { label: 'Promotions', href: '/seller#promotion-status' },
-  { label: 'Verification Status', href: '/seller#verification-status' },
+  { label: 'Sales', href: '/seller/sales' },
+  { label: 'Orders to Ship', href: '/seller/orders-to-ship' },
+  { label: 'Payouts', href: '/seller/payouts' },
+  { label: 'Promotions', href: '/seller/promotions' },
+  { label: 'Verification Status', href: '/seller/verification-status' },
+  { label: 'Shop by Culture', href: '/seller/shop-by-culture' },
 ];
 
 const adminNav: RoleNavItem[] = [

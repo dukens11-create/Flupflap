@@ -77,7 +77,7 @@ export async function POST(req: Request) {
       prisma.product.findMany({
       where: {
         id: { in: items.map(i => i.productId) },
-        status: 'APPROVED',
+        status: { in: ['APPROVED', 'ACTIVE'] },
         inventory: { gt: 0 },
       },
       include: {

@@ -107,7 +107,7 @@ export default async function SellerStorePage({ params }: Props) {
     if (!seller) notFound();
 
     const rawProducts = await prisma.product.findMany({
-      where: { sellerId: id, status: 'APPROVED' },
+      where: { sellerId: id, status: { in: ['APPROVED', 'ACTIVE'] } },
       orderBy: { createdAt: 'desc' },
       include: {
         seller: {

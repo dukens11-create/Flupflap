@@ -86,7 +86,7 @@ export default function ProductCard({ p: product }:{p:any}){
         </div>
         <p className="text-xs text-slate-500">{shippingText}</p>
         {product.pickupAvailable&&product.pickupCity&&<p className="text-xs font-medium text-emerald-700">{t('product.pickupIn', { location: pickupLocation })}</p>}
-        {typeof product.inventory === 'number' && product.inventory > 0 && product.inventory <= 5 && product.status === 'APPROVED' && (
+        {typeof product.inventory === 'number' && product.inventory > 0 && product.inventory <= 5 && (product.status === 'APPROVED' || product.status === 'ACTIVE') && (
           <p className="text-xs font-semibold text-orange-600">Only {product.inventory} left!</p>
         )}
 
