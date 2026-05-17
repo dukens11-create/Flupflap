@@ -3,6 +3,9 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { MessageCircle, Send, Radio } from 'lucide-react';
 
 const DEFAULT_GUEST_NAME = 'Guest';
+const RTC_CONFIG: RTCConfiguration = {
+  iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }],
+};
 
 interface ChatMessage {
   id: string;
@@ -25,9 +28,19 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
   const [guestName, setGuestName] = useState(buyerName ?? '');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [streamError, setStreamError] = useState<string | null>(null);
+  const [streamConnected, setStreamConnected] = useState(false);
+
   const lastSeenRef = useRef<string | null>(null);
   const chatBottomRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const remoteStreamRef = useRef<MediaStream | null>(null);
+  const peerRef = useRef<RTCPeerConnection | null>(null);
+  const signalPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const signalCursorRef = useRef<string | null>(null);
+  const activeOfferSignalRef = useRef<string | null>(null);
 
   const fetchMessages = useCallback(async () => {
     try {
@@ -51,7 +64,6 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     }
   }, [saleId]);
 
-  // Initial load + polling
   useEffect(() => {
     fetchMessages();
     pollRef.current = setInterval(fetchMessages, 5000);
@@ -60,10 +72,140 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     };
   }, [fetchMessages]);
 
-  // Auto-scroll chat
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  const stopSignalPolling = useCallback(() => {
+    if (signalPollRef.current) {
+      clearInterval(signalPollRef.current);
+      signalPollRef.current = null;
+    }
+  }, []);
+
+  const closePeerConnection = useCallback(() => {
+    peerRef.current?.close();
+    peerRef.current = null;
+    remoteStreamRef.current = null;
+    activeOfferSignalRef.current = null;
+    setStreamConnected(false);
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+  }, []);
+
+  const postSignal = useCallback(async (kind: 'ANSWER' | 'ICE', payload: Record<string, unknown>) => {
+    await fetch(`/api/garage-sales/${saleId}/live/signaling`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: 'BUYER', kind, payload }),
+    });
+  }, [saleId]);
+
+  const handleSellerOffer = useCallback(async (signalId: string, payload: { type?: string; sdp?: string }) => {
+    const type = payload.type === 'offer' ? payload.type : null;
+    if (!type || !payload.sdp) return;
+
+    closePeerConnection();
+
+    const remoteStream = new MediaStream();
+    remoteStreamRef.current = remoteStream;
+
+    const pc = new RTCPeerConnection(RTC_CONFIG);
+    peerRef.current = pc;
+    activeOfferSignalRef.current = signalId;
+
+    pc.ontrack = (event) => {
+      for (const track of event.streams[0]?.getTracks() ?? [event.track]) {
+        remoteStream.addTrack(track);
+      }
+      setStreamConnected(remoteStream.getTracks().length > 0);
+    };
+
+    pc.onicecandidate = (event) => {
+      if (!event.candidate) return;
+      void postSignal('ICE', { candidate: event.candidate.toJSON() });
+    };
+
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+        setStreamError('Live stream connection was interrupted. Wait for the seller to restart broadcasting.');
+      }
+    };
+
+    await pc.setRemoteDescription({ type, sdp: payload.sdp });
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    await postSignal('ANSWER', { type: answer.type, sdp: answer.sdp });
+
+    if (videoRef.current) {
+      videoRef.current.srcObject = remoteStream;
+    }
+  }, [closePeerConnection, postSignal]);
+
+  const pollSignals = useCallback(async () => {
+    if (!isLive) return;
+
+    try {
+      const params = new URLSearchParams({ role: 'BUYER' });
+      if (signalCursorRef.current) params.set('since', signalCursorRef.current);
+      const res = await fetch(`/api/garage-sales/${saleId}/live/signaling?${params.toString()}`);
+      if (!res.ok) return;
+
+      const data = await res.json() as {
+        isLive: boolean;
+        signals: Array<{ id: string; kind: string; payload: unknown; createdAt: string }>;
+      };
+
+      if (!data.isLive) {
+        setIsLive(false);
+        return;
+      }
+
+      for (const signal of data.signals) {
+        signalCursorRef.current = signal.createdAt;
+
+        if (signal.kind === 'OFFER') {
+          if (activeOfferSignalRef.current === signal.id) continue;
+          const payload = signal.payload as { type?: string; sdp?: string } | null;
+          if (!payload) continue;
+          setStreamError(null);
+          await handleSellerOffer(signal.id, payload);
+        }
+
+        if (signal.kind === 'ICE' && peerRef.current) {
+          const payload = signal.payload as { candidate?: RTCIceCandidateInit } | null;
+          if (!payload?.candidate) continue;
+          await peerRef.current.addIceCandidate(new RTCIceCandidate(payload.candidate));
+        }
+      }
+    } catch {
+      // polling retries
+    }
+  }, [handleSellerOffer, isLive, saleId]);
+
+  useEffect(() => {
+    if (!isLive) {
+      stopSignalPolling();
+      signalCursorRef.current = null;
+      closePeerConnection();
+      return;
+    }
+
+    pollSignals();
+    signalPollRef.current = setInterval(pollSignals, 2000);
+
+    return () => {
+      stopSignalPolling();
+    };
+  }, [closePeerConnection, isLive, pollSignals, stopSignalPolling]);
+
+  useEffect(() => {
+    return () => {
+      stopSignalPolling();
+      closePeerConnection();
+    };
+  }, [closePeerConnection, stopSignalPolling]);
 
   const handleSend = async () => {
     const trimmed = input.trim();
@@ -120,19 +262,29 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
         <p className="text-xs text-slate-500">The seller is live! Ask questions below.</p>
       </div>
 
-      {/* Seller is live — video playback requires WebRTC signaling infrastructure.
-          The seller's camera stream runs locally on their device. In a full
-          production deployment this would be bridged via a STUN/TURN + WebRTC
-          signaling server or an SFU (e.g. LiveKit, mediasoup). */}
-      <div className="rounded-xl bg-slate-900 aspect-video flex flex-col items-center justify-center gap-3 text-white">
-        <Radio size={40} className="animate-pulse text-red-400" />
-        <p className="text-sm font-semibold">Seller is broadcasting live</p>
-        <p className="text-xs text-slate-400 text-center px-4">
-          Live video streaming is active. Join the conversation in the chat below.
-        </p>
+      <div className="rounded-xl bg-slate-900 aspect-video relative overflow-hidden">
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          controls
+          className={`h-full w-full object-cover ${streamConnected ? '' : 'hidden'}`}
+        />
+        {!streamConnected && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white">
+            <Radio size={40} className="animate-pulse text-red-400" />
+            <p className="text-sm font-semibold">Connecting to seller stream…</p>
+            <p className="text-xs text-slate-300 px-4 text-center">
+              If playback does not start, keep this page open for a moment.
+            </p>
+          </div>
+        )}
       </div>
 
-      {/* Chat */}
+      {streamError && (
+        <p className="rounded-lg bg-red-50 px-3 py-1.5 text-xs text-red-700">{streamError}</p>
+      )}
+
       <div className="space-y-2">
         <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500 flex items-center gap-1.5">
           <MessageCircle size={13} /> Live Chat
