@@ -122,9 +122,12 @@ export default function Navbar() {
   const formatBadgeCount = (count: number) => (count > 99 ? '99+' : String(count));
   const isItemActive = (item: RoleNavItem): boolean => {
     const baseHref = item.href.split('#')[0];
-    if (pathname === baseHref) return true;
+    if (pathname === baseHref || (baseHref !== '/' && pathname.startsWith(`${baseHref}/`))) return true;
     if (item.children?.length) {
-      return item.children.some((child) => pathname === child.href.split('#')[0]);
+      return item.children.some((child) => {
+        const childHref = child.href.split('#')[0];
+        return pathname === childHref || (childHref !== '/' && pathname.startsWith(`${childHref}/`));
+      });
     }
     return false;
   };
@@ -231,7 +234,8 @@ export default function Navbar() {
                       </button>
                       <div className="invisible absolute left-0 top-full z-40 mt-1 w-56 rounded-2xl border border-slate-200 bg-white p-2 opacity-0 shadow-xl transition-all group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
                         {item.children.map((child) => {
-                          const childActive = pathname === child.href.split('#')[0];
+                          const childHref = child.href.split('#')[0];
+                          const childActive = pathname === childHref || (childHref !== '/' && pathname.startsWith(`${childHref}/`));
                           return (
                             <Link
                               key={`${child.href}-${child.label}`}
@@ -446,7 +450,8 @@ export default function Navbar() {
                       {expanded && (
                         <div className="mt-1 space-y-1 pl-3">
                           {item.children.map((child) => {
-                            const childActive = pathname === child.href.split('#')[0];
+                            const childHref = child.href.split('#')[0];
+                            const childActive = pathname === childHref || (childHref !== '/' && pathname.startsWith(`${childHref}/`));
                             return (
                               <Link
                                 key={`mobile-child-${child.href}-${child.label}`}
