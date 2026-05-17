@@ -182,6 +182,11 @@ function parseWorkflowAction(value: unknown): WorkflowAction | null {
   return null;
 }
 
+function shouldKeepDraftLikeStatus(status: string) {
+  // Keep legacy SCHEDULED rows from older releases in a non-live state when scheduling is unavailable.
+  return status === 'DRAFT' || status === 'SCHEDULED';
+}
+
 function validateProductReadyForPublish(product: ExistingProduct): string | null {
   if (!product.title?.trim()) return 'Title is required before publishing.';
   if (!product.description?.trim()) return 'Description is required before publishing.';
@@ -559,7 +564,7 @@ export async function POST(
       ? 'DRAFT'
       : submitAction === 'PUBLISH_NOW'
           ? 'ACTIVE'
-          : existing.status === 'DRAFT' || existing.status === 'SCHEDULED'
+          : shouldKeepDraftLikeStatus(existing.status)
             ? existing.status
             : 'PENDING';
     let updated;
@@ -819,7 +824,7 @@ export async function PATCH(
       ? 'DRAFT'
       : submitAction === 'PUBLISH_NOW'
           ? 'ACTIVE'
-          : existing.status === 'DRAFT' || existing.status === 'SCHEDULED'
+          : shouldKeepDraftLikeStatus(existing.status)
             ? existing.status
             : 'PENDING';
     let updated;
