@@ -99,13 +99,6 @@ function resolveSubmitAction(value: string | null): SubmitAction {
   return 'SUBMIT_REVIEW';
 }
 
-function parseScheduledFor(value: string | null) {
-  if (!value) return null;
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return parsed;
-}
-
 function parsePositiveNumber(value?: string | null) {
   const trimmed = value?.trim() ?? '';
   if (!trimmed) return null;
@@ -161,6 +154,24 @@ export async function GET(req: Request) {
   const products = await prisma.product.findMany({
     where: { sellerId },
     orderBy: { createdAt: 'desc' },
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      priceCents: true,
+      shippingCents: true,
+      condition: true,
+      category: true,
+      imageUrl: true,
+      inventory: true,
+      status: true,
+      sellerId: true,
+      createdAt: true,
+      pickupAvailable: true,
+      pickupCity: true,
+      pickupState: true,
+      pickupPostalCode: true,
+    },
   });
 
   return NextResponse.json(products);
@@ -218,6 +229,9 @@ export async function POST(req: Request) {
     const isDraftAction = submitAction === 'SAVE_DRAFT';
     const isScheduleAction = submitAction === 'SCHEDULE';
     const isPublishNowAction = submitAction === 'PUBLISH_NOW';
+    if (isScheduleAction) {
+      return jsonError('Scheduled listings are temporarily unavailable. Please save as draft or publish now.', 400);
+    }
     const incomingBody = toLogSafeObject(form.entries());
     console.info('[seller/products POST] incoming request body', incomingBody);
     const rawEntries = Object.fromEntries(form.entries());
@@ -422,11 +436,6 @@ export async function POST(req: Request) {
         return jsonError('Selected subcategory does not exist. Please reselect a category and try again.', 400);
       }
     }
-    const scheduledFor = parseScheduledFor(String(form.get('scheduledFor') ?? ''));
-    if (isScheduleAction && (!scheduledFor || scheduledFor <= new Date())) {
-      return jsonError('Choose a future date/time to schedule this listing.', 400);
-    }
-
     const loggingPayload = {
       title,
       description: data.description || '',
@@ -482,8 +491,7 @@ export async function POST(req: Request) {
           shippingCents: Number.isNaN(shippingValue) || shippingValue < 0 ? 0 : (resolvedShippingMode === 'FREE' ? 0 : cents(shippingRaw)),
           shippingMode: resolvedShippingMode,
           inventory: Number.isInteger(inventoryQty) && inventoryQty >= 0 ? inventoryQty : 0,
-          status: isDraftAction ? 'DRAFT' : isScheduleAction ? 'SCHEDULED' : isPublishNowAction ? 'ACTIVE' : 'PENDING',
-          scheduledFor: isScheduleAction ? scheduledFor : null,
+          status: isDraftAction ? 'DRAFT' : isPublishNowAction ? 'ACTIVE' : 'PENDING',
           publishedAt: isPublishNowAction ? new Date() : null,
           pickupAvailable,
           pickupCity,
@@ -499,6 +507,9 @@ export async function POST(req: Request) {
           heightIn: packageDetails?.heightIn ?? null,
           packageType: packageDetails?.packageType ?? null,
         },
+        select: {
+          id: true,
+        },
       });
     } catch (dbError) {
       const dbMessage = getErrorMessage(dbError);
@@ -510,14 +521,12 @@ export async function POST(req: Request) {
     }
 
     const fraudQuery = shouldRecommendFraudReview(riskAssessment) ? '&fraud=review' : '';
-    const redirectTo = isScheduleAction
-      ? `/seller/listings/scheduled?created=${product.id}${fraudQuery}`
-      : isPublishNowAction
+    const redirectTo = isPublishNowAction
         ? `/seller/listings/active?created=${product.id}${fraudQuery}`
         : `/seller/listings/drafts?created=${product.id}${fraudQuery}`;
     return NextResponse.json({
       success: true,
-      message: isDraftAction ? 'Draft saved successfully.' : isScheduleAction ? 'Listing scheduled successfully.' : 'Listing published successfully.',
+      message: isDraftAction ? 'Draft saved successfully.' : 'Listing published successfully.',
       redirectTo,
     });
   } catch (err) {

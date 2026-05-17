@@ -211,16 +211,38 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
     prisma.product.findMany({
       where: { sellerId },
       orderBy: { createdAt: 'desc' },
-      include: {
+      select: {
+        id: true,
+        title: true,
+        category: true,
+        condition: true,
+        priceCents: true,
+        status: true,
+        inventory: true,
+        viewCount: true,
+        soldQty: true,
+        imageUrl: true,
+        createdAt: true,
+        publishedAt: true,
+        weightOz: true,
+        weightUnit: true,
+        lengthIn: true,
+        widthIn: true,
+        heightIn: true,
+        packageType: true,
+        productAttributes: true,
         promotions: {
           where: { status: 'ACTIVE', expiresAt: { gt: new Date() } },
           orderBy: { expiresAt: 'desc' },
           take: 1,
+          select: {
+            status: true,
+            expiresAt: true,
+          },
         },
         cartInterest: {
           select: {
             totalAdds: true,
-            lastAddedAt: true,
           },
         },
       },
@@ -1015,7 +1037,6 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                 packageSummary: packageDetails
                   ? formatPackageDisplay(packageDetails, shippingSetupIncomplete)
                   : null,
-                scheduledFor: p.scheduledFor?.toISOString() ?? null,
                 publishedAt: p.publishedAt?.toISOString() ?? null,
               };
             })}

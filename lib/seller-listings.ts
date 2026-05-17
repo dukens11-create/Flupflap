@@ -34,11 +34,31 @@ export async function getSellerListingsPageData() {
     prisma.product.findMany({
       where: { sellerId },
       orderBy: { createdAt: 'desc' },
-      include: {
+      select: {
+        id: true,
+        title: true,
+        category: true,
+        condition: true,
+        priceCents: true,
+        status: true,
+        inventory: true,
+        viewCount: true,
+        soldQty: true,
+        imageUrl: true,
+        weightOz: true,
+        weightUnit: true,
+        lengthIn: true,
+        widthIn: true,
+        heightIn: true,
+        packageType: true,
+        productAttributes: true,
         promotions: {
           where: { status: 'ACTIVE', expiresAt: { gt: new Date() } },
           orderBy: { expiresAt: 'desc' },
           take: 1,
+          select: {
+            expiresAt: true,
+          },
         },
         cartInterest: {
           select: {
