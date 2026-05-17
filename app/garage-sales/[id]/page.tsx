@@ -5,10 +5,11 @@ import Image from 'next/image';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
-import { MapPin, Calendar, Phone, Tag, Eye, Heart, Share2, ExternalLink } from 'lucide-react';
+import { MapPin, Calendar, Phone, Tag, Eye, Heart, ExternalLink } from 'lucide-react';
 import { expireGarageSales } from '@/lib/garage-sales';
 import GarageSaleLivePanel from '@/components/GarageSaleLivePanel';
 import GarageSaleBuyerLiveView from '@/components/GarageSaleBuyerLiveView';
+import GarageSaleShareButton from '@/components/GarageSaleShareButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -271,19 +272,7 @@ export default async function GarageSaleDetailPage({ params }: Params) {
 
           {/* Stats / share */}
           <div className="card p-4 space-y-2">
-            <button
-              type="button"
-              onClick={() => {
-                if (navigator.share) {
-                  navigator.share({ title: sale.title, url: window.location.href });
-                } else {
-                  navigator.clipboard.writeText(window.location.href);
-                }
-              }}
-              className="btn-outline w-full flex items-center justify-center gap-2"
-            >
-              <Share2 size={14} /> Share This Sale
-            </button>
+            <GarageSaleShareButton title={sale.title} />
           </div>
 
           {/* Live Preview — seller controls */}
