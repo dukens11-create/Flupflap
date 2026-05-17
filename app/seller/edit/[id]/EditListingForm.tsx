@@ -219,7 +219,7 @@ export default function EditListingForm({
       }
       const data = await res.json();
 
-      const redirectTo = data?.redirectTo ?? `/seller?updated=${id}`;
+      const redirectTo = data?.redirectTo ?? `/seller/listings/drafts?updated=${id}`;
       router.push(redirectTo);
     } catch (err) {
       console.error('[EditListingForm] network error:', err);
@@ -252,7 +252,7 @@ export default function EditListingForm({
         setDeleting(false);
         return;
       }
-      router.push('/seller?deleted=1');
+      router.push('/seller/listings/active?deleted=1');
     } catch (err) {
       console.error('[EditListingForm] delete network error:', err);
       setSubmitError('Network error. Please check your connection and try again.');

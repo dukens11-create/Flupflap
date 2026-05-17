@@ -18,6 +18,7 @@ export default function robots(): MetadataRoute.Robots {
           '/offers',
           '/notifications',
           '/seller/new',
+          '/seller/listings',
           '/seller/edit',
           '/seller/promote',
           '/seller/dashboard',

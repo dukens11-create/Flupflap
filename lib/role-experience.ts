@@ -34,7 +34,9 @@ export function resolveRoleLoginDestination(role: string | null | undefined, cal
 
 export type RoleNavItem = {
   label: string;
-  href: string;
+  href?: string;
+  children?: RoleNavItem[];
+  matchPrefixes?: string[];
 };
 
 const buyerNav: RoleNavItem[] = [
@@ -46,9 +48,20 @@ const buyerNav: RoleNavItem[] = [
 
 const sellerNav: RoleNavItem[] = [
   { label: 'Seller Dashboard', href: '/seller/dashboard' },
-  { label: 'List Item', href: '/seller/new' },
   { label: 'Garage Sales', href: '/garage-sales' },
-  { label: 'My Listings', href: '/seller#my-listings' },
+  {
+    label: 'My Listings',
+    href: '/seller/listings',
+    matchPrefixes: ['/seller/listings'],
+    children: [
+      { label: 'List Item', href: '/seller/listings/new' },
+      { label: 'Drafts', href: '/seller/listings/drafts' },
+      { label: 'Scheduled', href: '/seller/listings/scheduled' },
+      { label: 'Active', href: '/seller/listings/active' },
+      { label: 'Sold', href: '/seller/listings/sold' },
+      { label: 'Archived', href: '/seller/listings/archived' },
+    ],
+  },
   { label: 'Sales', href: '/seller#sales-overview' },
   { label: 'Orders to Ship', href: '/seller#orders-to-ship' },
   { label: 'Payouts', href: '/seller#payouts' },
@@ -77,4 +90,16 @@ export function getRoleNavigation(role?: string | null): RoleNavItem[] {
   if (experienceRole === 'seller') return sellerNav;
   if (experienceRole === 'buyer') return buyerNav;
   return [{ label: 'Browse', href: '/' }, { label: 'Garage Sales', href: '/garage-sales' }];
+}
+
+export function isRoleNavItemActive(item: RoleNavItem, pathname?: string | null): boolean {
+  if (!pathname) return false;
+  if (item.matchPrefixes?.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) {
+    return true;
+  }
+  if (item.href) {
+    const hrefPath = item.href.split('#')[0];
+    if (pathname === hrefPath) return true;
+  }
+  return item.children?.some((child) => isRoleNavItemActive(child, pathname)) ?? false;
 }

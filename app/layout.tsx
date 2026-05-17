@@ -131,7 +131,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-900">{t('footer.sell')}</p>
                   <div className="mt-4 space-y-3">
                     <Link href="/signup" className="block link-hover-navy">{t('home.startSelling')}</Link>
-                    <Link href="/seller/new" className="block link-hover-navy">{t('nav.listItem')}</Link>
+                    <Link href="/seller/listings/new" className="block link-hover-navy">{t('nav.listItem')}</Link>
                     <Link href="/messages" className="block link-hover-navy">{t('nav.messages')}</Link>
                   </div>
                 </div>

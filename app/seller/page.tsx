@@ -281,9 +281,9 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   let emptyListingsMessage: ReactNode = 'No listings yet. Subscribe to start selling.';
   if (subscriptionActive && verificationApproved) {
     emptyListingsMessage = (
-      <span>
-        No listings yet. <Link href="/seller/new" className="text-blue-600 hover:underline">Create one</Link>.
-      </span>
+        <span>
+          No listings yet. <Link href="/seller/listings/new" className="text-blue-600 hover:underline">Create one</Link>.
+        </span>
     );
   } else if (subscriptionActive) {
     emptyListingsMessage = 'No listings yet. Complete seller verification to start selling.';
@@ -382,7 +382,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
           <h1 className="text-3xl font-black">Seller Dashboard</h1>
           <p className="text-slate-500 text-sm">Welcome back, {session.user.name}</p>
         </div>
-        {!isRestricted && subscriptionActive && verificationApproved && <Link href="/seller/new" className="btn-primary">Add New Product</Link>}
+        {!isRestricted && subscriptionActive && verificationApproved && <Link href="/seller/listings/new" className="btn-primary">Add New Product</Link>}
       </div>
 
       <section id="sales-overview" className="grid grid-cols-2 gap-4 mb-6 lg:grid-cols-5">

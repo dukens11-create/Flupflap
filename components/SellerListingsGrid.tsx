@@ -25,6 +25,9 @@ export interface SellerListingItem {
 interface Props {
   listings: SellerListingItem[];
   isRestricted: boolean;
+  hideFilters?: boolean;
+  emptyMessage?: string;
+  searchPlaceholder?: string;
 }
 
 type FilterTab = "all" | "active" | "pending" | "outofstock" | "sold";
@@ -549,7 +552,13 @@ const FILTER_TABS: { key: FilterTab; label: string }[] = [
   { key: "sold", label: "Sold" },
 ];
 
-export default function SellerListingsGrid({ listings, isRestricted }: Props) {
+export default function SellerListingsGrid({
+  listings,
+  isRestricted,
+  hideFilters = false,
+  emptyMessage,
+  searchPlaceholder = 'Search your listings…',
+}: Props) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterTab>("all");
   const [items, setItems] = useState<SellerListingItem[]>(listings);
@@ -597,7 +606,7 @@ export default function SellerListingsGrid({ listings, isRestricted }: Props) {
           </svg>
           <input
             type="search"
-            placeholder="Search your listings…"
+            placeholder={searchPlaceholder}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
@@ -605,32 +614,34 @@ export default function SellerListingsGrid({ listings, isRestricted }: Props) {
         </div>
 
         {/* Filter tabs */}
-        <div className="flex gap-1.5 flex-wrap">
-          {FILTER_TABS.map(({ key, label }) => {
-            const count = tabCount(key);
-            const active = filter === key;
-            return (
-              <button
-                key={key}
-                onClick={() => setFilter(key)}
-                className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                  active
-                    ? "bg-[var(--ff-primary-navy)] text-white"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                }`}
-              >
-                {label}
-                <span
-                  className={`text-[10px] font-semibold tabular-nums ${
-                    active ? "text-white/80" : "text-slate-400"
+        {!hideFilters && (
+          <div className="flex gap-1.5 flex-wrap">
+            {FILTER_TABS.map(({ key, label }) => {
+              const count = tabCount(key);
+              const active = filter === key;
+              return (
+                <button
+                  key={key}
+                  onClick={() => setFilter(key)}
+                  className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                    active
+                      ? "bg-[var(--ff-primary-navy)] text-white"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                   }`}
                 >
-                  {count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+                  {label}
+                  <span
+                    className={`text-[10px] font-semibold tabular-nums ${
+                      active ? "text-white/80" : "text-slate-400"
+                    }`}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* ── Cards grid ── */}
@@ -638,7 +649,7 @@ export default function SellerListingsGrid({ listings, isRestricted }: Props) {
         <div className="card p-8 text-center text-slate-500 text-sm">
           {search.trim() !== "" || filter !== "all"
             ? "No listings match your search or filter."
-            : "No listings yet."}
+            : (emptyMessage ?? "No listings yet.")}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">

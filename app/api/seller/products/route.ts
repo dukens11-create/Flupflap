@@ -480,7 +480,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       success: true,
       message: 'Listing submitted successfully.',
-      redirectTo: `/seller/dashboard?created=${product.id}${fraudQuery}`,
+      redirectTo: `/seller/listings/drafts?created=${product.id}${fraudQuery}`,
     });
   } catch (err) {
     const message = getErrorMessage(err);
