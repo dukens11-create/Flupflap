@@ -227,9 +227,8 @@ export async function POST(req: Request) {
     const form = await req.formData();
     const submitAction = resolveSubmitAction(String(form.get('submitAction') ?? ''));
     const isDraftAction = submitAction === 'SAVE_DRAFT';
-    const isScheduleAction = submitAction === 'SCHEDULE';
     const isPublishNowAction = submitAction === 'PUBLISH_NOW';
-    if (isScheduleAction) {
+    if (submitAction === 'SCHEDULE') {
       return jsonError('Scheduling functionality is currently disabled. Please save as draft or publish now.', 400);
     }
     const incomingBody = toLogSafeObject(form.entries());

@@ -182,7 +182,7 @@ function parseWorkflowAction(value: unknown): WorkflowAction | null {
   return null;
 }
 
-function isDraftOrLegacyScheduledStatus(status: string) {
+function isDraftLikeStatus(status: string) {
   // Keep legacy SCHEDULED rows from older releases in a non-live state when scheduling is unavailable.
   return status === 'DRAFT' || status === 'SCHEDULED';
 }
@@ -572,7 +572,7 @@ export async function POST(
       ? 'DRAFT'
       : submitAction === 'PUBLISH_NOW'
           ? 'ACTIVE'
-          : isDraftOrLegacyScheduledStatus(existing.status)
+          : isDraftLikeStatus(existing.status)
             ? existing.status
             : 'PENDING';
     let updated;
@@ -824,7 +824,7 @@ export async function PATCH(
       ? 'DRAFT'
       : submitAction === 'PUBLISH_NOW'
           ? 'ACTIVE'
-          : isDraftOrLegacyScheduledStatus(existing.status)
+          : isDraftLikeStatus(existing.status)
             ? existing.status
             : 'PENDING';
     let updated;
