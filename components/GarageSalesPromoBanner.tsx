@@ -71,12 +71,13 @@ export default function GarageSalesPromoBanner() {
           <span aria-hidden="true" className="btn-brand inline-flex">Post Your Garage Sale</span>
         </div>
 
-        <div className="relative h-44 w-full overflow-hidden rounded-2xl bg-slate-50 p-2 shadow-inner sm:h-56 lg:h-64">
+        <div className="w-full overflow-hidden rounded-2xl bg-slate-50 p-2 shadow-inner">
           <Image
-            src="/garage-sales-promo.svg"
-            alt="Garage Sale Weekend banner featuring furniture, tools, vintage items, and electronics with a call to post on FlupFlap"
-            fill
-            className="object-contain"
+            src="/promotional_imagine.png"
+            alt="FlupFlap promotional banner for garage sales and local marketplace deals"
+            width={501}
+            height={501}
+            className="h-auto w-full object-contain"
             loading="lazy"
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 40vw"
           />
