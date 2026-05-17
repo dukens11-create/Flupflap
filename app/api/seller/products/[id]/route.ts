@@ -560,7 +560,7 @@ export async function POST(
       : submitAction === 'PUBLISH_NOW'
           ? 'ACTIVE'
           : existing.status === 'DRAFT' || existing.status === 'SCHEDULED'
-            ? existing.status
+            ? 'DRAFT'
             : 'PENDING';
     let updated;
     try {
@@ -820,7 +820,7 @@ export async function PATCH(
       : submitAction === 'PUBLISH_NOW'
           ? 'ACTIVE'
           : existing.status === 'DRAFT' || existing.status === 'SCHEDULED'
-            ? existing.status
+            ? 'DRAFT'
             : 'PENDING';
     let updated;
     try {
