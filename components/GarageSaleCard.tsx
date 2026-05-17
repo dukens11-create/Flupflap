@@ -64,7 +64,8 @@ export default function GarageSaleCard({ sale }: { sale: GarageSaleSummary }) {
   const mainPhoto = sale.photos[0] ?? null;
   const openNow = isOpenNow(sale.startDate, sale.endDate);
   const startingSoon = !openNow && isStartingSoon(sale.startDate);
-  const saleTypeLabel = SALE_TYPE_LABELS[sale.saleType] ?? sale.saleType;  const priceRange = sale.priceRangeMin != null && sale.priceRangeMax != null
+  const saleTypeLabel = SALE_TYPE_LABELS[sale.saleType] ?? sale.saleType;
+  const priceRange = sale.priceRangeMin != null && sale.priceRangeMax != null
     ? `$${sale.priceRangeMin}–$${sale.priceRangeMax}`
     : sale.priceRangeMin != null
       ? `From $${sale.priceRangeMin}`

@@ -2,6 +2,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { MessageCircle, Send, Radio } from 'lucide-react';
 
+const DEFAULT_GUEST_NAME = 'Guest';
+
 interface ChatMessage {
   id: string;
   userId: string | null;
@@ -29,7 +31,9 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
 
   const fetchMessages = useCallback(async () => {
     try {
-      const url = `/api/garage-sales/${saleId}/chat${lastSeenRef.current ? `?since=${encodeURIComponent(lastSeenRef.current)}` : ''}`;
+      const params = new URLSearchParams();
+      if (lastSeenRef.current) params.set('since', lastSeenRef.current);
+      const url = `/api/garage-sales/${saleId}/chat${params.toString() ? `?${params.toString()}` : ''}`;
       const res = await fetch(url);
       if (!res.ok) return;
       const data = await res.json() as { messages: ChatMessage[]; isLive: boolean };
@@ -70,7 +74,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
       const res = await fetch(`/api/garage-sales/${saleId}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: trimmed, guestName: guestName || 'Guest' }),
+        body: JSON.stringify({ message: trimmed, guestName: guestName || DEFAULT_GUEST_NAME }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -88,6 +92,13 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
       setError(err instanceof Error ? err.message : 'Failed to send message');
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
     }
   };
 
@@ -166,7 +177,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+            onKeyDown={handleKeyDown}
             placeholder="Ask a question…"
             maxLength={500}
             className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--ff-primary-navy)]"

@@ -28,7 +28,9 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   const startCamera = useCallback(async () => {
     setError(null);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: micOn });
+      // Always request audio; honour current micOn state immediately after acquiring stream
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      stream.getAudioTracks().forEach((t) => { t.enabled = micOn; });
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;

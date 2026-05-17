@@ -5,6 +5,8 @@ import { prisma } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
+const DEFAULT_GUEST_NAME = 'Guest';
+
 type Params = { params: Promise<{ id: string }> };
 
 /** GET /api/garage-sales/[id]/chat — fetch recent messages (public) */
@@ -66,7 +68,11 @@ export async function POST(req: Request, { params }: Params) {
 
   const session = await getServerSession(authOptions);
   const userId = session?.user?.id ?? null;
-  const resolvedGuestName = userId ? null : (typeof guestName === 'string' ? guestName.trim().slice(0, 50) || 'Guest' : 'Guest');
+  let resolvedGuestName: string | null = null;
+  if (!userId) {
+    const trimmedName = typeof guestName === 'string' ? guestName.trim() : '';
+    resolvedGuestName = trimmedName ? trimmedName.slice(0, 50) : DEFAULT_GUEST_NAME;
+  }
 
   const msg = await prisma.garageSaleChat.create({
     data: {
