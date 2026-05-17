@@ -18,6 +18,7 @@ export type GarageSaleSummary = {
   priceRangeMin: number | null;
   priceRangeMax: number | null;
   isFeatured: boolean;
+  isLive: boolean;
   viewCount: number;
   latitude?: number | null;
   longitude?: number | null;
@@ -63,8 +64,7 @@ export default function GarageSaleCard({ sale }: { sale: GarageSaleSummary }) {
   const mainPhoto = sale.photos[0] ?? null;
   const openNow = isOpenNow(sale.startDate, sale.endDate);
   const startingSoon = !openNow && isStartingSoon(sale.startDate);
-  const saleTypeLabel = SALE_TYPE_LABELS[sale.saleType] ?? sale.saleType;
-  const priceRange = sale.priceRangeMin != null && sale.priceRangeMax != null
+  const saleTypeLabel = SALE_TYPE_LABELS[sale.saleType] ?? sale.saleType;  const priceRange = sale.priceRangeMin != null && sale.priceRangeMax != null
     ? `$${sale.priceRangeMin}–$${sale.priceRangeMax}`
     : sale.priceRangeMin != null
       ? `From $${sale.priceRangeMin}`
@@ -90,7 +90,12 @@ export default function GarageSaleCard({ sale }: { sale: GarageSaleSummary }) {
             ⭐ Featured
           </span>
         )}
-        {openNow && (
+        {sale.isLive && (
+          <span className="absolute left-3 top-3 rounded-full bg-red-500 px-2.5 py-1 text-[11px] font-bold text-white shadow-sm animate-pulse">
+            🔴 LIVE NOW
+          </span>
+        )}
+        {openNow && !sale.isLive && (
           <span className="absolute right-3 top-3 rounded-full bg-emerald-500 px-2.5 py-1 text-[11px] font-bold text-white shadow-sm">
             Open Now
           </span>

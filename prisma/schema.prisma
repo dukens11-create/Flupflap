@@ -951,11 +951,16 @@ model GarageSale {
   reports          GarageSaleReport[]
   // Favorites
   favorites        GarageSaleFavorite[]
+  chatMessages     GarageSaleChat[]
+  // Live preview
+  isLive           Boolean              @default(false)
+  liveStartedAt    DateTime?
   createdAt        DateTime             @default(now())
   updatedAt        DateTime             @updatedAt
 
   @@index([sellerId])
   @@index([status])
+  @@index([isLive])
   @@index([paymentStatus])
   @@index([city, state])
   @@index([zipCode])
@@ -1010,4 +1015,17 @@ model GarageSaleFavorite {
 
   @@unique([saleId, userId])
   @@index([userId])
+}
+
+model GarageSaleChat {
+  id        String     @id @default(cuid())
+  saleId    String
+  sale      GarageSale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  userId    String?
+  guestName String?
+  message   String     @db.VarChar(500)
+  createdAt DateTime   @default(now())
+
+  @@index([saleId])
+  @@index([createdAt])
 }

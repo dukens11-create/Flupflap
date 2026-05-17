@@ -7,6 +7,8 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { MapPin, Calendar, Phone, Tag, Eye, Heart, Share2, ExternalLink } from 'lucide-react';
 import { expireGarageSales } from '@/lib/garage-sales';
+import GarageSaleLivePanel from '@/components/GarageSaleLivePanel';
+import GarageSaleBuyerLiveView from '@/components/GarageSaleBuyerLiveView';
 
 export const dynamic = 'force-dynamic';
 
@@ -94,6 +96,11 @@ export default async function GarageSaleDetailPage({ params }: Params) {
         {sale.isFeatured && (
           <span className="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700">
             ⭐ Featured Sale
+          </span>
+        )}
+        {sale.isLive && (
+          <span className="inline-flex items-center rounded-full bg-red-500 px-3 py-1 text-xs font-bold text-white animate-pulse">
+            🔴 LIVE NOW
           </span>
         )}
         {openNow ? (
@@ -278,6 +285,20 @@ export default async function GarageSaleDetailPage({ params }: Params) {
               <Share2 size={14} /> Share This Sale
             </button>
           </div>
+
+          {/* Live Preview — seller controls */}
+          {isOwner && (
+            <GarageSaleLivePanel saleId={sale.id} initialIsLive={sale.isLive} />
+          )}
+
+          {/* Live Preview — buyer view */}
+          {!isOwner && (
+            <GarageSaleBuyerLiveView
+              saleId={sale.id}
+              initialIsLive={sale.isLive}
+              buyerName={session?.user?.name ?? null}
+            />
+          )}
 
           {/* Owner/admin actions */}
           {(isOwner || isAdmin) && (
