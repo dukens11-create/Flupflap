@@ -63,7 +63,6 @@ const sellerNav: RoleNavItem[] = [
   { label: 'Sales', href: '/seller/sales' },
   { label: 'Orders to Ship', href: '/seller/orders-to-ship' },
   { label: 'Payouts', href: '/seller/payouts' },
-  { label: 'Promotions', href: '/seller/promotions' },
   { label: 'Verification Status', href: '/seller/verification-status' },
   { label: 'Shop by Culture', href: '/seller/shop-by-culture' },
 ];
