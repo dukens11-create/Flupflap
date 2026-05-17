@@ -22,21 +22,6 @@ export const SALES_PROMOTION_KIND_LABELS: Record<SalesPromotionKind, string> = {
   OFFER: 'Offer',
 };
 
-const DISCOUNT_TYPE_LABELS: Record<SellerDiscountType, string> = {
-  PERCENTAGE: 'Percentage',
-  FIXED_AMOUNT: 'Fixed amount',
-};
-
-const TRIGGER_TYPE_LABELS: Record<SellerPromotionTriggerType, string> = {
-  ANY_PURCHASE: 'Any purchase',
-  MIN_SPEND: 'Minimum spend',
-  MIN_QUANTITY: 'Minimum quantity',
-};
-
-const REWARD_TYPE_LABELS: Record<SellerPromotionRewardType, string> = {
-  FREE_ITEM: 'Free item',
-};
-
 export function isPromotionRouteKind(value: string): value is PromotionRouteKind {
   return value === 'discounts' || value === 'offers';
 }
