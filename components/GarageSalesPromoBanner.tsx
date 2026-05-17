@@ -24,7 +24,7 @@ export default function GarageSalesPromoBanner() {
     }
   }
 
-  function handleBannerClick() {
+  function trackBannerClick() {
     void fetch('/api/analytics/banner-click', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -43,7 +43,7 @@ export default function GarageSalesPromoBanner() {
     <section className="relative overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md">
       <Link
         href="/garage-sales/create"
-        onClick={handleBannerClick}
+        onClick={trackBannerClick}
         className="absolute inset-0 z-10 rounded-[28px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ff-primary-navy)] focus-visible:ring-offset-2"
         aria-label="Open Garage Sales creation page"
       >
@@ -53,7 +53,7 @@ export default function GarageSalesPromoBanner() {
       <button
         type="button"
         onClick={handleDismiss}
-        className="absolute right-3 top-3 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white/90 text-slate-600 shadow-sm transition hover:bg-white sm:hidden"
+        className="absolute right-3 top-3 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white/90 text-slate-600 shadow-sm transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ff-primary-navy)] focus-visible:ring-offset-2 sm:hidden"
         aria-label="Dismiss garage sales banner"
       >
         <X size={16} />
@@ -66,7 +66,7 @@ export default function GarageSalesPromoBanner() {
           <p className="text-sm leading-6 text-slate-600 sm:text-base">
             Reach local buyers before your event starts and share your best finds.
           </p>
-          <span className="btn-brand inline-flex">Post Your Garage Sale</span>
+          <span aria-hidden="true" className="btn-brand inline-flex">Post Your Garage Sale</span>
         </div>
 
         <div className="relative h-44 w-full overflow-hidden rounded-2xl bg-slate-50 p-2 shadow-inner sm:h-56 lg:h-64">
