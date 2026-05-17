@@ -130,6 +130,16 @@ function LoginForm() {
     return Math.ceil((blockedUntil - cooldownNow) / 1000);
   }
 
+  function getCooldownMessage(seconds: number, referenceTime = cooldownNow) {
+    if (seconds <= 0) {
+      return '';
+    }
+
+    return rateLimitedUntil && rateLimitedUntil > referenceTime
+      ? t('login.tooManyRequests')
+      : t('login.resendCodeWait', { seconds });
+  }
+
   function getPhoneAuthErrorMessage(error: unknown) {
     const code = getFirebaseErrorCode(error);
 
@@ -163,11 +173,7 @@ function LoginForm() {
   const resendButtonLabel = resendCooldownSeconds > 0
     ? t('login.resendCodeCountdown', { seconds: resendCooldownSeconds })
     : t('login.resendCode');
-  const resendHelperMessage = rateLimitedUntil && rateLimitedUntil > cooldownNow
-    ? t('login.tooManyRequests')
-    : resendCooldownSeconds > 0
-      ? t('login.resendCodeWait', { seconds: resendCooldownSeconds })
-      : '';
+  const resendHelperMessage = getCooldownMessage(resendCooldownSeconds);
 
   async function sendPhoneOtp(phoneNumber: string, phoneMask = maskPhone(phoneNumber)) {
     const normalizedPhone = normalizePhone(phoneNumber);
@@ -183,11 +189,7 @@ function LoginForm() {
     setError('');
 
     if (resendCooldownSeconds > 0) {
-      setError(
-        rateLimitedUntil && rateLimitedUntil > Date.now()
-          ? t('login.tooManyRequests')
-          : t('login.resendCodeWait', { seconds: resendCooldownSeconds }),
-      );
+      setError(getCooldownMessage(resendCooldownSeconds, Date.now()));
       return false;
     }
 
