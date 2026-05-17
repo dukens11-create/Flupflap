@@ -78,6 +78,34 @@ enum PromotionStatus {
   CANCELLED
 }
 
+enum SalesPromotionKind {
+  DISCOUNT
+  OFFER
+}
+
+enum SalesPromotionStatus {
+  DRAFT
+  SCHEDULED
+  ACTIVE
+  EXPIRED
+  ARCHIVED
+}
+
+enum SellerDiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+enum SellerPromotionTriggerType {
+  ANY_PURCHASE
+  MIN_SPEND
+  MIN_QUANTITY
+}
+
+enum SellerPromotionRewardType {
+  FREE_ITEM
+}
+
 enum NotificationType {
   ORDER_UPDATE
   OFFER
@@ -186,6 +214,7 @@ model User {
   sellerReportResolutions  SellerReport[]            @relation("AdminSellerReportResolutions")
   loginActivities          LoginActivity[]
   promotions               Promotion[]
+  salesPromotions          SalesPromotion[]
   notifications            Notification[]
   sellerPlanId             String?
   sellerPlan               SellerPlan?               @relation(fields: [sellerPlanId], references: [id])
@@ -289,6 +318,7 @@ model Product {
   conversations      Conversation[]
   reports            ProductReport[]
   promotions         Promotion[]
+  rewardedSalesPromotions SalesPromotion[] @relation("SalesPromotionRewardProduct")
   cartInterest       ProductCartInterest?
   offers             Offer[]
   // Pickup fields
@@ -690,6 +720,39 @@ model Promotion {
   @@index([productId])
   @@index([sellerId])
   @@index([status])
+}
+
+model SalesPromotion {
+  id                 String                       @id @default(cuid())
+  sellerId           String
+  seller             User                         @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  kind               SalesPromotionKind
+  status             SalesPromotionStatus         @default(DRAFT)
+  name               String
+  description        String?
+  discountType       SellerDiscountType?
+  discountValue      Int?
+  triggerType        SellerPromotionTriggerType?
+  triggerValue       Int?
+  rewardType         SellerPromotionRewardType?
+  rewardProductId    String?
+  rewardProduct      Product?                     @relation("SalesPromotionRewardProduct", fields: [rewardProductId], references: [id], onDelete: SetNull)
+  rewardQuantity     Int                          @default(1)
+  applicableProductIds String[]                  @default([])
+  totalUsageLimit    Int?
+  perCustomerLimit   Int?
+  usageCount         Int                          @default(0)
+  conversionCount    Int                          @default(0)
+  revenueImpactCents Int                          @default(0)
+  startsAt           DateTime?
+  endsAt             DateTime?
+  archivedAt         DateTime?
+  createdAt          DateTime                     @default(now())
+  updatedAt          DateTime                     @updatedAt
+
+  @@index([sellerId, kind, status])
+  @@index([sellerId, startsAt])
+  @@index([rewardProductId])
 }
 
 model PromotionPlan {
