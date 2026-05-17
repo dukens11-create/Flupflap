@@ -11,7 +11,6 @@ import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
-import { createNotification } from '@/lib/notifications';
 
 const schema = z
   .object({
@@ -122,6 +121,8 @@ export async function POST(
       return NextResponse.redirect(errUrl, 302);
     }
 
+    // Sync phone verification onto the SellerVerification record if the seller
+    // has verified their phone since the submission was created.
     if (seller.phoneVerified && !verification.phoneVerified) {
       await prisma.sellerVerification.update({
         where: { sellerId: id },
@@ -133,67 +134,75 @@ export async function POST(
       });
     }
 
-    await prisma.sellerVerification.update({
-      where: { sellerId: id },
-      data: {
-        status: data.status,
-        rejectionReason:
-          data.status === SellerVerificationStatus.REJECTED
-            ? data.rejectionReason
-            : null,
-        adminFallbackStatus:
-          data.status === SellerVerificationStatus.APPROVED
-            ? SellerAdminFallbackStatus.APPROVED
-            : SellerAdminFallbackStatus.REJECTED,
-        // If admins do not provide a separate internal fallback note for
-        // rejections, reuse rejectionReason so dashboard context stays aligned.
-        adminFallbackReason:
-          data.adminFallbackReason
-          ?? (data.status === SellerVerificationStatus.REJECTED
-            ? data.rejectionReason
-            : null),
-        eligibleToListAt:
-          data.status === SellerVerificationStatus.APPROVED
-            ? new Date()
-            : null,
-        reviewedAt: new Date(),
-        reviewedById: session.user.id,
-      },
-    });
-
-    // Sync canonical kycStatus, sellerStatus, verifiedSeller, and approvedAt
-    // onto the User record so all dashboard counts use a single source of truth.
+    // Perform the three core state-transition writes inside a single
+    // transaction so they either all succeed or all roll back. This prevents
+    // partial approval state (e.g. SellerVerification marked APPROVED but
+    // User.kycStatus still NOT_SUBMITTED) after a mid-flight DB error.
     const now = new Date();
-    await prisma.user.update({
-      where: { id },
-      data:
-        data.status === SellerVerificationStatus.APPROVED
-          ? {
-              kycStatus: KycStatus.APPROVED,
-              sellerStatus: SellerStatus.ACTIVE,
-              verifiedSeller: true,
-              approvedAt: now,
-            }
-          : {
-              kycStatus: KycStatus.REJECTED,
-            },
-    });
+    await prisma.$transaction(async (tx) => {
+      await tx.sellerVerification.update({
+        where: { sellerId: id },
+        data: {
+          status: data.status,
+          rejectionReason:
+            data.status === SellerVerificationStatus.REJECTED
+              ? data.rejectionReason
+              : null,
+          adminFallbackStatus:
+            data.status === SellerVerificationStatus.APPROVED
+              ? SellerAdminFallbackStatus.APPROVED
+              : SellerAdminFallbackStatus.REJECTED,
+          // If admins do not provide a separate internal fallback note for
+          // rejections, reuse rejectionReason so dashboard context stays aligned.
+          adminFallbackReason:
+            data.adminFallbackReason
+            ?? (data.status === SellerVerificationStatus.REJECTED
+              ? data.rejectionReason
+              : null),
+          eligibleToListAt:
+            data.status === SellerVerificationStatus.APPROVED
+              ? now
+              : null,
+          reviewedAt: now,
+          reviewedById: session.user.id,
+        },
+      });
 
-    // Notify the seller of the admin's decision. Admin review decisions always
-    // create fresh notifications (no deduplication) so sellers receive a
-    // notification for every approval/rejection cycle.
-    await createNotification({
-      userId: id,
-      type: NotificationType.PAYOUT,
-      title:
-        data.status === SellerVerificationStatus.APPROVED
-          ? 'Identity verification approved ✓'
-          : 'Identity verification rejected',
-      body:
-        data.status === SellerVerificationStatus.APPROVED
-          ? 'An admin has approved your identity verification. You can now list items on FlupFlap once your subscription is active.'
-          : `Your identity verification was rejected: ${data.rejectionReason}. Please re-submit your documents from your seller dashboard.`,
-      link: '/seller',
+      // Sync canonical kycStatus, sellerStatus, verifiedSeller, and approvedAt
+      // onto the User record so all dashboard counts use a single source of truth.
+      await tx.user.update({
+        where: { id },
+        data:
+          data.status === SellerVerificationStatus.APPROVED
+            ? {
+                kycStatus: KycStatus.APPROVED,
+                sellerStatus: SellerStatus.ACTIVE,
+                verifiedSeller: true,
+                approvedAt: now,
+              }
+            : {
+                kycStatus: KycStatus.REJECTED,
+              },
+      });
+
+      // Notify the seller of the admin's decision. Admin review decisions always
+      // create fresh notifications (no deduplication) so sellers receive a
+      // notification for every approval/rejection cycle.
+      await tx.notification.create({
+        data: {
+          userId: id,
+          type: NotificationType.PAYOUT,
+          title:
+            data.status === SellerVerificationStatus.APPROVED
+              ? 'Identity verification approved ✓'
+              : 'Identity verification rejected',
+          body:
+            data.status === SellerVerificationStatus.APPROVED
+              ? 'An admin has approved your identity verification. You can now list items on FlupFlap once your subscription is active.'
+              : `Your identity verification was rejected: ${data.rejectionReason}. Please re-submit your documents from your seller dashboard.`,
+          link: '/seller',
+        },
+      });
     });
 
     return NextResponse.redirect(new URL('/admin/sellers?verification=updated', req.url));
