@@ -92,10 +92,10 @@ export function getRoleNavigation(role?: string | null): RoleNavItem[] {
   return [{ label: 'Browse', href: '/' }, { label: 'Garage Sales', href: '/garage-sales' }];
 }
 
-export function isRoleNavItemActive(
+function isRoleNavItemActiveInternal(
   item: RoleNavItem,
-  pathname?: string | null,
-  visited: Set<RoleNavItem> = new Set(),
+  pathname: string | null | undefined,
+  visited: Set<RoleNavItem>,
 ): boolean {
   if (!pathname) return false;
   if (visited.has(item)) return false;
@@ -107,8 +107,13 @@ export function isRoleNavItemActive(
     const hrefPath = item.href.split('#')[0];
     if (pathname === hrefPath) return true;
   }
-  return item.children?.some((child) => {
-    visited.add(child);
-    return isRoleNavItemActive(child, pathname, visited);
-  }) ?? false;
+  return item.children?.some((child) => isRoleNavItemActiveInternal(child, pathname, visited)) ?? false;
+}
+
+export function isRoleNavItemActive(
+  item: RoleNavItem,
+  pathname?: string | null,
+  visited: Set<RoleNavItem> = new Set(),
+): boolean {
+  return isRoleNavItemActiveInternal(item, pathname, visited);
 }

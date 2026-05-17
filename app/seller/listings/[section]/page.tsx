@@ -13,6 +13,10 @@ import {
 
 export const dynamic = 'force-dynamic';
 
+function formatItemCountLabel(count: number) {
+  return `${count} item${count === 1 ? '' : 's'}`;
+}
+
 type Props = {
   params: Promise<{ section: string }>;
   searchParams: Promise<{ created?: string; updated?: string; deleted?: string; fraud?: string }>;
@@ -46,7 +50,7 @@ export default async function SellerListingsSectionPage({ params, searchParams }
             <p className="text-sm text-slate-600">{copy.description}</p>
           </div>
           <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm font-semibold text-slate-700">
-            {filteredListings.length} item{filteredListings.length === 1 ? '' : 's'}
+            {formatItemCountLabel(filteredListings.length)}
           </span>
         </div>
       </section>

@@ -70,6 +70,7 @@ export function filterSellerListingsBySection(
     return listings.filter((item) => item.status === 'PENDING' || item.status === 'REJECTED');
   }
   if (section === 'scheduled') {
+    // Placeholder until scheduled publishing ships in the product model.
     return [];
   }
   if (section === 'active') {

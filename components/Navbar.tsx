@@ -140,7 +140,7 @@ export default function Navbar() {
       if (!href) return null;
       return (
         <Link
-          key={item.href ?? item.label}
+          key={item.label}
           href={href}
           className={`${navLinkClass} ${active ? 'bg-slate-100 text-slate-900' : ''}`}
           aria-label={item.label}
@@ -203,7 +203,7 @@ export default function Navbar() {
       if (!href) return null;
       return (
         <Link
-          key={`mobile-${item.href ?? item.label}`}
+          key={`mobile-${item.label}`}
           href={href}
           className={`rounded-lg px-3 py-2.5 ${
             experienceRole === 'admin'
