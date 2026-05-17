@@ -183,7 +183,7 @@ function parseWorkflowAction(value: unknown): WorkflowAction | null {
 }
 
 function isDraftLikeStatus(status: string) {
-  // Keep legacy SCHEDULED rows from older releases in a non-live state when scheduling is unavailable.
+  // Backward-compatibility for pre-existing SCHEDULED rows while scheduling creation is disabled.
   return status === 'DRAFT' || status === 'SCHEDULED';
 }
 
@@ -692,6 +692,7 @@ export async function PATCH(
     if (workflowAction) {
       const currentLifecycle = toSellerLifecycleStatus(existing.status);
       if (workflowAction === 'CANCEL_SCHEDULE') {
+        // Backward-compatibility path for legacy scheduled listings created before scheduling was disabled.
         if (currentLifecycle !== 'SCHEDULED') {
           return NextResponse.json({ error: 'Only scheduled listings can be moved back to draft.' }, { status: 400 });
         }
