@@ -141,22 +141,22 @@ function LoginForm() {
       return t('login.tooManyRequests');
     }
     if (code === 'auth/invalid-phone-number') {
-      return 'Invalid phone number. Please include your country code (e.g. +1 for US/Canada).';
+      return t('login.invalidPhoneNumber');
     }
     if (code === 'auth/captcha-check-failed' || code === 'auth/invalid-app-credential') {
-      return 'Security check failed. Please refresh and try again.';
+      return t('login.securityCheckFailed');
     }
     if (code === 'auth/operation-not-allowed') {
-      return 'Phone sign-in is not enabled for this app. Please contact support.';
+      return t('login.phoneSignInNotEnabled');
     }
     if (code === 'auth/unauthorized-domain') {
-      return 'This domain is not authorized for phone sign-in. Please contact support.';
+      return t('login.unauthorizedDomain');
     }
     if (code === 'auth/network-request-failed') {
-      return 'Network error. Please check your connection and try again.';
+      return t('login.networkError');
     }
 
-    return 'Phone verification failed. Please try again.';
+    return t('login.phoneVerificationFailed');
   }
 
   const resendCooldownSeconds = getSendCooldownSeconds();
