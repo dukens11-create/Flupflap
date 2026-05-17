@@ -25,8 +25,8 @@ function isMissingUserRolesColumnError(err: unknown): boolean {
     return false;
   }
 
-  const metaColumn = typeof err.meta?.column === 'string' ? err.meta.column : '';
-  return metaColumn.includes('User.roles') || err.message.includes('User.roles');
+  const errorColumn = typeof err.meta?.column === 'string' ? err.meta.column : '';
+  return errorColumn.includes('User.roles') || err.message.includes('User.roles');
 }
 
 function getSignupFailureResponse(err: unknown) {
@@ -239,7 +239,7 @@ export async function POST(req: Request) {
           return NextResponse.json(
             {
               error:
-                'This account currently has seller-only access until role upgrades finish. Please sign in and try again shortly.',
+                'This email is already linked to a seller account. Please sign in with this account to continue.',
               requiresSignIn: true,
             },
             { status: 409 },
