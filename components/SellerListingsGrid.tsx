@@ -187,7 +187,30 @@ interface CardProps {
 function ListingCard({ item, isRestricted, onDelete }: CardProps) {
   const [expanded, setExpanded] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
+  const [actionError, setActionError] = useState("");
   const lifecycle = toSellerLifecycleStatus(item.status);
+
+  async function runWorkflowAction(payload: Record<string, unknown>) {
+    setActionBusy(true);
+    setActionError("");
+    try {
+      const res = await fetch(`/api/seller/products/${item.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setActionError(data.error ?? "Unable to update listing workflow.");
+        return;
+      }
+      window.location.reload();
+    } catch {
+      setActionError("Network error. Please try again.");
+    } finally {
+      setActionBusy(false);
+    }
+  }
 
   const hasExtraDetails =
     item.packageSummary || item.cartAdds > 0 || item.conversionRate !== null;
@@ -376,36 +399,17 @@ function ListingCard({ item, isRestricted, onDelete }: CardProps) {
             />
           )}
           {!isRestricted && lifecycle === "DRAFT" && (
-            <button
-              disabled={actionBusy}
-              onClick={async () => {
-                const raw = window.prompt("Schedule date/time (YYYY-MM-DDTHH:mm)");
-                if (!raw) return;
-                setActionBusy(true);
-                await fetch(`/api/seller/products/${item.id}`, {
-                  method: "PATCH",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ workflowAction: "SCHEDULE", scheduledFor: raw }),
-                });
-                window.location.reload();
-              }}
+            <Link
+              href={`/seller/edit/${item.id}`}
               className="inline-flex items-center justify-center px-2.5 py-1 rounded-lg border border-slate-300 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors"
             >
               Schedule
-            </button>
+            </Link>
           )}
           {!isRestricted && lifecycle === "DRAFT" && (
             <button
               disabled={actionBusy}
-              onClick={async () => {
-                setActionBusy(true);
-                await fetch(`/api/seller/products/${item.id}`, {
-                  method: "PATCH",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ workflowAction: "PUBLISH_NOW" }),
-                });
-                window.location.reload();
-              }}
+              onClick={() => runWorkflowAction({ workflowAction: "PUBLISH_NOW" })}
               className="inline-flex items-center justify-center px-2.5 py-1 rounded-lg border border-slate-300 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors"
             >
               Publish now
@@ -414,57 +418,31 @@ function ListingCard({ item, isRestricted, onDelete }: CardProps) {
           {!isRestricted && lifecycle === "SCHEDULED" && (
             <button
               disabled={actionBusy}
-              onClick={async () => {
-                setActionBusy(true);
-                await fetch(`/api/seller/products/${item.id}`, {
-                  method: "PATCH",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ workflowAction: "PUBLISH_NOW" }),
-                });
-                window.location.reload();
-              }}
+              onClick={() => runWorkflowAction({ workflowAction: "PUBLISH_NOW" })}
               className="inline-flex items-center justify-center px-2.5 py-1 rounded-lg border border-slate-300 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors"
             >
               Publish now
             </button>
           )}
           {!isRestricted && lifecycle === "SCHEDULED" && (
-            <button
-              disabled={actionBusy}
-              onClick={async () => {
-                const raw = window.prompt("Reschedule date/time (YYYY-MM-DDTHH:mm)");
-                if (!raw) return;
-                setActionBusy(true);
-                await fetch(`/api/seller/products/${item.id}`, {
-                  method: "PATCH",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ workflowAction: "SCHEDULE", scheduledFor: raw }),
-                });
-                window.location.reload();
-              }}
+            <Link
+              href={`/seller/edit/${item.id}`}
               className="inline-flex items-center justify-center px-2.5 py-1 rounded-lg border border-slate-300 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors"
             >
               Reschedule
-            </button>
+            </Link>
           )}
           {!isRestricted && lifecycle === "SCHEDULED" && (
             <button
               disabled={actionBusy}
-              onClick={async () => {
-                setActionBusy(true);
-                await fetch(`/api/seller/products/${item.id}`, {
-                  method: "PATCH",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ workflowAction: "CANCEL_SCHEDULE" }),
-                });
-                window.location.reload();
-              }}
+              onClick={() => runWorkflowAction({ workflowAction: "CANCEL_SCHEDULE" })}
               className="inline-flex items-center justify-center px-2.5 py-1 rounded-lg border border-slate-300 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors"
             >
               Cancel schedule
             </button>
           )}
         </div>
+        {actionError && <p className="mt-1 text-xs text-red-600">{actionError}</p>}
       </div>
     </div>
   );

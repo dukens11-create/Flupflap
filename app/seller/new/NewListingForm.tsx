@@ -32,10 +32,10 @@ const EMPTY_SELECTED_CATEGORY: SelectedCategoryState = {
 
 export default function NewListingForm() {
   const router = useRouter();
+  const minScheduleDate = new Date().toISOString().slice(0, 16);
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitting, setSubmitting] = useState(false);
   const [shippingMode, setShippingMode] = useState<'CALCULATED' | 'FREE' | 'FLAT'>('CALCULATED');
-  const [submitAction, setSubmitAction] = useState<'SAVE_DRAFT' | 'SCHEDULE' | 'PUBLISH_NOW'>('PUBLISH_NOW');
   const [mediaState, setMediaState] = useState<MediaUploadState>({
     imageCount: 0,
     uploadedImageCount: 0,
@@ -76,6 +76,9 @@ export default function NewListingForm() {
 
     const form = event.currentTarget;
     const formData = new FormData(form);
+    const nativeSubmitEvent = event.nativeEvent as SubmitEvent;
+    const submitter = nativeSubmitEvent.submitter as HTMLButtonElement | null;
+    const submitAction = (submitter?.value as 'SAVE_DRAFT' | 'SCHEDULE' | 'PUBLISH_NOW' | undefined) ?? 'PUBLISH_NOW';
     formData.set('submitAction', submitAction);
 
     const nextErrors: FormErrors = {};
@@ -211,8 +214,8 @@ export default function NewListingForm() {
         {errors.title && <p className="mt-1 text-xs text-red-600">{errors.title}</p>}
       </div>
       <div>
-        <label className="label">Schedule publish time (optional)</label>
-        <input name="scheduledFor" type="datetime-local" className="input" />
+        <label className="label" htmlFor="scheduledFor">Schedule publish time (optional)</label>
+        <input id="scheduledFor" name="scheduledFor" type="datetime-local" className="input" min={minScheduleDate} />
       </div>
       <div>
         <label className="label">Description</label>
@@ -369,9 +372,9 @@ export default function NewListingForm() {
       )}
 
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-        <button type="submit" onClick={() => setSubmitAction('SAVE_DRAFT')} className="btn-outline" disabled={submitting || mediaState.isUploading || mediaState.isEnhancing}>Save Draft</button>
-        <button type="submit" onClick={() => setSubmitAction('SCHEDULE')} className="btn-outline" disabled={submitting || mediaState.isUploading || mediaState.isEnhancing}>Schedule</button>
-        <button type="submit" onClick={() => setSubmitAction('PUBLISH_NOW')} className="btn-primary" disabled={submitting || mediaState.isUploading || mediaState.isEnhancing}>Publish Now</button>
+        <button type="submit" name="submitAction" value="SAVE_DRAFT" className="btn-outline" disabled={submitting || mediaState.isUploading || mediaState.isEnhancing}>Save Draft</button>
+        <button type="submit" name="submitAction" value="SCHEDULE" className="btn-outline" disabled={submitting || mediaState.isUploading || mediaState.isEnhancing}>Schedule</button>
+        <button type="submit" name="submitAction" value="PUBLISH_NOW" className="btn-primary" disabled={submitting || mediaState.isUploading || mediaState.isEnhancing}>Publish Now</button>
       </div>
       <p className="text-xs text-slate-500 text-center">
         Draft listings stay private until published. Scheduled listings auto-publish at the selected time.

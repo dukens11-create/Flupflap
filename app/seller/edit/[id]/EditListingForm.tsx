@@ -88,10 +88,10 @@ export default function EditListingForm({
   defaultPickupPostalCode,
 }: EditListingFormProps) {
   const router = useRouter();
+  const minScheduleDate = new Date().toISOString().slice(0, 16);
   const [submitError, setSubmitError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [submitAction, setSubmitAction] = useState<'SAVE_DRAFT' | 'SCHEDULE' | 'PUBLISH_NOW'>('PUBLISH_NOW');
   const [mediaState, setMediaState] = useState<MediaUploadState>({
     imageCount: defaultImages.length,
     uploadedImageCount: defaultImages.length,
@@ -117,6 +117,9 @@ export default function EditListingForm({
 
     const form = e.currentTarget;
     const formData = new FormData(form);
+    const nativeSubmitEvent = e.nativeEvent as SubmitEvent;
+    const submitter = nativeSubmitEvent.submitter as HTMLButtonElement | null;
+    const submitAction = (submitter?.value as 'SAVE_DRAFT' | 'SCHEDULE' | 'PUBLISH_NOW' | undefined) ?? 'PUBLISH_NOW';
     formData.set('submitAction', submitAction);
     const isDraft = submitAction === 'SAVE_DRAFT';
     const isScheduled = submitAction === 'SCHEDULE';
@@ -312,8 +315,8 @@ export default function EditListingForm({
         />
       </div>
       <div>
-        <label className="label">Schedule publish time (optional)</label>
-        <input name="scheduledFor" type="datetime-local" className="input" />
+        <label className="label" htmlFor="scheduledFor">Schedule publish time (optional)</label>
+        <input id="scheduledFor" name="scheduledFor" type="datetime-local" className="input" min={minScheduleDate} />
       </div>
       <div>
         <label className="label">Description</label>
@@ -561,7 +564,8 @@ export default function EditListingForm({
         <button
           className="btn-outline"
           type="submit"
-          onClick={() => setSubmitAction('SCHEDULE')}
+          name="submitAction"
+          value="SCHEDULE"
           disabled={submitting || deleting}
         >
           Schedule
@@ -569,7 +573,8 @@ export default function EditListingForm({
         <button
           className="btn-primary"
           type="submit"
-          onClick={() => setSubmitAction('PUBLISH_NOW')}
+          name="submitAction"
+          value="PUBLISH_NOW"
           disabled={submitting || deleting}
         >
           {submitting ? 'Saving…' : 'Publish Now'}

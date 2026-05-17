@@ -466,7 +466,7 @@ export async function POST(req: Request) {
     try {
       product = await prisma.product.create({
         data: {
-          title: title || 'Untitled Draft',
+          title: title || 'Untitled',
           description: data.description || '',
           priceCents: price && !Number.isNaN(Number(price)) && Number(price) > 0 ? cents(price) : 0,
           condition: data.condition || 'UNSPECIFIED',
