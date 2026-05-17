@@ -127,6 +127,9 @@ export default function Navbar() {
     if (activeGroup) {
       setDesktopGroupOpen(activeGroup.label);
       setMobileGroupOpen(activeGroup.label);
+    } else {
+      setDesktopGroupOpen(null);
+      setMobileGroupOpen(null);
     }
   }, [pathname, roleNavigation]);
 

@@ -77,7 +77,7 @@ export default async function SellerListingsSectionPage({ params, searchParams }
         isRestricted={isRestricted}
         hideFilters
         emptyMessage={copy.emptyMessage}
-        searchPlaceholder={`Search ${copy.title.toLowerCase()}…`}
+        searchPlaceholder={copy.searchPlaceholder}
       />
     </main>
   );

@@ -23,32 +23,38 @@ export const SELLER_LISTINGS_SECTION_COPY: Record<
     title: string;
     description: string;
     emptyMessage: string;
+    searchPlaceholder: string;
   }
 > = {
   drafts: {
     title: 'Drafts',
     description: 'Listings that still need approval or more work before they go live.',
     emptyMessage: 'No draft listings yet. Items waiting for approval or revisions will show here.',
+    searchPlaceholder: 'Search draft listings…',
   },
   scheduled: {
     title: 'Scheduled',
     description: 'Listings scheduled to publish later will appear here.',
     emptyMessage: 'No scheduled listings yet.',
+    searchPlaceholder: 'Search scheduled listings…',
   },
   active: {
     title: 'Active',
     description: 'Only your live listings that buyers can currently shop.',
     emptyMessage: 'No active listings right now.',
+    searchPlaceholder: 'Search active listings…',
   },
   sold: {
     title: 'Sold',
     description: 'Completed sold listings and sold-only actions live here.',
     emptyMessage: 'No sold listings yet.',
+    searchPlaceholder: 'Search sold listings…',
   },
   archived: {
     title: 'Archived',
     description: 'Delisted, hidden, and offline listings live here for reference.',
     emptyMessage: 'No archived listings right now.',
+    searchPlaceholder: 'Search archived listings…',
   },
 };
 
