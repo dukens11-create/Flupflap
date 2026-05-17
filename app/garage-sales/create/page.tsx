@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
 
-export default function GarageSalesCreatePage() {
+export default async function GarageSalesCreatePage() {
   redirect('/garage-sales/new');
 }
