@@ -35,6 +35,7 @@ export default function NewListingForm() {
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitting, setSubmitting] = useState(false);
   const [shippingMode, setShippingMode] = useState<'CALCULATED' | 'FREE' | 'FLAT'>('CALCULATED');
+  const [submitAction, setSubmitAction] = useState<'SAVE_DRAFT' | 'SCHEDULE' | 'PUBLISH_NOW'>('PUBLISH_NOW');
   const [mediaState, setMediaState] = useState<MediaUploadState>({
     imageCount: 0,
     uploadedImageCount: 0,
@@ -75,6 +76,7 @@ export default function NewListingForm() {
 
     const form = event.currentTarget;
     const formData = new FormData(form);
+    formData.set('submitAction', submitAction);
 
     const nextErrors: FormErrors = {};
     const title = String(formData.get('title') ?? '').trim();
@@ -95,20 +97,24 @@ export default function NewListingForm() {
     const fallbackImage = String(formData.get('imageUrl') ?? '').trim();
     const resolvedImages = images.length > 0 ? images : (fallbackImage ? [fallbackImage] : []);
 
-    if (!title) nextErrors.title = 'Please enter a product title.';
-    if (!categoryId || categoryStale) nextErrors.category = INVALID_CATEGORY_MESSAGE;
-    if (!condition) nextErrors.condition = 'Please select an item condition.';
+    const isDraft = submitAction === 'SAVE_DRAFT';
+    const isScheduled = submitAction === 'SCHEDULE';
+    if (!isDraft) {
+      if (!title) nextErrors.title = 'Please enter a product title.';
+      if (!categoryId || categoryStale) nextErrors.category = INVALID_CATEGORY_MESSAGE;
+      if (!condition) nextErrors.condition = 'Please select an item condition.';
+    }
 
     const price = Number(priceRaw);
-    if (!priceRaw || Number.isNaN(price) || price <= 0) {
+    if (!isDraft && (!priceRaw || Number.isNaN(price) || price <= 0)) {
       nextErrors.price = 'Please enter a valid price.';
     }
 
     const inventoryQty = Number(inventoryRaw);
-    if (!inventoryRaw || Number.isNaN(inventoryQty) || !Number.isInteger(inventoryQty) || inventoryQty < 1 || inventoryQty > 9999) {
+    if (!isDraft && (!inventoryRaw || Number.isNaN(inventoryQty) || !Number.isInteger(inventoryQty) || inventoryQty < 1 || inventoryQty > 9999)) {
       nextErrors.inventoryQty = 'Please enter an inventory quantity between 1 and 9999.';
     }
-    if (shippingMode === 'FLAT') {
+    if (!isDraft && shippingMode === 'FLAT') {
       const shippingRaw = String(formData.get('shipping') ?? '').trim();
       const shippingPrice = Number(shippingRaw);
       if (!shippingRaw || Number.isNaN(shippingPrice) || shippingPrice < 0) {
@@ -117,19 +123,25 @@ export default function NewListingForm() {
     }
 
     const packageValues = packageInputs.map(Number);
-    if (
+    if (!isDraft && (
       packageInputs.some((value) => !value)
       || packageValues.some((value) => Number.isNaN(value) || value <= 0)
-    ) {
+    )) {
       nextErrors.shippingPackage = 'Shipping package details are required.';
     }
 
-    if (resolvedImages.length < 1) {
+    if (!isDraft && resolvedImages.length < 1) {
       nextErrors.images = 'Please upload at least 1 product image.';
-    } else if (resolvedImages.length > 6) {
+    } else if (!isDraft && resolvedImages.length > 6) {
       nextErrors.images = 'You can upload up to 6 product images.';
-    } else if (!mediaState.canSubmit) {
+    } else if (!isDraft && !mediaState.canSubmit) {
       nextErrors.images = mediaState.message || 'Please wait for media uploads to finish before submitting.';
+    }
+    if (isScheduled) {
+      const scheduledFor = String(formData.get('scheduledFor') ?? '').trim();
+      if (!scheduledFor) {
+        nextErrors.submit = 'Choose a future date/time to schedule this listing.';
+      }
     }
 
     if (Object.keys(nextErrors).length > 0) {
@@ -197,6 +209,10 @@ export default function NewListingForm() {
         <label className="label">Title</label>
         <input name="title" className={`input ${errors.title ? 'border-red-500 ring-1 ring-red-100' : ''}`} placeholder="e.g. Used iPhone 13" required minLength={3} />
         {errors.title && <p className="mt-1 text-xs text-red-600">{errors.title}</p>}
+      </div>
+      <div>
+        <label className="label">Schedule publish time (optional)</label>
+        <input name="scheduledFor" type="datetime-local" className="input" />
       </div>
       <div>
         <label className="label">Description</label>
@@ -352,20 +368,14 @@ export default function NewListingForm() {
         </p>
       )}
 
-      <button
-        className="btn-primary w-full disabled:opacity-60 disabled:cursor-not-allowed"
-        type="submit"
-        disabled={
-          submitting
-          || mediaState.isUploading
-          || mediaState.isEnhancing
-          || !selectedCategory.categoryId
-          || selectedCategory.stale
-        }
-      >
-        {submitting ? 'Submitting…' : 'Submit for review'}
-      </button>
-      <p className="text-xs text-slate-500 text-center">Your listing will be reviewed by an admin before it goes live.</p>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <button type="submit" onClick={() => setSubmitAction('SAVE_DRAFT')} className="btn-outline" disabled={submitting || mediaState.isUploading || mediaState.isEnhancing}>Save Draft</button>
+        <button type="submit" onClick={() => setSubmitAction('SCHEDULE')} className="btn-outline" disabled={submitting || mediaState.isUploading || mediaState.isEnhancing}>Schedule</button>
+        <button type="submit" onClick={() => setSubmitAction('PUBLISH_NOW')} className="btn-primary" disabled={submitting || mediaState.isUploading || mediaState.isEnhancing}>Publish Now</button>
+      </div>
+      <p className="text-xs text-slate-500 text-center">
+        Draft listings stay private until published. Scheduled listings auto-publish at the selected time.
+      </p>
     </form>
   );
 }

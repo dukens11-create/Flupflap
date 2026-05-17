@@ -32,6 +32,7 @@ import {
   getEffectivePackageDetails,
   hasStoredPackageDetails,
 } from '@/lib/product-package';
+import { toSellerLifecycleStatus } from '@/lib/listing-status';
 
 export const dynamic = 'force-dynamic';
 
@@ -249,12 +250,12 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
 
   const productsAddedThisWeek = products.filter(p => p.createdAt >= weekStart).length;
   const productsAddedThisMonth = products.filter(p => p.createdAt >= monthStart).length;
-  const activeListingsCount = products.filter(p => p.status === 'APPROVED').length;
-  const pendingListingsCount = products.filter(p => p.status === 'PENDING').length;
+  const activeListingsCount = products.filter((p) => toSellerLifecycleStatus(p.status) === 'ACTIVE').length;
+  const pendingListingsCount = products.filter((p) => toSellerLifecycleStatus(p.status) === 'DRAFT').length;
   const totalCartAdds = products.reduce((sum, product) => sum + (product.cartInterest?.totalAdds ?? 0), 0);
   const totalViewCount = products.reduce((sum, p) => sum + (p.viewCount ?? 0), 0);
   const totalSoldQty = products.reduce((sum, p) => sum + (p.soldQty ?? 0), 0);
-  const totalRemainingStock = products.reduce((sum, p) => sum + (p.status === 'APPROVED' ? p.inventory : 0), 0);
+  const totalRemainingStock = products.reduce((sum, p) => sum + (toSellerLifecycleStatus(p.status) === 'ACTIVE' ? p.inventory : 0), 0);
   // Conversion rate = unique purchase transactions / total views (not units, to avoid >100%)
   const overallConversionRate = calcConversionRate(completedOrdersCount, totalViewCount);
   // Per-product: count of distinct order IDs per product (used for per-listing conversion rate)
@@ -858,6 +859,8 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                 packageSummary: packageDetails
                   ? formatPackageDisplay(packageDetails, shippingSetupIncomplete)
                   : null,
+                scheduledFor: p.scheduledFor?.toISOString() ?? null,
+                publishedAt: p.publishedAt?.toISOString() ?? null,
               };
             })}
           />

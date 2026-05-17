@@ -91,6 +91,7 @@ export default function EditListingForm({
   const [submitError, setSubmitError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [submitAction, setSubmitAction] = useState<'SAVE_DRAFT' | 'SCHEDULE' | 'PUBLISH_NOW'>('PUBLISH_NOW');
   const [mediaState, setMediaState] = useState<MediaUploadState>({
     imageCount: defaultImages.length,
     uploadedImageCount: defaultImages.length,
@@ -116,6 +117,9 @@ export default function EditListingForm({
 
     const form = e.currentTarget;
     const formData = new FormData(form);
+    formData.set('submitAction', submitAction);
+    const isDraft = submitAction === 'SAVE_DRAFT';
+    const isScheduled = submitAction === 'SCHEDULE';
 
     // Client-side validation
     const condition = String(formData.get('condition') ?? '').trim();
@@ -132,20 +136,20 @@ export default function EditListingForm({
     const imageUrl = String(formData.get('imageUrl') ?? '').trim();
     const resolvedImages = images.length > 0 ? images : (imageUrl ? [imageUrl] : []);
 
-    if (!submittedCategoryId || categoryStale) {
+    if (!isDraft && (!submittedCategoryId || categoryStale)) {
       setSubmitError(INVALID_CATEGORY_MESSAGE);
       return;
     }
-    if (!condition) {
+    if (!isDraft && !condition) {
       setSubmitError('Please select an item condition.');
       return;
     }
-    if (!weight || !length || !width || !height) {
+    if (!isDraft && (!weight || !length || !width || !height)) {
       setSubmitError('Please fill in all shipping package dimensions (weight, length, width, height).');
       return;
     }
     const numericPackageValues = [weight, length, width, height].map(Number);
-    if (numericPackageValues.some((value) => Number.isNaN(value) || value <= 0)) {
+    if (!isDraft && numericPackageValues.some((value) => Number.isNaN(value) || value <= 0)) {
       const packageFields = [
         ['weight', numericPackageValues[0]],
         ['length', numericPackageValues[1]],
@@ -164,13 +168,20 @@ export default function EditListingForm({
         return;
       }
     }
-    if (resolvedImages.length < 1) {
+    if (!isDraft && resolvedImages.length < 1) {
       setSubmitError('Please upload at least one product image.');
       return;
     }
-    if (mediaState.isUploading || mediaState.isEnhancing || !mediaState.canSubmit) {
+    if (!isDraft && (mediaState.isUploading || mediaState.isEnhancing || !mediaState.canSubmit)) {
       setSubmitError(mediaState.message || 'Please wait for media uploads to finish before submitting.');
       return;
+    }
+    if (isScheduled) {
+      const scheduledFor = String(formData.get('scheduledFor') ?? '').trim();
+      if (!scheduledFor) {
+        setSubmitError('Choose a future date/time to schedule this listing.');
+        return;
+      }
     }
 
     setSubmitError('');
@@ -260,6 +271,29 @@ export default function EditListingForm({
     }
   }
 
+  async function handleSaveDraftQuickly() {
+    if (submitting || deleting) return;
+    setSubmitError('');
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/seller/products/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workflowAction: 'SAVE_DRAFT' }),
+      });
+      if (!res.ok) {
+        const errorMessage = await readApiMessage(res, 'Unable to save draft right now.');
+        setSubmitError(errorMessage);
+        setSubmitting(false);
+        return;
+      }
+      router.push('/seller?updated=1');
+    } catch {
+      setSubmitError('Network error. Please check your connection and try again.');
+      setSubmitting(false);
+    }
+  }
+
   return (
     <form onSubmit={handleSubmit} className="card p-6 space-y-4" noValidate>
       {submitError && (
@@ -276,6 +310,10 @@ export default function EditListingForm({
           required
           minLength={3}
         />
+      </div>
+      <div>
+        <label className="label">Schedule publish time (optional)</label>
+        <input name="scheduledFor" type="datetime-local" className="input" />
       </div>
       <div>
         <label className="label">Description</label>
@@ -508,16 +546,33 @@ export default function EditListingForm({
           Selected category: {selectedCategory.categoryPath}
         </p>
       )}
-      <div className="flex gap-3">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
         <a href="/seller" className="btn-outline flex-1 text-center">
           Cancel
         </a>
         <button
-          className="btn-primary flex-1"
-          type="submit"
-          disabled={submitting || deleting || !selectedCategory.categoryId || selectedCategory.stale}
+          className="btn-outline"
+          type="button"
+          onClick={handleSaveDraftQuickly}
+          disabled={submitting || deleting}
         >
-          {submitting ? 'Saving…' : 'Save changes'}
+          Save Draft
+        </button>
+        <button
+          className="btn-outline"
+          type="submit"
+          onClick={() => setSubmitAction('SCHEDULE')}
+          disabled={submitting || deleting}
+        >
+          Schedule
+        </button>
+        <button
+          className="btn-primary"
+          type="submit"
+          onClick={() => setSubmitAction('PUBLISH_NOW')}
+          disabled={submitting || deleting}
+        >
+          {submitting ? 'Saving…' : 'Publish Now'}
         </button>
       </div>
       {canDelete && (
@@ -537,7 +592,7 @@ export default function EditListingForm({
         </div>
       )}
       <p className="text-xs text-slate-500 text-center">
-        Your listing will return to &quot;Pending&quot; status and be re-reviewed by an admin.
+        Draft listings stay private until published. Scheduled listings auto-publish at the selected time.
       </p>
     </form>
   );

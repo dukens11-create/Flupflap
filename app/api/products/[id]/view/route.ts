@@ -20,7 +20,7 @@ export async function POST(
     }
 
     // Only count views on approved products; return silently for others
-    if (product.status !== 'APPROVED') {
+    if (!['APPROVED', 'ACTIVE'].includes(product.status)) {
       return NextResponse.json({ ok: false, skipped: true });
     }
 

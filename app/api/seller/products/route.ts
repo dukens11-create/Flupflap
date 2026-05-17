@@ -92,6 +92,20 @@ function getErrorMessage(err: unknown): string {
   return 'Unknown error.';
 }
 
+type SubmitAction = 'SAVE_DRAFT' | 'SCHEDULE' | 'PUBLISH_NOW' | 'SUBMIT_REVIEW';
+
+function resolveSubmitAction(value: string | null): SubmitAction {
+  if (value === 'SAVE_DRAFT' || value === 'SCHEDULE' || value === 'PUBLISH_NOW') return value;
+  return 'SUBMIT_REVIEW';
+}
+
+function parseScheduledFor(value: string | null) {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed;
+}
+
 function parsePositiveNumber(value?: string | null) {
   const trimmed = value?.trim() ?? '';
   if (!trimmed) return null;
@@ -200,6 +214,10 @@ export async function POST(req: Request) {
     }
 
     const form = await req.formData();
+    const submitAction = resolveSubmitAction(String(form.get('submitAction') ?? ''));
+    const isDraftAction = submitAction === 'SAVE_DRAFT';
+    const isScheduleAction = submitAction === 'SCHEDULE';
+    const isPublishNowAction = submitAction === 'PUBLISH_NOW';
     const incomingBody = toLogSafeObject(form.entries());
     console.info('[seller/products POST] incoming request body', incomingBody);
     const rawEntries = Object.fromEntries(form.entries());
@@ -244,36 +262,36 @@ export async function POST(req: Request) {
       : data.imageUrl
         ? [data.imageUrl]
         : [];
-    if (resolvedImages.length < 1) {
+    if (!isDraftAction && resolvedImages.length < 1) {
       return jsonError('Please upload at least 1 product image.', 400);
     }
-    if (resolvedImages.length > 6) {
+    if (!isDraftAction && resolvedImages.length > 6) {
       return jsonError('You can upload up to 6 product images.', 400);
     }
 
     const title = data.title ?? '';
-    if (!title) {
+    if (!isDraftAction && !title) {
       return jsonError('Please enter a product title.', 400);
     }
 
     const price = data.price ?? '';
-    if (!price || Number.isNaN(Number(price)) || Number(price) <= 0) {
+    if (!isDraftAction && (!price || Number.isNaN(Number(price)) || Number(price) <= 0)) {
       return jsonError('Please enter a valid price.', 400);
     }
 
     const inventoryRaw = data.inventoryQty || data.inventory || '';
     const inventoryQty = Number(inventoryRaw);
-    if (!inventoryRaw || Number.isNaN(inventoryQty) || !Number.isInteger(inventoryQty) || inventoryQty < 1 || inventoryQty > 9999) {
+    if (!isDraftAction && (!inventoryRaw || Number.isNaN(inventoryQty) || !Number.isInteger(inventoryQty) || inventoryQty < 1 || inventoryQty > 9999)) {
       return jsonError('Please enter an inventory quantity between 1 and 9999.', 400);
     }
 
-    if (!data.condition) {
+    if (!isDraftAction && !data.condition) {
       return jsonError('Please select a condition.', 400);
     }
 
     const shippingRaw = data.shippingPrice || data.shipping || '0';
     const shippingValue = Number(shippingRaw);
-    if (Number.isNaN(shippingValue) || shippingValue < 0) {
+    if (!isDraftAction && (Number.isNaN(shippingValue) || shippingValue < 0)) {
       return jsonError('Please enter a valid shipping price.', 400);
     }
 
@@ -288,13 +306,13 @@ export async function POST(req: Request) {
     })();
 
     const packageDetails = resolveSubmittedPackageDetails(data);
-    if (!packageDetails) {
+    if (!isDraftAction && !packageDetails) {
       return jsonError(SHIPPING_PACKAGE_DETAILS_REQUIRED_MESSAGE, 400);
     }
 
     const attributes = parseJsonOrNull(data.productAttributes);
     const mediaEnhancements = parseJsonOrNull(data.mediaEnhancements);
-    const normalizedAttributes: Record<string, unknown> = setShippingClass(attributes, packageDetails.shippingClass) ?? {};
+    const normalizedAttributes: Record<string, unknown> = setShippingClass(attributes, packageDetails?.shippingClass ?? null) ?? {};
     if (data.brand) normalizedAttributes.brand = data.brand;
     if (data.sizeMl) {
       normalizedAttributes.size_ml = data.sizeMl;
@@ -307,16 +325,25 @@ export async function POST(req: Request) {
 
     await ensureFashionCategoryHierarchy(prisma);
     const categoryNodes = await loadCategoryHierarchyNodesWithFallback(prisma);
-    if (data.categoryStale === 'true') {
+    const shouldValidateCategory = !isDraftAction || Boolean(data.categoryId || data.category);
+    if (!isDraftAction && data.categoryStale === 'true') {
       return jsonError(INVALID_CATEGORY_SUBMIT_MESSAGE, 400);
     }
-    const validatedCategory = validateCategorySelection(categoryNodes, {
-      categoryId: data.categoryId,
-      subcategoryId: data.subcategoryId,
-      parentCategoryId: data.parentCategoryId,
-      categoryLabel: data.category ?? data.refineCategory ?? data.subcategory ?? '',
-    });
-    if (!validatedCategory.ok) {
+    const validatedCategory = shouldValidateCategory
+      ? validateCategorySelection(categoryNodes, {
+        categoryId: data.categoryId,
+        subcategoryId: data.subcategoryId,
+        parentCategoryId: data.parentCategoryId,
+        categoryLabel: data.category ?? data.refineCategory ?? data.subcategory ?? '',
+      })
+      : {
+        ok: true as const,
+        categoryId: null,
+        subcategoryId: null,
+        path: [],
+        displayName: data.category ?? 'Draft',
+      };
+    if (!validatedCategory.ok && !isDraftAction) {
       console.warn('[seller/products POST] invalid category selection', {
         categoryId: data.categoryId ?? null,
         subcategoryId: data.subcategoryId ?? null,
@@ -326,13 +353,13 @@ export async function POST(req: Request) {
       });
       return jsonError(INVALID_CATEGORY_SUBMIT_MESSAGE, 400);
     }
-    const category = validatedCategory.displayName;
-    const categoryPath = validatedCategory.path.map((node) => node.name).join(' > ');
+    const category = validatedCategory.ok ? validatedCategory.displayName : (data.category ?? 'Draft');
+    const categoryPath = validatedCategory.ok ? validatedCategory.path.map((node) => node.name).join(' > ') : category;
     normalizedAttributes.searchableText = buildProductSearchableText({
       title,
       description: data.description || '',
       brand: (normalizedAttributes.brand as string | undefined) ?? null,
-      condition: data.condition,
+      condition: data.condition || '',
       categoryName: category,
       categoryPath,
       tags: normalizedAttributes.tags,
@@ -355,20 +382,20 @@ export async function POST(req: Request) {
     const pickupCity = data.pickupCity || data.localPickupCity || null;
     const pickupState = data.pickupState || data.localPickupState || null;
     const pickupPostalCode = data.pickupPostalCode || data.localPickupPostalCode || null;
-    const safeCategoryId = validatedCategory.categoryId;
-    const safeSubcategoryId = validatedCategory.subcategoryId;
-    const subcategoryName = validatedCategory.path.find((node) => node.level === 1)?.name ?? null;
+    const safeCategoryId = validatedCategory.ok ? validatedCategory.categoryId : null;
+    const safeSubcategoryId = validatedCategory.ok ? validatedCategory.subcategoryId : null;
+    const subcategoryName = validatedCategory.ok ? validatedCategory.path.find((node) => node.level === 1)?.name ?? null : null;
     const refineCategoryName =
-      validatedCategory.path.find((node) => node.level >= 2)?.name
+      (validatedCategory.ok ? validatedCategory.path.find((node) => node.level >= 2)?.name : null)
       ?? data.refineCategory
       ?? null;
     if (process.env.NODE_ENV !== 'production') {
       console.log('Submitting categoryId:', safeCategoryId, 'subcategoryId:', safeSubcategoryId ?? null);
     }
-    const categoryRecord = await prisma.category.findUnique({
+    const categoryRecord = safeCategoryId ? await prisma.category.findUnique({
       where: { id: safeCategoryId },
       select: { id: true, name: true, slug: true, parentId: true, level: true },
-    });
+    }) : null;
     if (process.env.NODE_ENV !== 'production') {
       console.info('[seller/products POST] category existence lookup', {
         requestedCategoryId: safeCategoryId,
@@ -376,7 +403,7 @@ export async function POST(req: Request) {
         categoryRecord,
       });
     }
-    if (!categoryRecord) {
+    if (!isDraftAction && !categoryRecord) {
       return jsonError('Selected category does not exist. Please reselect a category and try again.', 400);
     }
     if (safeSubcategoryId) {
@@ -391,9 +418,13 @@ export async function POST(req: Request) {
           subcategoryRecord,
         });
       }
-      if (!subcategoryRecord) {
+      if (!isDraftAction && !subcategoryRecord) {
         return jsonError('Selected subcategory does not exist. Please reselect a category and try again.', 400);
       }
+    }
+    const scheduledFor = parseScheduledFor(String(form.get('scheduledFor') ?? ''));
+    if (isScheduleAction && (!scheduledFor || scheduledFor <= new Date())) {
+      return jsonError('Choose a future date/time to schedule this listing.', 400);
     }
 
     const loggingPayload = {
@@ -427,7 +458,7 @@ export async function POST(req: Request) {
       description: data.description || '',
       priceCents: cents(price),
       category,
-      condition: data.condition,
+      condition: data.condition || 'UNSPECIFIED',
       imageUrl: mainImage,
     });
 
@@ -435,10 +466,10 @@ export async function POST(req: Request) {
     try {
       product = await prisma.product.create({
         data: {
-          title,
+          title: title || 'Untitled Draft',
           description: data.description || '',
-          priceCents: cents(price),
-          condition: data.condition,
+          priceCents: price && !Number.isNaN(Number(price)) && Number(price) > 0 ? cents(price) : 0,
+          condition: data.condition || 'UNSPECIFIED',
           category,
           imageUrl: mainImage,
           images: resolvedImages,
@@ -448,10 +479,12 @@ export async function POST(req: Request) {
           mainImage,
           videoUrl,
           sellerId,
-          shippingCents: resolvedShippingMode === 'FREE' ? 0 : cents(shippingRaw),
+          shippingCents: Number.isNaN(shippingValue) || shippingValue < 0 ? 0 : (resolvedShippingMode === 'FREE' ? 0 : cents(shippingRaw)),
           shippingMode: resolvedShippingMode,
-          inventory: inventoryQty,
-          status: 'PENDING',
+          inventory: Number.isInteger(inventoryQty) && inventoryQty >= 0 ? inventoryQty : 0,
+          status: isDraftAction ? 'DRAFT' : isScheduleAction ? 'SCHEDULED' : isPublishNowAction ? 'ACTIVE' : 'PENDING',
+          scheduledFor: isScheduleAction ? scheduledFor : null,
+          publishedAt: isPublishNowAction ? new Date() : null,
           pickupAvailable,
           pickupCity,
           pickupState,
@@ -459,12 +492,12 @@ export async function POST(req: Request) {
           categoryId: safeCategoryId,
           subcategoryId: safeSubcategoryId,
           productAttributes: productAttributesValue,
-          weightOz: packageDetails.weightOz,
-          weightUnit: packageDetails.weightUnit,
-          lengthIn: packageDetails.lengthIn,
-          widthIn: packageDetails.widthIn,
-          heightIn: packageDetails.heightIn,
-          packageType: packageDetails.packageType,
+          weightOz: packageDetails?.weightOz ?? null,
+          weightUnit: packageDetails?.weightUnit ?? 'lb',
+          lengthIn: packageDetails?.lengthIn ?? null,
+          widthIn: packageDetails?.widthIn ?? null,
+          heightIn: packageDetails?.heightIn ?? null,
+          packageType: packageDetails?.packageType ?? null,
         },
       });
     } catch (dbError) {
@@ -479,7 +512,7 @@ export async function POST(req: Request) {
     const fraudQuery = shouldRecommendFraudReview(riskAssessment) ? '&fraud=review' : '';
     return NextResponse.json({
       success: true,
-      message: 'Listing submitted successfully.',
+      message: isDraftAction ? 'Draft saved successfully.' : isScheduleAction ? 'Listing scheduled successfully.' : 'Listing published successfully.',
       redirectTo: `/seller/dashboard?created=${product.id}${fraudQuery}`,
     });
   } catch (err) {
