@@ -1,12 +1,11 @@
 'use client';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Upload, X, MapPin, AlertCircle } from 'lucide-react';
 import {
   calculateGarageSalePricing,
   centsToDollars,
   DEFAULT_GARAGE_SALE_PRICING_SETTINGS,
-  type GarageSalePricingSettings,
 } from '@/lib/garage-sale-pricing';
 
 const SALE_TYPES = [
@@ -48,27 +47,9 @@ export default function GarageSaleNewForm() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [geoStatus, setGeoStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
-  const [pricingSettings, setPricingSettings] = useState<GarageSalePricingSettings>(DEFAULT_GARAGE_SALE_PRICING_SETTINGS);
-  const [pricingReady, setPricingReady] = useState(false);
   const latRef = useRef<HTMLInputElement>(null);
   const lngRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch('/api/garage-sales/pricing')
-      .then((res) => res.ok ? res.json() : null)
-      .then((data) => {
-        if (!data || cancelled) return;
-        setPricingSettings(data.settings ?? DEFAULT_GARAGE_SALE_PRICING_SETTINGS);
-        setPricingReady(true);
-      })
-      .catch(() => {
-        if (!cancelled) setPricingReady(true);
-      });
-
-    return () => { cancelled = true; };
-  }, []);
 
   const pricingEstimate = useMemo(() => {
     if (!startDate || !endDate) return null;
@@ -81,9 +62,9 @@ export default function GarageSaleNewForm() {
       endDate: end,
       homepagePromotion: false,
       topLocalSearchPlacement: false,
-      settings: pricingSettings,
+      settings: DEFAULT_GARAGE_SALE_PRICING_SETTINGS,
     });
-  }, [endDate, pricingSettings, startDate]);
+  }, [endDate, startDate]);
 
   function toggleCategory(cat: string) {
     setCategories((prev) =>
@@ -428,9 +409,7 @@ export default function GarageSaleNewForm() {
         <h2 className="font-bold text-slate-900">Pricing &amp; Checkout</h2>
 
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
-          {!pricingReady ? (
-            <p className="text-slate-500">Loading pricing…</p>
-          ) : !pricingEstimate ? (
+          {!pricingEstimate ? (
             <p className="text-slate-500">Select start and end times to see your live total.</p>
           ) : (
             <div className="space-y-1.5">
