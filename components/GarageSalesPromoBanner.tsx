@@ -34,7 +34,7 @@ export default function GarageSalesPromoBanner() {
         destination: '/garage-sales/create',
       }),
       keepalive: true,
-    }).catch(() => null);
+    }).catch(() => {});
   }
 
   if (dismissed) return null;
