@@ -1,4 +1,5 @@
 export const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
+export const GARAGE_SALE_FLAT_DAILY_PRICE_CENTS = 399;
 
 export type GarageSaleListingType = 'STANDARD' | 'FEATURED';
 
@@ -13,12 +14,12 @@ export type GarageSalePricingSettings = {
 };
 
 export const DEFAULT_GARAGE_SALE_PRICING_SETTINGS: GarageSalePricingSettings = {
-  standardPriceCents: 299,
-  featuredPriceCents: 699,
-  homepagePromoEnabled: true,
-  homepagePromoCents: 499,
-  topSearchEnabled: true,
-  topSearchCents: 399,
+  standardPriceCents: GARAGE_SALE_FLAT_DAILY_PRICE_CENTS,
+  featuredPriceCents: GARAGE_SALE_FLAT_DAILY_PRICE_CENTS,
+  homepagePromoEnabled: false,
+  homepagePromoCents: 0,
+  topSearchEnabled: false,
+  topSearchCents: 0,
   firstListingFree: false,
 };
 
@@ -57,24 +58,16 @@ export function calculateGarageSaleDurationDays(startDate: Date, endDate: Date) 
 
 export function calculateGarageSalePricing(input: GarageSalePricingInput): GarageSalePricingBreakdown {
   const durationDays = calculateGarageSaleDurationDays(input.startDate, input.endDate);
-  const pricePerDayCents = input.listingType === 'FEATURED'
-    ? input.settings.featuredPriceCents
-    : input.settings.standardPriceCents;
+  const pricePerDayCents = GARAGE_SALE_FLAT_DAILY_PRICE_CENTS;
 
   const baseAmountCents = durationDays * pricePerDayCents;
-
-  const effectiveHomepagePromotion = input.homepagePromotion && input.settings.homepagePromoEnabled;
-  const effectiveTopLocalSearchPlacement = input.topLocalSearchPlacement && input.settings.topSearchEnabled;
-
-  const homepagePromotionCents = effectiveHomepagePromotion ? input.settings.homepagePromoCents : 0;
-  const topLocalSearchPlacementCents = effectiveTopLocalSearchPlacement ? input.settings.topSearchCents : 0;
-
-  const addOnsAmountCents = homepagePromotionCents + topLocalSearchPlacementCents;
-  const subtotal = baseAmountCents + addOnsAmountCents;
-
-  const discountCents = input.settings.firstListingFree && input.isEligibleForFreeFirstListing
-    ? subtotal
-    : 0;
+  const effectiveHomepagePromotion = false;
+  const effectiveTopLocalSearchPlacement = false;
+  const homepagePromotionCents = 0;
+  const topLocalSearchPlacementCents = 0;
+  const addOnsAmountCents = 0;
+  const subtotal = baseAmountCents;
+  const discountCents = 0;
 
   return {
     durationDays,

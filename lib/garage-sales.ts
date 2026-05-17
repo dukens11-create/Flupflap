@@ -1,22 +1,11 @@
 import { prisma } from '@/lib/db';
-import { getMarketplaceSettings } from '@/lib/commission';
 import {
   DEFAULT_GARAGE_SALE_PRICING_SETTINGS,
   type GarageSalePricingSettings,
 } from '@/lib/garage-sale-pricing';
 
 export async function getGarageSalePricingSettings(): Promise<GarageSalePricingSettings> {
-  const settings = await getMarketplaceSettings();
-
-  return {
-    standardPriceCents: settings.garageStandardPriceCents,
-    featuredPriceCents: settings.garageFeaturedPriceCents,
-    homepagePromoEnabled: settings.garageHomepagePromoEnabled,
-    homepagePromoCents: settings.garageHomepagePromoCents,
-    topSearchEnabled: settings.garageTopSearchEnabled,
-    topSearchCents: settings.garageTopSearchCents,
-    firstListingFree: settings.garageFirstListingFree,
-  };
+  return { ...DEFAULT_GARAGE_SALE_PRICING_SETTINGS };
 }
 
 export function getDefaultGarageSalePricingSettings(): GarageSalePricingSettings {

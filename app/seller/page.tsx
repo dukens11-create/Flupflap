@@ -41,7 +41,6 @@ export const metadata: Metadata = { title: 'Seller Dashboard' };
 
 type SellerWorkspaceView =
   | 'dashboard'
-  | 'garage-sales'
   | 'my-listings'
   | 'sales'
   | 'orders-to-ship'
@@ -104,7 +103,6 @@ function sellerVerificationStatusLabel(status?: string | null) {
 function normalizeSellerView(value: string | undefined): SellerWorkspaceView {
   const views: SellerWorkspaceView[] = [
     'dashboard',
-    'garage-sales',
     'my-listings',
     'sales',
     'orders-to-ship',
@@ -165,7 +163,6 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   const currentView = normalizeSellerView(sp.view);
   const listingsState = normalizeListingsState(sp.state);
   const isDashboardView = currentView === 'dashboard';
-  const isGarageSalesView = currentView === 'garage-sales';
   const isListingsView = currentView === 'my-listings';
   const isSalesView = currentView === 'sales';
   const isOrdersView = currentView === 'orders-to-ship';
@@ -207,7 +204,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
     ? freePromotionExpiresAt.toLocaleDateString('en-US', DEFAULT_DATE_FORMAT_OPTIONS)
     : null;
   await expirePromotions();
-  const [products, orders, soldItems, verificationSubmission, promotionHistory, garageSales] = await Promise.all([
+  const [products, orders, soldItems, verificationSubmission, promotionHistory] = await Promise.all([
     prisma.product.findMany({
       where: { sellerId },
       orderBy: { createdAt: 'desc' },
@@ -301,20 +298,6 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
       },
       orderBy: { createdAt: 'desc' },
     }),
-    prisma.garageSale.findMany({
-      where: { sellerId },
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        title: true,
-        city: true,
-        state: true,
-        startDate: true,
-        endDate: true,
-        status: true,
-        isArchived: true,
-      },
-    }),
   ]);
 
   // Compute earnings from seller's completed order items
@@ -394,14 +377,8 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
     sold: soldListings.length,
     archived: archivedListings.length,
   };
-  const garageSaleCounts = {
-    active: garageSales.filter((sale) => sale.status === 'APPROVED' && !sale.isArchived).length,
-    pending: garageSales.filter((sale) => sale.status === 'PENDING').length,
-    archived: garageSales.filter((sale) => sale.isArchived || sale.status === 'EXPIRED' || sale.status === 'HIDDEN').length,
-  };
   const viewHeading: Record<SellerWorkspaceView, string> = {
     dashboard: 'Seller Dashboard',
-    'garage-sales': 'Garage Sales',
     'my-listings': 'My Listings',
     sales: 'Sales',
     'orders-to-ship': 'Orders to Ship',
@@ -1199,40 +1176,6 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
           </div>
         )}
       </section>
-      )}
-
-      {isGarageSalesView && (
-        <section className="mb-8">
-          <div className="flex items-center justify-between mb-3 gap-3">
-            <h2 className="text-xl font-bold">Garage Sales</h2>
-            <Link href="/garage-sales/new" className="btn-outline text-xs">Create Garage Sale</Link>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-            <StatCard label="Active" value={String(garageSaleCounts.active)} />
-            <StatCard label="Pending" value={String(garageSaleCounts.pending)} />
-            <StatCard label="Archived" value={String(garageSaleCounts.archived)} />
-          </div>
-          {garageSales.length === 0 ? (
-            <div className="card p-6 text-slate-500 text-sm">No garage sales yet.</div>
-          ) : (
-            <div className="space-y-2">
-              {garageSales.map((sale) => (
-                <div key={sale.id} className="card p-4 flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="font-semibold text-slate-900">{sale.title}</p>
-                    <p className="text-xs text-slate-500">
-                      {sale.city}, {sale.state} · {sale.startDate.toLocaleDateString('en-US', DEFAULT_DATE_FORMAT_OPTIONS)} - {sale.endDate.toLocaleDateString('en-US', DEFAULT_DATE_FORMAT_OPTIONS)}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`badge ${statusBadge(sale.status)}`}>{sale.status}</span>
-                    <Link href={`/garage-sales/${sale.id}`} className="btn-outline text-xs">View</Link>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
       )}
 
       {isShopByCultureView && (

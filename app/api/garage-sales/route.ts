@@ -211,19 +211,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Maximum 5 active garage sale listings allowed' }, { status: 429 });
   }
 
-  const [pricingSettings, paidGarageSaleCount] = await Promise.all([
-    getGarageSalePricingSettings(),
-    prisma.garageSale.count({ where: { sellerId: session.user.id, paymentStatus: 'PAID' } }),
-  ]);
+  const pricingSettings = await getGarageSalePricingSettings();
 
   const pricing = calculateGarageSalePricing({
-    listingType: data.listingType,
+    listingType: 'STANDARD',
     startDate: start,
     endDate: end,
-    homepagePromotion: data.homepagePromotion,
-    topLocalSearchPlacement: data.topLocalSearchPlacement,
+    homepagePromotion: false,
+    topLocalSearchPlacement: false,
     settings: pricingSettings,
-    isEligibleForFreeFirstListing: paidGarageSaleCount === 0,
   });
 
   if (pricing.durationDays <= 0) {
@@ -237,7 +233,7 @@ export async function POST(req: Request) {
       title: data.title,
       description: data.description,
       saleType: data.saleType,
-      listingType: data.listingType,
+      listingType: 'STANDARD',
       address: data.address,
       city: data.city,
       state: data.state,
@@ -254,9 +250,9 @@ export async function POST(req: Request) {
       sellerPhone: data.sellerPhone ?? null,
       priceRangeMin: data.priceRangeMin ?? null,
       priceRangeMax: data.priceRangeMax ?? null,
-      isFeatured: data.listingType === 'FEATURED',
-      homepagePromoted: pricing.effectiveHomepagePromotion,
-      topSearchPromoted: pricing.effectiveTopLocalSearchPlacement,
+      isFeatured: false,
+      homepagePromoted: false,
+      topSearchPromoted: false,
       pricePerDayCents: pricing.pricePerDayCents,
       baseAmountCents: pricing.baseAmountCents,
       addOnsAmountCents: pricing.addOnsAmountCents,
@@ -286,35 +282,13 @@ export async function POST(req: Request) {
       price_data: {
         currency: 'usd',
         product_data: {
-          name: `${data.listingType === 'FEATURED' ? 'Featured' : 'Standard'} Garage Sale Listing`,
+          name: 'Garage Sale Listing',
           description: `${pricing.durationDays} day${pricing.durationDays === 1 ? '' : 's'} at $${(pricing.pricePerDayCents / 100).toFixed(2)}/day`,
         },
         unit_amount: pricing.baseAmountCents,
       },
     },
   ];
-
-  if (pricing.homepagePromotionCents > 0) {
-    lineItems.push({
-      quantity: 1,
-      price_data: {
-        currency: 'usd',
-        product_data: { name: 'Garage Sale Homepage Promotion' },
-        unit_amount: pricing.homepagePromotionCents,
-      },
-    });
-  }
-
-  if (pricing.topLocalSearchPlacementCents > 0) {
-    lineItems.push({
-      quantity: 1,
-      price_data: {
-        currency: 'usd',
-        product_data: { name: 'Garage Sale Top Local Search Placement' },
-        unit_amount: pricing.topLocalSearchPlacementCents,
-      },
-    });
-  }
 
   const checkout = await stripe.checkout.sessions.create({
     mode: 'payment',
@@ -327,7 +301,7 @@ export async function POST(req: Request) {
       type: 'garage_sale_listing',
       saleId: sale.id,
       sellerId: session.user.id,
-      listingType: data.listingType,
+      listingType: 'STANDARD',
       durationDays: String(pricing.durationDays),
     },
   });
