@@ -127,7 +127,7 @@ export async function POST(req: Request, { params }: Params) {
   }
 
   const payloadRaw = JSON.stringify(payload);
-  if (payloadRaw.length > 20000) {
+  if (Buffer.byteLength(payloadRaw, 'utf8') > 20000) {
     return NextResponse.json({ error: 'Payload exceeds maximum size of 20000 bytes' }, { status: 413 });
   }
 

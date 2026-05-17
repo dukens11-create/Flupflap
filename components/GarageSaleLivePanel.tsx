@@ -119,7 +119,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
 
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === 'failed') {
-        setError('WebRTC connection failed. This may be due to network issues or firewall restrictions. Try ending and restarting the live session.');
+        setError('WebRTC connection failed. Try restarting the live session.');
       }
     };
 
