@@ -223,6 +223,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
         createdAt: true,
         viewCount: true,
         soldQty: true,
+        publishedAt: true,
         weightOz: true,
         weightUnit: true,
         lengthIn: true,
@@ -234,6 +235,10 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
           where: { status: 'ACTIVE', expiresAt: { gt: new Date() } },
           orderBy: { expiresAt: 'desc' },
           take: 1,
+          select: {
+            status: true,
+            expiresAt: true,
+          },
         },
         cartInterest: {
           select: {
@@ -1033,6 +1038,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                 packageSummary: packageDetails
                   ? formatPackageDisplay(packageDetails, shippingSetupIncomplete)
                   : null,
+                publishedAt: p.publishedAt?.toISOString() ?? null,
               };
             })}
           />

@@ -41,7 +41,40 @@ export default async function SellerEditPage({
   }
 
   const { id } = await params;
-  const product = await prisma.product.findUnique({ where: { id } });
+  const product = await prisma.product.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      sellerId: true,
+      status: true,
+      title: true,
+      description: true,
+      priceCents: true,
+      shippingCents: true,
+      inventory: true,
+      category: true,
+      categoryId: true,
+      subcategoryId: true,
+      productAttributes: true,
+      condition: true,
+      imageUrl: true,
+      images: true,
+      originalImages: true,
+      enhancedImages: true,
+      imageThumbnails: true,
+      videoUrl: true,
+      weightOz: true,
+      weightUnit: true,
+      lengthIn: true,
+      widthIn: true,
+      heightIn: true,
+      packageType: true,
+      pickupAvailable: true,
+      pickupCity: true,
+      pickupState: true,
+      pickupPostalCode: true,
+    },
+  });
 
   if (!product) notFound();
   if (product.sellerId !== sellerId) forbidden();

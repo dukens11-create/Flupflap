@@ -81,10 +81,49 @@ type ProductUpdateInput = z.infer<typeof updateSchema>;
 const INVALID_CATEGORY_SUBMIT_MESSAGE = 'Please select a valid category before submitting.';
 type WorkflowAction = 'SAVE_DRAFT' | 'SCHEDULE' | 'PUBLISH_NOW' | 'CANCEL_SCHEDULE';
 
+const SELLER_PRODUCT_SAFE_SELECT = {
+  id: true,
+  sellerId: true,
+  title: true,
+  description: true,
+  priceCents: true,
+  shippingCents: true,
+  shippingMode: true,
+  category: true,
+  categoryId: true,
+  subcategoryId: true,
+  condition: true,
+  imageUrl: true,
+  images: true,
+  originalImages: true,
+  enhancedImages: true,
+  imageThumbnails: true,
+  mainImage: true,
+  videoUrl: true,
+  inventory: true,
+  status: true,
+  pickupAvailable: true,
+  pickupCity: true,
+  pickupState: true,
+  pickupPostalCode: true,
+  productAttributes: true,
+  weightOz: true,
+  weightUnit: true,
+  lengthIn: true,
+  widthIn: true,
+  heightIn: true,
+  packageType: true,
+  createdAt: true,
+  publishedAt: true,
+} as const;
+
 type ExistingProduct = NonNullable<Awaited<ReturnType<typeof getOwnedSellerProduct>>['product']>;
 
 async function getOwnedSellerProduct(id: string, sellerId: string) {
-  const product = await prisma.product.findUnique({ where: { id } });
+  const product = await prisma.product.findUnique({
+    where: { id },
+    select: SELLER_PRODUCT_SAFE_SELECT,
+  });
   if (!product) return { product: null, forbidden: false };
   if (product.sellerId !== sellerId) return { product: null, forbidden: true };
   return { product, forbidden: false };
@@ -143,11 +182,17 @@ function parseWorkflowAction(value: unknown): WorkflowAction | null {
   return null;
 }
 
-function parseWorkflowSchedule(value: unknown) {
-  if (typeof value !== 'string' || !value.trim()) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return date;
+function isDraftLikeStatus(status: string) {
+  // Backward-compatibility for pre-existing SCHEDULED rows while scheduling creation is disabled.
+  return status === 'DRAFT' || status === 'SCHEDULED';
+}
+
+function setSellerListingToDraft(id: string) {
+  return prisma.product.update({
+    where: { id },
+    data: { status: 'DRAFT' },
+    select: SELLER_PRODUCT_SAFE_SELECT,
+  });
 }
 
 function validateProductReadyForPublish(product: ExistingProduct): string | null {
@@ -414,6 +459,14 @@ export async function POST(
 
     const form = await req.formData();
     const submitAction = parseWorkflowAction(form.get('submitAction'));
+    if (submitAction === 'SCHEDULE') {
+      return respondWithError(
+        id,
+        'Scheduling functionality is currently disabled. Please save as draft or publish now.',
+        acceptsJson,
+        400,
+      );
+    }
     const method = (form.get('_method') as string)?.toLowerCase();
 
     if (method === 'delete') {
@@ -437,11 +490,6 @@ export async function POST(
       enhancedImages: enhancedImagesRaw.length ? enhancedImagesRaw : undefined,
       imageThumbnails: imageThumbnailsRaw.length ? imageThumbnailsRaw : undefined,
     });
-    const scheduledForInput = parseWorkflowSchedule(form.get('scheduledFor'));
-    if (submitAction === 'SCHEDULE' && (!scheduledForInput || scheduledForInput <= new Date())) {
-      return respondWithError(id, 'Choose a future date/time to schedule this listing.', acceptsJson, 400);
-    }
-
     // Diagnostic logging for debugging failed saves
     console.log('[seller/products/[id] POST] parsed payload', {
       productId: id,
@@ -522,11 +570,9 @@ export async function POST(
 
     const nextStatus = submitAction === 'SAVE_DRAFT'
       ? 'DRAFT'
-      : submitAction === 'SCHEDULE'
-        ? 'SCHEDULED'
-        : submitAction === 'PUBLISH_NOW'
+      : submitAction === 'PUBLISH_NOW'
           ? 'ACTIVE'
-          : existing.status === 'DRAFT' || existing.status === 'SCHEDULED'
+          : isDraftLikeStatus(existing.status)
             ? existing.status
             : 'PENDING';
     let updated;
@@ -567,9 +613,9 @@ export async function POST(
           enhancedImages: resolvedEnhancedImages,
           imageThumbnails: resolvedImageThumbnails,
           status: nextStatus,
-          scheduledFor: submitAction === 'SCHEDULE' ? scheduledForInput : (nextStatus === 'SCHEDULED' ? existing.scheduledFor : null),
           publishedAt: submitAction === 'PUBLISH_NOW' ? new Date() : existing.publishedAt,
         },
+        select: SELLER_PRODUCT_SAFE_SELECT,
       });
     } catch (dbError) {
       const message = getErrorMessage(dbError);
@@ -646,20 +692,15 @@ export async function PATCH(
     if (workflowAction) {
       const currentLifecycle = toSellerLifecycleStatus(existing.status);
       if (workflowAction === 'CANCEL_SCHEDULE') {
+        // Backward-compatibility path for legacy scheduled listings created before scheduling was disabled.
         if (currentLifecycle !== 'SCHEDULED') {
           return NextResponse.json({ error: 'Only scheduled listings can be moved back to draft.' }, { status: 400 });
         }
-        const updated = await prisma.product.update({
-          where: { id },
-          data: { status: 'DRAFT', scheduledFor: null },
-        });
+        const updated = await setSellerListingToDraft(id);
         return NextResponse.json(updated);
       }
       if (workflowAction === 'SAVE_DRAFT') {
-        const updated = await prisma.product.update({
-          where: { id },
-          data: { status: 'DRAFT', scheduledFor: null },
-        });
+        const updated = await setSellerListingToDraft(id);
         return NextResponse.json(updated);
       }
       const publishValidationError = validateProductReadyForPublish(existing);
@@ -671,32 +712,25 @@ export async function PATCH(
           where: { id },
           data: {
             status: 'ACTIVE',
-            scheduledFor: null,
             publishedAt: new Date(),
           },
+          select: SELLER_PRODUCT_SAFE_SELECT,
         });
         return NextResponse.json(updated);
       }
-      const scheduledFor = parseWorkflowSchedule(body.scheduledFor);
-      if (!scheduledFor || scheduledFor <= new Date()) {
-        return NextResponse.json({ error: 'Choose a future date/time to schedule this listing.' }, { status: 400 });
-      }
-      const updated = await prisma.product.update({
-        where: { id },
-        data: {
-          status: 'SCHEDULED',
-          scheduledFor,
-          publishedAt: null,
-        },
-      });
-      return NextResponse.json(updated);
+      return NextResponse.json(
+        { error: 'Scheduling functionality is currently disabled. Please save as draft or publish now.' },
+        { status: 400 },
+      );
     }
 
     const submitAction = parseWorkflowAction(body.submitAction);
     const data = updateSchema.parse(body);
-    const scheduledForInput = parseWorkflowSchedule(body.scheduledFor);
-    if (submitAction === 'SCHEDULE' && (!scheduledForInput || scheduledForInput <= new Date())) {
-      return NextResponse.json({ error: 'Choose a future date/time to schedule this listing.' }, { status: 400 });
+    if (submitAction === 'SCHEDULE') {
+      return NextResponse.json(
+        { error: 'Scheduling functionality is currently disabled. Please save as draft or publish now.' },
+        { status: 400 },
+      );
     }
 
     // Diagnostic logging for debugging failed saves
@@ -789,11 +823,9 @@ export async function PATCH(
 
     const nextStatus = submitAction === 'SAVE_DRAFT'
       ? 'DRAFT'
-      : submitAction === 'SCHEDULE'
-        ? 'SCHEDULED'
-        : submitAction === 'PUBLISH_NOW'
+      : submitAction === 'PUBLISH_NOW'
           ? 'ACTIVE'
-          : existing.status === 'DRAFT' || existing.status === 'SCHEDULED'
+          : isDraftLikeStatus(existing.status)
             ? existing.status
             : 'PENDING';
     let updated;
@@ -834,9 +866,9 @@ export async function PATCH(
           }),
           productAttributes: nextProductAttributesValue,
           status: nextStatus,
-          scheduledFor: submitAction === 'SCHEDULE' ? scheduledForInput : (nextStatus === 'SCHEDULED' ? existing.scheduledFor : null),
           publishedAt: submitAction === 'PUBLISH_NOW' ? new Date() : existing.publishedAt,
         },
+        select: SELLER_PRODUCT_SAFE_SELECT,
       });
     } catch (dbError) {
       const message = getErrorMessage(dbError);

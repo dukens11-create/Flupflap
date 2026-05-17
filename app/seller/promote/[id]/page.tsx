@@ -44,7 +44,19 @@ export default async function SellerPromotePage({
   const settings = await getMarketplaceSettings();
   const freePromotionEligible = settings.freePromotionEnabled && !!dbUser && isFreePromotionEligible(dbUser);
   const hasPromotionCredits = !freePromotionEligible && (dbUser?.promotionCredits ?? 0) > 0;
-  const product = await prisma.product.findUnique({ where: { id } });
+  const product = await prisma.product.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      sellerId: true,
+      title: true,
+      imageUrl: true,
+      condition: true,
+      category: true,
+      priceCents: true,
+      status: true,
+    },
+  });
 
   if (!product || product.sellerId !== sellerId) {
     redirect('/seller');
