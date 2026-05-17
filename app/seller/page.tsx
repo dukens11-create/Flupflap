@@ -243,6 +243,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
         cartInterest: {
           select: {
             totalAdds: true,
+            lastAddedAt: true,
           },
         },
       },
