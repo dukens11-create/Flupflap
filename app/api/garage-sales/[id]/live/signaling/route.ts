@@ -86,7 +86,7 @@ export async function GET(req: Request, { params }: Params) {
       ...(createdAtFilter ? { createdAt: createdAtFilter } : {}),
     },
     orderBy: { createdAt: 'asc' },
-    take: 200,
+    take: 100,
     select: { id: true, sender: true, kind: true, payload: true, createdAt: true },
   });
 

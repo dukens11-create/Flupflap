@@ -93,7 +93,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   const startSignalPolling = useCallback(() => {
     stopSignalPolling();
     pollSignals();
-    signalPollRef.current = setInterval(pollSignals, 1200);
+    signalPollRef.current = setInterval(pollSignals, 2000);
   }, [pollSignals, stopSignalPolling]);
 
   const createAndSendOffer = useCallback(async () => {

@@ -193,7 +193,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     }
 
     pollSignals();
-    signalPollRef.current = setInterval(pollSignals, 1200);
+    signalPollRef.current = setInterval(pollSignals, 2000);
 
     return () => {
       stopSignalPolling();
