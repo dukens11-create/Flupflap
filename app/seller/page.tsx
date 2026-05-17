@@ -34,6 +34,7 @@ import {
 } from '@/lib/product-package';
 import { toSellerLifecycleStatus } from '@/lib/listing-status';
 import { getRoleNavigation } from '@/lib/role-experience';
+import { isSchemaNotInitializedError } from '@/lib/db-errors';
 
 export const dynamic = 'force-dynamic';
 
@@ -173,6 +174,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   const subscribedFromCheckout = sp.subscribed === '1';
 
   // Fetch full user to check seller status (session JWT may be stale)
+  try {
   let dbUser = await prisma.user.findUnique({ where: { id: sellerId } });
   const hasStoredSubscriptionCustomer = !!dbUser?.stripeCustomerId;
   const subscriptionLooksInactive = dbUser ? !isSubscriptionActive(dbUser) : false;
@@ -1233,4 +1235,24 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
       )}
     </main>
   );
+  } catch (err: unknown) {
+    if (isSchemaNotInitializedError(err)) {
+      return (
+        <main className="max-w-4xl mx-auto">
+          <div className="mb-6">
+            <h1 className="text-3xl font-black">Seller Dashboard</h1>
+          </div>
+          <div className="card p-10 text-center text-slate-500">
+            <p className="font-semibold text-slate-700 mb-1">Database schema not yet initialized</p>
+            <p className="text-sm">
+              The database is connected but required tables or columns are missing.{' '}
+              Run <code className="font-mono text-xs bg-slate-100 px-1 rounded">prisma migrate deploy</code> to
+              apply all committed migrations, then reload this page.
+            </p>
+          </div>
+        </main>
+      );
+    }
+    throw err;
+  }
 }

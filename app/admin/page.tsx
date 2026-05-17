@@ -9,6 +9,7 @@ import type { Metadata } from 'next';
 import { getVisitorMetrics } from '@/lib/traffic';
 import AdminListingsTable from '@/components/AdminListingsTable';
 import { getSellerKycStats } from '@/lib/seller-kyc-stats';
+import { isSchemaNotInitializedError } from '@/lib/db-errors';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,87 +35,88 @@ export default async function AdminPage({
 
   const suspiciousLoginSince = new Date(Date.now() - 1000 * 60 * 60 * 24 * 30);
 
-  const [settings, pending, all, recentOrders, restrictedSellersCount, buyerCount, sellerCount, totalUsersCount, totalOrdersCount, pendingSellerApprovalsCount, paidRevenueAgg, platformCommissionAgg, openReportsCount, openSellerReportsCount, suspiciousLoginCount, activePromotionsCount, productsThisWeek, productsThisMonth, activeListingsCount, soldItemsAgg, revenueThisWeekAgg, revenueThisMonthAgg, visitorMetrics, kycCounts] = await Promise.all([
-    getMarketplaceSettings(),
-    prisma.product.findMany({
-      where: { status: 'PENDING' },
-      include: { seller: { select: { name: true, email: true } } },
-      orderBy: { createdAt: 'asc' },
-    }),
-    prisma.product.findMany({
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        title: true,
-        imageUrl: true,
-        mainImage: true,
-        images: true,
-        priceCents: true,
-        inventory: true,
-        status: true,
-        condition: true,
-        category: true,
-        createdAt: true,
-        seller: { select: { id: true, name: true } },
-      },
-    }),
-    prisma.order.findMany({
-      orderBy: { createdAt: 'desc' },
-      take: 10,
-      include: { buyer: { select: { name: true, email: true } } },
-    }),
-    // Sellers who are restricted (not active) — excludes PENDING which is its own category
-    prisma.user.count({
-      where: { role: 'SELLER', sellerStatus: { in: ['SUSPENDED', 'BANNED', 'RESTRICTED'] } },
-    }),
-    prisma.user.count({ where: { role: 'CUSTOMER' } }),
-    prisma.user.count({ where: { role: 'SELLER' } }),
-    prisma.user.count(),
-    prisma.order.count(),
-    // Pending Seller Approvals: seller accounts awaiting admin account approval
-    prisma.user.count({
-      where: { role: 'SELLER', sellerStatus: 'PENDING' },
-    }),
-    prisma.order.aggregate({
-      _sum: { totalCents: true },
-      where: { status: { in: PAID_ORDER_STATUSES } },
-    }),
-    prisma.order.aggregate({
-      _sum: { platformFeeCents: true },
-      where: { status: { in: PAID_ORDER_STATUSES } },
-    }),
-    prisma.productReport.count({
-      where: { status: 'OPEN' },
-    }),
-    prisma.sellerReport.count({
-      where: { status: 'OPEN' },
-    }),
-    prisma.loginActivity.count({
-      where: { suspicious: true, createdAt: { gte: suspiciousLoginSince } },
-    }),
-    prisma.promotion.count({
-      where: { status: 'ACTIVE', expiresAt: { gt: now } },
-    }),
-    prisma.product.count({ where: { createdAt: { gte: weekStart } } }),
-    prisma.product.count({ where: { createdAt: { gte: monthStart } } }),
-    prisma.product.count({ where: { status: 'APPROVED' } }),
-    prisma.orderItem.aggregate({
-      _sum: { quantity: true },
-      where: { order: { status: { in: PAID_ORDER_STATUSES } } },
-    }),
-    prisma.order.aggregate({
-      _sum: { totalCents: true },
-      where: { status: { in: PAID_ORDER_STATUSES }, createdAt: { gte: weekStart } },
-    }),
-    prisma.order.aggregate({
-      _sum: { totalCents: true },
-      where: { status: { in: PAID_ORDER_STATUSES }, createdAt: { gte: monthStart } },
-    }),
-    getVisitorMetrics(now),
-    // KYC counts use shared helpers that read both kycStatus and the legacy
-    // verifiedSeller flag so previously-approved sellers are never miscounted.
-    getSellerKycStats(),
-  ]);
+  try {
+    const [settings, pending, all, recentOrders, restrictedSellersCount, buyerCount, sellerCount, totalUsersCount, totalOrdersCount, pendingSellerApprovalsCount, paidRevenueAgg, platformCommissionAgg, openReportsCount, openSellerReportsCount, suspiciousLoginCount, activePromotionsCount, productsThisWeek, productsThisMonth, activeListingsCount, soldItemsAgg, revenueThisWeekAgg, revenueThisMonthAgg, visitorMetrics, kycCounts] = await Promise.all([
+      getMarketplaceSettings(),
+      prisma.product.findMany({
+        where: { status: 'PENDING' },
+        include: { seller: { select: { name: true, email: true } } },
+        orderBy: { createdAt: 'asc' },
+      }),
+      prisma.product.findMany({
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          title: true,
+          imageUrl: true,
+          mainImage: true,
+          images: true,
+          priceCents: true,
+          inventory: true,
+          status: true,
+          condition: true,
+          category: true,
+          createdAt: true,
+          seller: { select: { id: true, name: true } },
+        },
+      }),
+      prisma.order.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+        include: { buyer: { select: { name: true, email: true } } },
+      }),
+      // Sellers who are restricted (not active) — excludes PENDING which is its own category
+      prisma.user.count({
+        where: { role: 'SELLER', sellerStatus: { in: ['SUSPENDED', 'BANNED', 'RESTRICTED'] } },
+      }),
+      prisma.user.count({ where: { role: 'CUSTOMER' } }),
+      prisma.user.count({ where: { role: 'SELLER' } }),
+      prisma.user.count(),
+      prisma.order.count(),
+      // Pending Seller Approvals: seller accounts awaiting admin account approval
+      prisma.user.count({
+        where: { role: 'SELLER', sellerStatus: 'PENDING' },
+      }),
+      prisma.order.aggregate({
+        _sum: { totalCents: true },
+        where: { status: { in: PAID_ORDER_STATUSES } },
+      }),
+      prisma.order.aggregate({
+        _sum: { platformFeeCents: true },
+        where: { status: { in: PAID_ORDER_STATUSES } },
+      }),
+      prisma.productReport.count({
+        where: { status: 'OPEN' },
+      }),
+      prisma.sellerReport.count({
+        where: { status: 'OPEN' },
+      }),
+      prisma.loginActivity.count({
+        where: { suspicious: true, createdAt: { gte: suspiciousLoginSince } },
+      }),
+      prisma.promotion.count({
+        where: { status: 'ACTIVE', expiresAt: { gt: now } },
+      }),
+      prisma.product.count({ where: { createdAt: { gte: weekStart } } }),
+      prisma.product.count({ where: { createdAt: { gte: monthStart } } }),
+      prisma.product.count({ where: { status: 'APPROVED' } }),
+      prisma.orderItem.aggregate({
+        _sum: { quantity: true },
+        where: { order: { status: { in: PAID_ORDER_STATUSES } } },
+      }),
+      prisma.order.aggregate({
+        _sum: { totalCents: true },
+        where: { status: { in: PAID_ORDER_STATUSES }, createdAt: { gte: weekStart } },
+      }),
+      prisma.order.aggregate({
+        _sum: { totalCents: true },
+        where: { status: { in: PAID_ORDER_STATUSES }, createdAt: { gte: monthStart } },
+      }),
+      getVisitorMetrics(now),
+      // KYC counts use shared helpers that read both kycStatus and the legacy
+      // verifiedSeller flag so previously-approved sellers are never miscounted.
+      getSellerKycStats(),
+    ]);
 
   const { kycApprovedCount, kycPendingCount, kycRejectedCount, kycNotSubmittedCount } = kycCounts;
 
@@ -437,4 +439,24 @@ export default async function AdminPage({
       </section>
     </main>
   );
+  } catch (err: unknown) {
+    if (isSchemaNotInitializedError(err)) {
+      return (
+        <main className="w-full max-w-5xl mx-auto px-4 sm:px-6">
+          <div className="mb-4">
+            <h1 className="text-3xl font-black">Admin Dashboard</h1>
+          </div>
+          <div className="card p-10 text-center text-slate-500">
+            <p className="font-semibold text-slate-700 mb-1">Database schema not yet initialized</p>
+            <p className="text-sm">
+              The database is connected but required tables or columns are missing.{' '}
+              Run <code className="font-mono text-xs bg-slate-100 px-1 rounded">prisma migrate deploy</code> to
+              apply all committed migrations, then reload this page.
+            </p>
+          </div>
+        </main>
+      );
+    }
+    throw err;
+  }
 }

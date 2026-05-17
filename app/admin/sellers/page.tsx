@@ -19,6 +19,7 @@ import {
   deriveEffectiveKycStatus,
 } from '@/lib/seller-kyc-stats';
 import SellerModerationForm from '@/components/SellerModerationForm';
+import { isSchemaNotInitializedError } from '@/lib/db-errors';
 
 export const dynamic = 'force-dynamic';
 
@@ -120,61 +121,62 @@ export default async function AdminSellersPage({
     ? (KYC_WHERE_MAP[parsedKyc] ?? { kycStatus: parsedKyc })
     : {};
 
-  const sellers = await prisma.user.findMany({
-    where: { role: 'SELLER', ...sellerStatusFilter, ...kycStatusFilter },
-    orderBy: { createdAt: 'desc' },
-    include: {
-      verificationSubmission: {
-        include: {
-          reviewedBy: { select: { name: true, email: true } },
+  try {
+    const sellers = await prisma.user.findMany({
+      where: { role: 'SELLER', ...sellerStatusFilter, ...kycStatusFilter },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        verificationSubmission: {
+          include: {
+            reviewedBy: { select: { name: true, email: true } },
+          },
         },
+        moderationLogsAsSeller: {
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+          include: { admin: { select: { name: true, email: true } } },
+        },
+        _count: { select: { products: true } },
       },
-      moderationLogsAsSeller: {
-        orderBy: { createdAt: 'desc' },
-        take: 5,
-        include: { admin: { select: { name: true, email: true } } },
-      },
-      _count: { select: { products: true } },
-    },
-  });
+    });
 
-  // Count sellers per seller status and KYC status for tab badges.
-  // KYC counts use the shared helpers that check both kycStatus and the legacy
-  // verifiedSeller flag so previously-approved sellers are never miscounted.
-  const [
-    pendingStatusCount,
-    activeStatusCount,
-    restrictedStatusCount,
-    suspendedStatusCount,
-    bannedStatusCount,
-    { kycPendingCount, kycApprovedCount, kycRejectedCount, kycNotSubmittedCount },
-  ] = await Promise.all([
-    prisma.user.count({ where: { role: 'SELLER', sellerStatus: 'PENDING' } }),
-    prisma.user.count({ where: { role: 'SELLER', sellerStatus: 'ACTIVE' } }),
-    prisma.user.count({ where: { role: 'SELLER', sellerStatus: 'RESTRICTED' } }),
-    prisma.user.count({ where: { role: 'SELLER', sellerStatus: 'SUSPENDED' } }),
-    prisma.user.count({ where: { role: 'SELLER', sellerStatus: 'BANNED' } }),
-    getSellerKycStats(),
-  ]);
+    // Count sellers per seller status and KYC status for tab badges.
+    // KYC counts use the shared helpers that check both kycStatus and the legacy
+    // verifiedSeller flag so previously-approved sellers are never miscounted.
+    const [
+      pendingStatusCount,
+      activeStatusCount,
+      restrictedStatusCount,
+      suspendedStatusCount,
+      bannedStatusCount,
+      { kycPendingCount, kycApprovedCount, kycRejectedCount, kycNotSubmittedCount },
+    ] = await Promise.all([
+      prisma.user.count({ where: { role: 'SELLER', sellerStatus: 'PENDING' } }),
+      prisma.user.count({ where: { role: 'SELLER', sellerStatus: 'ACTIVE' } }),
+      prisma.user.count({ where: { role: 'SELLER', sellerStatus: 'RESTRICTED' } }),
+      prisma.user.count({ where: { role: 'SELLER', sellerStatus: 'SUSPENDED' } }),
+      prisma.user.count({ where: { role: 'SELLER', sellerStatus: 'BANNED' } }),
+      getSellerKycStats(),
+    ]);
 
-  const totalSellerCount = pendingStatusCount + activeStatusCount + restrictedStatusCount + suspendedStatusCount + bannedStatusCount;
+    const totalSellerCount = pendingStatusCount + activeStatusCount + restrictedStatusCount + suspendedStatusCount + bannedStatusCount;
 
-  const sellerStatusCounts: Record<string, number> = {
-    '': totalSellerCount,
-    PENDING: pendingStatusCount,
-    ACTIVE: activeStatusCount,
-    RESTRICTED: restrictedStatusCount,
-    SUSPENDED: suspendedStatusCount,
-    BANNED: bannedStatusCount,
-  };
+    const sellerStatusCounts: Record<string, number> = {
+      '': totalSellerCount,
+      PENDING: pendingStatusCount,
+      ACTIVE: activeStatusCount,
+      RESTRICTED: restrictedStatusCount,
+      SUSPENDED: suspendedStatusCount,
+      BANNED: bannedStatusCount,
+    };
 
-  const kycCounts: Record<string, number> = {
-    '': totalSellerCount,
-    PENDING_REVIEW: kycPendingCount,
-    APPROVED: kycApprovedCount,
-    REJECTED: kycRejectedCount,
-    NOT_SUBMITTED: kycNotSubmittedCount,
-  };
+    const kycCounts: Record<string, number> = {
+      '': totalSellerCount,
+      PENDING_REVIEW: kycPendingCount,
+      APPROVED: kycApprovedCount,
+      REJECTED: kycRejectedCount,
+      NOT_SUBMITTED: kycNotSubmittedCount,
+    };
 
   return (
     <main id="kyc-verification" className="max-w-5xl mx-auto">
@@ -478,4 +480,27 @@ export default async function AdminSellersPage({
       )}
     </main>
   );
+  } catch (err: unknown) {
+    if (isSchemaNotInitializedError(err)) {
+      return (
+        <main id="kyc-verification" className="max-w-5xl mx-auto">
+          <div className="mb-6 flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-black">Seller Management</h1>
+            </div>
+            <a href="/admin" className="btn-outline text-sm">← Admin Dashboard</a>
+          </div>
+          <div className="card p-10 text-center text-slate-500">
+            <p className="font-semibold text-slate-700 mb-1">Database schema not yet initialized</p>
+            <p className="text-sm">
+              The database is connected but required tables or columns are missing.{' '}
+              Run <code className="font-mono text-xs bg-slate-100 px-1 rounded">prisma migrate deploy</code> to
+              apply all committed migrations, then reload this page.
+            </p>
+          </div>
+        </main>
+      );
+    }
+    throw err;
+  }
 }
