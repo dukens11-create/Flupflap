@@ -175,7 +175,7 @@ export function parseSalesPromotionForm(form: FormData, kind: PromotionRouteKind
       discountType: null,
       discountValue: null,
       triggerType: triggerTypeResult.data,
-      triggerValue: triggerTypeResult.data === 'ANY_PURCHASE' ? null : (triggerValue ?? null),
+      triggerValue: triggerTypeResult.data === 'ANY_PURCHASE' ? null : triggerValue,
       rewardType: rewardTypeResult.data,
       rewardProductId,
       rewardQuantity,
