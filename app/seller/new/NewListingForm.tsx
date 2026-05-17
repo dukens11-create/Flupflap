@@ -199,7 +199,7 @@ export default function NewListingForm() {
         return;
       }
 
-      router.push(data.redirectTo ?? '/seller/dashboard');
+      router.push(data.redirectTo ?? '/seller/listings/drafts');
     } catch {
       setErrors({ submit: 'Network error. Please try again.' });
       setSubmitting(false);

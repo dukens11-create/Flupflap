@@ -421,7 +421,7 @@ export async function POST(
         return NextResponse.json({ error: 'Cannot delete a sold item.' }, { status: 400 });
       }
       await prisma.product.delete({ where: { id } });
-      return NextResponse.redirect(new URL('/seller?deleted=1', getSiteUrl()));
+      return NextResponse.redirect(new URL('/seller/listings/active?deleted=1', getSiteUrl()));
     }
 
     // Default: update
@@ -581,7 +581,7 @@ export async function POST(
     }
 
     const fraudQuery = shouldRecommendFraudReview(riskAssessment) ? '&fraud=review' : '';
-    const redirectTo = `/seller?updated=${updated.id}${fraudQuery}`;
+    const redirectTo = `/seller/listings/drafts?updated=${updated.id}${fraudQuery}`;
 
     if (acceptsJson) {
       return NextResponse.json({ success: true, redirectTo });

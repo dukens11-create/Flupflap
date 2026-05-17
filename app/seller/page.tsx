@@ -211,25 +211,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
     prisma.product.findMany({
       where: { sellerId },
       orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        title: true,
-        category: true,
-        condition: true,
-        priceCents: true,
-        status: true,
-        inventory: true,
-        imageUrl: true,
-        createdAt: true,
-        viewCount: true,
-        soldQty: true,
-        weightOz: true,
-        weightUnit: true,
-        lengthIn: true,
-        widthIn: true,
-        heightIn: true,
-        packageType: true,
-        productAttributes: true,
+      include: {
         promotions: {
           where: { status: 'ACTIVE', expiresAt: { gt: new Date() } },
           orderBy: { expiresAt: 'desc' },
@@ -365,9 +347,9 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   let emptyListingsMessage: ReactNode = 'No listings yet. Subscribe to start selling.';
   if (subscriptionActive && verificationApproved) {
     emptyListingsMessage = (
-      <span>
-        No listings yet. <Link href="/seller/new" className="text-blue-600 hover:underline">Create one</Link>.
-      </span>
+        <span>
+          No listings yet. <Link href="/seller/listings/new" className="text-blue-600 hover:underline">Create one</Link>.
+        </span>
     );
   } else if (subscriptionActive) {
     emptyListingsMessage = 'No listings yet. Complete seller verification to start selling.';
@@ -503,7 +485,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
           <h1 className="text-3xl font-black">{viewHeading[currentView]}</h1>
           <p className="text-slate-500 text-sm">Welcome back, {session.user.name}</p>
         </div>
-        {!isRestricted && subscriptionActive && verificationApproved && <Link href="/seller/new" className="btn-primary">Add New Product</Link>}
+        {!isRestricted && subscriptionActive && verificationApproved && <Link href="/seller/listings/new" className="btn-primary">Add New Product</Link>}
       </div>
 
       {isDashboardView && (
@@ -512,7 +494,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
         <StatCard label="Active Listings" value={String(activeListingsCount)} />
         <StatCard label="Pending Orders" value={String(pendingOrdersToShip)} />
         <div id="promotion-status" className="card p-5">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Boost Status</p>
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Promotion Status</p>
           <p className={`mt-2 text-sm font-semibold ${freePromotionEligible ? 'text-indigo-700' : 'text-slate-500'}`}>
             {freePromotionEligible
               ? `Free promotion active (${freePromotionDaysLeft} day${freePromotionDaysLeft === 1 ? '' : 's'} left)`
@@ -520,9 +502,6 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                 ? `Free promotion expired`
                 : 'No free promotion'}
           </p>
-          <Link href="/seller/promotions" className="mt-3 inline-flex text-xs font-semibold text-slate-700 hover:underline">
-            Manage discounts & offers →
-          </Link>
         </div>
         <div id="seller-health" className="card p-5">
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Verification Status</p>
@@ -1036,6 +1015,8 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                 packageSummary: packageDetails
                   ? formatPackageDisplay(packageDetails, shippingSetupIncomplete)
                   : null,
+                scheduledFor: p.scheduledFor?.toISOString() ?? null,
+                publishedAt: p.publishedAt?.toISOString() ?? null,
               };
             })}
           />
@@ -1043,13 +1024,10 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
       </section>
       )}
 
-      {/* ── Listing Boosts ── */}
+      {/* ── Promotions ── */}
       {isPromotionsView && (
       <section id="promotions" className="mb-8">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-xl font-bold">Listing Boosts</h2>
-          <Link href="/seller/promotions" className="btn-outline text-xs">Open discounts & offers</Link>
-        </div>
+        <h2 className="text-xl font-bold mb-3">Promotions</h2>
 
         {/* Free promotion status */}
         <div className={`card p-4 mb-4 text-sm ${freePromotionEligible ? 'bg-blue-50 border-blue-200 text-blue-900' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>

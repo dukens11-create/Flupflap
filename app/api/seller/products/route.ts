@@ -510,10 +510,15 @@ export async function POST(req: Request) {
     }
 
     const fraudQuery = shouldRecommendFraudReview(riskAssessment) ? '&fraud=review' : '';
+    const redirectTo = isScheduleAction
+      ? `/seller/listings/scheduled?created=${product.id}${fraudQuery}`
+      : isPublishNowAction
+        ? `/seller/listings/active?created=${product.id}${fraudQuery}`
+        : `/seller/listings/drafts?created=${product.id}${fraudQuery}`;
     return NextResponse.json({
       success: true,
       message: isDraftAction ? 'Draft saved successfully.' : isScheduleAction ? 'Listing scheduled successfully.' : 'Listing published successfully.',
-      redirectTo: `/seller/dashboard?created=${product.id}${fraudQuery}`,
+      redirectTo,
     });
   } catch (err) {
     const message = getErrorMessage(err);

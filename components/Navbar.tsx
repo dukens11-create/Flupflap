@@ -5,8 +5,8 @@ import { signOut, useSession } from 'next-auth/react';
 import { ShoppingCart, LogIn, UserPlus, LogOut, User, MessageCircle, Bell, Menu, X, ChevronDown } from 'lucide-react';
 import LanguageSelector from '@/components/LanguageSelector';
 import { useI18n } from '@/components/I18nProvider';
-import { useEffect, useState } from 'react';
-import { getRoleNavigation, normalizeExperienceRole, type RoleNavItem } from '@/lib/role-experience';
+import { useEffect, useMemo, useState } from 'react';
+import { getRoleNavigation, isRoleNavItemActive, normalizeExperienceRole, type RoleNavItem } from '@/lib/role-experience';
 import { usePathname } from 'next/navigation';
 import { CULTURAL_MARKETPLACES } from '@/lib/cultural-marketplaces';
 
@@ -102,14 +102,15 @@ export default function Navbar() {
   const { data: session } = useSession();
   const role = session?.user?.role ?? null;
   const experienceRole = normalizeExperienceRole(role);
-  const roleNavigation = getRoleNavigation(role);
+  const roleNavigation = useMemo(() => getRoleNavigation(role), [role]);
   const pathname = usePathname();
   const cartCount = useCartCount();
   const unreadMessages = useUnreadMessages(!!session?.user);
   const unreadNotifications = useUnreadNotifications(!!session?.user);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [cultureMenuOpen, setCultureMenuOpen] = useState(false);
-  const [expandedMobileGroups, setExpandedMobileGroups] = useState<string[]>([]);
+  const [desktopGroupOpen, setDesktopGroupOpen] = useState<string | null>(null);
+  const [mobileGroupOpen, setMobileGroupOpen] = useState<string | null>(null);
   const { t } = useI18n();
   const navLinkClass = 'rounded-full px-3 py-2 transition-colors hover:bg-slate-100 link-hover-navy';
   const actionLinkClass = 'relative flex items-center gap-1 rounded-full px-3 py-2 transition-colors hover:bg-slate-100 link-hover-navy';
@@ -120,24 +121,144 @@ export default function Navbar() {
   const signupHref = callbackPathname ? `/signup?callbackUrl=${encodeURIComponent(callbackPathname)}` : '/signup';
   const localSellersHref = '/?pickup=1';
   const formatBadgeCount = (count: number) => (count > 99 ? '99+' : String(count));
-  const isItemActive = (item: RoleNavItem): boolean => {
-    const baseHref = item.href.split('#')[0];
-    if (pathname === baseHref || (baseHref !== '/' && pathname.startsWith(`${baseHref}/`))) return true;
-    if (item.children?.length) {
-      return item.children.some((child) => {
-        const childHref = child.href.split('#')[0];
-        return pathname === childHref || (childHref !== '/' && pathname.startsWith(`${childHref}/`));
-      });
+
+  useEffect(() => {
+    const activeGroup = roleNavigation.find((item) => item.children && isRoleNavItemActive(item, pathname));
+    if (activeGroup) {
+      setDesktopGroupOpen(activeGroup.label);
+      setMobileGroupOpen(activeGroup.label);
+    } else {
+      setDesktopGroupOpen(null);
+      setMobileGroupOpen(null);
     }
-    return false;
-  };
-  const toggleMobileGroup = (label: string) => {
-    setExpandedMobileGroups((groups) => (
-      groups.includes(label)
-        ? groups.filter((group) => group !== label)
-        : [...groups, label]
-    ));
-  };
+  }, [pathname, roleNavigation]);
+
+  function renderDesktopNavItem(item: RoleNavItem) {
+    const active = isRoleNavItemActive(item, pathname);
+    if (!item.children?.length) {
+      const href = item.href;
+      if (!href) return null;
+      return (
+        <Link
+          key={item.label}
+          href={href}
+          className={`${navLinkClass} ${active ? 'bg-slate-100 text-slate-900' : ''}`}
+          aria-label={item.label}
+          aria-current={active ? 'page' : undefined}
+        >
+          {item.label}
+        </Link>
+      );
+    }
+
+    const open = desktopGroupOpen === item.label;
+    return (
+      <div
+        key={item.label}
+        className="relative"
+        onMouseEnter={() => setDesktopGroupOpen(item.label)}
+        onMouseLeave={() => setDesktopGroupOpen((current) => (current === item.label ? null : current))}
+      >
+        <button
+          type="button"
+          className={`${navLinkClass} flex items-center gap-1 ${active ? 'bg-slate-100 text-slate-900' : ''}`}
+          onClick={() => setDesktopGroupOpen((current) => (current === item.label ? null : item.label))}
+          aria-expanded={open}
+          aria-haspopup="true"
+          aria-current={active ? 'page' : undefined}
+        >
+          {item.label}
+          <ChevronDown size={14} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+        </button>
+        {open && (
+          <div className="absolute left-0 top-full z-50 mt-1 min-w-52 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
+            <div className="space-y-1">
+              {item.children.map((child) => {
+                if (!child.href) return null;
+                const childActive = isRoleNavItemActive(child, pathname);
+                return (
+                  <Link
+                    key={child.href}
+                    href={child.href}
+                    className={`block rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
+                      childActive ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'
+                    }`}
+                    aria-current={childActive ? 'page' : undefined}
+                  >
+                    {child.label}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function renderMobileNavItem(item: RoleNavItem) {
+    const active = isRoleNavItemActive(item, pathname);
+    if (!item.children?.length) {
+      const href = item.href;
+      if (!href) return null;
+      return (
+        <Link
+          key={`mobile-${item.label}`}
+          href={href}
+          className={`rounded-lg px-3 py-2.5 ${
+            experienceRole === 'admin'
+              ? 'text-slate-100 hover:bg-white/10'
+              : active
+                ? 'bg-white text-slate-900'
+                : 'text-slate-700 hover:bg-white/80'
+          }`}
+          onClick={() => setMobileOpen(false)}
+          aria-label={item.label}
+          aria-current={active ? 'page' : undefined}
+        >
+          {item.label}
+        </Link>
+      );
+    }
+
+    const open = mobileGroupOpen === item.label;
+    return (
+      <div key={`mobile-group-${item.label}`} className="rounded-lg border border-slate-200/80 bg-white/60">
+        <button
+          type="button"
+          onClick={() => setMobileGroupOpen((current) => (current === item.label ? null : item.label))}
+          className={`flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left ${
+            active ? 'text-slate-900' : 'text-slate-700'
+          }`}
+          aria-expanded={open}
+        >
+          <span>{item.label}</span>
+          <ChevronDown size={14} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+        </button>
+        {open && (
+          <div className="space-y-1 px-2 pb-2">
+            {item.children.map((child) => {
+              if (!child.href) return null;
+              const childActive = isRoleNavItemActive(child, pathname);
+              return (
+                <Link
+                  key={`mobile-${child.href}-${child.label}`}
+                  href={child.href}
+                  className={`block rounded-lg px-3 py-2 text-sm ${
+                    childActive ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-white'
+                  }`}
+                  onClick={() => setMobileOpen(false)}
+                  aria-current={childActive ? 'page' : undefined}
+                >
+                  {child.label}
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <header className="sticky top-0 z-30 border-b border-slate-200 bg-white">
@@ -217,53 +338,7 @@ export default function Navbar() {
 
           <div className="hidden flex-1 flex-col gap-3 md:flex lg:flex-row lg:items-center">
             <nav className="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-600">
-              {roleNavigation.map((item) => {
-                const active = isItemActive(item);
-                const activeClassName = active ? 'bg-slate-100 text-slate-900' : '';
-                if (item.children?.length) {
-                  return (
-                    <div key={`${item.href}-${item.label}`} className="group relative">
-                      <button
-                        type="button"
-                        className={`${navLinkClass} ${activeClassName} flex items-center gap-1`}
-                        aria-expanded={active}
-                        aria-haspopup="true"
-                      >
-                        {item.label}
-                        <ChevronDown size={14} aria-hidden="true" className="transition-transform group-hover:rotate-180 group-focus-within:rotate-180" />
-                      </button>
-                      <div className="invisible absolute left-0 top-full z-40 mt-1 w-56 rounded-2xl border border-slate-200 bg-white p-2 opacity-0 shadow-xl transition-all group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
-                        {item.children.map((child) => {
-                          const childHref = child.href.split('#')[0];
-                          const childActive = pathname === childHref || (childHref !== '/' && pathname.startsWith(`${childHref}/`));
-                          return (
-                            <Link
-                              key={`${child.href}-${child.label}`}
-                              href={child.href}
-                              className={`block rounded-xl px-3 py-2 text-sm transition-colors hover:bg-slate-100 ${childActive ? 'bg-slate-100 font-semibold text-slate-900' : 'text-slate-600'}`}
-                              aria-current={childActive ? 'page' : undefined}
-                            >
-                              {child.label}
-                            </Link>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                }
-
-                return (
-                  <Link
-                    key={`${item.href}-${item.label}`}
-                    href={item.href}
-                    className={`${navLinkClass} ${activeClassName}`}
-                    aria-label={item.label}
-                    aria-current={active ? 'page' : undefined}
-                  >
-                    {item.label}
-                  </Link>
-                );
-              })}
+              {roleNavigation.map((item) => renderDesktopNavItem(item))}
               
               {/* Shop by Culture Dropdown */}
               {CULTURAL_MARKETPLACES.length > 0 && (
@@ -427,62 +502,7 @@ export default function Navbar() {
                 : 'border-emerald-200 bg-emerald-50'
           }`}>
             <nav className="flex flex-col gap-1 text-sm font-medium">
-              {roleNavigation.map((item) => {
-                const active = isItemActive(item);
-                const baseClasses = experienceRole === 'admin'
-                  ? 'text-slate-100 hover:bg-white/10'
-                  : 'text-slate-700 hover:bg-white/80';
-                const activeClasses = active ? (experienceRole === 'admin' ? 'bg-white/10' : 'bg-white text-slate-900') : '';
-
-                if (item.children?.length) {
-                  const expanded = active || expandedMobileGroups.includes(item.label);
-                  return (
-                    <div key={`mobile-${item.href}-${item.label}`} className="rounded-lg">
-                      <button
-                        type="button"
-                        className={`flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left ${baseClasses} ${activeClasses}`}
-                        onClick={() => toggleMobileGroup(item.label)}
-                        aria-expanded={expanded}
-                      >
-                        <span>{item.label}</span>
-                        <ChevronDown size={14} aria-hidden="true" className={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
-                      </button>
-                      {expanded && (
-                        <div className="mt-1 space-y-1 pl-3">
-                          {item.children.map((child) => {
-                            const childHref = child.href.split('#')[0];
-                            const childActive = pathname === childHref || (childHref !== '/' && pathname.startsWith(`${childHref}/`));
-                            return (
-                              <Link
-                                key={`mobile-child-${child.href}-${child.label}`}
-                                href={child.href}
-                                className={`block rounded-lg px-3 py-2 ${baseClasses} ${childActive ? activeClasses : ''}`}
-                                onClick={() => setMobileOpen(false)}
-                                aria-current={childActive ? 'page' : undefined}
-                              >
-                                {child.label}
-                              </Link>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  );
-                }
-
-                return (
-                  <Link
-                    key={`mobile-${item.href}-${item.label}`}
-                    href={item.href}
-                    className={`rounded-lg px-3 py-2.5 ${baseClasses} ${activeClasses}`}
-                    onClick={() => setMobileOpen(false)}
-                    aria-label={item.label}
-                    aria-current={active ? 'page' : undefined}
-                  >
-                    {item.label}
-                  </Link>
-                );
-              })}
+              {roleNavigation.map((item) => renderMobileNavItem(item))}
               {session?.user ? (
                 <button
                   onClick={() => signOut({ callbackUrl: '/' })}

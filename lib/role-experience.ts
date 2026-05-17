@@ -36,6 +36,7 @@ export type RoleNavItem = {
   label: string;
   href: string;
   children?: RoleNavItem[];
+  matchPrefixes?: string[];
 };
 
 const buyerNav: RoleNavItem[] = [
@@ -47,21 +48,24 @@ const buyerNav: RoleNavItem[] = [
 
 const sellerNav: RoleNavItem[] = [
   { label: 'Seller Dashboard', href: '/seller/dashboard' },
-  { label: 'List Item', href: '/seller/new' },
   { label: 'Garage Sales', href: '/seller/garage-sales' },
-  { label: 'My Listings', href: '/seller/my-listings' },
+  {
+    label: 'My Listings',
+    href: '/seller/listings',
+    matchPrefixes: ['/seller/listings'],
+    children: [
+      { label: 'List Item', href: '/seller/listings/new' },
+      { label: 'Drafts', href: '/seller/listings/drafts' },
+      { label: 'Scheduled', href: '/seller/listings/scheduled' },
+      { label: 'Active', href: '/seller/listings/active' },
+      { label: 'Sold', href: '/seller/listings/sold' },
+      { label: 'Archived', href: '/seller/listings/archived' },
+    ],
+  },
   { label: 'Sales', href: '/seller/sales' },
   { label: 'Orders to Ship', href: '/seller/orders-to-ship' },
   { label: 'Payouts', href: '/seller/payouts' },
-  {
-    label: 'Promotions',
-    href: '/seller/promotions',
-    children: [
-      { label: 'Overview', href: '/seller/promotions' },
-      { label: 'Discounts', href: '/seller/promotions/discounts' },
-      { label: 'Offers', href: '/seller/promotions/offers' },
-    ],
-  },
+  { label: 'Promotions', href: '/seller/promotions' },
   { label: 'Verification Status', href: '/seller/verification-status' },
   { label: 'Shop by Culture', href: '/seller/shop-by-culture' },
 ];
@@ -87,4 +91,30 @@ export function getRoleNavigation(role?: string | null): RoleNavItem[] {
   if (experienceRole === 'seller') return sellerNav;
   if (experienceRole === 'buyer') return buyerNav;
   return [{ label: 'Browse', href: '/' }, { label: 'Garage Sales', href: '/garage-sales' }];
+}
+
+function isRoleNavItemActiveInternal(
+  item: RoleNavItem,
+  pathname: string | null | undefined,
+  visited: Set<RoleNavItem>,
+): boolean {
+  if (!pathname) return false;
+  if (visited.has(item)) return false;
+  visited.add(item);
+  if (item.matchPrefixes?.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) {
+    return true;
+  }
+  if (item.href) {
+    const hrefPath = item.href.split('#')[0];
+    if (pathname === hrefPath) return true;
+  }
+  return item.children?.some((child) => isRoleNavItemActiveInternal(child, pathname, visited)) ?? false;
+}
+
+export function isRoleNavItemActive(
+  item: RoleNavItem,
+  pathname?: string | null,
+  visited: Set<RoleNavItem> = new Set(),
+): boolean {
+  return isRoleNavItemActiveInternal(item, pathname, visited);
 }
