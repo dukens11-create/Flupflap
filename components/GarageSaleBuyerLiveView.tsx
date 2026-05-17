@@ -129,7 +129,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
 
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
-        setStreamError('Live stream connection was interrupted.');
+        setStreamError('Live stream connection was interrupted. The stream will reconnect automatically when the seller restarts broadcasting.');
       }
     };
 

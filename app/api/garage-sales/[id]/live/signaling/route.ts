@@ -128,7 +128,7 @@ export async function POST(req: Request, { params }: Params) {
 
   const payloadRaw = JSON.stringify(payload);
   if (payloadRaw.length > 20000) {
-    return NextResponse.json({ error: 'payload too large' }, { status: 413 });
+    return NextResponse.json({ error: 'Payload exceeds maximum size of 20000 bytes' }, { status: 413 });
   }
 
   const sale = await prisma.garageSale.findUnique({
