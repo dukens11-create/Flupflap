@@ -42,14 +42,18 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: 'action must be "start" or "end"' }, { status: 400 });
   }
 
-  const updated = await prisma.garageSale.update({
-    where: { id },
-    data: {
-      isLive: action === 'start',
-      liveStartedAt: action === 'start' ? new Date() : null,
-    },
-    select: { id: true, isLive: true, liveStartedAt: true },
-  });
+  const now = new Date();
+  const [, updated] = await prisma.$transaction([
+    prisma.garageSaleLiveSignal.deleteMany({ where: { saleId: id } }),
+    prisma.garageSale.update({
+      where: { id },
+      data: {
+        isLive: action === 'start',
+        liveStartedAt: action === 'start' ? now : null,
+      },
+      select: { id: true, isLive: true, liveStartedAt: true },
+    }),
+  ]);
 
   return NextResponse.json(updated);
 }
