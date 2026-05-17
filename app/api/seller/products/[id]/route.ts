@@ -182,7 +182,7 @@ function parseWorkflowAction(value: unknown): WorkflowAction | null {
   return null;
 }
 
-function shouldKeepDraftLikeStatus(status: string) {
+function isDraftOrScheduledStatus(status: string) {
   // Keep legacy SCHEDULED rows from older releases in a non-live state when scheduling is unavailable.
   return status === 'DRAFT' || status === 'SCHEDULED';
 }
@@ -454,7 +454,7 @@ export async function POST(
     if (submitAction === 'SCHEDULE') {
       return respondWithError(
         id,
-        'Scheduled listings are temporarily unavailable. Please save as draft or publish now.',
+        'Scheduling functionality is currently disabled. Please save as draft or publish now.',
         acceptsJson,
         400,
       );
@@ -564,7 +564,7 @@ export async function POST(
       ? 'DRAFT'
       : submitAction === 'PUBLISH_NOW'
           ? 'ACTIVE'
-          : shouldKeepDraftLikeStatus(existing.status)
+          : isDraftOrScheduledStatus(existing.status)
             ? existing.status
             : 'PENDING';
     let updated;
@@ -718,7 +718,7 @@ export async function PATCH(
         return NextResponse.json(updated);
       }
       return NextResponse.json(
-        { error: 'Scheduled listings are temporarily unavailable. Please save as draft or publish now.' },
+        { error: 'Scheduling functionality is currently disabled. Please save as draft or publish now.' },
         { status: 400 },
       );
     }
@@ -727,7 +727,7 @@ export async function PATCH(
     const data = updateSchema.parse(body);
     if (submitAction === 'SCHEDULE') {
       return NextResponse.json(
-        { error: 'Scheduled listings are temporarily unavailable. Please save as draft or publish now.' },
+        { error: 'Scheduling functionality is currently disabled. Please save as draft or publish now.' },
         { status: 400 },
       );
     }
@@ -824,7 +824,7 @@ export async function PATCH(
       ? 'DRAFT'
       : submitAction === 'PUBLISH_NOW'
           ? 'ACTIVE'
-          : shouldKeepDraftLikeStatus(existing.status)
+          : isDraftOrScheduledStatus(existing.status)
             ? existing.status
             : 'PENDING';
     let updated;

@@ -230,7 +230,7 @@ export async function POST(req: Request) {
     const isScheduleAction = submitAction === 'SCHEDULE';
     const isPublishNowAction = submitAction === 'PUBLISH_NOW';
     if (isScheduleAction) {
-      return jsonError('Scheduled listings are temporarily unavailable. Please save as draft or publish now.', 400);
+      return jsonError('Scheduling functionality is currently disabled. Please save as draft or publish now.', 400);
     }
     const incomingBody = toLogSafeObject(form.entries());
     console.info('[seller/products POST] incoming request body', incomingBody);
