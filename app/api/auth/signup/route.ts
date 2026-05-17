@@ -3,7 +3,7 @@ import { prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { getMarketplaceSettings } from '@/lib/commission';
-import { Role, SellerStatus } from '@prisma/client';
+import { Prisma, Role, SellerStatus } from '@prisma/client';
 import { applyRateLimit, sanitizeTextInput } from '@/lib/security';
 import { logError } from '@/lib/logger';
 import { normalizePhone } from '@/lib/phone';
@@ -19,6 +19,15 @@ const schema = z.object({
   phone: z.string().max(20).optional(),
   firebaseIdToken: z.string().min(1).optional(),
 });
+
+function isMissingUserRolesColumnError(err: unknown): boolean {
+  if (!(err instanceof Prisma.PrismaClientKnownRequestError) || err.code !== 'P2022') {
+    return false;
+  }
+
+  const metaColumn = typeof err.meta?.column === 'string' ? err.meta.column : '';
+  return metaColumn.includes('User.roles') || err.message.includes('User.roles');
+}
 
 function getSignupFailureResponse(err: unknown) {
   if (typeof err === 'object' && err !== null && 'code' in err) {
@@ -113,25 +122,71 @@ export async function POST(req: Request) {
       ? new Date(now.getTime() + settings.freePromotionDurationDays * 24 * 60 * 60 * 1000)
       : null;
     const normalizedEmail = data.email.toLowerCase();
-    const existing = await prisma.user.findUnique({
-      where: { email: normalizedEmail },
-      select: {
-        id: true,
-        email: true,
-        password: true,
-        role: true,
-        roles: true,
-        phone: true,
-        sellerStatus: true,
-        phoneVerified: true,
-        phoneVerifiedAt: true,
-        hasFreePromotion: true,
-        freePromotionStart: true,
-        freePromotionEnd: true,
-        freePromotionGrantedAt: true,
-        freePromotionExpiresAt: true,
-      },
-    });
+    let userRolesColumnAvailable = true;
+    let existing: {
+      id: string;
+      email: string;
+      password: string | null;
+      role: Role;
+      roles: Role[] | null;
+      phone: string | null;
+      sellerStatus: SellerStatus | null;
+      phoneVerified: boolean;
+      phoneVerifiedAt: Date | null;
+      hasFreePromotion: boolean;
+      freePromotionStart: Date | null;
+      freePromotionEnd: Date | null;
+      freePromotionGrantedAt: Date | null;
+      freePromotionExpiresAt: Date | null;
+    } | null = null;
+
+    try {
+      existing = await prisma.user.findUnique({
+        where: { email: normalizedEmail },
+        select: {
+          id: true,
+          email: true,
+          password: true,
+          role: true,
+          roles: true,
+          phone: true,
+          sellerStatus: true,
+          phoneVerified: true,
+          phoneVerifiedAt: true,
+          hasFreePromotion: true,
+          freePromotionStart: true,
+          freePromotionEnd: true,
+          freePromotionGrantedAt: true,
+          freePromotionExpiresAt: true,
+        },
+      });
+    } catch (err) {
+      if (!isMissingUserRolesColumnError(err)) {
+        throw err;
+      }
+
+      userRolesColumnAvailable = false;
+      const legacyExisting = await prisma.user.findUnique({
+        where: { email: normalizedEmail },
+        select: {
+          id: true,
+          email: true,
+          password: true,
+          role: true,
+          phone: true,
+          sellerStatus: true,
+          phoneVerified: true,
+          phoneVerifiedAt: true,
+          hasFreePromotion: true,
+          freePromotionStart: true,
+          freePromotionEnd: true,
+          freePromotionGrantedAt: true,
+          freePromotionExpiresAt: true,
+        },
+      });
+
+      existing = legacyExisting ? { ...legacyExisting, roles: null } : null;
+    }
 
     if (existing) {
       const existingRoles = normalizeUserRoles(existing.roles, existing.role);
@@ -159,7 +214,7 @@ export async function POST(req: Request) {
           where: { id: existing.id },
           data: {
             role: 'SELLER',
-            roles: addUserRole(existingRoles, existing.role, 'SELLER'),
+            ...(userRolesColumnAvailable ? { roles: addUserRole(existingRoles, existing.role, 'SELLER') } : {}),
             phone: verifiedPhone,
             sellerStatus: SellerStatus.PENDING,
             phoneVerified: true,
@@ -180,6 +235,17 @@ export async function POST(req: Request) {
       }
 
       if (requestedRole === 'CUSTOMER' && !hasBuyerRole) {
+        if (!userRolesColumnAvailable) {
+          return NextResponse.json(
+            {
+              error:
+                'This account currently has seller-only access until role upgrades finish. Please sign in and try again shortly.',
+              requiresSignIn: true,
+            },
+            { status: 409 },
+          );
+        }
+
         const passwordOk = await safeComparePassword(data.password, existing.password, 'signup/upgrade-to-buyer');
         if (!passwordOk) {
           return NextResponse.json(
@@ -212,7 +278,7 @@ export async function POST(req: Request) {
         email: normalizedEmail,
         password,
         role: data.role,
-        roles: [data.role as Role],
+        ...(userRolesColumnAvailable ? { roles: [data.role as Role] } : {}),
         phone: data.role === 'SELLER' ? verifiedPhone : null,
         ...(data.role === 'SELLER'
           ? {
