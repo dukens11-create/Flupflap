@@ -35,6 +35,7 @@ export function resolveRoleLoginDestination(role: string | null | undefined, cal
 export type RoleNavItem = {
   label: string;
   href: string;
+  children?: RoleNavItem[];
 };
 
 const buyerNav: RoleNavItem[] = [
@@ -49,10 +50,18 @@ const sellerNav: RoleNavItem[] = [
   { label: 'List Item', href: '/seller/new' },
   { label: 'Garage Sales', href: '/garage-sales' },
   { label: 'My Listings', href: '/seller#my-listings' },
-  { label: 'Sales', href: '/seller#sales-overview' },
+  { label: 'Sales', href: '/seller/sales' },
   { label: 'Orders to Ship', href: '/seller#orders-to-ship' },
   { label: 'Payouts', href: '/seller#payouts' },
-  { label: 'Promotions', href: '/seller#promotion-status' },
+  {
+    label: 'Promotions',
+    href: '/seller/promotions',
+    children: [
+      { label: 'Overview', href: '/seller/promotions' },
+      { label: 'Discounts', href: '/seller/promotions/discounts' },
+      { label: 'Offers', href: '/seller/promotions/offers' },
+    ],
+  },
   { label: 'Verification Status', href: '/seller#verification-status' },
 ];
 
