@@ -32,10 +32,24 @@ import {
   getEffectivePackageDetails,
   hasStoredPackageDetails,
 } from '@/lib/product-package';
+import { getRoleNavigation } from '@/lib/role-experience';
 
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = { title: 'Seller Dashboard' };
+
+type SellerWorkspaceView =
+  | 'dashboard'
+  | 'garage-sales'
+  | 'my-listings'
+  | 'sales'
+  | 'orders-to-ship'
+  | 'payouts'
+  | 'promotions'
+  | 'verification-status'
+  | 'shop-by-culture';
+
+type ListingsState = 'drafts' | 'scheduled' | 'active' | 'sold' | 'archived';
 
 function statusBadge(status: string) {
   const map: Record<string, string> = {
@@ -86,6 +100,32 @@ function sellerVerificationStatusLabel(status?: string | null) {
   return 'pending review';
 }
 
+function normalizeSellerView(value: string | undefined): SellerWorkspaceView {
+  const views: SellerWorkspaceView[] = [
+    'dashboard',
+    'garage-sales',
+    'my-listings',
+    'sales',
+    'orders-to-ship',
+    'payouts',
+    'promotions',
+    'verification-status',
+    'shop-by-culture',
+  ];
+  if (value && views.includes(value as SellerWorkspaceView)) {
+    return value as SellerWorkspaceView;
+  }
+  return 'dashboard';
+}
+
+function normalizeListingsState(value: string | undefined): ListingsState {
+  const states: ListingsState[] = ['drafts', 'scheduled', 'active', 'sold', 'archived'];
+  if (value && states.includes(value as ListingsState)) {
+    return value as ListingsState;
+  }
+  return 'active';
+}
+
 function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div className="card p-5 flex flex-col gap-1">
@@ -114,13 +154,24 @@ function stripeAccountStatus(account: {
   };
 }
 
-export default async function SellerPage({ searchParams }: { searchParams: Promise<{ created?: string; stripe?: string; reason?: string; updated?: string; deleted?: string; promoted?: string; subscribed?: string; subscribe?: string; verification?: string; fraud?: string }> }) {
+export default async function SellerPage({ searchParams }: { searchParams: Promise<{ created?: string; stripe?: string; reason?: string; updated?: string; deleted?: string; promoted?: string; subscribed?: string; subscribe?: string; verification?: string; fraud?: string; view?: string; state?: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect('/login');
   if (session.user.role !== 'SELLER') redirect('/');
   const sellerId = session.user.id;
   if (!sellerId) redirect('/login');
   const sp = await searchParams;
+  const currentView = normalizeSellerView(sp.view);
+  const listingsState = normalizeListingsState(sp.state);
+  const isDashboardView = currentView === 'dashboard';
+  const isGarageSalesView = currentView === 'garage-sales';
+  const isListingsView = currentView === 'my-listings';
+  const isSalesView = currentView === 'sales';
+  const isOrdersView = currentView === 'orders-to-ship';
+  const isPayoutsView = currentView === 'payouts';
+  const isPromotionsView = currentView === 'promotions';
+  const isVerificationView = currentView === 'verification-status';
+  const isShopByCultureView = currentView === 'shop-by-culture';
   const subscribedFromCheckout = sp.subscribed === '1';
 
   // Fetch full user to check seller status (session JWT may be stale)
@@ -155,7 +206,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
     ? freePromotionExpiresAt.toLocaleDateString('en-US', DEFAULT_DATE_FORMAT_OPTIONS)
     : null;
   await expirePromotions();
-  const [products, orders, soldItems, verificationSubmission, promotionHistory] = await Promise.all([
+  const [products, orders, soldItems, verificationSubmission, promotionHistory, garageSales] = await Promise.all([
     prisma.product.findMany({
       where: { sellerId },
       orderBy: { createdAt: 'desc' },
@@ -231,6 +282,20 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
       },
       orderBy: { createdAt: 'desc' },
     }),
+    prisma.garageSale.findMany({
+      where: { sellerId },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        title: true,
+        city: true,
+        state: true,
+        startDate: true,
+        endDate: true,
+        status: true,
+        isArchived: true,
+      },
+    }),
   ]);
 
   // Compute earnings from seller's completed order items
@@ -290,6 +355,43 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   }
   const incompleteShippingProducts = products.filter((product) => !hasStoredPackageDetails(product));
   const shippingReadyCount = products.length - incompleteShippingProducts.length;
+  const activeListings = products.filter((p) => p.status === 'APPROVED' && p.inventory > 0);
+  const soldListings = products.filter((p) => p.status === 'SOLD' || (p.status === 'APPROVED' && p.inventory === 0));
+  const archivedListings = products.filter((p) => p.status === 'HIDDEN');
+  const draftListings = products.filter((p) => p.status === 'PENDING' || p.status === 'REJECTED');
+  const scheduledListings: typeof products = [];
+  const listingsByState: Record<ListingsState, typeof products> = {
+    drafts: draftListings,
+    scheduled: scheduledListings,
+    active: activeListings,
+    sold: soldListings,
+    archived: archivedListings,
+  };
+  const selectedListings = listingsByState[listingsState];
+  const listingsStateCounts: Record<ListingsState, number> = {
+    drafts: draftListings.length,
+    scheduled: scheduledListings.length,
+    active: activeListings.length,
+    sold: soldListings.length,
+    archived: archivedListings.length,
+  };
+  const garageSaleCounts = {
+    active: garageSales.filter((sale) => sale.status === 'APPROVED' && !sale.isArchived).length,
+    pending: garageSales.filter((sale) => sale.status === 'PENDING').length,
+    archived: garageSales.filter((sale) => sale.isArchived || sale.status === 'EXPIRED' || sale.status === 'HIDDEN').length,
+  };
+  const viewHeading: Record<SellerWorkspaceView, string> = {
+    dashboard: 'Seller Dashboard',
+    'garage-sales': 'Garage Sales',
+    'my-listings': 'My Listings',
+    sales: 'Sales',
+    'orders-to-ship': 'Orders to Ship',
+    payouts: 'Payouts',
+    promotions: 'Promotions',
+    'verification-status': 'Verification Status',
+    'shop-by-culture': 'Shop by Culture',
+  };
+  const workspaceLinks = getRoleNavigation('SELLER');
 
   // Fetch Stripe onboarding state from DB (not the JWT, which is set only at
   // login and would be stale immediately after the seller returns from Stripe).
@@ -379,13 +481,14 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
     <main className="max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-black">Seller Dashboard</h1>
+          <h1 className="text-3xl font-black">{viewHeading[currentView]}</h1>
           <p className="text-slate-500 text-sm">Welcome back, {session.user.name}</p>
         </div>
         {!isRestricted && subscriptionActive && verificationApproved && <Link href="/seller/new" className="btn-primary">Add New Product</Link>}
       </div>
 
-      <section id="sales-overview" className="grid grid-cols-2 gap-4 mb-6 lg:grid-cols-5">
+      {isDashboardView && (
+        <section id="sales-overview" className="grid grid-cols-2 gap-4 mb-6 lg:grid-cols-5">
         <StatCard label="Total Sales" value={dollars(grossSalesCents)} />
         <StatCard label="Active Listings" value={String(activeListingsCount)} />
         <StatCard label="Pending Orders" value={String(pendingOrdersToShip)} />
@@ -403,7 +506,21 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Verification Status</p>
           <p className="mt-2 text-sm font-semibold text-slate-700">{sellerVerificationStatusLabel(verificationSubmission?.status)}</p>
         </div>
-      </section>
+        </section>
+      )}
+
+      {isDashboardView && (
+        <section className="mb-8">
+          <h2 className="text-xl font-bold mb-3">Quick Access</h2>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {workspaceLinks.filter((link) => link.href !== '/seller/dashboard').map((link) => (
+              <Link key={link.href} href={link.href} className="card p-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors">
+                {link.label}
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
       {isRestricted && (
         <div className="card p-5 mb-6 bg-red-50 border-red-200 text-red-800">
@@ -415,34 +532,34 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
         </div>
       )}
 
-      {sp.verification === 'submitted' && (
+      {(isDashboardView || isVerificationView) && sp.verification === 'submitted' && (
         <div className="card p-4 mb-6 bg-green-50 border-green-200 text-green-800 text-sm">
           ✅ Seller verification submitted. You&apos;ll be automatically approved once required checks pass. Admin review is only used as fallback when checks are incomplete or fail.
         </div>
       )}
-      {sp.verification === 'provider_started' && (
+      {(isDashboardView || isVerificationView) && sp.verification === 'provider_started' && (
         <div className="card p-4 mb-6 bg-blue-50 border-blue-200 text-blue-900 text-sm">
           ✅ Provider verification has been started. Complete all provider steps, then return to this dashboard to track status updates.
         </div>
       )}
-      {sp.verification === 'provider_pending' && (
+      {(isDashboardView || isVerificationView) && sp.verification === 'provider_pending' && (
         <div className="card p-4 mb-6 bg-amber-50 border-amber-300 text-amber-900 text-sm">
           Identity verification is in progress. Listings remain locked until your identity is verified.
         </div>
       )}
 
-      {sp.verification === 'required' && (
+      {(isDashboardView || isVerificationView) && sp.verification === 'required' && (
         <div className="card p-4 mb-6 bg-amber-50 border-amber-300 text-amber-900 text-sm">
           Submit and pass seller verification before creating product listings.
         </div>
       )}
-      {sp.fraud === 'review' && (
+      {(isDashboardView || isListingsView) && sp.fraud === 'review' && (
         <div className="card p-4 mb-6 bg-amber-50 border-amber-300 text-amber-900 text-sm">
           Your latest listing triggered extra trust-and-safety review signals (for example duplicate content, unusual pricing, or rapid posting). An admin will review it before it goes live.
         </div>
       )}
 
-      {!isRestricted && (
+      {(isDashboardView || isVerificationView) && !isRestricted && (
         <section id="verification-status" className="card p-6 mb-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
@@ -500,7 +617,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
       )}
 
       {/* ── Shop Profile ── */}
-      {!isRestricted && (
+      {isDashboardView && !isRestricted && (
         <section id="shop-profile" className="card p-6 mb-6">
           <div className="mb-4">
             <p className="text-lg font-semibold text-slate-900">Shop Profile</p>
@@ -524,7 +641,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
       )}
 
       {/* ── Seller Subscription ── */}
-      {!isRestricted && !subscriptionActive && (
+      {isDashboardView && !isRestricted && !subscriptionActive && (
         <div className="card p-5 mb-6 bg-amber-50 border-amber-300 text-amber-900">
           <p className="font-semibold mb-1">
             {subscriptionStatus === 'PAST_DUE'
@@ -547,7 +664,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
         </div>
       )}
 
-      {!isRestricted && subscriptionActive && (
+      {isDashboardView && !isRestricted && subscriptionActive && (
         <div className="card p-4 mb-6 bg-green-50 border-green-200 text-green-800 text-sm flex justify-between items-center gap-3">
           <span>
               ✅ Seller subscription active
@@ -559,6 +676,8 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
         </div>
       )}
 
+      {isDashboardView && (
+        <>
       {sp.created && (
         <div className="card p-4 mb-6 bg-green-50 border-green-200 text-green-800 text-sm">
           ✅ Product submitted for review! It will appear publicly once approved by an admin.
@@ -659,8 +778,11 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
           <StripeConnectButton label="Resume Stripe setup" className="btn-outline text-xs flex-shrink-0" />
         </div>
       )}
+        </>
+      )}
 
       {/* ── Earnings Summary ── */}
+      {isPayoutsView && (
       <section id="payouts" className="mb-8">
         <h2 className="text-xl font-bold mb-3">Earnings Summary</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
@@ -704,8 +826,10 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
           </p>
         )}
       </section>
+      )}
 
       {/* ── Product Statistics ── */}
+      {isSalesView && (
       <section className="mb-8">
         <h2 className="text-xl font-bold mb-3">Product Statistics</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
@@ -748,8 +872,10 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
           <p className="text-xs text-slate-400 mt-3">Statistics will populate once you have listings and sales.</p>
         )}
       </section>
+      )}
 
       {/* ── Sold Items ── */}
+      {isSalesView && (
       <section className="mb-8">
         <h2 className="text-xl font-bold mb-3">Sold Items</h2>
         {soldItems.length === 0 ? (
@@ -795,7 +921,9 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
           </div>
         )}
       </section>
+      )}
 
+      {isListingsView && (
       <section id="shipping-package-details" className="mb-8">
         <h2 className="text-xl font-bold mb-3">Shipping & Package Details</h2>
         <div className="card p-4 space-y-2">
@@ -817,18 +945,46 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
           )}
         </div>
       </section>
+      )}
 
       {/* ── My Listings ── */}
+      {isListingsView && (
       <section id="my-listings" className="mb-8">
         <h2 className="text-xl font-bold mb-3">My Listings</h2>
-        {products.length === 0 ? (
+        <div className="flex flex-wrap gap-2 mb-4">
+          {([
+            ['drafts', 'Drafts'],
+            ['scheduled', 'Scheduled'],
+            ['active', 'Active'],
+            ['sold', 'Sold'],
+            ['archived', 'Archived'],
+          ] as Array<[ListingsState, string]>).map(([stateKey, label]) => (
+            <Link
+              key={stateKey}
+              href={`/seller/my-listings?state=${stateKey}`}
+              className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                listingsState === stateKey
+                  ? 'bg-[var(--ff-primary-navy)] text-white'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              {label} <span className="text-[10px] opacity-80">{listingsStateCounts[stateKey]}</span>
+            </Link>
+          ))}
+        </div>
+        {listingsState === 'scheduled' && (
+          <div className="card p-4 mb-4 text-sm text-slate-600">
+            Scheduled listings will appear here once scheduling is configured for your account.
+          </div>
+        )}
+        {selectedListings.length === 0 ? (
           <div className="card p-6 text-slate-500">
             {emptyListingsMessage}
           </div>
         ) : (
           <SellerListingsGrid
             isRestricted={isRestricted}
-            listings={products.map(p => {
+            listings={selectedListings.map(p => {
               const activePromo = p.promotions[0] ?? null;
               const cartAdds = p.cartInterest?.totalAdds ?? 0;
               const viewCount = p.viewCount ?? 0;
@@ -863,8 +1019,10 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
           />
         )}
       </section>
+      )}
 
       {/* ── Promotions ── */}
+      {isPromotionsView && (
       <section id="promotions" className="mb-8">
         <h2 className="text-xl font-bold mb-3">Promotions</h2>
 
@@ -952,8 +1110,10 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
           )}
         </div>
       </section>
+      )}
 
       {/* ── Recent Orders (for shipping management) ── */}
+      {isOrdersView && (
       <section id="orders-to-ship">
         <div className="flex items-center gap-3 mb-1">
           <h2 className="text-xl font-bold">Recent Orders</h2>
@@ -1020,6 +1180,89 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
           </div>
         )}
       </section>
+      )}
+
+      {isGarageSalesView && (
+        <section className="mb-8">
+          <div className="flex items-center justify-between mb-3 gap-3">
+            <h2 className="text-xl font-bold">Garage Sales</h2>
+            <Link href="/garage-sales/new" className="btn-outline text-xs">Create Garage Sale</Link>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+            <StatCard label="Active" value={String(garageSaleCounts.active)} />
+            <StatCard label="Pending" value={String(garageSaleCounts.pending)} />
+            <StatCard label="Archived" value={String(garageSaleCounts.archived)} />
+          </div>
+          {garageSales.length === 0 ? (
+            <div className="card p-6 text-slate-500 text-sm">No garage sales yet.</div>
+          ) : (
+            <div className="space-y-2">
+              {garageSales.map((sale) => (
+                <div key={sale.id} className="card p-4 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-slate-900">{sale.title}</p>
+                    <p className="text-xs text-slate-500">
+                      {sale.city}, {sale.state} · {sale.startDate.toLocaleDateString('en-US', DEFAULT_DATE_FORMAT_OPTIONS)} - {sale.endDate.toLocaleDateString('en-US', DEFAULT_DATE_FORMAT_OPTIONS)}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`badge ${statusBadge(sale.status)}`}>{sale.status}</span>
+                    <Link href={`/garage-sales/${sale.id}`} className="btn-outline text-xs">View</Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {isShopByCultureView && (
+        <section className="mb-8">
+          {(() => {
+            const categoryCounts = products.reduce((acc, product) => {
+              const key = product.category || 'Uncategorized';
+              acc.set(key, (acc.get(key) ?? 0) + 1);
+              return acc;
+            }, new Map<string, number>());
+            const cultureBreakdown = Array.from(categoryCounts.entries())
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, 8);
+            return (
+              <>
+          <h2 className="text-xl font-bold mb-3">Shop by Culture</h2>
+          <p className="text-sm text-slate-500 mb-4">
+            Manage how your listings appear across culture and community shopping categories.
+          </p>
+          {cultureBreakdown.length === 0 ? (
+            <div className="card p-6 text-slate-500 text-sm">Add listings to start building your culture/category storefront mix.</div>
+          ) : (
+            <div className="card overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100 text-left">
+                    <th className="px-4 py-3 font-semibold text-slate-600">Category</th>
+                    <th className="px-4 py-3 font-semibold text-slate-600 text-right">Listings</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cultureBreakdown.map(([category, count]) => (
+                    <tr key={category} className="border-b border-slate-50">
+                      <td className="px-4 py-3 text-slate-800">{category}</td>
+                      <td className="px-4 py-3 text-right font-semibold text-slate-700">{count}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <div className="mt-4">
+            <Link href="/seller/my-listings" className="btn-outline text-xs">Manage listing categories</Link>
+          </div>
+              </>
+            );
+          })()}
+        </section>
+      )}
     </main>
   );
 }
