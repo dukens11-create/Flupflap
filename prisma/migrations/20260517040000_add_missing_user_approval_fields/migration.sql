@@ -55,6 +55,9 @@ ALTER TABLE "User"
   -- Free promotion window (canonical)
   ADD COLUMN IF NOT EXISTS "freePromotionStart"           TIMESTAMP(3),
   ADD COLUMN IF NOT EXISTS "freePromotionEnd"             TIMESTAMP(3),
+  -- NOTE: hasFreePromotion defaults to true intentionally, matching the schema,
+  -- so sellers who joined before this migration retain free-promotion eligibility.
+  -- New signups are evaluated at runtime by isFreePromotionEligible().
   ADD COLUMN IF NOT EXISTS "hasFreePromotion"             BOOLEAN         NOT NULL DEFAULT true,
   ADD COLUMN IF NOT EXISTS "promotionCredits"             INTEGER         NOT NULL DEFAULT 0,
 

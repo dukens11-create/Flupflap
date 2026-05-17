@@ -134,35 +134,30 @@ export async function POST(
       });
     }
 
-    // Perform the three core state-transition writes inside a single
-    // transaction so they either all succeed or all roll back. This prevents
-    // partial approval state (e.g. SellerVerification marked APPROVED but
+    // Perform the two core state-transition writes inside a single transaction
+    // so they either both succeed or both roll back. This prevents partial
+    // approval state (e.g. SellerVerification marked APPROVED but
     // User.kycStatus still NOT_SUBMITTED) after a mid-flight DB error.
     const now = new Date();
+    const isApproved = data.status === SellerVerificationStatus.APPROVED;
+
+    // If admins do not provide a separate internal fallback note for
+    // rejections, reuse rejectionReason so dashboard context stays aligned.
+    const adminFallbackReason =
+      data.adminFallbackReason ??
+      (data.status === SellerVerificationStatus.REJECTED ? data.rejectionReason : null);
+
     await prisma.$transaction(async (tx) => {
       await tx.sellerVerification.update({
         where: { sellerId: id },
         data: {
           status: data.status,
-          rejectionReason:
-            data.status === SellerVerificationStatus.REJECTED
-              ? data.rejectionReason
-              : null,
-          adminFallbackStatus:
-            data.status === SellerVerificationStatus.APPROVED
-              ? SellerAdminFallbackStatus.APPROVED
-              : SellerAdminFallbackStatus.REJECTED,
-          // If admins do not provide a separate internal fallback note for
-          // rejections, reuse rejectionReason so dashboard context stays aligned.
-          adminFallbackReason:
-            data.adminFallbackReason
-            ?? (data.status === SellerVerificationStatus.REJECTED
-              ? data.rejectionReason
-              : null),
-          eligibleToListAt:
-            data.status === SellerVerificationStatus.APPROVED
-              ? now
-              : null,
+          rejectionReason: isApproved ? null : data.rejectionReason,
+          adminFallbackStatus: isApproved
+            ? SellerAdminFallbackStatus.APPROVED
+            : SellerAdminFallbackStatus.REJECTED,
+          adminFallbackReason,
+          eligibleToListAt: isApproved ? now : null,
           reviewedAt: now,
           reviewedById: session.user.id,
         },
@@ -172,38 +167,39 @@ export async function POST(
       // onto the User record so all dashboard counts use a single source of truth.
       await tx.user.update({
         where: { id },
-        data:
-          data.status === SellerVerificationStatus.APPROVED
-            ? {
-                kycStatus: KycStatus.APPROVED,
-                sellerStatus: SellerStatus.ACTIVE,
-                verifiedSeller: true,
-                approvedAt: now,
-              }
-            : {
-                kycStatus: KycStatus.REJECTED,
-              },
+        data: isApproved
+          ? {
+              kycStatus: KycStatus.APPROVED,
+              sellerStatus: SellerStatus.ACTIVE,
+              verifiedSeller: true,
+              approvedAt: now,
+            }
+          : {
+              kycStatus: KycStatus.REJECTED,
+            },
       });
+    });
 
-      // Notify the seller of the admin's decision. Admin review decisions always
-      // create fresh notifications (no deduplication) so sellers receive a
-      // notification for every approval/rejection cycle.
-      await tx.notification.create({
+    // Send the seller a notification of the admin's decision. This is done
+    // outside the transaction so a notification failure never rolls back the
+    // approval itself — the approval state is the source of truth.
+    try {
+      await prisma.notification.create({
         data: {
           userId: id,
           type: NotificationType.PAYOUT,
-          title:
-            data.status === SellerVerificationStatus.APPROVED
-              ? 'Identity verification approved ✓'
-              : 'Identity verification rejected',
-          body:
-            data.status === SellerVerificationStatus.APPROVED
-              ? 'An admin has approved your identity verification. You can now list items on FlupFlap once your subscription is active.'
-              : `Your identity verification was rejected: ${data.rejectionReason}. Please re-submit your documents from your seller dashboard.`,
+          title: isApproved
+            ? 'Identity verification approved ✓'
+            : 'Identity verification rejected',
+          body: isApproved
+            ? 'An admin has approved your identity verification. You can now list items on FlupFlap once your subscription is active.'
+            : `Your identity verification was rejected: ${data.rejectionReason}. Please re-submit your documents from your seller dashboard.`,
           link: '/seller',
         },
       });
-    });
+    } catch (notifyErr) {
+      console.error('[admin/sellers/verification POST] notification create failed:', notifyErr);
+    }
 
     return NextResponse.redirect(new URL('/admin/sellers?verification=updated', req.url));
   } catch (err: any) {
