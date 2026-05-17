@@ -14,8 +14,10 @@ export default function GarageSaleShareButton({ title }: Props) {
       try {
         await navigator.share({ title, url });
         return;
-      } catch {
-        return;
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          return;
+        }
       }
     }
 
