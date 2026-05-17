@@ -72,7 +72,7 @@ export default function GarageSalesPromoBanner() {
         <div className="relative h-44 w-full overflow-hidden rounded-2xl bg-slate-50 p-2 shadow-inner sm:h-56 lg:h-64">
           <Image
             src="/garage-sales-promo.svg"
-            alt="Garage Sales promotional banner"
+            alt="Garage Sale Weekend banner featuring furniture, tools, vintage items, and electronics with a call to post on FlupFlap"
             fill
             className="object-contain"
             loading="lazy"
