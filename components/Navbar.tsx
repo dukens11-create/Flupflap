@@ -172,6 +172,7 @@ export default function Navbar() {
           <div className="absolute left-0 top-full z-50 mt-1 min-w-52 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
             <div className="space-y-1">
               {item.children.map((child) => {
+                if (!child.href) return null;
                 const childActive = isRoleNavItemActive(child, pathname);
                 return (
                   <Link
@@ -233,6 +234,7 @@ export default function Navbar() {
         {open && (
           <div className="space-y-1 px-2 pb-2">
             {item.children.map((child) => {
+              if (!child.href) return null;
               const childActive = isRoleNavItemActive(child, pathname);
               return (
                 <Link

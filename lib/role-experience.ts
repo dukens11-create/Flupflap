@@ -108,8 +108,7 @@ export function isRoleNavItemActive(
     if (pathname === hrefPath) return true;
   }
   return item.children?.some((child) => {
-    const nextVisited = new Set(visited);
-    nextVisited.add(child);
-    return isRoleNavItemActive(child, pathname, nextVisited);
+    visited.add(child);
+    return isRoleNavItemActive(child, pathname, visited);
   }) ?? false;
 }
