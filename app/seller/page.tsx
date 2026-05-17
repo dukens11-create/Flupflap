@@ -494,7 +494,7 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
         <StatCard label="Active Listings" value={String(activeListingsCount)} />
         <StatCard label="Pending Orders" value={String(pendingOrdersToShip)} />
         <div id="promotion-status" className="card p-5">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Promotion Status</p>
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Boost Status</p>
           <p className={`mt-2 text-sm font-semibold ${freePromotionEligible ? 'text-indigo-700' : 'text-slate-500'}`}>
             {freePromotionEligible
               ? `Free promotion active (${freePromotionDaysLeft} day${freePromotionDaysLeft === 1 ? '' : 's'} left)`
@@ -502,6 +502,9 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                 ? `Free promotion expired`
                 : 'No free promotion'}
           </p>
+          <Link href="/seller/promotions" className="mt-3 inline-flex text-xs font-semibold text-slate-700 hover:underline">
+            Manage discounts & offers →
+          </Link>
         </div>
         <div id="seller-health" className="card p-5">
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Verification Status</p>
@@ -1024,10 +1027,13 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
       </section>
       )}
 
-      {/* ── Promotions ── */}
+      {/* ── Listing Boosts ── */}
       {isPromotionsView && (
       <section id="promotions" className="mb-8">
-        <h2 className="text-xl font-bold mb-3">Promotions</h2>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-xl font-bold">Listing Boosts</h2>
+          <Link href="/seller/promotions" className="btn-outline text-xs">Open discounts & offers</Link>
+        </div>
 
         {/* Free promotion status */}
         <div className={`card p-4 mb-4 text-sm ${freePromotionEligible ? 'bg-blue-50 border-blue-200 text-blue-900' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
