@@ -74,7 +74,7 @@ export default function GarageSalesPromoBanner() {
         <div className="w-full overflow-hidden rounded-2xl bg-slate-50 p-2 shadow-inner">
           <Image
             src="/promotional_imagine.png"
-            alt="Promotional banner"
+            alt="FlupFlap promotional banner for garage sales and local marketplace deals"
             width={501}
             height={501}
             className="h-auto w-full object-contain"
