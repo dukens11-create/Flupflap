@@ -46,7 +46,7 @@ export async function POST(req: Request) {
     }),
     ]);
 
-    if (!product || product.status !== 'APPROVED' || product.inventory <= 0) {
+    if (!product || (product.status !== 'APPROVED' && product.status !== 'ACTIVE') || product.inventory <= 0) {
       return NextResponse.json({ error: 'Product not available.' }, { status: 400 });
     }
 

@@ -48,11 +48,11 @@ const buyerNav: RoleNavItem[] = [
 const sellerNav: RoleNavItem[] = [
   { label: 'Seller Dashboard', href: '/seller/dashboard' },
   { label: 'List Item', href: '/seller/new' },
-  { label: 'Garage Sales', href: '/garage-sales' },
-  { label: 'My Listings', href: '/seller#my-listings' },
+  { label: 'Garage Sales', href: '/seller/garage-sales' },
+  { label: 'My Listings', href: '/seller/my-listings' },
   { label: 'Sales', href: '/seller/sales' },
-  { label: 'Orders to Ship', href: '/seller#orders-to-ship' },
-  { label: 'Payouts', href: '/seller#payouts' },
+  { label: 'Orders to Ship', href: '/seller/orders-to-ship' },
+  { label: 'Payouts', href: '/seller/payouts' },
   {
     label: 'Promotions',
     href: '/seller/promotions',
@@ -62,7 +62,8 @@ const sellerNav: RoleNavItem[] = [
       { label: 'Offers', href: '/seller/promotions/offers' },
     ],
   },
-  { label: 'Verification Status', href: '/seller#verification-status' },
+  { label: 'Verification Status', href: '/seller/verification-status' },
+  { label: 'Shop by Culture', href: '/seller/shop-by-culture' },
 ];
 
 const adminNav: RoleNavItem[] = [
