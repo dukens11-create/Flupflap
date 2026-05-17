@@ -12,22 +12,15 @@ import { getFirebaseClientAuth } from '@/lib/firebase/client';
 import { normalizePhone } from '@/lib/phone';
 
 const OTP_CODE_LENGTH = 6;
+const RESEND_COOLDOWN_SECONDS = 30;
+const RATE_LIMIT_COOLDOWN_SECONDS = 5 * 60;
 
-function getFirebaseErrorMessage(error: unknown): string {
-  if (typeof error === 'object' && error !== null) {
-    const message = 'message' in error ? error.message : undefined;
-    if (typeof message === 'string' && message.trim()) {
-      return message.trim();
-    }
-    const code = 'code' in error ? error.code : undefined;
-    if (typeof code === 'string' && code.trim()) {
-      return code.trim();
-    }
+function getFirebaseErrorCode(error: unknown): string | undefined {
+  if (typeof error === 'object' && error !== null && 'code' in error) {
+    const value = (error as { code?: unknown }).code;
+    return typeof value === 'string' ? value : undefined;
   }
-  if (error instanceof Error && error.message.trim()) {
-    return error.message.trim();
-  }
-  return 'Phone verification failed. Please try again.';
+  return undefined;
 }
 
 function maskPhone(phone: string): string {
@@ -59,6 +52,9 @@ function LoginForm() {
   const [pendingPassword, setPendingPassword] = useState('');
   const [pendingPhone, setPendingPhone] = useState('');
   const [otpCode, setOtpCode] = useState('');
+  const [resendAvailableAt, setResendAvailableAt] = useState<number | null>(null);
+  const [rateLimitedUntil, setRateLimitedUntil] = useState<number | null>(null);
+  const [cooldownNow, setCooldownNow] = useState(() => Date.now());
   const confirmationResultRef = useRef<ConfirmationResult | null>(null);
   const recaptchaRef = useRef<RecaptchaVerifier | null>(null);
 
@@ -68,6 +64,22 @@ function LoginForm() {
       recaptchaRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    const nextBlockedUntil = Math.max(resendAvailableAt ?? 0, rateLimitedUntil ?? 0);
+    if (!nextBlockedUntil || nextBlockedUntil <= Date.now()) {
+      return;
+    }
+
+    setCooldownNow(Date.now());
+    const intervalId = window.setInterval(() => {
+      setCooldownNow(Date.now());
+    }, 1000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [rateLimitedUntil, resendAvailableAt]);
 
   async function redirectByRole() {
     setRedirecting(true);
@@ -96,6 +108,67 @@ function LoginForm() {
     return { auth, verifier: recaptchaRef.current };
   }
 
+  function startResendCooldown(seconds: number) {
+    const now = Date.now();
+    setCooldownNow(now);
+    setResendAvailableAt(now + seconds * 1000);
+  }
+
+  function applyRateLimitCooldown() {
+    const now = Date.now();
+    const blockedUntil = now + RATE_LIMIT_COOLDOWN_SECONDS * 1000;
+    setCooldownNow(now);
+    setRateLimitedUntil(blockedUntil);
+    setResendAvailableAt(blockedUntil);
+  }
+
+  function getSendCooldownSeconds() {
+    const blockedUntil = Math.max(resendAvailableAt ?? 0, rateLimitedUntil ?? 0);
+    if (!blockedUntil || blockedUntil <= cooldownNow) {
+      return 0;
+    }
+    return Math.ceil((blockedUntil - cooldownNow) / 1000);
+  }
+
+  function getPhoneAuthErrorMessage(error: unknown) {
+    const code = getFirebaseErrorCode(error);
+
+    if (code === 'auth/invalid-verification-code' || code === 'auth/code-expired') {
+      return t('login.invalidCode');
+    }
+    if (code === 'auth/too-many-requests') {
+      applyRateLimitCooldown();
+      return t('login.tooManyRequests');
+    }
+    if (code === 'auth/invalid-phone-number') {
+      return 'Invalid phone number. Please include your country code (e.g. +1 for US/Canada).';
+    }
+    if (code === 'auth/captcha-check-failed' || code === 'auth/invalid-app-credential') {
+      return 'Security check failed. Please refresh and try again.';
+    }
+    if (code === 'auth/operation-not-allowed') {
+      return 'Phone sign-in is not enabled for this app. Please contact support.';
+    }
+    if (code === 'auth/unauthorized-domain') {
+      return 'This domain is not authorized for phone sign-in. Please contact support.';
+    }
+    if (code === 'auth/network-request-failed') {
+      return 'Network error. Please check your connection and try again.';
+    }
+
+    return 'Phone verification failed. Please try again.';
+  }
+
+  const resendCooldownSeconds = getSendCooldownSeconds();
+  const resendButtonLabel = resendCooldownSeconds > 0
+    ? t('login.resendCodeCountdown', { seconds: resendCooldownSeconds })
+    : t('login.resendCode');
+  const resendHelperMessage = rateLimitedUntil && rateLimitedUntil > cooldownNow
+    ? t('login.tooManyRequests')
+    : resendCooldownSeconds > 0
+      ? t('login.resendCodeWait', { seconds: resendCooldownSeconds })
+      : '';
+
   async function sendPhoneOtp(phoneNumber: string, phoneMask = maskPhone(phoneNumber)) {
     const normalizedPhone = normalizePhone(phoneNumber);
     if (!normalizedPhone) {
@@ -108,15 +181,27 @@ function LoginForm() {
     setStep('otp');
     setOtpCode('');
     setError('');
+
+    if (resendCooldownSeconds > 0) {
+      setError(
+        rateLimitedUntil && rateLimitedUntil > Date.now()
+          ? t('login.tooManyRequests')
+          : t('login.resendCodeWait', { seconds: resendCooldownSeconds }),
+      );
+      return false;
+    }
+
     setLoading(true);
 
     try {
       const { auth, verifier } = getOrCreateRecaptchaVerifier();
       confirmationResultRef.current = await signInWithPhoneNumber(auth, normalizedPhone, verifier);
+      setRateLimitedUntil(null);
+      startResendCooldown(RESEND_COOLDOWN_SECONDS);
       return true;
     } catch (err) {
       confirmationResultRef.current = null;
-      setError(getFirebaseErrorMessage(err));
+      setError(getPhoneAuthErrorMessage(err));
       return false;
     } finally {
       setLoading(false);
@@ -285,7 +370,7 @@ function LoginForm() {
         await redirectByRole();
       }
     } catch (err) {
-      setError(getFirebaseErrorMessage(err));
+      setError(getPhoneAuthErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -389,9 +474,9 @@ function LoginForm() {
             type="button"
             className="hover:text-blue-600"
             onClick={resendOtp}
-            disabled={loading}
+            disabled={loading || resendCooldownSeconds > 0}
           >
-            {t('login.resendCode')}
+            {resendButtonLabel}
           </button>
           <button
             type="button"
@@ -401,6 +486,7 @@ function LoginForm() {
             {t('login.back')}
           </button>
         </div>
+        {resendHelperMessage && <p className="text-xs text-slate-500">{resendHelperMessage}</p>}
       </form>
     );
   } else {
