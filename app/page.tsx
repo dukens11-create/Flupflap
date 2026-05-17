@@ -1,5 +1,4 @@
 import { Suspense } from 'react';
-import Image from 'next/image';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
@@ -13,6 +12,7 @@ import { BadgeCheck, CreditCard, ShieldCheck, Truck } from 'lucide-react';
 import { getSellerResponseStatsForSellers } from '@/lib/messages';
 import { authOptions } from '@/lib/auth-options';
 import { getRoleDefaultPath, normalizeExperienceRole } from '@/lib/role-experience';
+import GarageSalesPromoBanner from '@/components/GarageSalesPromoBanner';
 import {
   buildProductSearchableText,
   normalizeSearchText,
@@ -439,40 +439,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
         </Suspense>
       </section>
 
-      <section id="promotional-banner">
-        <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white p-3 shadow-[0_16px_36px_-20px_rgba(15,23,42,0.5)] sm:p-4">
-          <div className="relative h-52 w-full sm:h-64 md:h-72 lg:h-80 xl:h-[24rem]">
-            <Image
-              src="/promotional_imagine.png"
-              alt="FlupFlap promotional banner"
-              fill
-              priority
-              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 90vw, 1200px"
-              className="object-contain object-center"
-            />
-          </div>
-        </div>
-      </section>
-
-      <section id="garage-sales-banner">
-        <Link
-          href="/garage-sales/create"
-          className="group block overflow-hidden rounded-[28px] shadow-[0_16px_36px_-20px_rgba(15,23,42,0.5)] transition-shadow hover:shadow-[0_20px_42px_-20px_rgba(15,23,42,0.55)]"
-          aria-label="Go to Garage Sales creation page"
-        >
-          <div className="rounded-[28px] border border-slate-200 bg-white p-3 sm:p-4">
-            <div className="relative h-36 w-full sm:h-48 md:h-56 lg:h-64">
-              <Image
-                src="/images/garage-sales-banner.png"
-                alt="Garage Sales promotional banner"
-                fill
-                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 90vw, 1200px"
-                className="object-contain object-center"
-              />
-            </div>
-          </div>
-        </Link>
-      </section>
+      <GarageSalesPromoBanner />
 
       <section id="featured-products" className="space-y-4">
         <div className="space-y-2">
