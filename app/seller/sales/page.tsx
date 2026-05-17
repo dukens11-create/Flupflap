@@ -59,7 +59,7 @@ export default async function SellerSalesPage() {
   const activeListingsCount = products.filter((product) => product.status === 'APPROVED' && product.inventory > 0).length;
   const totalViews = products.reduce((sum, product) => sum + (product.viewCount ?? 0), 0);
   const totalSold = products.reduce((sum, product) => sum + (product.soldQty ?? 0), 0);
-  const conversionRate = totalViews > 0 ? ((completedOrdersCount / totalViews) * 100).toFixed(1) : null;
+  const orderToViewRatio = totalViews > 0 ? ((completedOrdersCount / totalViews) * 100).toFixed(1) : null;
 
   return (
     <main className="mx-auto max-w-5xl space-y-6">
@@ -82,7 +82,7 @@ export default async function SellerSalesPage() {
         <StatCard label="Items Sold" value={String(itemsSoldCount)} />
         <StatCard label="Completed Orders" value={String(completedOrdersCount)} />
         <StatCard label="Active Listings" value={String(activeListingsCount)} />
-        <StatCard label="Conversion Rate" value={conversionRate ? `${conversionRate}%` : '—'} sub="orders ÷ views" />
+        <StatCard label="Order/View Ratio" value={orderToViewRatio ? `${orderToViewRatio}%` : '—'} sub="completed orders ÷ listing views" />
       </section>
 
       <section className="grid gap-6 lg:grid-cols-[1.2fr,0.8fr]">

@@ -29,6 +29,27 @@ function optionalPositiveNumber(value: FormDataEntryValue | null) {
   return parsed;
 }
 
+function parseDiscountValue(discountType: 'PERCENTAGE' | 'FIXED_AMOUNT', value: FormDataEntryValue | null) {
+  const rawDiscountValue = discountType === 'PERCENTAGE'
+    ? optionalPositiveInt(value)
+    : optionalPositiveNumber(value);
+
+  if (!rawDiscountValue || Number.isNaN(rawDiscountValue)) {
+    return { value: null, error: discountType === 'PERCENTAGE'
+      ? 'Percentage discounts must be whole numbers greater than zero.'
+      : 'Fixed amount discounts must be valid dollar amounts greater than zero.' };
+  }
+
+  if (discountType === 'PERCENTAGE' && rawDiscountValue > 100) {
+    return { value: null, error: 'Percentage discounts cannot exceed 100%.' };
+  }
+
+  return {
+    value: discountType === 'PERCENTAGE' ? rawDiscountValue : Math.round(rawDiscountValue * 100),
+    error: null,
+  };
+}
+
 function optionalDate(value: FormDataEntryValue | null) {
   const normalized = optionalTrimmedString(value);
   if (!normalized) return null;
@@ -93,20 +114,11 @@ export function parseSalesPromotionForm(form: FormData, kind: PromotionRouteKind
     if (!discountTypeResult.success) {
       return { error: 'Choose a valid discount type.' };
     }
-    const rawDiscountValue = discountTypeResult.data === 'PERCENTAGE'
-      ? optionalPositiveInt(form.get('discountValue'))
-      : optionalPositiveNumber(form.get('discountValue'));
-    if (!rawDiscountValue || Number.isNaN(rawDiscountValue)) {
-      return { error: discountTypeResult.data === 'PERCENTAGE'
-        ? 'Percentage discounts must be whole numbers greater than zero.'
-        : 'Fixed amount discounts must be valid dollar amounts greater than zero.' };
+    const discountValueResult = parseDiscountValue(discountTypeResult.data, form.get('discountValue'));
+    if (discountValueResult.error || discountValueResult.value == null) {
+      return { error: discountValueResult.error ?? 'Discount value is invalid.' };
     }
-    if (discountTypeResult.data === 'PERCENTAGE' && rawDiscountValue > 100) {
-      return { error: 'Percentage discounts cannot exceed 100%.' };
-    }
-    const discountValue = discountTypeResult.data === 'PERCENTAGE'
-      ? rawDiscountValue
-      : Math.round(rawDiscountValue * 100);
+    const discountValue = discountValueResult.value;
 
     return {
       data: {

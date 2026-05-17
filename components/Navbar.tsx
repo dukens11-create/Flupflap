@@ -230,7 +230,7 @@ export default function Navbar() {
                         aria-haspopup="true"
                       >
                         {item.label}
-                        <ChevronDown size={14} className="transition-transform group-hover:rotate-180 group-focus-within:rotate-180" />
+                        <ChevronDown size={14} aria-hidden="true" className="transition-transform group-hover:rotate-180 group-focus-within:rotate-180" />
                       </button>
                       <div className="invisible absolute left-0 top-full z-40 mt-1 w-56 rounded-2xl border border-slate-200 bg-white p-2 opacity-0 shadow-xl transition-all group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
                         {item.children.map((child) => {
@@ -445,7 +445,7 @@ export default function Navbar() {
                         aria-expanded={expanded}
                       >
                         <span>{item.label}</span>
-                        <ChevronDown size={14} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                        <ChevronDown size={14} aria-hidden="true" className={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
                       </button>
                       {expanded && (
                         <div className="mt-1 space-y-1 pl-3">
