@@ -130,7 +130,7 @@ function LoginForm() {
     return Math.ceil((blockedUntil - cooldownNow) / 1000);
   }
 
-  function getCooldownMessage(seconds: number, referenceTime = cooldownNow) {
+  function getCooldownMessage(seconds: number, referenceTime: number) {
     if (seconds <= 0) {
       return '';
     }
@@ -173,7 +173,7 @@ function LoginForm() {
   const resendButtonLabel = resendCooldownSeconds > 0
     ? t('login.resendCodeCountdown', { seconds: resendCooldownSeconds })
     : t('login.resendCode');
-  const resendHelperMessage = getCooldownMessage(resendCooldownSeconds);
+  const resendHelperMessage = getCooldownMessage(resendCooldownSeconds, cooldownNow);
 
   async function sendPhoneOtp(phoneNumber: string, phoneMask = maskPhone(phoneNumber)) {
     const normalizedPhone = normalizePhone(phoneNumber);
