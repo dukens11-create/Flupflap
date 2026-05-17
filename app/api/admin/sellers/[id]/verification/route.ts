@@ -196,7 +196,7 @@ export async function POST(
           : `Your identity verification was rejected: ${data.rejectionReason}. Please re-submit your documents from your seller dashboard.`,
         link: '/seller',
       });
-    } catch (notifyErr) {
+    } catch (notifyErr: unknown) {
       console.error('[admin/sellers/verification POST] notification create failed:', notifyErr);
     }
 
