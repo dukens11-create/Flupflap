@@ -150,10 +150,6 @@ export function parseSalesPromotionForm(form: FormData, kind: PromotionRouteKind
   if (triggerTypeResult.data !== 'ANY_PURCHASE' && (!triggerValue || Number.isNaN(triggerValue))) {
     return { error: 'Enter a trigger value for minimum spend or minimum quantity offers.' };
   }
-  if (triggerTypeResult.data === 'ANY_PURCHASE' && Number.isNaN(triggerValue)) {
-    return { error: 'Trigger value must be a whole number greater than zero.' };
-  }
-
   return {
     data: {
       name,

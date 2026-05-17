@@ -38,7 +38,7 @@ CREATE TABLE "SalesPromotion" (
     "endsAt" TIMESTAMP(3),
     "archivedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "SalesPromotion_pkey" PRIMARY KEY ("id")
 );

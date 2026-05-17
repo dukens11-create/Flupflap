@@ -192,7 +192,7 @@ export default function SellerPromotionForm({
                 name="discountValue"
                 type="number"
                 min="1"
-                step={initialValues?.discountType === 'FIXED_AMOUNT' ? '0.01' : '1'}
+                step="0.01"
                 className="input"
                 placeholder={initialValues?.discountType === 'FIXED_AMOUNT' ? '5.00' : '10'}
                 defaultValue={initialValues?.discountType === 'FIXED_AMOUNT' && initialValues?.discountValue ? (initialValues.discountValue / 100).toFixed(2) : (initialValues?.discountValue ?? '')}
