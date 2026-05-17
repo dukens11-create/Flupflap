@@ -186,7 +186,7 @@ export function summarizeSalesPromotion(promotion: SellerPromotionWithReward) {
 export function getPromotionFieldDescription(kind: PromotionRouteKind) {
   return kind === 'discounts'
     ? 'Create targeted percentage or fixed-amount discounts with scheduling, limits, and listing-level applicability.'
-    : 'Create free-gift and buy-more offers with clear trigger conditions, reward rules, and scheduling.';
+    : 'Create free gift and buy-more offers with clear trigger conditions, reward rules, and scheduling.';
 }
 
 export async function getSellerPromotionProductOptions(sellerId: string) {
