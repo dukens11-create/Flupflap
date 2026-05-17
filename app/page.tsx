@@ -439,6 +439,21 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
         </Suspense>
       </section>
 
+      <section id="promotional-banner">
+        <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white p-3 shadow-[0_16px_36px_-20px_rgba(15,23,42,0.5)] sm:p-4">
+          <div className="relative h-52 w-full sm:h-64 md:h-72 lg:h-80 xl:h-[24rem]">
+            <Image
+              src="/promotional_imagine.png"
+              alt="FlupFlap promotional banner"
+              fill
+              priority
+              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 90vw, 1200px"
+              className="object-contain object-center"
+            />
+          </div>
+        </div>
+      </section>
+
       <section id="garage-sales-banner">
         <Link
           href="/garage-sales/create"
