@@ -182,9 +182,17 @@ function parseWorkflowAction(value: unknown): WorkflowAction | null {
   return null;
 }
 
-function isDraftOrScheduledStatus(status: string) {
+function isDraftOrLegacyScheduledStatus(status: string) {
   // Keep legacy SCHEDULED rows from older releases in a non-live state when scheduling is unavailable.
   return status === 'DRAFT' || status === 'SCHEDULED';
+}
+
+function setSellerListingToDraft(id: string) {
+  return prisma.product.update({
+    where: { id },
+    data: { status: 'DRAFT' },
+    select: SELLER_PRODUCT_SAFE_SELECT,
+  });
 }
 
 function validateProductReadyForPublish(product: ExistingProduct): string | null {
@@ -564,7 +572,7 @@ export async function POST(
       ? 'DRAFT'
       : submitAction === 'PUBLISH_NOW'
           ? 'ACTIVE'
-          : isDraftOrScheduledStatus(existing.status)
+          : isDraftOrLegacyScheduledStatus(existing.status)
             ? existing.status
             : 'PENDING';
     let updated;
@@ -687,19 +695,11 @@ export async function PATCH(
         if (currentLifecycle !== 'SCHEDULED') {
           return NextResponse.json({ error: 'Only scheduled listings can be moved back to draft.' }, { status: 400 });
         }
-        const updated = await prisma.product.update({
-          where: { id },
-          data: { status: 'DRAFT' },
-          select: SELLER_PRODUCT_SAFE_SELECT,
-        });
+        const updated = await setSellerListingToDraft(id);
         return NextResponse.json(updated);
       }
       if (workflowAction === 'SAVE_DRAFT') {
-        const updated = await prisma.product.update({
-          where: { id },
-          data: { status: 'DRAFT' },
-          select: SELLER_PRODUCT_SAFE_SELECT,
-        });
+        const updated = await setSellerListingToDraft(id);
         return NextResponse.json(updated);
       }
       const publishValidationError = validateProductReadyForPublish(existing);
@@ -824,7 +824,7 @@ export async function PATCH(
       ? 'DRAFT'
       : submitAction === 'PUBLISH_NOW'
           ? 'ACTIVE'
-          : isDraftOrScheduledStatus(existing.status)
+          : isDraftOrLegacyScheduledStatus(existing.status)
             ? existing.status
             : 'PENDING';
     let updated;
