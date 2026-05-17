@@ -1,7 +1,4 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth-options';
-import { prisma } from '@/lib/db';
 import { calculateGarageSalePricing } from '@/lib/garage-sale-pricing';
 import { getGarageSalePricingSettings } from '@/lib/garage-sales';
 
@@ -17,16 +14,8 @@ export async function GET(req: Request) {
 
   const pricingSettings = await getGarageSalePricingSettings();
 
-  const session = await getServerSession(authOptions);
-  let isEligibleForFreeFirstListing = false;
-  if (session?.user?.id) {
-    const paidCount = await prisma.garageSale.count({ where: { sellerId: session.user.id, paymentStatus: 'PAID' } });
-    isEligibleForFreeFirstListing = paidCount === 0;
-  }
-
   const response: Record<string, unknown> = {
     settings: pricingSettings,
-    isEligibleForFreeFirstListing,
   };
 
   if (startDateRaw && endDateRaw) {
@@ -40,7 +29,6 @@ export async function GET(req: Request) {
         homepagePromotion,
         topLocalSearchPlacement,
         settings: pricingSettings,
-        isEligibleForFreeFirstListing,
       });
     }
   }
