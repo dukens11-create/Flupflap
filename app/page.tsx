@@ -12,6 +12,7 @@ import { BadgeCheck, CreditCard, ShieldCheck, Truck } from 'lucide-react';
 import { getSellerResponseStatsForSellers } from '@/lib/messages';
 import { authOptions } from '@/lib/auth-options';
 import { getRoleDefaultPath, normalizeExperienceRole } from '@/lib/role-experience';
+import GarageSalesPromoBanner from '@/components/GarageSalesPromoBanner';
 import {
   buildProductSearchableText,
   normalizeSearchText,
@@ -437,6 +438,8 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
           <BrowseFilters />
         </Suspense>
       </section>
+
+      <GarageSalesPromoBanner />
 
       <section id="featured-products" className="space-y-4">
         <div className="space-y-2">
