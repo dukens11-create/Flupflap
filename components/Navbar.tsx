@@ -136,10 +136,12 @@ export default function Navbar() {
   function renderDesktopNavItem(item: RoleNavItem) {
     const active = isRoleNavItemActive(item, pathname);
     if (!item.children?.length) {
+      const href = item.href;
+      if (!href) return null;
       return (
         <Link
           key={item.href ?? item.label}
-          href={item.href!}
+          href={href}
           className={`${navLinkClass} ${active ? 'bg-slate-100 text-slate-900' : ''}`}
           aria-label={item.label}
           aria-current={active ? 'page' : undefined}
@@ -177,7 +179,7 @@ export default function Navbar() {
                 return (
                   <Link
                     key={child.href}
-                    href={child.href!}
+                    href={child.href}
                     className={`block rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
                       childActive ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'
                     }`}
@@ -197,10 +199,12 @@ export default function Navbar() {
   function renderMobileNavItem(item: RoleNavItem) {
     const active = isRoleNavItemActive(item, pathname);
     if (!item.children?.length) {
+      const href = item.href;
+      if (!href) return null;
       return (
         <Link
           key={`mobile-${item.href ?? item.label}`}
-          href={item.href!}
+          href={href}
           className={`rounded-lg px-3 py-2.5 ${
             experienceRole === 'admin'
               ? 'text-slate-100 hover:bg-white/10'
@@ -239,7 +243,7 @@ export default function Navbar() {
               return (
                 <Link
                   key={`mobile-${child.href}-${child.label}`}
-                  href={child.href!}
+                  href={child.href}
                   className={`block rounded-lg px-3 py-2 text-sm ${
                     childActive ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-white'
                   }`}
