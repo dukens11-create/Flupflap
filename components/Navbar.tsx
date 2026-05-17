@@ -5,7 +5,7 @@ import { signOut, useSession } from 'next-auth/react';
 import { ShoppingCart, LogIn, UserPlus, LogOut, User, MessageCircle, Bell, Menu, X, ChevronDown } from 'lucide-react';
 import LanguageSelector from '@/components/LanguageSelector';
 import { useI18n } from '@/components/I18nProvider';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { getRoleNavigation, isRoleNavItemActive, normalizeExperienceRole, type RoleNavItem } from '@/lib/role-experience';
 import { usePathname } from 'next/navigation';
 import { CULTURAL_MARKETPLACES } from '@/lib/cultural-marketplaces';
@@ -102,7 +102,7 @@ export default function Navbar() {
   const { data: session } = useSession();
   const role = session?.user?.role ?? null;
   const experienceRole = normalizeExperienceRole(role);
-  const roleNavigation = getRoleNavigation(role);
+  const roleNavigation = useMemo(() => getRoleNavigation(role), [role]);
   const pathname = usePathname();
   const cartCount = useCartCount();
   const unreadMessages = useUnreadMessages(!!session?.user);

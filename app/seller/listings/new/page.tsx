@@ -4,6 +4,7 @@ import type { Metadata } from 'next';
 import SellerListingsSectionNav from '@/components/SellerListingsSectionNav';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
+import { isSellerRestricted } from '@/lib/seller-listings';
 import { isSubscriptionActive } from '@/lib/subscription';
 import { syncSellerSubscriptionFromStripe } from '@/lib/subscription-sync';
 import { isSellerVerificationApproved } from '@/lib/seller-verification';
@@ -21,7 +22,7 @@ export default async function SellerListingsNewPage() {
   if (!sellerId) redirect('/login');
 
   const dbUser = await prisma.user.findUnique({ where: { id: sellerId } });
-  if (dbUser?.sellerStatus === 'SUSPENDED' || dbUser?.sellerStatus === 'BANNED' || dbUser?.sellerStatus === 'RESTRICTED') {
+  if (isSellerRestricted(dbUser?.sellerStatus)) {
     redirect('/seller');
   }
 

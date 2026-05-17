@@ -15,6 +15,10 @@ function calcConversionRate(orders: number, views: number): string | null {
   return ((orders / views) * 100).toFixed(1);
 }
 
+export function isSellerRestricted(sellerStatus?: string | null) {
+  return sellerStatus === 'SUSPENDED' || sellerStatus === 'BANNED' || sellerStatus === 'RESTRICTED';
+}
+
 export async function getSellerListingsPageData() {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect('/login');
@@ -57,10 +61,7 @@ export async function getSellerListingsPageData() {
 
   if (!dbUser) redirect('/login');
 
-  const isRestricted =
-    dbUser.sellerStatus === 'SUSPENDED'
-    || dbUser.sellerStatus === 'BANNED'
-    || dbUser.sellerStatus === 'RESTRICTED';
+  const isRestricted = isSellerRestricted(dbUser.sellerStatus);
 
   const orderCountByProductId = soldItems.reduce((acc, item) => {
     if (!acc.has(item.productId)) acc.set(item.productId, new Set<string>());
