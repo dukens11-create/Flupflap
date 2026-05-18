@@ -15,6 +15,8 @@ const STATUS_LABELS: Record<string, string> = {
   PAID: 'Paid',
   SHIPPED: 'Shipped',
   DELIVERED: 'Delivered',
+  REFUND_REQUESTED: 'Refund Requested',
+  PARTIALLY_REFUNDED: 'Partially Refunded',
   CANCELLED: 'Cancelled',
   REFUNDED: 'Refunded',
 };
@@ -25,6 +27,8 @@ function statusBadge(status: string) {
     PAID: 'badge-blue',
     SHIPPED: 'badge-green',
     DELIVERED: 'badge-green',
+    REFUND_REQUESTED: 'badge-yellow',
+    PARTIALLY_REFUNDED: 'badge-blue',
     CANCELLED: 'badge-red',
     REFUNDED: 'badge-slate',
   };
