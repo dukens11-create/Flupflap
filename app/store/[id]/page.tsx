@@ -5,6 +5,7 @@ import { prisma, isDatabaseConfigured } from '@/lib/db';
 import ProductCard from '@/components/ProductCard';
 import { ShieldCheck } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
+import { createPageMetadata } from '@/lib/seo';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,22 +15,36 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!isDatabaseConfigured()) {
-    return { title: 'Seller Store' };
+    return createPageMetadata({
+      title: 'Seller Store',
+      noIndex: true,
+    });
   }
   try {
     const { id } = await params;
-    const seller = await prisma.user.findUnique({
-      where: { id, deletedAt: null, role: 'SELLER' },
-      select: { name: true, shopName: true },
-    });
-    if (!seller) return { title: 'Seller Store' };
+    const [seller, activeListingCount] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id, deletedAt: null, role: 'SELLER' },
+        select: { name: true, shopName: true },
+      }),
+      prisma.product.count({
+        where: { sellerId: id, status: { in: ['APPROVED', 'ACTIVE'] } },
+      }),
+    ]);
+    if (!seller || activeListingCount === 0) {
+      notFound();
+    }
     const publicName = seller.shopName?.trim() || 'FlupFlap Seller';
-    return {
+    return createPageMetadata({
       title: `${publicName}'s Store`,
       description: `Browse products listed by ${publicName} on FlupFlap Marketplace.`,
-    };
+      path: `/store/${id}`,
+    });
   } catch {
-    return { title: 'Seller Store' };
+    return createPageMetadata({
+      title: 'Seller Store',
+      noIndex: true,
+    });
   }
 }
 
@@ -139,7 +154,7 @@ export default async function SellerStorePage({ params }: Props) {
     notFound();
   }
 
-  if (!seller) notFound();
+  if (!seller || products.length === 0) notFound();
 
   const isVerified = seller.verificationSubmission?.status === 'APPROVED';
   const sellerPublicName = seller.shopName?.trim() || 'FlupFlap Seller';

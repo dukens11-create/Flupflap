@@ -13,6 +13,8 @@ import { getSellerResponseStatsForSellers } from '@/lib/messages';
 import { authOptions } from '@/lib/auth-options';
 import { getRoleDefaultPath, normalizeExperienceRole } from '@/lib/role-experience';
 import GarageSalesPromoBanner from '@/components/GarageSalesPromoBanner';
+import { createPageMetadata } from '@/lib/seo';
+import { DEFAULT_CATEGORY_TREE, type DefaultCategoryNode } from '@/lib/default-categories';
 import {
   buildProductSearchableText,
   normalizeSearchText,
@@ -24,7 +26,67 @@ import { isSchemaNotInitializedError } from '@/lib/db-errors';
 
 export const dynamic = 'force-dynamic';
 
-export const metadata: Metadata = { title: 'Browse Products' };
+const CATEGORY_PARAM_KEYS = new Set(['category', 'subcategory', 'refineCategory']);
+
+function hasSearchParamValue(value: string | string[] | undefined): boolean {
+  if (Array.isArray(value)) return value.some((entry) => entry.trim().length > 0);
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function buildDefaultCategorySlugMap(
+  nodes: DefaultCategoryNode[],
+  map: Map<string, string>,
+): Map<string, string> {
+  for (const node of nodes) {
+    map.set(node.id, node.slug);
+    buildDefaultCategorySlugMap(node.children, map);
+  }
+  return map;
+}
+
+const DEFAULT_CATEGORY_SLUG_BY_ID = buildDefaultCategorySlugMap(DEFAULT_CATEGORY_TREE, new Map<string, string>());
+
+async function resolveCategoryCanonicalPath(sp: SearchParams): Promise<string | null> {
+  const targetCategoryId = sp.refineCategory || sp.subcategory || sp.category;
+  if (!targetCategoryId) return null;
+
+  if (isDatabaseConfigured()) {
+    try {
+      const category = await prisma.category.findUnique({
+        where: { id: targetCategoryId },
+        select: { slug: true },
+      });
+      if (category?.slug) {
+        return `/category/${category.slug}`;
+      }
+    } catch {
+      // Fallback to default category definitions.
+    }
+  }
+
+  const fallbackSlug = DEFAULT_CATEGORY_SLUG_BY_ID.get(targetCategoryId);
+  return fallbackSlug ? `/category/${fallbackSlug}` : null;
+}
+
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}): Promise<Metadata> {
+  const sp = await searchParams;
+  const nonEmptyParams = Object.entries(sp).filter(([, value]) => hasSearchParamValue(value));
+  const hasParams = nonEmptyParams.length > 0;
+  const hasNonCategoryFilters = nonEmptyParams.some(([key]) => !CATEGORY_PARAM_KEYS.has(key));
+  const categoryCanonicalPath = hasParams && !hasNonCategoryFilters
+    ? await resolveCategoryCanonicalPath(sp)
+    : null;
+
+  return createPageMetadata({
+    title: 'Browse Products',
+    path: categoryCanonicalPath ?? '/',
+    noIndex: hasNonCategoryFilters,
+  });
+}
 
 interface SearchParams {
   q?: string;
