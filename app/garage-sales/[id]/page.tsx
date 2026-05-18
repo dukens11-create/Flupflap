@@ -49,7 +49,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const isPubliclyIndexable = lifecycle.publiclyVisible && !sale.isSpam;
   const description = sale.description?.trim()
     ? sale.description.slice(0, META_DESCRIPTION_MAX_LENGTH)
-    : `View sale details for ${sale.title} in ${sale.city}, ${sale.state}.`.slice(0, META_DESCRIPTION_MAX_LENGTH);
+    : `View sale details for ${sale.title} in ${sale.city}, ${sale.state}.`;
 
   return createPageMetadata({
     title: `${sale.title} – ${sale.city}, ${sale.state} | FlupFlap`,

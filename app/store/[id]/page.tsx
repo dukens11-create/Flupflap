@@ -31,7 +31,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         where: { sellerId: id, status: { in: ['APPROVED', 'ACTIVE'] } },
       }),
     ]);
-    if (!seller || activeListingCount === 0) {
+    if (!seller) {
+      notFound();
+    }
+    if (activeListingCount === 0) {
       return createPageMetadata({
         title: 'Seller Store',
         noIndex: true,
