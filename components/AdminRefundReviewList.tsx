@@ -40,8 +40,15 @@ export default function AdminRefundReviewList({
   const [amounts, setAmounts] = useState<Record<string, string>>({});
   const [submittingKey, setSubmittingKey] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const formatCreatedDate = (value: string) => new Date(value).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
 
   async function approveRequest(refundRequestId: string) {
+    if (submittingKey) return;
+
     const amountRaw = (amounts[refundRequestId] ?? '').trim();
     const approvedAmountCents = amountRaw ? Math.round(Number.parseFloat(amountRaw) * 100) : undefined;
 
@@ -50,7 +57,6 @@ export default function AdminRefundReviewList({
       return;
     }
 
-    if (submittingKey) return;
     setSubmittingKey(`${refundRequestId}:approve`);
     setError('');
 
@@ -168,7 +174,7 @@ export default function AdminRefundReviewList({
                 <th className="px-4 py-3 font-semibold text-slate-600">Amount</th>
                 <th className="px-4 py-3 font-semibold text-slate-600">Reason</th>
                 <th className="px-4 py-3 font-semibold text-slate-600">Status</th>
-                <th className="px-4 py-3 font-semibold text-slate-600">Stripe payment intent</th>
+                <th className="px-4 py-3 font-semibold text-slate-600">Stripe Payment Intent</th>
                 <th className="px-4 py-3 font-semibold text-slate-600">Created</th>
                 <th className="px-4 py-3 font-semibold text-slate-600">Actions</th>
               </tr>
@@ -198,7 +204,7 @@ export default function AdminRefundReviewList({
                       {request.order.stripePaymentIntentId ?? 'N/A'}
                     </td>
                     <td className="px-4 py-3 text-xs text-slate-500">
-                      {new Date(request.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      <time dateTime={request.createdAt}>{formatCreatedDate(request.createdAt)}</time>
                     </td>
                     <td className="px-4 py-3 min-w-[260px] space-y-2">
                       <div className="flex flex-wrap gap-2">
@@ -230,21 +236,27 @@ export default function AdminRefundReviewList({
                       </div>
                       {!resolved && (
                         <div className="space-y-2">
-                          <label className="label">Approved amount (USD, optional)</label>
+                          <label htmlFor={`amount-${request.id}`} className="label">Approved amount (USD, optional)</label>
                           <input
+                            id={`amount-${request.id}`}
                             className="input"
                             inputMode="decimal"
+                            aria-describedby={`amount-hint-${request.id}`}
+                            aria-required={false}
                             value={amounts[request.id] ?? ''}
                             onChange={(event) => setAmounts((prev) => ({ ...prev, [request.id]: event.target.value }))}
                             placeholder={(request.requestedAmountCents / 100).toFixed(2)}
                           />
-                          <label className="label">Admin note (optional)</label>
+                          <p id={`amount-hint-${request.id}`} className="text-xs text-slate-500">Leave blank to use requested amount.</p>
+                          <label htmlFor={`note-${request.id}`} className="label">Admin note (optional)</label>
                           <textarea
+                            id={`note-${request.id}`}
                             className="input h-16 resize-none"
                             maxLength={2000}
+                            aria-required={false}
                             value={notes[request.id] ?? ''}
                             onChange={(event) => setNotes((prev) => ({ ...prev, [request.id]: event.target.value }))}
-                            placeholder="Admin note (optional)"
+                            placeholder="e.g., Refund approved due to order cancellation."
                           />
                         </div>
                       )}
@@ -277,26 +289,32 @@ export default function AdminRefundReviewList({
                 <p><span className="font-semibold">Amount:</span> {dollars(request.requestedAmountCents)}</p>
                 <p><span className="font-semibold">Reason:</span> {request.reason}</p>
                 <p><span className="font-semibold">Stripe payment intent:</span> {request.order.stripePaymentIntentId ?? 'N/A'}</p>
-                <p><span className="font-semibold">Created:</span> {new Date(request.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                <p><span className="font-semibold">Created:</span> <time dateTime={request.createdAt}>{formatCreatedDate(request.createdAt)}</time></p>
               </div>
 
               {!resolved && (
                 <div className="space-y-2 border-t border-slate-100 pt-3">
-                  <label className="label">Approved amount (USD, optional)</label>
+                  <label htmlFor={`amount-mobile-${request.id}`} className="label">Approved amount (USD, optional)</label>
                   <input
+                    id={`amount-mobile-${request.id}`}
                     className="input"
                     inputMode="decimal"
+                    aria-describedby={`amount-mobile-hint-${request.id}`}
+                    aria-required={false}
                     value={amounts[request.id] ?? ''}
                     onChange={(event) => setAmounts((prev) => ({ ...prev, [request.id]: event.target.value }))}
                     placeholder={(request.requestedAmountCents / 100).toFixed(2)}
                   />
-                  <label className="label">Admin note (optional)</label>
+                  <p id={`amount-mobile-hint-${request.id}`} className="text-xs text-slate-500">Leave blank to use requested amount.</p>
+                  <label htmlFor={`note-mobile-${request.id}`} className="label">Admin note (optional)</label>
                   <textarea
+                    id={`note-mobile-${request.id}`}
                     className="input h-20 resize-none"
                     maxLength={2000}
+                    aria-required={false}
                     value={notes[request.id] ?? ''}
                     onChange={(event) => setNotes((prev) => ({ ...prev, [request.id]: event.target.value }))}
-                    placeholder="Add internal resolution context."
+                    placeholder="e.g., Refund approved due to order cancellation."
                   />
                 </div>
               )}
