@@ -324,17 +324,17 @@ export async function POST(req: Request) {
     if (isGarageSaleCheckoutSession(cs)) {
       const result = await finalizeGarageSaleCheckoutSession(cs);
       if (result.reason === 'missing_sale_id') {
-        return new NextResponse('Missing garage sale metadata', { status: 400 });
+        return new NextResponse('ok', { status: 200 });
       }
       if (result.reason === 'sale_not_found') {
-        return new NextResponse('Garage sale not found', { status: 404 });
+        return new NextResponse('ok', { status: 200 });
       }
       return new NextResponse('ok', { status: 200 });
     }
 
     // Handle seller subscription enrollment
     if (cs.metadata?.type === 'seller_subscription') {
-      const sellerId: string | undefined = cs.metadata?.sellerId;
+      const sellerId = cs.metadata?.sellerId;
       if (!sellerId) return new NextResponse('Missing sellerId', { status: 400 });
 
       // Retrieve the Stripe subscription to get period details
@@ -419,9 +419,9 @@ export async function POST(req: Request) {
       return new NextResponse('ok', { status: 200 });
     }
     const metadataBuyerId = cs.metadata?.buyerId;
-    const rawItems = cs.metadata?.items ?? '[]';
+    const rawItems: string = cs.metadata?.items ?? '[]';
     const metadataItems: { productId: string; quantity: number }[] = JSON.parse(rawItems);
-    const rawPickupIds = cs.metadata?.pickupItemIds ?? '[]';
+    const rawPickupIds: string = cs.metadata?.pickupItemIds ?? '[]';
     const metadataPickupItemIds: string[] = JSON.parse(rawPickupIds);
 
     // Avoid duplicate processing

@@ -86,7 +86,13 @@ export default async function SellerGarageSalesPage({
       });
     }
     if (syncResult.synced || syncResult.reason === 'already_paid') {
-      redirect(`/seller/garage-sales?paid=1&saleId=${encodeURIComponent(saleId)}`);
+      const ownedSale = await prisma.garageSale.findFirst({
+        where: { id: saleId, sellerId },
+        select: { id: true },
+      });
+      if (ownedSale) {
+        redirect(`/seller/garage-sales?paid=1&saleId=${encodeURIComponent(ownedSale.id)}`);
+      }
     }
   }
   await expireGarageSales();

@@ -43,7 +43,13 @@ export async function finalizeGarageSaleCheckoutSession(cs: Stripe.Checkout.Sess
 
   const paymentIntentId = extractStripeResourceId(cs.payment_intent);
   const receiptUrl = await getReceiptUrl(paymentIntentId);
-  const finalAmountCents = typeof cs.amount_total === 'number' ? cs.amount_total : sale.totalPaidCents;
+  const existingPayment = await prisma.garageSalePayment.findUnique({
+    where: { stripeCheckoutId: cs.id },
+    select: { amountCents: true },
+  });
+  const finalAmountCents = typeof cs.amount_total === 'number'
+    ? cs.amount_total
+    : existingPayment?.amountCents ?? sale.totalPaidCents;
   const now = new Date();
 
   await prisma.$transaction([

@@ -30,16 +30,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ];
 
   // ── Category pages ───────────────────────────────────────────────────────────
-  // Keep both URL forms:
-  // - `/?category=...` deep-links to the homepage filtered experience users share.
-  // - `/category/{slug}` provides clean canonical discovery routes for SEO.
   const categoryEntries = flattenCategoryEntries(DEFAULT_CATEGORY_TREE);
-  const categoryRoutes: MetadataRoute.Sitemap = categoryEntries.map((entry) => ({
-    url: absoluteUrl(`/?category=${entry.id}`),
-    lastModified: now,
-    changeFrequency: 'daily' as const,
-    priority: 0.8,
-  }));
   const categorySeoRoutes: MetadataRoute.Sitemap = categoryEntries.map((entry) => ({
     url: absoluteUrl(`/category/${entry.slug}`),
     lastModified: now,
@@ -48,7 +39,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }));
 
   if (!isDatabaseConfigured()) {
-    return [...staticRoutes, ...categoryRoutes, ...categorySeoRoutes];
+    return [...staticRoutes, ...categorySeoRoutes];
   }
 
   // ── Dynamic product and seller pages ──────────────────────────────────────
@@ -93,5 +84,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // Database unavailable at sitemap generation time — skip dynamic routes.
   }
 
-  return [...staticRoutes, ...categoryRoutes, ...categorySeoRoutes, ...productRoutes, ...sellerRoutes];
+  return [...staticRoutes, ...categorySeoRoutes, ...productRoutes, ...sellerRoutes];
 }
