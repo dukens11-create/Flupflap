@@ -31,17 +31,21 @@ function isRefundResolved(refundRequest: AdminRefundDashboardItem) {
 
 export default function AdminRefundReviewList({ initialRefundRequests }: { initialRefundRequests: AdminRefundDashboardItem[] }) {
   const router = useRouter();
-  const [notes, setNotes] = useState<Record<string, string>>({});
+  const [notes, setNotes] = useState<Record<string, string>>(() => Object.fromEntries(
+    initialRefundRequests
+      .filter((request): request is AdminRefundDashboardItem & { adminNotes: string } => Boolean(request.adminNotes))
+      .map((request) => [request.id, request.adminNotes]),
+  ));
   const [amounts, setAmounts] = useState<Record<string, string>>({});
-  const [submittingId, setSubmittingId] = useState<string | null>(null);
+  const [submittingAction, setSubmittingAction] = useState<{ refundRequestId: string; action: RefundAction } | null>(null);
   const [apiError, setApiError] = useState('');
   const [validationError, setValidationError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [retryAction, setRetryAction] = useState<{ refundRequestId: string; action: RefundAction } | null>(null);
 
   async function submitRefundAction(refundRequestId: string, action: RefundAction) {
-    if (submittingId) return;
-    setSubmittingId(`${refundRequestId}:${action}`);
+    if (submittingAction) return;
+    setSubmittingAction({ refundRequestId, action });
     setApiError('');
     setValidationError('');
     setSuccessMessage('');
@@ -58,7 +62,7 @@ export default function AdminRefundReviewList({ initialRefundRequests }: { initi
       const approvedAmountCents = amountRaw ? Math.round(Number.parseFloat(amountRaw) * 100) : undefined;
 
       if (amountRaw && (!Number.isFinite(approvedAmountCents ?? NaN) || (approvedAmountCents ?? 0) <= 0)) {
-        setSubmittingId(null);
+        setSubmittingAction(null);
         setValidationError('Approved amount must be a positive USD value.');
         return;
       }
@@ -92,16 +96,16 @@ export default function AdminRefundReviewList({ initialRefundRequests }: { initi
     } catch {
       setApiError('Unable to reach the refunds API. Please try again.');
     } finally {
-      setSubmittingId(null);
+      setSubmittingAction(null);
     }
   }
 
   function renderActionControls(request: AdminRefundDashboardItem) {
     const resolved = isRefundResolved(request);
     const missingPaymentIntent = !request.order.stripePaymentIntentId;
-    const approving = submittingId === `${request.id}:approve`;
-    const rejecting = submittingId === `${request.id}:reject`;
-    const resolving = submittingId === `${request.id}:resolve`;
+    const approving = submittingAction?.refundRequestId === request.id && submittingAction.action === 'approve';
+    const rejecting = submittingAction?.refundRequestId === request.id && submittingAction.action === 'reject';
+    const resolving = submittingAction?.refundRequestId === request.id && submittingAction.action === 'resolve';
     const amountPlaceholder = ((request.approvedAmountCents ?? request.requestedAmountCents) / 100).toFixed(2);
 
     return (
@@ -124,7 +128,7 @@ export default function AdminRefundReviewList({ initialRefundRequests }: { initi
             <textarea
               className="input h-20 resize-none"
               maxLength={2000}
-              value={notes[request.id] ?? request.adminNotes ?? ''}
+              value={notes[request.id] ?? ''}
               onChange={(event) => setNotes((prev) => ({ ...prev, [request.id]: event.target.value }))}
               placeholder="Review notes visible on the refund timeline."
             />
@@ -164,9 +168,11 @@ export default function AdminRefundReviewList({ initialRefundRequests }: { initi
         {missingPaymentIntent && !resolved && (
           <p className="text-xs text-amber-700">No Stripe payment intent is available for this order, so it cannot be refunded automatically.</p>
         )}
-        <p className="text-xs text-amber-700">
-          Payout reversal for Stripe Connect seller transfers is currently a manual follow-up step after refund approval.
-        </p>
+        {!resolved && (
+          <p className="text-xs text-amber-700">
+            Payout reversal for Stripe Connect seller transfers is currently a manual follow-up step after refund approval.
+          </p>
+        )}
       </div>
     );
   }
@@ -222,7 +228,7 @@ export default function AdminRefundReviewList({ initialRefundRequests }: { initi
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Stripe payment intent</th>
                 <th className="px-4 py-3">Created date</th>
-                <th className="px-4 py-3">Action buttons</th>
+                <th className="px-4 py-3">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 align-top">
@@ -232,9 +238,9 @@ export default function AdminRefundReviewList({ initialRefundRequests }: { initi
 
                 return (
                   <tr key={request.id}>
-                    <td className="px-4 py-4 font-mono text-xs text-slate-600 break-all">{request.id}</td>
+                    <td className="px-4 py-4 font-mono text-xs text-slate-600 break-words">{request.id}</td>
                     <td className="px-4 py-4">
-                      <Link href={`/orders/${request.order.id}`} className="font-mono text-xs text-blue-600 hover:text-blue-700 break-all">
+                      <Link href={`/orders/${request.order.id}`} className="font-mono text-xs text-blue-600 hover:text-blue-700 break-words">
                         {request.order.id}
                       </Link>
                     </td>
@@ -270,7 +276,7 @@ export default function AdminRefundReviewList({ initialRefundRequests }: { initi
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-4 font-mono text-xs text-slate-600 break-all">{request.order.stripePaymentIntentId ?? '—'}</td>
+                    <td className="px-4 py-4 font-mono text-xs text-slate-600 break-words">{request.order.stripePaymentIntentId ?? '—'}</td>
                     <td className="px-4 py-4 text-slate-700">
                       <div className="space-y-1">
                         <p>{formatDate(request.createdAt)}</p>
@@ -294,8 +300,8 @@ export default function AdminRefundReviewList({ initialRefundRequests }: { initi
               <div key={request.id} className="rounded-2xl border border-slate-200 p-4 shadow-sm">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 space-y-1">
-                    <p className="text-xs font-mono text-slate-400 break-all">{request.id}</p>
-                    <Link href={`/orders/${request.order.id}`} className="text-sm font-semibold text-blue-600 hover:text-blue-700 break-all">
+                    <p className="text-xs font-mono text-slate-400 break-words">{request.id}</p>
+                    <Link href={`/orders/${request.order.id}`} className="text-sm font-semibold text-blue-600 hover:text-blue-700 break-words">
                       Order {request.order.id}
                     </Link>
                   </div>
@@ -325,7 +331,7 @@ export default function AdminRefundReviewList({ initialRefundRequests }: { initi
                   </div>
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Stripe payment intent</p>
-                    <p className="font-mono text-xs break-all">{request.order.stripePaymentIntentId ?? '—'}</p>
+                    <p className="font-mono text-xs break-words">{request.order.stripePaymentIntentId ?? '—'}</p>
                   </div>
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Created date</p>
@@ -349,7 +355,7 @@ export default function AdminRefundReviewList({ initialRefundRequests }: { initi
                   {request.stripeRefundId && (
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Stripe refund</p>
-                      <p className="font-mono text-xs break-all text-green-700">{request.stripeRefundId}</p>
+                      <p className="font-mono text-xs break-words text-green-700">{request.stripeRefundId}</p>
                     </div>
                   )}
                 </div>

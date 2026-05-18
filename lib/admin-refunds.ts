@@ -197,15 +197,6 @@ export async function approveAdminRefundRequest({
   );
   const mergedNotes = adminNotes?.trim() || null;
 
-  await prisma.refundRequest.update({
-    where: { id: refundRequest.id },
-    data: {
-      status: 'APPROVED',
-      approvedAmountCents: normalizedApprovedAmountCents,
-      adminNotes: mergedNotes,
-    },
-  });
-
   const stripeRefund = await stripe.refunds.create({
     payment_intent: refundRequest.order.stripePaymentIntentId,
     amount: normalizedApprovedAmountCents,
@@ -241,14 +232,6 @@ export async function approveAdminRefundRequest({
   });
 
   await createNotifications([
-    {
-      userId: refundRequest.buyerId,
-      type: NotificationType.ORDER_UPDATE,
-      title: 'Refund request approved',
-      body: 'Your refund request was approved and is now being processed.',
-      link: `/orders/${refundRequest.orderId}`,
-      data: { orderId: refundRequest.orderId, refundRequestId: refundRequest.id, status: 'APPROVED' },
-    },
     {
       userId: refundRequest.buyerId,
       type: NotificationType.ORDER_UPDATE,

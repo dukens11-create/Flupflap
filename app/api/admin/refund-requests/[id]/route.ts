@@ -10,8 +10,9 @@ import {
 } from '@/lib/admin-refunds';
 import { logError } from '@/lib/logger';
 
+// Keep legacy `deny` support for older clients while new admin routes use `reject`.
 const adminRefundSchema = z.object({
-  action: z.enum(['approve', 'deny', 'resolve']),
+  action: z.enum(['approve', 'deny', 'reject', 'resolve']),
   approvedAmountCents: z.number().int().positive().optional(),
   adminNotes: z.string().trim().max(2000).optional(),
 });
