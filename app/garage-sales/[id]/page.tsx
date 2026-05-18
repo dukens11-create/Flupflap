@@ -77,11 +77,9 @@ export default async function GarageSaleDetailPage({ params }: Params) {
   const visibilityBlockReason = getGarageSaleVisibilityBlockReason(sale);
   const blockedLiveControlsMessage = getGarageSaleLiveControlsUnavailableMessage(sale);
   const hiddenStatusLabel = visibilityBlockReason === 'PAYMENT_PENDING' ? 'AWAITING PAYMENT' : sale.status;
-  const hiddenStatusBadgeClass = visibilityBlockReason === 'PAYMENT_PENDING'
+  const hiddenStatusBadgeClass = (visibilityBlockReason === 'PAYMENT_PENDING' || sale.status === 'PENDING')
     ? 'bg-yellow-100 text-yellow-700'
-    : sale.status === 'PENDING'
-      ? 'bg-yellow-100 text-yellow-700'
-      : 'bg-red-100 text-red-700';
+    : 'bg-red-100 text-red-700';
   const openNow = listingIsPubliclyVisible && isOpenNow(sale.startDate, sale.endDate);
   const saleTypeLabel = SALE_TYPE_LABELS[sale.saleType] ?? sale.saleType;
   const priceRange = sale.priceRangeMin != null && sale.priceRangeMax != null
