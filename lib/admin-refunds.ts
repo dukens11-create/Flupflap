@@ -310,7 +310,6 @@ export async function resolveRefundRequest({
     data: {
       adminNotes: adminNote?.trim() || refundRequest.adminNotes,
       resolvedAt: new Date(),
-      status: refundRequest.status,
     },
   });
 }

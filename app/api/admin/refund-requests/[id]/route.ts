@@ -7,8 +7,13 @@ import { AdminRefundActionError, approveRefundRequest, rejectRefundRequest } fro
 const adminRefundSchema = z.object({
   action: z.enum(['approve', 'deny']),
   approvedAmountCents: z.number().int().positive().optional(),
+  adminNote: z.string().trim().max(2000).optional(),
   adminNotes: z.string().trim().max(2000).optional(),
-});
+}).transform((data) => ({
+  action: data.action,
+  approvedAmountCents: data.approvedAmountCents,
+  adminNote: data.adminNote ?? data.adminNotes,
+}));
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
@@ -37,13 +42,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const updated = parsed.data.action === 'deny'
       ? await rejectRefundRequest({
           id,
-          adminNote: parsed.data.adminNotes,
+          adminNote: parsed.data.adminNote,
         })
       : await approveRefundRequest({
           id,
           adminId: session.user.id,
           approvedAmountCents: parsed.data.approvedAmountCents,
-          adminNote: parsed.data.adminNotes,
+          adminNote: parsed.data.adminNote,
         });
 
     return NextResponse.json(updated);

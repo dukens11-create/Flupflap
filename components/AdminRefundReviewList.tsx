@@ -106,7 +106,7 @@ export default function AdminRefundReviewList({
         approvedAmountCents: data.approvedAmountCents,
         adminNotes: data.adminNotes,
         stripeRefundId: data.stripeRefundId,
-        resolvedAt: data.resolvedAt ? new Date(data.resolvedAt).toISOString() : null,
+        resolvedAt: data.resolvedAt ?? null,
       });
     } catch {
       setActionError('API request failed. Please try again.');
