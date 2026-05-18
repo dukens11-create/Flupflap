@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/db';
 import { requireSeller } from '@/lib/require-seller';
 import { expireGarageSales } from '@/lib/garage-sales';
@@ -68,6 +69,9 @@ export default async function SellerGarageSalesPage({
         saleId: sp.saleId,
         reason: syncResult.reason ?? 'unknown',
       });
+    }
+    if (syncResult.synced || syncResult.reason === 'already_paid') {
+      redirect(`/seller/garage-sales?paid=1&saleId=${encodeURIComponent(sp.saleId)}`);
     }
   }
   await expireGarageSales();

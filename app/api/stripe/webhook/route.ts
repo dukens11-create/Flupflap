@@ -275,13 +275,28 @@ export async function POST(req: Request) {
     return new NextResponse('ok', { status: 200 });
   }
 
-  if (event.type === 'checkout.session.expired' || event.type === 'checkout.session.async_payment_failed') {
+  if (event.type === 'checkout.session.expired') {
     const cs = event.data.object as Stripe.Checkout.Session;
     if (isGarageSaleCheckoutSession(cs)) {
       logWarn('Garage sale checkout failed', {
         tag: 'stripe/webhook',
         action: 'garageSaleCheckoutFailed',
-        eventType: event.type,
+        eventType: 'checkout.session.expired',
+        stripeCheckoutId: cs.id,
+        saleId: cs.metadata?.saleId,
+      });
+      await failGarageSaleCheckoutSession(cs);
+    }
+    return new NextResponse('ok', { status: 200 });
+  }
+
+  if (event.type === 'checkout.session.async_payment_failed') {
+    const cs = event.data.object as Stripe.Checkout.Session;
+    if (isGarageSaleCheckoutSession(cs)) {
+      logWarn('Garage sale checkout async payment failed', {
+        tag: 'stripe/webhook',
+        action: 'garageSaleCheckoutAsyncPaymentFailed',
+        eventType: 'checkout.session.async_payment_failed',
         stripeCheckoutId: cs.id,
         saleId: cs.metadata?.saleId,
       });
@@ -292,14 +307,6 @@ export async function POST(req: Request) {
 
   // ── Stripe Connect: seller onboarding ────────────────────────────────────────
   if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
-    try {
-      await expirePromotions();
-    } catch (err) {
-      logError('Promotion expiry failed during checkout webhook', err, {
-        tag: 'stripe/webhook',
-        action: 'expirePromotions',
-      });
-    }
     const cs = event.data.object as any;
 
     if (isGarageSaleCheckoutSession(cs)) {
@@ -379,6 +386,7 @@ export async function POST(req: Request) {
 
     // Handle promotion payments separately from product purchases
     if (cs.metadata?.type === 'promotion') {
+      await expirePromotions();
       const promotionId: string = cs.metadata?.promotionId;
       if (!promotionId) return new NextResponse('Missing promotionId', { status: 400 });
 
