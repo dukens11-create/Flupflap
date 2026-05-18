@@ -9,6 +9,7 @@ import { MapPin, Calendar, Phone, Tag, Eye, Heart, ExternalLink } from 'lucide-r
 import { expireGarageSales } from '@/lib/garage-sales';
 import {
   getGarageSaleLiveControlsBlockMessage,
+  getGarageSaleOwnerHiddenStatusMessage,
   getGarageSaleVisibilityBlockReason,
   isGarageSalePubliclyVisible,
 } from '@/lib/garage-sale-visibility';
@@ -76,6 +77,7 @@ export default async function GarageSaleDetailPage({ params }: Params) {
 
   const visibilityBlockReason = getGarageSaleVisibilityBlockReason(sale);
   const blockedLiveControlsMessage = getGarageSaleLiveControlsBlockMessage(sale);
+  const ownerHiddenStatusMessage = getGarageSaleOwnerHiddenStatusMessage(sale);
   const hiddenStatusLabel = (() => {
     if (visibilityBlockReason === 'PAYMENT_PENDING') return 'AWAITING PAYMENT';
     if (visibilityBlockReason === 'PAYMENT_UNPAID') return 'PAYMENT REQUIRED';
@@ -84,6 +86,7 @@ export default async function GarageSaleDetailPage({ params }: Params) {
     if (visibilityBlockReason === 'REJECTED') return 'REJECTED';
     if (visibilityBlockReason === 'ARCHIVED') return 'ARCHIVED';
     if (visibilityBlockReason === 'HIDDEN') return 'HIDDEN';
+    if (visibilityBlockReason === 'UNKNOWN_STATUS') return 'NOT VISIBLE';
     return sale.status;
   })();
   const hiddenStatusBadgeClass = (visibilityBlockReason === 'PAYMENT_PENDING' || sale.status === 'PENDING')
@@ -156,7 +159,7 @@ export default async function GarageSaleDetailPage({ params }: Params) {
       </div>
       {isOwner && !listingIsPubliclyVisible && (
         <div className="card border-yellow-300 bg-yellow-50 p-4 text-sm text-yellow-900">
-          <p className="font-semibold">{blockedLiveControlsMessage}</p>
+          <p className="font-semibold">{ownerHiddenStatusMessage}</p>
           <Link href="/seller/garage-sales" className="mt-2 inline-block font-semibold underline">
             Open My Garage Sales
           </Link>

@@ -48,7 +48,7 @@ export async function PATCH(req: Request, { params }: Params) {
     case 'approve':
       if (sale.paymentStatus !== 'PAID') {
         return NextResponse.json(
-          { error: 'Cannot approve listing: payment status must be PAID.' },
+          { error: `Cannot approve listing: payment status is ${sale.paymentStatus}, but must be PAID.` },
           { status: 422 },
         );
       }

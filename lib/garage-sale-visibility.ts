@@ -13,6 +13,7 @@ export type GarageSaleVisibilityBlockReason =
   | 'PENDING_REVIEW'
   | 'REJECTED'
   | 'HIDDEN'
+  | 'UNKNOWN_STATUS'
   | null;
 
 export function isGarageSalePubliclyVisible(sale: GarageSaleVisibilityInput) {
@@ -29,7 +30,7 @@ export function getGarageSaleVisibilityBlockReason(sale: GarageSaleVisibilityInp
   if (sale.status === 'PENDING') return 'PENDING_REVIEW';
   if (sale.status === 'REJECTED') return 'REJECTED';
   if (sale.status === 'HIDDEN') return 'HIDDEN';
-  if (sale.status !== 'APPROVED') return 'HIDDEN';
+  if (sale.status !== 'APPROVED') return 'UNKNOWN_STATUS';
   return null;
 }
 
@@ -56,5 +57,37 @@ export function getGarageSaleLiveControlsBlockMessage(sale: GarageSaleVisibility
   if (reason === 'SPAM') {
     return 'Live controls are unavailable while this listing is flagged for review.';
   }
+  if (reason === 'UNKNOWN_STATUS') {
+    return 'Live controls are unavailable until this listing becomes visible.';
+  }
   return 'Live controls are unavailable for this listing right now.';
+}
+
+export function getGarageSaleOwnerHiddenStatusMessage(sale: GarageSaleVisibilityInput) {
+  const reason = getGarageSaleVisibilityBlockReason(sale);
+  if (reason === 'PAYMENT_PENDING') {
+    return 'Your payment is still pending. This listing is hidden and live controls are unavailable until payment is confirmed.';
+  }
+  if (reason === 'PAYMENT_UNPAID') {
+    return 'Payment is not completed for this listing, so it is not visible to buyers.';
+  }
+  if (reason === 'PENDING_REVIEW') {
+    return 'Your listing is pending review.';
+  }
+  if (reason === 'REJECTED') {
+    return 'Your listing was rejected. Update details and try again.';
+  }
+  if (reason === 'HIDDEN') {
+    return 'This listing is currently hidden.';
+  }
+  if (reason === 'ARCHIVED') {
+    return 'This listing is archived and no longer visible.';
+  }
+  if (reason === 'SPAM') {
+    return 'This listing is under review and currently hidden.';
+  }
+  if (reason === 'UNKNOWN_STATUS') {
+    return 'This listing is not currently visible.';
+  }
+  return 'This listing is visible.';
 }
