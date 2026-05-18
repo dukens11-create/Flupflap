@@ -14,6 +14,12 @@ type Props = {
 
 const MAX_POLL_ATTEMPTS = 6;
 const POLL_INTERVAL_MS = 3000;
+const PAID_QUERY_FLAG = '1';
+const SALE_ID_QUERY_PARAM = 'saleId';
+
+function isLiveState(state?: string) {
+  return state === 'LIVE' || state === 'OPEN' || state === 'UPCOMING';
+}
 
 export default function PaymentReconciliationBanner({
   saleId,
@@ -26,9 +32,9 @@ export default function PaymentReconciliationBanner({
   const [ownerMessage, setOwnerMessage] = useState<string | undefined>(initialOwnerMessage);
   const [isPolling, setIsPolling] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
-  const didShowLiveState = useRef(initialState === 'LIVE' || initialState === 'OPEN' || initialState === 'UPCOMING');
+  const didShowLiveState = useRef(isLiveState(initialState));
 
-  const isLive = state === 'LIVE' || state === 'OPEN' || state === 'UPCOMING';
+  const isLive = isLiveState(state);
   const isPending = !state || state === 'PAYMENT_PENDING';
 
   const reconcile = useCallback(async (manual = false) => {
@@ -62,22 +68,24 @@ export default function PaymentReconciliationBanner({
 
   useEffect(() => {
     if (state !== 'PAYMENT_PENDING') return;
-    let attempts = 0;
+    let attempts = 1;
+    void reconcile(false);
     const interval = setInterval(() => {
       attempts += 1;
-      void reconcile(false);
-      if (attempts >= MAX_POLL_ATTEMPTS) {
+      if (attempts > MAX_POLL_ATTEMPTS) {
         clearInterval(interval);
+        return;
       }
+      void reconcile(false);
     }, POLL_INTERVAL_MS);
     return () => clearInterval(interval);
   }, [reconcile, state]);
 
   useEffect(() => {
-    if (!isLive || didShowLiveState.current) return;
+    if (!isLive || didShowLiveState.current || !checkoutSessionId) return;
     didShowLiveState.current = true;
-    router.replace(`/seller/garage-sales?paid=1&saleId=${encodeURIComponent(saleId)}`);
-  }, [isLive, router, saleId]);
+    router.replace(`/seller/garage-sales?paid=${PAID_QUERY_FLAG}&${SALE_ID_QUERY_PARAM}=${encodeURIComponent(saleId)}`);
+  }, [checkoutSessionId, isLive, router, saleId]);
 
   const toneClass = useMemo(() => {
     if (isLive) return 'border-green-200 bg-green-50 text-green-900';

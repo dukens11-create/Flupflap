@@ -145,9 +145,6 @@ export async function PATCH(req: Request, { params }: Params) {
     return NextResponse.json({ error: timeValidationError }, { status: 422 });
   }
   const durationDays = calculateGarageSaleDurationDays(maybeStart, maybeEnd);
-  if (durationDays <= 0) {
-    return NextResponse.json({ error: 'End time must be after start time.' }, { status: 422 });
-  }
   updates.durationDays = durationDays;
 
   // Re-pend if editing an approved listing

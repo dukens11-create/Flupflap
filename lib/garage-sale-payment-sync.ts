@@ -139,10 +139,20 @@ export async function finalizeGarageSaleCheckoutSession(cs: Stripe.Checkout.Sess
     where: { stripeCheckoutId: cs.id },
     select: { amountCents: true },
   });
+  const usedSaleAmountFallback = typeof cs.amount_total !== 'number' && existingPayment?.amountCents == null;
   const finalAmountCents = typeof cs.amount_total === 'number'
     ? cs.amount_total
     : existingPayment?.amountCents ?? sale.totalPaidCents;
-  const requiresRepair = needsPaidStateRepair({
+  if (usedSaleAmountFallback) {
+    logWarn('Garage sale checkout amount missing; falling back to sale totalPaidCents', {
+      tag: 'garage-sale/payment-sync',
+      action: 'finalizeCheckoutSession',
+      saleId,
+      stripeCheckoutId: cs.id,
+      fallbackAmountCents: sale.totalPaidCents,
+    });
+  }
+  const requiresStateUpdate = needsPaidStateRepair({
     sale,
     expectedAmountCents: finalAmountCents,
     paymentIntentId,
@@ -150,7 +160,7 @@ export async function finalizeGarageSaleCheckoutSession(cs: Stripe.Checkout.Sess
   const now = new Date();
 
   await prisma.$transaction([
-    ...(requiresRepair
+    ...(requiresStateUpdate
       ? [prisma.garageSale.update({
         where: { id: saleId },
         data: buildPaidSaleUpdate({
@@ -181,7 +191,7 @@ export async function finalizeGarageSaleCheckoutSession(cs: Stripe.Checkout.Sess
     }),
   ]);
 
-  if (requiresRepair) {
+  if (requiresStateUpdate) {
     logInfo('Garage sale payment confirmed', {
       tag: 'garage-sale/payment-sync',
       action: 'finalizeCheckoutSession',
@@ -251,9 +261,24 @@ export async function finalizeGarageSalePaymentIntent(intent: Stripe.PaymentInte
     return { processed: false, saleId, reason: 'sale_not_found' };
   }
 
-  const amountCents = intent.amount_received > 0 ? intent.amount_received : intent.amount;
+  const amountCents = intent.amount_received > 0
+    ? intent.amount_received
+    : intent.amount > 0
+      ? intent.amount
+      : sale.totalPaidCents;
+  if (amountCents <= 0) {
+    logWarn('Garage sale payment intent had non-positive amount', {
+      tag: 'garage-sale/payment-sync',
+      action: 'finalizePaymentIntent',
+      saleId,
+      stripePaymentId: intent.id,
+      amountReceived: intent.amount_received,
+      amount: intent.amount,
+    });
+    return { processed: false, saleId, sellerId: sale.sellerId, reason: 'not_paid' };
+  }
   const receiptUrl = await getReceiptUrl(intent.id);
-  const requiresRepair = needsPaidStateRepair({
+  const requiresStateUpdate = needsPaidStateRepair({
     sale,
     expectedAmountCents: amountCents,
     paymentIntentId: intent.id,
@@ -262,7 +287,7 @@ export async function finalizeGarageSalePaymentIntent(intent: Stripe.PaymentInte
 
   try {
     await prisma.$transaction(async (tx) => {
-      if (requiresRepair) {
+      if (requiresStateUpdate) {
         await tx.garageSale.update({
           where: { id: saleId },
           data: buildPaidSaleUpdate({
@@ -317,7 +342,7 @@ export async function finalizeGarageSalePaymentIntent(intent: Stripe.PaymentInte
     throw err;
   }
 
-  if (requiresRepair) {
+  if (requiresStateUpdate) {
     logInfo('Garage sale payment confirmed', {
       tag: 'garage-sale/payment-sync',
       action: 'finalizePaymentIntent',

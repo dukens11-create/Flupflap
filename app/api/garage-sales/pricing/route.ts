@@ -15,7 +15,11 @@ export async function GET(req: Request) {
 
   const pricingSettings = await getGarageSalePricingSettings();
 
-  const response: Record<string, unknown> = {
+  const response: {
+    settings: Awaited<ReturnType<typeof getGarageSalePricingSettings>>;
+    estimate?: ReturnType<typeof calculateGarageSalePricing>;
+    validationError?: string;
+  } = {
     settings: pricingSettings,
   };
 

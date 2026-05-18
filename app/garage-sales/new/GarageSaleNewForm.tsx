@@ -34,6 +34,7 @@ const US_STATES = [
   'LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND',
   'OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY',
 ];
+const DATETIME_STEP_SECONDS = 60;
 
 export default function GarageSaleNewForm() {
   const router = useRouter();
@@ -335,7 +336,7 @@ export default function GarageSaleNewForm() {
               type="datetime-local"
               className="input"
               required
-              step={60}
+              step={DATETIME_STEP_SECONDS}
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
             />
@@ -347,7 +348,7 @@ export default function GarageSaleNewForm() {
               type="datetime-local"
               className="input"
               required
-              step={60}
+              step={DATETIME_STEP_SECONDS}
               min={startDate || undefined}
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
@@ -357,7 +358,7 @@ export default function GarageSaleNewForm() {
         {timeError ? (
           <p className="text-xs text-red-600">{timeError}</p>
         ) : (
-          <p className="text-xs text-slate-500">End time must be later than start time. On mobile, verify both date and time before checkout.</p>
+          <p className="text-xs text-slate-500">End time must be later than start time. On mobile devices, confirm both date and time fields are set before submitting.</p>
         )}
       </div>
 
