@@ -29,15 +29,8 @@ function generatePickupCode(): string {
 }
 
 async function markGarageSaleCheckoutAsFailed(cs: Stripe.Checkout.Session, reason: 'FAILED' | 'PENDING' = 'FAILED') {
-  const saleId = cs.metadata?.saleId
-    ?? (await prisma.garageSalePayment.findUnique({
-      where: { stripeCheckoutId: cs.id },
-      select: { saleId: true },
-    }))?.saleId
-    ?? (await prisma.garageSale.findUnique({
-      where: { stripeCheckoutId: cs.id },
-      select: { id: true },
-    }))?.id;
+  const checkoutContext = await resolveGarageSaleCheckoutContext(cs.id);
+  const saleId = cs.metadata?.saleId ?? checkoutContext?.saleId;
   if (!saleId) return;
 
   await prisma.$transaction([
@@ -56,21 +49,30 @@ async function markGarageSaleCheckoutAsFailed(cs: Stripe.Checkout.Session, reaso
   ]);
 }
 
+async function resolveGarageSaleCheckoutContext(checkoutId: string) {
+  const payment = await prisma.garageSalePayment.findUnique({
+    where: { stripeCheckoutId: checkoutId },
+    select: { saleId: true, sellerId: true },
+  });
+  if (payment) {
+    return payment;
+  }
+
+  const sale = await prisma.garageSale.findUnique({
+    where: { stripeCheckoutId: checkoutId },
+    select: { id: true, sellerId: true },
+  });
+  if (!sale) {
+    return null;
+  }
+
+  return { saleId: sale.id, sellerId: sale.sellerId };
+}
+
 async function finalizeGarageSaleCheckout(cs: Stripe.Checkout.Session) {
-  const saleId: string | undefined = cs.metadata?.saleId
-    ?? (await prisma.garageSalePayment.findUnique({
-      where: { stripeCheckoutId: cs.id },
-      select: { saleId: true },
-    }))?.saleId
-    ?? (await prisma.garageSale.findUnique({
-      where: { stripeCheckoutId: cs.id },
-      select: { id: true },
-    }))?.id;
-  const sellerId: string | undefined = cs.metadata?.sellerId
-    ?? (await prisma.garageSalePayment.findUnique({
-      where: { stripeCheckoutId: cs.id },
-      select: { sellerId: true },
-    }))?.sellerId;
+  const checkoutContext = await resolveGarageSaleCheckoutContext(cs.id);
+  const saleId: string | undefined = cs.metadata?.saleId ?? checkoutContext?.saleId;
+  const sellerId: string | undefined = cs.metadata?.sellerId ?? checkoutContext?.sellerId;
   if (!saleId || !sellerId) {
     return new NextResponse('Missing garage sale metadata', { status: 400 });
   }
@@ -150,7 +152,12 @@ async function finalizeGarageSaleFromPaymentIntent(intent: Stripe.PaymentIntent)
     if (checkoutSession && checkoutSession.metadata?.type === 'garage_sale_listing') {
       return finalizeGarageSaleCheckout(checkoutSession);
     }
-  } catch {
+  } catch (error) {
+    logWarn('Unable to list checkout sessions by payment intent for garage sale', {
+      tag: 'stripe/webhook',
+      paymentIntentId: intent.id,
+      message: error instanceof Error ? error.message : String(error),
+    });
     // Fall through to metadata-based reconciliation.
   }
 
@@ -174,7 +181,12 @@ async function finalizeGarageSaleFromPaymentIntent(intent: Stripe.PaymentIntent)
       if (typeof expandedIntent.latest_charge !== 'string') {
         receiptUrl = expandedIntent.latest_charge?.receipt_url ?? null;
       }
-    } catch {
+    } catch (error) {
+      logWarn('Unable to retrieve expanded payment intent charge for garage sale receipt', {
+        tag: 'stripe/webhook',
+        paymentIntentId: intent.id,
+        message: error instanceof Error ? error.message : String(error),
+      });
       // Non-fatal
     }
   }
