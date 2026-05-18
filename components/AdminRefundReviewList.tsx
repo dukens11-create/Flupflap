@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { dollars } from '@/lib/money';
-import { REFUND_STATUS_LABELS, refundStatusBadge } from '@/lib/refunds';
+import { isRefundRequestResolvable, REFUND_STATUS_LABELS, refundStatusBadge } from '@/lib/refunds';
 
 type AdminRefundRequest = {
   id: string;
@@ -126,9 +126,10 @@ export default function AdminRefundReviewList({
 
   async function approveRefund(request: AdminRefundRequest) {
     const amountRaw = (amounts[request.id] ?? '').trim();
-    const approvedAmountCents = amountRaw ? Math.round(Number.parseFloat(amountRaw) * 100) : undefined;
+    const parsedAmountCents = amountRaw ? Math.round(Number.parseFloat(amountRaw) * 100) : null;
+    const approvedAmountCents = parsedAmountCents ?? undefined;
 
-    if (amountRaw && (!Number.isFinite(approvedAmountCents ?? NaN) || (approvedAmountCents ?? 0) <= 0)) {
+    if (amountRaw && (parsedAmountCents === null || !Number.isFinite(parsedAmountCents) || parsedAmountCents <= 0)) {
       setActionError('Approved amount must be a positive USD value.');
       setRetryAction(null);
       return;
@@ -166,7 +167,7 @@ export default function AdminRefundReviewList({
 
   function renderActionControls(request: AdminRefundRequest) {
     const resolved = isResolved(request);
-    const canResolve = !request.resolvedAt && ['APPROVED', 'DENIED', 'REFUNDED'].includes(request.status);
+    const canResolve = !request.resolvedAt && isRefundRequestResolvable(request.status);
     const approveEndpoint = `/api/admin/refunds/${request.id}/approve`;
     const rejectEndpoint = `/api/admin/refunds/${request.id}/reject`;
     const resolveEndpoint = `/api/admin/refunds/${request.id}/resolve`;

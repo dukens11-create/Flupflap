@@ -3,7 +3,7 @@ import { NotificationType } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { isSchemaNotInitializedError } from '@/lib/db-errors';
 import { createNotifications } from '@/lib/notifications';
-import { normalizeRefundAmountCents } from '@/lib/refunds';
+import { isRefundRequestResolvable, normalizeRefundAmountCents } from '@/lib/refunds';
 import { stripe } from '@/lib/stripe';
 
 export type AdminRefundListItem = {
@@ -178,7 +178,7 @@ function ensureRefundRequestIsOpen(status: string) {
 }
 
 function ensureRefundRequestCanBeResolved(status: string) {
-  if (!['APPROVED', 'DENIED', 'REFUNDED'].includes(status)) {
+  if (!isRefundRequestResolvable(status as Parameters<typeof isRefundRequestResolvable>[0])) {
     throw new AdminRefundActionError(400, 'Only approved, denied, or refunded requests can be marked as resolved.');
   }
 }
@@ -218,6 +218,8 @@ export async function approveRefundRequest({
   });
 
   const resolvedAt = new Date();
+  // RefundRequest.orderId is unique, so this flow can only issue one refund-request-based
+  // Stripe refund per order. Comparing against the order total is sufficient here.
   const nextOrderStatus = normalizedAmountCents < refundRequest.order.totalCents ? 'PARTIALLY_REFUNDED' : 'REFUNDED';
 
   const updated = await prisma.$transaction(async (tx) => {

@@ -10,10 +10,10 @@ const adminRefundSchema = z.object({
   adminNote: z.string().trim().max(2000).optional(),
   // Deprecated: retained for legacy admin clients that still send `adminNotes`.
   adminNotes: z.string().trim().max(2000).optional(),
-}).transform((data) => ({
-  action: data.action,
-  approvedAmountCents: data.approvedAmountCents,
-  adminNote: data.adminNote ?? data.adminNotes,
+}).transform(({ action, approvedAmountCents, adminNote, adminNotes }) => ({
+  action,
+  approvedAmountCents,
+  adminNote: adminNote ?? adminNotes,
 }));
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {

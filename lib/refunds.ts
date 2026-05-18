@@ -8,6 +8,8 @@ export const REFUND_STATUS_LABELS: Record<RefundRequestStatus, string> = {
   REFUNDED: 'Refunded',
 };
 
+export const RESOLVABLE_REFUND_STATUSES: RefundRequestStatus[] = ['APPROVED', 'DENIED', 'REFUNDED'];
+
 export function refundStatusBadge(status: RefundRequestStatus): string {
   switch (status) {
     case 'REQUESTED':
@@ -23,6 +25,10 @@ export function refundStatusBadge(status: RefundRequestStatus): string {
     default:
       return 'badge-slate';
   }
+}
+
+export function isRefundRequestResolvable(status: RefundRequestStatus): boolean {
+  return RESOLVABLE_REFUND_STATUSES.includes(status);
 }
 
 export function normalizeRefundAmountCents(requestedAmountCents: number | undefined, orderTotalCents: number): number {
