@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import type { Metadata } from 'next';
 import { authOptions } from '@/lib/auth-options';
 import { getAdminRefundRequests } from '@/lib/admin-refunds';
+import { ADMIN_REFUNDS_LOAD_ERROR } from '@/lib/admin-refunds-errors';
 import AdminRefundReviewList from '@/components/AdminRefundReviewList';
 
 export const dynamic = 'force-dynamic';
@@ -30,7 +31,7 @@ export default async function AdminRefundsPage() {
     );
   }
 
-  const { refundRequests, fetchFailed } = await getAdminRefundRequests();
+  const { refundRequests, fetchFailed, fetchError, schemaNotInitialized } = await getAdminRefundRequests();
 
   return (
     <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6">
@@ -44,7 +45,17 @@ export default async function AdminRefundsPage() {
 
       {fetchFailed ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Unable to load refund requests. Please refresh the page or contact support if the problem persists.
+          {schemaNotInitialized ? (
+            <>
+              <p className="font-semibold text-amber-900">Database schema not yet initialized.</p>
+              <p className="mt-1">
+                Run <code className="rounded bg-amber-100 px-1 font-mono text-xs">prisma migrate deploy</code> to apply
+                all committed migrations, then reload this page.
+              </p>
+            </>
+          ) : (
+            fetchError ?? ADMIN_REFUNDS_LOAD_ERROR
+          )}
         </div>
       ) : (
         <AdminRefundReviewList initialRefundRequests={refundRequests} allowEmptyState />
