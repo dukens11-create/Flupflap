@@ -46,9 +46,9 @@ function buildGarageSaleActivationData(
 function shouldActivateGarageSaleListing(
   sale: Awaited<ReturnType<typeof prisma.garageSale.findUniqueOrThrow>>,
 ) {
-  const paymentWasNotFullyApplied = sale.paymentStatus !== 'PAID' || !sale.activatedAt;
+  const isPaymentNotFullyApplied = sale.paymentStatus !== 'PAID' || !sale.activatedAt;
   const listingCanStillGoLive = sale.status !== 'REJECTED' && sale.status !== 'EXPIRED' && !sale.isArchived;
-  return paymentWasNotFullyApplied && listingCanStillGoLive;
+  return isPaymentNotFullyApplied && listingCanStillGoLive;
 }
 
 export async function confirmGarageSalePayment(params: {

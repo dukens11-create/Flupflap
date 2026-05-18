@@ -32,12 +32,12 @@ export default function GarageSalePaymentStatusBanner({
 
     let isMounted = true;
     let attempts = 0;
-    let interval: ReturnType<typeof globalThis.setInterval> | undefined;
+    let interval: ReturnType<typeof setInterval> | undefined;
     const canonicalUrl = `/garage-sales/${saleId}?payment=success${isReposted ? '&reposted=1' : ''}`;
 
     const stopPolling = () => {
       if (interval) {
-        globalThis.clearInterval(interval);
+        clearInterval(interval);
         interval = undefined;
       }
     };
@@ -75,7 +75,7 @@ export default function GarageSalePaymentStatusBanner({
     };
 
     void poll();
-    interval = globalThis.setInterval(() => {
+    interval = setInterval(() => {
       void poll();
     }, POLL_INTERVAL_MS);
 

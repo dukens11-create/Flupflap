@@ -31,7 +31,7 @@ export async function expireGarageSales(now = new Date()) {
   return expired.count;
 }
 
-const GARAGE_SALE_ID_PATTERN = /c[a-z0-9]{24,}/i;
+const GARAGE_SALE_ID_PATTERN = /c[a-z0-9]{24,}/;
 
 export function buildPublicGarageSaleWhere(now = new Date()) {
   return {
