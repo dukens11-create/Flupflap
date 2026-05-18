@@ -44,9 +44,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const trimmedShopDescription = seller.shopDescription?.trim();
     return createPageMetadata({
       title: `${publicName}'s Store`,
-      description: trimmedShopDescription
-        ? trimmedShopDescription
-        : `Browse products listed by ${publicName} on FlupFlap Marketplace.`,
+      description: trimmedShopDescription ?? `Browse products listed by ${publicName} on FlupFlap Marketplace.`,
       path: `/store/${id}`,
     });
   } catch {

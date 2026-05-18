@@ -57,8 +57,9 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 
   const lifecycle = deriveGarageSaleLifecycle(sale);
   const isPubliclyIndexable = lifecycle.publiclyVisible && !sale.isSpam;
-  const description = sale.description?.trim()
-    ? truncateMetaDescription(sale.description)
+  const trimmedDescription = sale.description?.trim();
+  const description = trimmedDescription
+    ? truncateMetaDescription(trimmedDescription)
     : `View sale details for ${sale.title} in ${sale.city}, ${sale.state}.`;
 
   return createPageMetadata({
