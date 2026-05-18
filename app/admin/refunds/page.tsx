@@ -3,8 +3,8 @@ import Link from 'next/link';
 import { getServerSession } from 'next-auth';
 import type { Metadata } from 'next';
 import { authOptions } from '@/lib/auth-options';
-import { prisma } from '@/lib/db';
 import AdminRefundReviewList from '@/components/AdminRefundReviewList';
+import { getAdminRefundRequestsSafe } from '@/lib/admin-refunds';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Admin Refund Requests' };
@@ -14,56 +14,25 @@ export default async function AdminRefundsPage() {
   if (!session?.user) redirect('/login');
   if (session.user.role !== 'ADMIN') redirect('/');
 
-  const refundRequests = await prisma.refundRequest.findMany({
-    include: {
-      order: {
-        select: {
-          id: true,
-          status: true,
-          totalCents: true,
-          buyer: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-          items: {
-            select: {
-              id: true,
-              quantity: true,
-              product: {
-                select: {
-                  id: true,
-                  title: true,
-                  seller: {
-                    select: {
-                      id: true,
-                      name: true,
-                      email: true,
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-    },
-    orderBy: { createdAt: 'desc' },
-  });
+  const { refundRequests, fetchError, schemaIssue } = await getAdminRefundRequestsSafe();
 
   return (
-    <main className="mx-auto max-w-5xl space-y-6">
+    <main className="mx-auto w-full max-w-7xl space-y-6 px-4 sm:px-6">
       <div>
         <Link href="/admin" className="text-sm text-slate-500 hover:text-blue-600">← Back to admin dashboard</Link>
         <h1 className="mt-2 text-3xl font-black">Marketplace Refund Requests</h1>
         <p className="text-sm text-slate-500">
-          Review buyer requests, consider seller responses, and approve or deny final resolution.
+          Review buyer requests, approve or reject refunds, and keep refund outcomes organized without page crashes.
         </p>
       </div>
 
-      <AdminRefundReviewList initialRefundRequests={refundRequests} />
+      <AdminRefundReviewList
+        initialRefundRequests={refundRequests}
+        loadError={fetchError}
+        loadErrorMessage={schemaIssue
+          ? 'Refund data is temporarily unavailable because the database schema is missing one or more refund tables or columns.'
+          : 'We could not load live refund data right now. You can retry safely without leaving this page.'}
+      />
     </main>
   );
 }
