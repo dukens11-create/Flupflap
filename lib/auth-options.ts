@@ -147,10 +147,15 @@ export const authOptions: NextAuthOptions = {
         token.stripeAccountId = user.stripeAccountId;
         token.stripeOnboardingComplete = user.stripeOnboardingComplete;
       }
+      if (typeof token.id !== 'string' && typeof token.sub === 'string') {
+        token.id = token.sub;
+      }
       // On session update refetch lightweight account fields from DB.
       if (trigger === 'update') {
+        const tokenUserId = typeof token.id === 'string' ? token.id : (typeof token.sub === 'string' ? token.sub : null);
+        if (!tokenUserId) return token;
         const dbUser = await prisma.user.findUnique({
-          where: { id: token.id as string },
+          where: { id: tokenUserId },
           select: { name: true },
         });
         if (dbUser) {
@@ -162,7 +167,7 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       if (session.user) {
         stripImageFields(session.user);
-        session.user.id = token.id as string;
+        session.user.id = typeof token.id === 'string' ? token.id : (typeof token.sub === 'string' ? token.sub : '');
         session.user.role = token.role as Role;
         session.user.stripeAccountId = typeof token.stripeAccountId === 'string' ? token.stripeAccountId : null;
         session.user.stripeOnboardingComplete = Boolean(token.stripeOnboardingComplete);
