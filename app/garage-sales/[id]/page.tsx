@@ -68,11 +68,8 @@ export default async function GarageSaleDetailPage({ params }: Params) {
   const isOwner = session?.user?.id === sale.sellerId;
   const isAdmin = session?.user?.role === 'ADMIN';
   const lifecycle = deriveGarageSaleLifecycle(sale);
-
-  if (!lifecycle.publiclyVisible && !isOwner && !isAdmin) notFound();
-
-  const listingIsPubliclyVisible = lifecycle.publiclyVisible;
-  const openNow = lifecycle.openNow;
+  const listingIsPubliclyVisible = isGarageSalePubliclyVisible(sale);
+  const openNow = listingIsPubliclyVisible && lifecycle.openNow;
   const visibilityBlockReason = getGarageSaleVisibilityBlockReason(sale);
   const blockedLiveControlsMessage = getGarageSaleLiveControlsBlockMessage(sale);
   const ownerHiddenStatusMessage = getGarageSaleOwnerHiddenStatusMessage(sale) ?? 'This listing is not currently visible.';
@@ -92,6 +89,8 @@ export default async function GarageSaleDetailPage({ params }: Params) {
     : lifecycle.state === 'PAYMENT_FAILED' || lifecycle.state === 'PAYMENT_REFUNDED' || lifecycle.state === 'REJECTED'
       ? 'bg-red-100 text-red-700'
       : 'bg-slate-200 text-slate-700';
+
+  if (!listingIsPubliclyVisible && !isOwner && !isAdmin) notFound();
   const saleTypeLabel = SALE_TYPE_LABELS[sale.saleType] ?? sale.saleType;
   const priceRange = sale.priceRangeMin != null && sale.priceRangeMax != null
     ? `$${sale.priceRangeMin}–$${sale.priceRangeMax}`

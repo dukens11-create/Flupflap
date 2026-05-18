@@ -29,7 +29,8 @@ function generatePickupCode(): string {
 }
 
 async function markGarageSaleCheckoutAsFailed(cs: Stripe.Checkout.Session, reason: 'FAILED' | 'PENDING' = 'FAILED') {
-  const saleId = cs.metadata?.saleId;
+  const checkoutContext = await resolveGarageSaleCheckoutContext(cs.id);
+  const saleId = cs.metadata?.saleId ?? checkoutContext?.saleId;
   if (!saleId) return;
 
   await prisma.$transaction([
@@ -48,9 +49,38 @@ async function markGarageSaleCheckoutAsFailed(cs: Stripe.Checkout.Session, reaso
   ]);
 }
 
+async function resolveGarageSaleCheckoutContext(checkoutId: string) {
+  const payment = await prisma.garageSalePayment.findUnique({
+    where: { stripeCheckoutId: checkoutId },
+    select: { saleId: true, sellerId: true },
+  });
+  if (payment) {
+    return payment;
+  }
+
+  const sale = await prisma.garageSale.findUnique({
+    where: { stripeCheckoutId: checkoutId },
+    select: { id: true, sellerId: true },
+  });
+  if (!sale) {
+    return null;
+  }
+
+  return { saleId: sale.id, sellerId: sale.sellerId };
+}
+
+async function findLatestGarageSalePayment(saleId: string) {
+  return prisma.garageSalePayment.findFirst({
+    where: { saleId },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true },
+  });
+}
+
 async function finalizeGarageSaleCheckout(cs: Stripe.Checkout.Session) {
-  const saleId: string | undefined = cs.metadata?.saleId;
-  const sellerId: string | undefined = cs.metadata?.sellerId;
+  const checkoutContext = await resolveGarageSaleCheckoutContext(cs.id);
+  const saleId: string | undefined = cs.metadata?.saleId ?? checkoutContext?.saleId;
+  const sellerId: string | undefined = cs.metadata?.sellerId ?? checkoutContext?.sellerId;
   if (!saleId || !sellerId) {
     return new NextResponse('Missing garage sale metadata', { status: 400 });
   }
@@ -115,6 +145,113 @@ async function finalizeGarageSaleCheckout(cs: Stripe.Checkout.Session) {
   return new NextResponse('ok', { status: 200 });
 }
 
+async function finalizeGarageSaleFromPaymentIntent(intent: Stripe.PaymentIntent) {
+  if (intent.metadata?.type !== 'garage_sale_listing') {
+    return new NextResponse('ok', { status: 200 });
+  }
+
+  const saleId = intent.metadata?.saleId;
+  const sellerId = intent.metadata?.sellerId;
+  if (!saleId || !sellerId) {
+    try {
+      const sessions = await stripe.checkout.sessions.list({
+        payment_intent: intent.id,
+        limit: 1,
+      });
+      const checkoutSession = sessions.data[0];
+      if (checkoutSession && checkoutSession.metadata?.type === 'garage_sale_listing') {
+        return finalizeGarageSaleCheckout(checkoutSession);
+      }
+      if (!checkoutSession) {
+        logWarn('No checkout session found for successful garage sale payment intent', {
+          tag: 'stripe/webhook',
+          paymentIntentId: intent.id,
+        });
+      }
+    } catch (error) {
+      logWarn('Unable to list checkout sessions by payment intent for garage sale', {
+        tag: 'stripe/webhook',
+        paymentIntentId: intent.id,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+    return new NextResponse('ok', { status: 200 });
+  }
+
+  const sale = await prisma.garageSale.findUnique({ where: { id: saleId } });
+  if (!sale || sale.paymentStatus === 'PAID') {
+    return new NextResponse('ok', { status: 200 });
+  }
+
+  let receiptUrl: string | null = null;
+  if (typeof intent.latest_charge !== 'string') {
+    receiptUrl = intent.latest_charge?.receipt_url ?? null;
+  } else {
+    try {
+      const expandedIntent = await stripe.paymentIntents.retrieve(intent.id, { expand: ['latest_charge'] });
+      if (typeof expandedIntent.latest_charge !== 'string') {
+        receiptUrl = expandedIntent.latest_charge?.receipt_url ?? null;
+      }
+    } catch (error) {
+      logWarn('Unable to retrieve expanded payment intent charge for garage sale receipt', {
+        tag: 'stripe/webhook',
+        paymentIntentId: intent.id,
+        message: error instanceof Error ? error.message : String(error),
+      });
+      // Non-fatal
+    }
+  }
+
+  const amountPaidCents = intent.amount_received;
+  if (amountPaidCents <= 0) {
+    logWarn('Garage sale payment intent succeeded with non-positive amount_received', {
+      tag: 'stripe/webhook',
+      paymentIntentId: intent.id,
+      saleId,
+      amountReceived: amountPaidCents,
+    });
+    return new NextResponse('ok', { status: 200 });
+  }
+  const existingPayment = await findLatestGarageSalePayment(saleId);
+
+  const now = new Date();
+  await prisma.$transaction([
+    prisma.garageSale.update({
+      where: { id: saleId },
+      data: {
+        status: 'APPROVED',
+        paymentStatus: 'PAID',
+        stripePaymentId: intent.id,
+        paidAt: now,
+        activatedAt: now,
+        isFeatured: sale.listingType === 'FEATURED',
+        totalPaidCents: amountPaidCents,
+      },
+    }),
+    existingPayment
+      ? prisma.garageSalePayment.update({
+        where: { id: existingPayment.id },
+        data: {
+          status: 'PAID',
+          amountCents: amountPaidCents,
+          stripePaymentId: intent.id,
+          stripeReceiptUrl: receiptUrl,
+        },
+      })
+      : prisma.garageSalePayment.create({
+        data: {
+          saleId,
+          sellerId,
+          amountCents: amountPaidCents,
+          status: 'PAID',
+          stripePaymentId: intent.id,
+          stripeReceiptUrl: receiptUrl,
+        },
+      }),
+  ]);
+
+  return new NextResponse('ok', { status: 200 });
+}
 export async function POST(req: Request) {
   const body = await req.text();
   const sig = (await headers()).get('stripe-signature') ?? '';
@@ -377,6 +514,14 @@ export async function POST(req: Request) {
     const cs = event.data.object as Stripe.Checkout.Session;
     if (cs.metadata?.type === 'garage_sale_listing') {
       return finalizeGarageSaleCheckout(cs);
+    }
+    return new NextResponse('ok', { status: 200 });
+  }
+
+  if (event.type === 'payment_intent.succeeded') {
+    const intent = event.data.object as Stripe.PaymentIntent;
+    if (intent.metadata?.type === 'garage_sale_listing') {
+      return finalizeGarageSaleFromPaymentIntent(intent);
     }
     return new NextResponse('ok', { status: 200 });
   }

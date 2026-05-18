@@ -304,6 +304,13 @@ export async function POST(req: Request) {
       listingType: 'STANDARD',
       durationDays: String(pricing.durationDays),
     },
+    payment_intent_data: {
+      metadata: {
+        type: 'garage_sale_listing',
+        saleId: sale.id,
+        sellerId: session.user.id,
+      },
+    },
   });
 
   await prisma.$transaction([

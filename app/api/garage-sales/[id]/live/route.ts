@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { deriveGarageSaleLifecycle } from '@/lib/garage-sale-lifecycle';
-import { getGarageSaleLiveControlsBlockMessage } from '@/lib/garage-sale-visibility';
+import { getGarageSaleLiveControlsBlockMessage, isGarageSalePubliclyVisible } from '@/lib/garage-sale-visibility';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,11 +52,8 @@ export async function POST(req: Request, { params }: Params) {
 
   const lifecycle = deriveGarageSaleLifecycle(sale);
 
-  if (action === 'start' && !lifecycle.sellerCanGoLive) {
-    const error = lifecycle.state === 'UPCOMING'
-      ? 'Live controls unlock when your sale start time arrives.'
-      : getGarageSaleLiveControlsBlockMessage(sale);
-    return NextResponse.json({ error }, { status: 422 });
+  if (action === 'start' && (!lifecycle.sellerCanGoLive || !isGarageSalePubliclyVisible(sale))) {
+    return NextResponse.json({ error: getGarageSaleLiveControlsBlockMessage(sale) }, { status: 422 });
   }
 
   const now = new Date();
@@ -87,8 +84,7 @@ export async function GET(_req: Request, { params }: Params) {
     select: { id: true, isLive: true, liveStartedAt: true, status: true, paymentStatus: true, isArchived: true, isSpam: true, startDate: true, endDate: true },
   });
   if (!sale) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  const lifecycle = deriveGarageSaleLifecycle(sale);
-  if (!lifecycle.publiclyVisible) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (!isGarageSalePubliclyVisible(sale)) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   return NextResponse.json({ id: sale.id, isLive: sale.isLive, liveStartedAt: sale.liveStartedAt });
 }
