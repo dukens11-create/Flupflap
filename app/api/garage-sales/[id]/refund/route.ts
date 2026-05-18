@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { stripe } from '@/lib/stripe';
 import { resolveGarageSaleByRouteParam } from '@/lib/garage-sales';
