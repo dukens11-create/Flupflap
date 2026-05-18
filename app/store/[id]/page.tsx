@@ -32,11 +32,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       }),
     ]);
     if (!seller || activeListingCount === 0) {
-      return createPageMetadata({
-        title: 'Seller Store',
-        description: 'The requested seller store could not be found.',
-        noIndex: true,
-      });
+      notFound();
     }
     const publicName = seller.shopName?.trim() || 'FlupFlap Seller';
     return createPageMetadata({
