@@ -487,6 +487,11 @@ export default async function GarageSaleDetailPage({ params, searchParams }: Par
           {(isOwner || isAdmin) && (
             <div className="card p-4 space-y-2">
               <h2 className="text-xs font-bold uppercase tracking-wide text-slate-500">Payment history</h2>
+              {sale.paymentStatus === 'PENDING' && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                  Payment is still processing. Refunds are unavailable until payment settles. If this remains pending, contact support.
+                </div>
+              )}
               {sale.payments.length === 0 ? (
                 <p className="text-xs text-slate-500">No payments yet.</p>
               ) : (
