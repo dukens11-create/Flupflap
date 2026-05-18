@@ -56,6 +56,10 @@ const PAYMENT_LABEL: Record<string, string> = {
   REFUNDED: 'Refunded',
 };
 
+function shouldWarnOnSyncFailure(reason?: string) {
+  return reason !== 'already_paid' && reason !== 'payment_not_paid';
+}
+
 export default async function SellerGarageSalesPage({
   searchParams,
 }: {
@@ -69,7 +73,7 @@ export default async function SellerGarageSalesPage({
       saleId: sp.saleId,
       sellerId,
     });
-    if (!syncResult.synced && syncResult.reason !== 'already_paid') {
+    if (!syncResult.synced && shouldWarnOnSyncFailure(syncResult.reason)) {
       logWarn('Seller garage sale payment sync did not finalize', {
         tag: 'seller/garage-sales',
         action: 'syncGarageSaleCheckoutSessionForSeller',

@@ -306,7 +306,7 @@ export async function POST(req: Request) {
     return new NextResponse('ok', { status: 200 });
   }
 
-  // ── Stripe Connect: seller onboarding ────────────────────────────────────────
+  // ── Checkout completion: garage sales, subscriptions, promotions, orders ────
   if (CHECKOUT_COMPLETION_EVENTS.has(event.type)) {
     const cs = event.data.object as Stripe.Checkout.Session;
     // Keep promotion statuses fresh on all successful checkout completions
