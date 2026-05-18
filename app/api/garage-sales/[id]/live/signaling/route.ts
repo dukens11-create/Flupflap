@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { Prisma } from '@prisma/client';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
+import { deriveGarageSaleLifecycle } from '@/lib/garage-sale-lifecycle';
 
 export const dynamic = 'force-dynamic';
 
@@ -76,11 +77,23 @@ export async function GET(req: Request, { params }: Params) {
 
   const sale = await prisma.garageSale.findUnique({
     where: { id },
-    select: { id: true, status: true, isLive: true, sellerId: true, liveStartedAt: true },
+    select: {
+      id: true,
+      status: true,
+      paymentStatus: true,
+      isArchived: true,
+      startDate: true,
+      endDate: true,
+      isLive: true,
+      sellerId: true,
+      liveStartedAt: true,
+    },
   });
-  if (!sale || sale.status !== 'APPROVED') {
+  if (!sale) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
+  const lifecycle = deriveGarageSaleLifecycle(sale);
+  if (!lifecycle.publiclyVisible) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   if (roleParam === 'SELLER') {
     const ownerCheck = await requireSellerOwner(sale.sellerId);
@@ -163,11 +176,22 @@ export async function POST(req: Request, { params }: Params) {
 
   const sale = await prisma.garageSale.findUnique({
     where: { id },
-    select: { id: true, status: true, isLive: true, sellerId: true },
+    select: {
+      id: true,
+      status: true,
+      paymentStatus: true,
+      isArchived: true,
+      startDate: true,
+      endDate: true,
+      isLive: true,
+      sellerId: true,
+    },
   });
-  if (!sale || sale.status !== 'APPROVED') {
+  if (!sale) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
+  const lifecycle = deriveGarageSaleLifecycle(sale);
+  if (!lifecycle.publiclyVisible) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   if (!sale.isLive) {
     return NextResponse.json({ error: 'Live session is not active' }, { status: 422 });
   }

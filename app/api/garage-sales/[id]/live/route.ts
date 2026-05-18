@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
+import { deriveGarageSaleLifecycle } from '@/lib/garage-sale-lifecycle';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,16 +19,21 @@ export async function POST(req: Request, { params }: Params) {
 
   const sale = await prisma.garageSale.findUnique({
     where: { id },
-    select: { id: true, sellerId: true, status: true, isLive: true },
+    select: {
+      id: true,
+      sellerId: true,
+      status: true,
+      isLive: true,
+      paymentStatus: true,
+      isArchived: true,
+      startDate: true,
+      endDate: true,
+    },
   });
   if (!sale) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   if (sale.sellerId !== session.user.id) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
-
-  if (sale.status !== 'APPROVED') {
-    return NextResponse.json({ error: 'Only approved listings can go live' }, { status: 422 });
   }
 
   let body: unknown;
@@ -40,6 +46,12 @@ export async function POST(req: Request, { params }: Params) {
   const action = (body as { action?: string })?.action;
   if (action !== 'start' && action !== 'end') {
     return NextResponse.json({ error: 'action must be "start" or "end"' }, { status: 400 });
+  }
+
+  const lifecycle = deriveGarageSaleLifecycle(sale);
+
+  if (action === 'start' && !lifecycle.sellerCanGoLive) {
+    return NextResponse.json({ error: 'Live can only start when the listing is paid, visible, and currently open.' }, { status: 422 });
   }
 
   const now = new Date();
@@ -67,10 +79,11 @@ export async function GET(_req: Request, { params }: Params) {
 
   const sale = await prisma.garageSale.findUnique({
     where: { id },
-    select: { id: true, isLive: true, liveStartedAt: true, status: true },
+    select: { id: true, isLive: true, liveStartedAt: true, status: true, paymentStatus: true, isArchived: true, startDate: true, endDate: true },
   });
   if (!sale) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  if (sale.status !== 'APPROVED') return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  const lifecycle = deriveGarageSaleLifecycle(sale);
+  if (!lifecycle.publiclyVisible) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   return NextResponse.json({ id: sale.id, isLive: sale.isLive, liveStartedAt: sale.liveStartedAt });
 }
