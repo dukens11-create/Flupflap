@@ -29,7 +29,15 @@ function generatePickupCode(): string {
 }
 
 async function markGarageSaleCheckoutAsFailed(cs: Stripe.Checkout.Session, reason: 'FAILED' | 'PENDING' = 'FAILED') {
-  const saleId = cs.metadata?.saleId;
+  const saleId = cs.metadata?.saleId
+    ?? (await prisma.garageSalePayment.findUnique({
+      where: { stripeCheckoutId: cs.id },
+      select: { saleId: true },
+    }))?.saleId
+    ?? (await prisma.garageSale.findUnique({
+      where: { stripeCheckoutId: cs.id },
+      select: { id: true },
+    }))?.id;
   if (!saleId) return;
 
   await prisma.$transaction([
@@ -49,8 +57,20 @@ async function markGarageSaleCheckoutAsFailed(cs: Stripe.Checkout.Session, reaso
 }
 
 async function finalizeGarageSaleCheckout(cs: Stripe.Checkout.Session) {
-  const saleId: string | undefined = cs.metadata?.saleId;
-  const sellerId: string | undefined = cs.metadata?.sellerId;
+  const saleId: string | undefined = cs.metadata?.saleId
+    ?? (await prisma.garageSalePayment.findUnique({
+      where: { stripeCheckoutId: cs.id },
+      select: { saleId: true },
+    }))?.saleId
+    ?? (await prisma.garageSale.findUnique({
+      where: { stripeCheckoutId: cs.id },
+      select: { id: true },
+    }))?.id;
+  const sellerId: string | undefined = cs.metadata?.sellerId
+    ?? (await prisma.garageSalePayment.findUnique({
+      where: { stripeCheckoutId: cs.id },
+      select: { sellerId: true },
+    }))?.sellerId;
   if (!saleId || !sellerId) {
     return new NextResponse('Missing garage sale metadata', { status: 400 });
   }
@@ -86,6 +106,7 @@ async function finalizeGarageSaleCheckout(cs: Stripe.Checkout.Session) {
         status: 'APPROVED',
         paymentStatus: 'PAID',
         stripePaymentId: paymentIntentId,
+        stripeCheckoutId: cs.id,
         paidAt: now,
         activatedAt: now,
         isFeatured: sale.listingType === 'FEATURED',
@@ -110,6 +131,95 @@ async function finalizeGarageSaleCheckout(cs: Stripe.Checkout.Session) {
         stripeReceiptUrl: receiptUrl,
       },
     }),
+  ]);
+
+  return new NextResponse('ok', { status: 200 });
+}
+
+async function finalizeGarageSaleFromPaymentIntent(intent: Stripe.PaymentIntent) {
+  if (intent.metadata?.type !== 'garage_sale_listing') {
+    return new NextResponse('ok', { status: 200 });
+  }
+
+  try {
+    const sessions = await stripe.checkout.sessions.list({
+      payment_intent: intent.id,
+      limit: 1,
+    });
+    const checkoutSession = sessions.data[0];
+    if (checkoutSession && checkoutSession.metadata?.type === 'garage_sale_listing') {
+      return finalizeGarageSaleCheckout(checkoutSession);
+    }
+  } catch {
+    // Fall through to metadata-based reconciliation.
+  }
+
+  const saleId = intent.metadata?.saleId;
+  const sellerId = intent.metadata?.sellerId;
+  if (!saleId || !sellerId) {
+    return new NextResponse('ok', { status: 200 });
+  }
+
+  const sale = await prisma.garageSale.findUnique({ where: { id: saleId } });
+  if (!sale || sale.paymentStatus === 'PAID') {
+    return new NextResponse('ok', { status: 200 });
+  }
+
+  let receiptUrl: string | null = null;
+  if (typeof intent.latest_charge !== 'string') {
+    receiptUrl = intent.latest_charge?.receipt_url ?? null;
+  } else {
+    try {
+      const expandedIntent = await stripe.paymentIntents.retrieve(intent.id, { expand: ['latest_charge'] });
+      if (typeof expandedIntent.latest_charge !== 'string') {
+        receiptUrl = expandedIntent.latest_charge?.receipt_url ?? null;
+      }
+    } catch {
+      // Non-fatal
+    }
+  }
+
+  const amountPaidCents = intent.amount_received > 0 ? intent.amount_received : sale.totalPaidCents;
+  const existingPayment = await prisma.garageSalePayment.findFirst({
+    where: { saleId },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true },
+  });
+
+  const now = new Date();
+  await prisma.$transaction([
+    prisma.garageSale.update({
+      where: { id: saleId },
+      data: {
+        status: 'APPROVED',
+        paymentStatus: 'PAID',
+        stripePaymentId: intent.id,
+        paidAt: now,
+        activatedAt: now,
+        isFeatured: sale.listingType === 'FEATURED',
+        totalPaidCents: amountPaidCents,
+      },
+    }),
+    existingPayment
+      ? prisma.garageSalePayment.update({
+        where: { id: existingPayment.id },
+        data: {
+          status: 'PAID',
+          amountCents: amountPaidCents,
+          stripePaymentId: intent.id,
+          stripeReceiptUrl: receiptUrl,
+        },
+      })
+      : prisma.garageSalePayment.create({
+        data: {
+          saleId,
+          sellerId,
+          amountCents: amountPaidCents,
+          status: 'PAID',
+          stripePaymentId: intent.id,
+          stripeReceiptUrl: receiptUrl,
+        },
+      }),
   ]);
 
   return new NextResponse('ok', { status: 200 });
@@ -377,6 +487,14 @@ export async function POST(req: Request) {
     const cs = event.data.object as Stripe.Checkout.Session;
     if (cs.metadata?.type === 'garage_sale_listing') {
       return finalizeGarageSaleCheckout(cs);
+    }
+    return new NextResponse('ok', { status: 200 });
+  }
+
+  if (event.type === 'payment_intent.succeeded') {
+    const intent = event.data.object as Stripe.PaymentIntent;
+    if (intent.metadata?.type === 'garage_sale_listing') {
+      return finalizeGarageSaleFromPaymentIntent(intent);
     }
     return new NextResponse('ok', { status: 200 });
   }
