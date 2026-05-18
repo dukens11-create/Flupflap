@@ -51,6 +51,10 @@ function isResolved(request: AdminRefundRequest) {
   return Boolean(request.resolvedAt) || request.status === 'DENIED' || request.status === 'REFUNDED';
 }
 
+function makeActionKey(refundRequestId: string, endpoint: string) {
+  return `${refundRequestId}:${endpoint}`;
+}
+
 export default function AdminRefundReviewList({
   initialRefundRequests,
   loadError = false,
@@ -62,7 +66,11 @@ export default function AdminRefundReviewList({
 }) {
   const router = useRouter();
   const [refundRequests, setRefundRequests] = useState(initialRefundRequests);
-  const [notes, setNotes] = useState<Record<string, string>>({});
+  const [notes, setNotes] = useState<Record<string, string>>(() => Object.fromEntries(
+    initialRefundRequests
+      .filter((request) => Boolean(request.adminNotes))
+      .map((request) => [request.id, request.adminNotes ?? '']),
+  ));
   const [amounts, setAmounts] = useState<Record<string, string>>({});
   const [submittingKey, setSubmittingKey] = useState<string | null>(null);
   const [actionError, setActionError] = useState('');
@@ -80,7 +88,7 @@ export default function AdminRefundReviewList({
   }
 
   async function postAction(refundRequestId: string, endpoint: string, payload: Record<string, unknown>) {
-    const submittingId = `${refundRequestId}:${endpoint}`;
+    const submittingId = makeActionKey(refundRequestId, endpoint);
     if (submittingKey) return;
 
     setSubmittingKey(submittingId);
@@ -159,8 +167,6 @@ export default function AdminRefundReviewList({
   function renderActionControls(request: AdminRefundRequest) {
     const resolved = isResolved(request);
     const canResolve = !request.resolvedAt && ['APPROVED', 'DENIED', 'REFUNDED'].includes(request.status);
-    const actionBaseKey = request.id;
-
     return (
       <div className="space-y-3">
         <div className="grid gap-3 sm:grid-cols-2">
@@ -180,7 +186,7 @@ export default function AdminRefundReviewList({
             <textarea
               className="input h-24 resize-none"
               maxLength={2000}
-              value={notes[request.id] ?? request.adminNotes ?? ''}
+              value={notes[request.id] ?? ''}
               onChange={(event) => setNotes((prev) => ({ ...prev, [request.id]: event.target.value }))}
               placeholder="Add an internal/admin-facing note for this refund."
             />
@@ -194,7 +200,7 @@ export default function AdminRefundReviewList({
           <button
             type="button"
             className="btn-primary text-sm disabled:opacity-50"
-            disabled={resolved || submittingKey === `${actionBaseKey}:/api/admin/refunds/${request.id}/approve`}
+            disabled={resolved || submittingKey === makeActionKey(request.id, `/api/admin/refunds/${request.id}/approve`)}
             onClick={() => approveRefund(request)}
           >
             Approve refund
@@ -202,7 +208,7 @@ export default function AdminRefundReviewList({
           <button
             type="button"
             className="btn-outline text-sm disabled:opacity-50"
-            disabled={resolved || submittingKey === `${actionBaseKey}:/api/admin/refunds/${request.id}/reject`}
+            disabled={resolved || submittingKey === makeActionKey(request.id, `/api/admin/refunds/${request.id}/reject`)}
             onClick={() => rejectRefund(request)}
           >
             Reject refund
@@ -210,7 +216,7 @@ export default function AdminRefundReviewList({
           <button
             type="button"
             className="btn-outline text-sm disabled:opacity-50"
-            disabled={!canResolve || submittingKey === `${actionBaseKey}:/api/admin/refunds/${request.id}/resolve`}
+            disabled={!canResolve || submittingKey === makeActionKey(request.id, `/api/admin/refunds/${request.id}/resolve`)}
             onClick={() => resolveRefund(request)}
           >
             Mark as resolved

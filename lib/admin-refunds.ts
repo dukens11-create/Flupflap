@@ -305,10 +305,14 @@ export async function resolveRefundRequest({
     throw new AdminRefundActionError(400, 'Only approved, denied, or refunded requests can be marked as resolved.');
   }
 
+  const normalizedAdminNote = adminNote === undefined
+    ? refundRequest.adminNotes
+    : adminNote.trim() || null;
+
   return prisma.refundRequest.update({
     where: { id: refundRequest.id },
     data: {
-      adminNotes: adminNote?.trim() || refundRequest.adminNotes,
+      adminNotes: normalizedAdminNote,
       resolvedAt: new Date(),
     },
   });
