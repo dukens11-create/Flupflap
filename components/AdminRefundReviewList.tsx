@@ -18,6 +18,14 @@ function shortId(value: string): string {
   return value.length > 10 ? `${value.slice(0, 10)}…` : value;
 }
 
+function getEffectiveAmount(request: AdminRefundListItem): number {
+  return request.approvedAmountCents ?? request.requestedAmountCents;
+}
+
+function isClosedRefund(request: AdminRefundListItem): boolean {
+  return request.status === 'DENIED' || request.status === 'REFUNDED' || Boolean(request.resolvedAt);
+}
+
 export default function AdminRefundReviewList({
   initialRefundRequests,
   fetchFailed,
@@ -114,8 +122,8 @@ export default function AdminRefundReviewList({
 
       <div className="md:hidden space-y-3">
         {refundRequests.map((request) => {
-          const amount = request.approvedAmountCents ?? request.requestedAmountCents;
-          const closed = request.status === 'DENIED' || request.status === 'REFUNDED' || Boolean(request.resolvedAt);
+          const amount = getEffectiveAmount(request);
+          const closed = isClosedRefund(request);
           const missingIntent = !request.stripePaymentIntentId;
 
           return (
@@ -194,8 +202,8 @@ export default function AdminRefundReviewList({
           </thead>
           <tbody className="divide-y divide-slate-100">
             {refundRequests.map((request) => {
-              const amount = request.approvedAmountCents ?? request.requestedAmountCents;
-              const closed = request.status === 'DENIED' || request.status === 'REFUNDED' || Boolean(request.resolvedAt);
+              const amount = getEffectiveAmount(request);
+              const closed = isClosedRefund(request);
               const missingIntent = !request.stripePaymentIntentId;
 
               return (
