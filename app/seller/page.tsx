@@ -487,7 +487,6 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
           <h1 className="text-3xl font-black">{viewHeading[currentView]}</h1>
           <p className="text-slate-500 text-sm">Welcome back, {session.user.name}</p>
         </div>
-        {!isRestricted && subscriptionActive && verificationApproved && <Link href="/seller/listings/new" className="btn-primary">Add New Product</Link>}
       </div>
 
       {isDashboardView && (
