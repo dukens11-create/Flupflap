@@ -28,6 +28,11 @@ export const dynamic = 'force-dynamic';
 
 const CATEGORY_PARAM_KEYS = new Set(['category', 'subcategory', 'refineCategory']);
 
+function hasSearchParamValue(value: string | string[] | undefined): boolean {
+  if (Array.isArray(value)) return value.some((entry) => entry.trim().length > 0);
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
 function buildDefaultCategorySlugMap(
   nodes: DefaultCategoryNode[],
   map: Map<string, string>,
@@ -69,7 +74,7 @@ export async function generateMetadata({
   searchParams: Promise<SearchParams>;
 }): Promise<Metadata> {
   const sp = await searchParams;
-  const nonEmptyParams = Object.entries(sp).filter(([, value]) => typeof value === 'string' && value.trim().length > 0);
+  const nonEmptyParams = Object.entries(sp).filter(([, value]) => hasSearchParamValue(value));
   const hasParams = nonEmptyParams.length > 0;
   const hasNonCategoryFilters = nonEmptyParams.some(([key]) => !CATEGORY_PARAM_KEYS.has(key));
   const categoryCanonicalPath = hasParams && !hasNonCategoryFilters

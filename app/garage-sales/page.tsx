@@ -21,13 +21,18 @@ interface SearchParams {
   page?: string;
 }
 
+function hasSearchParamValue(value: string | string[] | undefined): boolean {
+  if (Array.isArray(value)) return value.some((entry) => entry.trim().length > 0);
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
 export async function generateMetadata({
   searchParams,
 }: {
   searchParams: Promise<SearchParams>;
 }): Promise<Metadata> {
   const sp = await searchParams;
-  const hasFilters = Object.values(sp).some((value) => typeof value === 'string' && value.trim().length > 0);
+  const hasFilters = Object.values(sp).some((value) => hasSearchParamValue(value));
 
   return createPageMetadata({
     title: 'Garage Sales Near You | FlupFlap',
