@@ -19,7 +19,6 @@ export type GarageSaleVisibilityBlockReason =
   | 'PAYMENT_PENDING'
   | 'PAYMENT_FAILED'
   | 'PAYMENT_REFUNDED'
-  | 'PAYMENT_UNPAID'
   | 'PENDING_REVIEW'
   | 'REJECTED'
   | 'UPCOMING'
@@ -55,7 +54,6 @@ export function getGarageSaleVisibilityBlockReason(sale: GarageSaleVisibilityInp
   if (sale.paymentStatus === 'PENDING') return 'PAYMENT_PENDING';
   if (sale.paymentStatus === 'FAILED') return 'PAYMENT_FAILED';
   if (sale.paymentStatus === 'REFUNDED') return 'PAYMENT_REFUNDED';
-  if (sale.paymentStatus !== 'PAID') return 'PAYMENT_UNPAID';
   if (lifecycle?.state === 'UPCOMING') return 'UPCOMING';
   if (lifecycle?.state === 'EXPIRED') return 'EXPIRED';
   if (sale.status === 'PENDING') return 'PENDING_REVIEW';
@@ -75,9 +73,6 @@ export function getGarageSaleLiveControlsBlockMessage(sale: GarageSaleVisibility
   }
   if (reason === 'PAYMENT_REFUNDED') {
     return 'Live controls are unavailable because this listing payment was refunded.';
-  }
-  if (reason === 'PAYMENT_UNPAID') {
-    return 'Live controls are unavailable because payment is not completed for this listing.';
   }
   if (reason === 'PENDING_REVIEW') {
     return 'Your listing is pending review. Live controls are unavailable until an admin approves it.';
@@ -116,9 +111,6 @@ export function getGarageSaleOwnerHiddenStatusMessage(sale: GarageSaleVisibility
   }
   if (reason === 'PAYMENT_REFUNDED') {
     return 'Payment was refunded. This listing is no longer visible.';
-  }
-  if (reason === 'PAYMENT_UNPAID') {
-    return 'Payment is not completed for this listing, so it is not visible to buyers.';
   }
   if (reason === 'PENDING_REVIEW') {
     return 'Your listing is pending review.';

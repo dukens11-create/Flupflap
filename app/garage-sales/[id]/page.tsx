@@ -74,19 +74,21 @@ export default async function GarageSaleDetailPage({ params }: Params) {
   const blockedLiveControlsMessage = getGarageSaleLiveControlsBlockMessage(sale);
   const ownerHiddenStatusMessage = getGarageSaleOwnerHiddenStatusMessage(sale) ?? 'This listing is not currently visible.';
   const hiddenStatusLabel = (() => {
+    if (visibilityBlockReason === 'ARCHIVED') return 'ARCHIVED';
     if (visibilityBlockReason === 'SPAM') return 'UNDER REVIEW';
+    if (visibilityBlockReason === 'PAYMENT_PENDING') return 'PAYMENT PENDING';
+    if (visibilityBlockReason === 'PAYMENT_FAILED') return 'PAYMENT FAILED';
+    if (visibilityBlockReason === 'PAYMENT_REFUNDED') return 'REFUNDED';
+    if (visibilityBlockReason === 'PENDING_REVIEW') return 'PENDING REVIEW';
+    if (visibilityBlockReason === 'REJECTED') return 'REJECTED';
+    if (visibilityBlockReason === 'UPCOMING') return 'UPCOMING';
+    if (visibilityBlockReason === 'EXPIRED') return 'EXPIRED';
     if (visibilityBlockReason === 'UNKNOWN_STATUS') return 'NOT VISIBLE';
-    if (lifecycle.state === 'PAYMENT_PENDING') return 'PAYMENT PENDING';
-    if (lifecycle.state === 'PENDING_REVIEW') return 'PENDING REVIEW';
-    if (lifecycle.state === 'PAYMENT_FAILED') return 'PAYMENT FAILED';
-    if (lifecycle.state === 'PAYMENT_REFUNDED') return 'REFUNDED';
-    if (lifecycle.state === 'REJECTED') return 'REJECTED';
-    if (lifecycle.state === 'EXPIRED') return 'EXPIRED';
     return 'HIDDEN';
   })();
-  const hiddenStatusBadgeClass = lifecycle.state === 'PAYMENT_PENDING' || lifecycle.state === 'PENDING_REVIEW'
+  const hiddenStatusBadgeClass = visibilityBlockReason === 'PAYMENT_PENDING' || visibilityBlockReason === 'PENDING_REVIEW'
     ? 'bg-yellow-100 text-yellow-700'
-    : lifecycle.state === 'PAYMENT_FAILED' || lifecycle.state === 'PAYMENT_REFUNDED' || lifecycle.state === 'REJECTED'
+    : visibilityBlockReason === 'PAYMENT_FAILED' || visibilityBlockReason === 'PAYMENT_REFUNDED' || visibilityBlockReason === 'REJECTED'
       ? 'bg-red-100 text-red-700'
       : 'bg-slate-200 text-slate-700';
 

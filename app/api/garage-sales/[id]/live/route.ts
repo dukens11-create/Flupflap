@@ -3,7 +3,11 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { deriveGarageSaleLifecycle } from '@/lib/garage-sale-lifecycle';
-import { getGarageSaleLiveControlsBlockMessage, isGarageSalePubliclyVisible } from '@/lib/garage-sale-visibility';
+import {
+  getGarageSaleLiveControlsBlockMessage,
+  getGarageSaleVisibilityBlockReason,
+  isGarageSalePubliclyVisible,
+} from '@/lib/garage-sale-visibility';
 
 export const dynamic = 'force-dynamic';
 
@@ -51,8 +55,9 @@ export async function POST(req: Request, { params }: Params) {
   }
 
   const lifecycle = deriveGarageSaleLifecycle(sale);
+  const visibilityBlockReason = getGarageSaleVisibilityBlockReason(sale);
 
-  if (action === 'start' && (!lifecycle.sellerCanGoLive || !isGarageSalePubliclyVisible(sale))) {
+  if (action === 'start' && (visibilityBlockReason !== null || !lifecycle.sellerCanGoLive)) {
     return NextResponse.json({ error: getGarageSaleLiveControlsBlockMessage(sale) }, { status: 422 });
   }
 
