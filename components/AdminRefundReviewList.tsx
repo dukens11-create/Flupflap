@@ -68,8 +68,8 @@ export default function AdminRefundReviewList({
   const [refundRequests, setRefundRequests] = useState(initialRefundRequests);
   const [notes, setNotes] = useState<Record<string, string>>(() => Object.fromEntries(
     initialRefundRequests
-      .filter((request) => Boolean(request.adminNotes))
-      .map((request) => [request.id, request.adminNotes ?? '']),
+      .filter((request) => request.adminNotes)
+      .map((request) => [request.id, request.adminNotes as string]),
   ));
   const [amounts, setAmounts] = useState<Record<string, string>>({});
   const [submittingKey, setSubmittingKey] = useState<string | null>(null);
@@ -167,6 +167,9 @@ export default function AdminRefundReviewList({
   function renderActionControls(request: AdminRefundRequest) {
     const resolved = isResolved(request);
     const canResolve = !request.resolvedAt && ['APPROVED', 'DENIED', 'REFUNDED'].includes(request.status);
+    const approveEndpoint = `/api/admin/refunds/${request.id}/approve`;
+    const rejectEndpoint = `/api/admin/refunds/${request.id}/reject`;
+    const resolveEndpoint = `/api/admin/refunds/${request.id}/resolve`;
     return (
       <div className="space-y-3">
         <div className="grid gap-3 sm:grid-cols-2">
@@ -200,7 +203,7 @@ export default function AdminRefundReviewList({
           <button
             type="button"
             className="btn-primary text-sm disabled:opacity-50"
-            disabled={resolved || submittingKey === makeActionKey(request.id, `/api/admin/refunds/${request.id}/approve`)}
+            disabled={resolved || submittingKey === makeActionKey(request.id, approveEndpoint)}
             onClick={() => approveRefund(request)}
           >
             Approve refund
@@ -208,7 +211,7 @@ export default function AdminRefundReviewList({
           <button
             type="button"
             className="btn-outline text-sm disabled:opacity-50"
-            disabled={resolved || submittingKey === makeActionKey(request.id, `/api/admin/refunds/${request.id}/reject`)}
+            disabled={resolved || submittingKey === makeActionKey(request.id, rejectEndpoint)}
             onClick={() => rejectRefund(request)}
           >
             Reject refund
@@ -216,7 +219,7 @@ export default function AdminRefundReviewList({
           <button
             type="button"
             className="btn-outline text-sm disabled:opacity-50"
-            disabled={!canResolve || submittingKey === makeActionKey(request.id, `/api/admin/refunds/${request.id}/resolve`)}
+            disabled={!canResolve || submittingKey === makeActionKey(request.id, resolveEndpoint)}
             onClick={() => resolveRefund(request)}
           >
             Mark as resolved

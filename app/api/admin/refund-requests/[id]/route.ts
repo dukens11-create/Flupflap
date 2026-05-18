@@ -8,6 +8,7 @@ const adminRefundSchema = z.object({
   action: z.enum(['approve', 'deny']),
   approvedAmountCents: z.number().int().positive().optional(),
   adminNote: z.string().trim().max(2000).optional(),
+  // Deprecated: retained for legacy admin clients that still send `adminNotes`.
   adminNotes: z.string().trim().max(2000).optional(),
 }).transform((data) => ({
   action: data.action,

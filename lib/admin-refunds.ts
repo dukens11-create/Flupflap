@@ -177,6 +177,12 @@ function ensureRefundRequestIsOpen(status: string) {
   }
 }
 
+function ensureRefundRequestCanBeResolved(status: string) {
+  if (!['APPROVED', 'DENIED', 'REFUNDED'].includes(status)) {
+    throw new AdminRefundActionError(400, 'Only approved, denied, or refunded requests can be marked as resolved.');
+  }
+}
+
 export async function approveRefundRequest({
   id,
   adminId,
@@ -301,9 +307,7 @@ export async function resolveRefundRequest({
     return refundRequest;
   }
 
-  if (!['APPROVED', 'DENIED', 'REFUNDED'].includes(refundRequest.status)) {
-    throw new AdminRefundActionError(400, 'Only approved, denied, or refunded requests can be marked as resolved.');
-  }
+  ensureRefundRequestCanBeResolved(refundRequest.status);
 
   const normalizedAdminNote = adminNote === undefined
     ? refundRequest.adminNotes
