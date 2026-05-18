@@ -11,6 +11,7 @@ import GarageSaleLivePanel from '@/components/GarageSaleLivePanel';
 import GarageSaleBuyerLiveView from '@/components/GarageSaleBuyerLiveView';
 import GarageSaleShareButton from '@/components/GarageSaleShareButton';
 import { deriveGarageSaleLifecycle } from '@/lib/garage-sale-lifecycle';
+import { createPageMetadata } from '@/lib/seo';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,6 +22,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const sale = await prisma.garageSale.findUnique({
     where: { id },
     select: {
+      id: true,
       title: true,
       city: true,
       state: true,
@@ -31,40 +33,29 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
       startDate: true,
       endDate: true,
       isLive: true,
+      isSpam: true,
     },
   });
-  if (!sale) return { title: 'Garage Sale Not Found', robots: { index: false, follow: false } };
-
-  const lifecycle = deriveGarageSaleLifecycle(sale);
-  const pageTitle = `${sale.title} – ${sale.city}, ${sale.state} | FlupFlap`;
-
-  if (!lifecycle.publiclyVisible) {
-    // Hidden, unpaid, or unapproved sales must not be indexed by search engines.
-    return { title: pageTitle, robots: { index: false, follow: false } };
+  if (!sale) {
+    return createPageMetadata({
+      title: 'Garage Sale Not Found',
+      description: 'The requested garage sale could not be found.',
+      noIndex: true,
+    });
   }
 
-  const canonicalPath = `/garage-sales/${id}`;
+  const lifecycle = deriveGarageSaleLifecycle(sale);
+  const isPubliclyIndexable = lifecycle.publiclyVisible && !sale.isSpam;
   const description = sale.description?.trim()
     ? sale.description.slice(0, 160)
-    : `Browse details for ${sale.title} in ${sale.city}, ${sale.state}.`.slice(0, 160);
+    : `View sale details for ${sale.title} in ${sale.city}, ${sale.state}.`.slice(0, 160);
 
-  return {
-    title: pageTitle,
+  return createPageMetadata({
+    title: `${sale.title} – ${sale.city}, ${sale.state} | FlupFlap`,
     description,
-    alternates: { canonical: canonicalPath },
-    robots: { index: true, follow: true },
-    openGraph: {
-      title: pageTitle,
-      description,
-      url: canonicalPath,
-      type: 'website',
-    },
-    twitter: {
-      card: 'summary_large_image',
-      title: pageTitle,
-      description,
-    },
-  };
+    path: `/garage-sales/${sale.id}`,
+    noIndex: !isPubliclyIndexable,
+  });
 }
 
 const SALE_TYPE_LABELS: Record<string, string> = {

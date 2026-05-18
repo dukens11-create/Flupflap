@@ -5,6 +5,7 @@ import { prisma, isDatabaseConfigured } from '@/lib/db';
 import ProductCard from '@/components/ProductCard';
 import { ShieldCheck } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
+import { createPageMetadata } from '@/lib/seo';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,45 +15,41 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!isDatabaseConfigured()) {
-    return { title: 'Seller Store', robots: { index: false, follow: false } };
+    return createPageMetadata({
+      title: 'Seller Store',
+      noIndex: true,
+    });
   }
   try {
     const { id } = await params;
-    const seller = await prisma.user.findUnique({
-      where: { id, deletedAt: null, role: 'SELLER' },
-      select: {
-        id: true,
-        name: true,
-        shopName: true,
-        shopDescription: true,
-        products: {
-          where: { status: { in: ['APPROVED', 'ACTIVE'] } },
-          select: { id: true },
-          take: 1,
-        },
-      },
-    });
-    if (!seller || seller.products.length === 0) {
-      return { title: 'Seller Store', robots: { index: false, follow: false } };
+    const [seller, activeListingCount] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id, deletedAt: null, role: 'SELLER' },
+        select: { name: true, shopName: true, shopDescription: true },
+      }),
+      prisma.product.count({
+        where: { sellerId: id, status: { in: ['APPROVED', 'ACTIVE'] } },
+      }),
+    ]);
+    if (!seller || activeListingCount === 0) {
+      return createPageMetadata({
+        title: 'Seller Store',
+        noIndex: true,
+      });
     }
     const publicName = seller.shopName?.trim() || 'FlupFlap Seller';
-    const description = seller.shopDescription?.trim()
-      ? seller.shopDescription
-      : `Browse products listed by ${publicName} on FlupFlap Marketplace.`;
-    return {
+    return createPageMetadata({
       title: `${publicName}'s Store`,
-      description,
-      alternates: { canonical: `/store/${seller.id}` },
-      robots: { index: true, follow: true },
-      openGraph: {
-        title: `${publicName}'s Store`,
-        description,
-        url: `/store/${seller.id}`,
-        type: 'website',
-      },
-    };
+      description: seller.shopDescription?.trim()
+        ? seller.shopDescription
+        : `Browse products listed by ${publicName} on FlupFlap Marketplace.`,
+      path: `/store/${id}`,
+    });
   } catch {
-    return { title: 'Seller Store', robots: { index: false, follow: false } };
+    return createPageMetadata({
+      title: 'Seller Store',
+      noIndex: true,
+    });
   }
 }
 
@@ -163,9 +160,6 @@ export default async function SellerStorePage({ params }: Props) {
   }
 
   if (!seller) notFound();
-
-  // A seller store with no active listings is a thin page and should not be
-  // indexed or reachable via a public 200 response.
   if (products.length === 0) notFound();
 
   const isVerified = seller.verificationSubmission?.status === 'APPROVED';

@@ -8,12 +8,6 @@ import { createPageMetadata } from '@/lib/seo';
 
 export const dynamic = 'force-dynamic';
 
-export const metadata: Metadata = createPageMetadata({
-  title: 'Garage Sales Near You | FlupFlap',
-  description: 'Find local garage sales, yard sales, and estate sales near you on FlupFlap.',
-  path: '/garage-sales',
-});
-
 interface SearchParams {
   q?: string;
   city?: string;
@@ -25,6 +19,27 @@ interface SearchParams {
   sort?: string;
   radius?: string;
   page?: string;
+}
+
+function hasSearchParamValue(value: string | string[] | undefined): boolean {
+  if (Array.isArray(value)) return value.some((entry) => entry.trim().length > 0);
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}): Promise<Metadata> {
+  const sp = await searchParams;
+  const hasFilters = Object.values(sp).some((value) => hasSearchParamValue(value));
+
+  return createPageMetadata({
+    title: 'Garage Sales Near You | FlupFlap',
+    description: 'Discover verified local garage, yard, estate, and moving sales near you on FlupFlap.',
+    path: '/garage-sales',
+    noIndex: hasFilters,
+  });
 }
 
 const RADIUS_OPTIONS = [

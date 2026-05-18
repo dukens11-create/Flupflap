@@ -32,9 +32,6 @@ export const metadata: Metadata = {
     'apple-mobile-web-app-capable': 'yes',
     'apple-mobile-web-app-title': 'FlupFlap',
   },
-  alternates: {
-    canonical: '/',
-  },
   robots: {
     index: true,
     follow: true,
