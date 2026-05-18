@@ -263,12 +263,13 @@ export async function rejectRefundRequest({
 }) {
   const refundRequest = await getRefundRequestForAdminAction(id);
   ensureRefundRequestIsOpen(refundRequest.status);
+  const normalizedAdminNote = adminNote?.trim() || null;
 
   const denied = await prisma.refundRequest.update({
     where: { id: refundRequest.id },
     data: {
       status: 'DENIED',
-      adminNotes: adminNote?.trim() || null,
+      adminNotes: normalizedAdminNote,
       resolvedAt: new Date(),
     },
   });
@@ -309,7 +310,7 @@ export async function resolveRefundRequest({
     data: {
       adminNotes: adminNote?.trim() || refundRequest.adminNotes,
       resolvedAt: new Date(),
-      status: refundRequest.stripeRefundId && refundRequest.status === 'APPROVED' ? 'REFUNDED' : refundRequest.status,
+      status: refundRequest.status,
     },
   });
 }

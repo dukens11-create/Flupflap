@@ -31,6 +31,10 @@ type RetryAction = {
   payload: Record<string, unknown>;
 };
 
+// Keeps the desktop table readable without forcing extreme horizontal scrolling
+// on narrower laptop screens. Phone layouts switch to cards instead.
+const ADMIN_REFUNDS_TABLE_MIN_WIDTH = 'min-w-[1080px]';
+
 function formatPerson(person: { name: string | null; email: string }) {
   return person.name?.trim() || person.email;
 }
@@ -268,7 +272,7 @@ export default function AdminRefundReviewList({
 
       <div className="hidden overflow-hidden rounded-2xl border border-slate-200 bg-white md:block">
         <div className="overflow-x-auto">
-          <table className="min-w-[1080px] w-full text-sm">
+          <table className={`${ADMIN_REFUNDS_TABLE_MIN_WIDTH} w-full text-sm`}>
             <thead className="bg-slate-50">
               <tr className="border-b border-slate-200">
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Refund ID</th>
@@ -280,7 +284,7 @@ export default function AdminRefundReviewList({
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Status</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Stripe payment intent</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Created</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Action buttons</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 align-top">
