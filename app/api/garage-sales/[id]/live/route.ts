@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
-import { deriveGarageSaleLifecycle } from '@/lib/garage-sale-lifecycle';
 import {
   getGarageSaleLiveControlsBlockMessage,
   getGarageSaleVisibilityBlockReason,
@@ -54,11 +53,10 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: 'action must be "start" or "end"' }, { status: 400 });
   }
 
-  const lifecycle = deriveGarageSaleLifecycle(sale);
   const visibilityBlockReason = getGarageSaleVisibilityBlockReason(sale);
 
-  if (action === 'start' && (visibilityBlockReason !== null || !lifecycle.sellerCanGoLive)) {
-    return NextResponse.json({ error: getGarageSaleLiveControlsBlockMessage(sale) }, { status: 422 });
+  if (action === 'start' && visibilityBlockReason !== null) {
+    return NextResponse.json({ error: getGarageSaleLiveControlsBlockMessage(sale, visibilityBlockReason) }, { status: 422 });
   }
 
   const now = new Date();

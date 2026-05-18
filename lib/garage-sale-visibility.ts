@@ -27,6 +27,8 @@ export type GarageSaleVisibilityBlockReason =
   | 'UNKNOWN_STATUS'
   | null;
 
+export type GarageSaleVisibilityTone = 'warning' | 'danger' | 'neutral';
+
 function getLifecycle(sale: GarageSaleVisibilityInput) {
   if (!sale.startDate || !sale.endDate || typeof sale.isLive !== 'boolean') return null;
 
@@ -41,9 +43,12 @@ function getLifecycle(sale: GarageSaleVisibilityInput) {
 }
 
 export function isGarageSalePubliclyVisible(sale: GarageSaleVisibilityInput) {
-  if (sale.isSpam) return false;
+  return getGarageSaleVisibilityBlockReason(sale) === null;
+}
+
+export function isGarageSalePubliclyOpenNow(sale: GarageSaleVisibilityInput) {
   const lifecycle = getLifecycle(sale);
-  return lifecycle ? lifecycle.publiclyVisible : false;
+  return getGarageSaleVisibilityBlockReason(sale) === null && Boolean(lifecycle?.openNow);
 }
 
 export function getGarageSaleVisibilityBlockReason(sale: GarageSaleVisibilityInput): GarageSaleVisibilityBlockReason {
@@ -63,8 +68,20 @@ export function getGarageSaleVisibilityBlockReason(sale: GarageSaleVisibilityInp
   return null;
 }
 
-export function getGarageSaleLiveControlsBlockMessage(sale: GarageSaleVisibilityInput) {
-  const reason = getGarageSaleVisibilityBlockReason(sale);
+export function getGarageSaleVisibilityTone(reason: GarageSaleVisibilityBlockReason): GarageSaleVisibilityTone {
+  if (reason === 'PAYMENT_PENDING' || reason === 'PENDING_REVIEW') {
+    return 'warning';
+  }
+  if (reason === 'PAYMENT_FAILED' || reason === 'PAYMENT_REFUNDED' || reason === 'REJECTED') {
+    return 'danger';
+  }
+  return 'neutral';
+}
+
+export function getGarageSaleLiveControlsBlockMessage(
+  sale: GarageSaleVisibilityInput,
+  reason = getGarageSaleVisibilityBlockReason(sale),
+) {
   if (reason === 'PAYMENT_PENDING') {
     return 'Live controls are unavailable while payment is pending. Your listing stays hidden until payment is confirmed.';
   }
@@ -101,8 +118,10 @@ export function getGarageSaleLiveControlsBlockMessage(sale: GarageSaleVisibility
   return 'Live controls are unavailable for this listing right now.';
 }
 
-export function getGarageSaleOwnerHiddenStatusMessage(sale: GarageSaleVisibilityInput) {
-  const reason = getGarageSaleVisibilityBlockReason(sale);
+export function getGarageSaleOwnerHiddenStatusMessage(
+  sale: GarageSaleVisibilityInput,
+  reason = getGarageSaleVisibilityBlockReason(sale),
+) {
   if (reason === 'PAYMENT_PENDING') {
     return 'Your payment is still pending. This listing is hidden and live controls are unavailable until payment is confirmed.';
   }

@@ -11,7 +11,9 @@ import {
   getGarageSaleLiveControlsBlockMessage,
   getGarageSaleOwnerHiddenStatusMessage,
   getGarageSaleVisibilityBlockReason,
+  getGarageSaleVisibilityTone,
   isGarageSalePubliclyVisible,
+  isGarageSalePubliclyOpenNow,
 } from '@/lib/garage-sale-visibility';
 import GarageSaleLivePanel from '@/components/GarageSaleLivePanel';
 import GarageSaleBuyerLiveView from '@/components/GarageSaleBuyerLiveView';
@@ -69,10 +71,10 @@ export default async function GarageSaleDetailPage({ params }: Params) {
   const isAdmin = session?.user?.role === 'ADMIN';
   const lifecycle = deriveGarageSaleLifecycle(sale);
   const listingIsPubliclyVisible = isGarageSalePubliclyVisible(sale);
-  const openNow = listingIsPubliclyVisible && lifecycle.openNow;
+  const openNow = isGarageSalePubliclyOpenNow(sale);
   const visibilityBlockReason = getGarageSaleVisibilityBlockReason(sale);
-  const blockedLiveControlsMessage = getGarageSaleLiveControlsBlockMessage(sale);
-  const ownerHiddenStatusMessage = getGarageSaleOwnerHiddenStatusMessage(sale) ?? 'This listing is not currently visible.';
+  const blockedLiveControlsMessage = getGarageSaleLiveControlsBlockMessage(sale, visibilityBlockReason);
+  const ownerHiddenStatusMessage = getGarageSaleOwnerHiddenStatusMessage(sale, visibilityBlockReason) ?? 'This listing is not currently visible.';
   const hiddenStatusLabel = (() => {
     if (visibilityBlockReason === 'ARCHIVED') return 'ARCHIVED';
     if (visibilityBlockReason === 'SPAM') return 'UNDER REVIEW';
@@ -86,9 +88,10 @@ export default async function GarageSaleDetailPage({ params }: Params) {
     if (visibilityBlockReason === 'UNKNOWN_STATUS') return 'NOT VISIBLE';
     return 'HIDDEN';
   })();
-  const hiddenStatusBadgeClass = visibilityBlockReason === 'PAYMENT_PENDING' || visibilityBlockReason === 'PENDING_REVIEW'
+  const hiddenStatusTone = getGarageSaleVisibilityTone(visibilityBlockReason);
+  const hiddenStatusBadgeClass = hiddenStatusTone === 'warning'
     ? 'bg-yellow-100 text-yellow-700'
-    : visibilityBlockReason === 'PAYMENT_FAILED' || visibilityBlockReason === 'PAYMENT_REFUNDED' || visibilityBlockReason === 'REJECTED'
+    : hiddenStatusTone === 'danger'
       ? 'bg-red-100 text-red-700'
       : 'bg-slate-200 text-slate-700';
 
