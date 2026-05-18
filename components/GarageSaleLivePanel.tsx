@@ -11,6 +11,8 @@ const RTC_CONFIG: RTCConfiguration = {
   iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }],
 };
 const PREVIEW_REQUIRED_MESSAGE = 'Preview your camera before starting your live garage sale.';
+const CAMERA_ACCESS_MESSAGE = 'Please allow camera access to start your live sale.';
+const CAMERA_BLOCKED_MESSAGE = 'Camera access blocked in browser settings.';
 
 type CameraStatus = 'idle' | 'connecting' | 'ready' | 'awaitingInteraction' | 'blocked' | 'unsupported';
 
@@ -192,6 +194,19 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       return false;
     }
 
+    if (navigator.permissions?.query) {
+      try {
+        const permissionStatus = await navigator.permissions.query({ name: 'camera' as PermissionName });
+        if (permissionStatus.state === 'denied') {
+          setCameraStatus('blocked');
+          setError(CAMERA_BLOCKED_MESSAGE);
+          return false;
+        }
+      } catch {
+        // Fallback to getUserMedia-based permission detection.
+      }
+    }
+
     setError(null);
     setCameraStatus('connecting');
     setPreviewReady(false);
@@ -228,7 +243,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       setCameraStatus(name === 'NotAllowedError' || name === 'SecurityError' ? 'blocked' : 'idle');
       setError(
         name === 'NotAllowedError' || name === 'SecurityError'
-          ? 'Please allow camera access to start your live sale.'
+          ? CAMERA_ACCESS_MESSAGE
           : (err instanceof Error ? err.message : 'Unable to connect to your camera right now.'),
       );
       return false;
@@ -393,11 +408,11 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       case 'connecting':
         return 'Connecting camera...';
       case 'ready':
-        return 'Camera ready';
+        return 'Camera Ready';
       case 'awaitingInteraction':
         return 'Tap to resume preview';
       case 'blocked':
-        return 'Please allow camera access to start your live sale.';
+        return CAMERA_BLOCKED_MESSAGE;
       case 'unsupported':
         return 'Camera preview is not supported in this browser.';
       default:
@@ -406,7 +421,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   })();
 
   return (
-    <div className="card space-y-4 p-4 transition-all duration-300">
+    <div className="card space-y-4 p-4 sm:space-y-5 sm:p-5 transition-all duration-300">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-500">
           <Radio size={13} /> Live Preview
@@ -421,7 +436,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
           }`}>
             <span className={`h-2 w-2 rounded-full ${
               cameraStatus === 'ready'
-                ? 'bg-emerald-500'
+                ? 'animate-pulse bg-emerald-500'
                 : cameraStatus === 'connecting'
                   ? 'animate-pulse bg-slate-400'
                   : 'bg-amber-500'
@@ -441,13 +456,13 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         </div>
       </div>
 
-      <div className="relative flex aspect-[4/5] w-full items-center justify-center overflow-hidden rounded-2xl bg-slate-900 sm:aspect-video">
+      <div className="relative flex aspect-[3/4] min-h-[22rem] w-full items-center justify-center overflow-hidden rounded-2xl bg-slate-900 sm:aspect-video sm:min-h-0">
         <video
           ref={videoRef}
           autoPlay
           playsInline
           muted
-          className={`w-full h-full object-cover ${camOn ? '' : 'hidden'}`}
+          className={`h-full w-full rounded-2xl object-cover transition-opacity duration-500 ${camOn ? (previewReady ? 'opacity-100' : 'opacity-0') : 'hidden'}`}
         />
         {!camOn && (
           <div className="flex flex-col items-center gap-2 px-4 text-center text-slate-300">
@@ -456,9 +471,16 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
           </div>
         )}
         {isLive && (
-          <span className="absolute left-3 top-3 rounded-full bg-red-500 px-2.5 py-1 text-[11px] font-bold text-white animate-pulse shadow-lg">
-            🔴 LIVE
+          <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-red-500 px-2.5 py-1 text-[11px] font-bold text-white animate-pulse shadow-lg">
+            🔴 LIVE <Eye size={11} /> {viewerCount}
           </span>
+        )}
+        {camOn && cameraStatus === 'connecting' && (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-slate-950/45 px-4 transition-opacity duration-300">
+            <span className="rounded-full bg-white/95 px-3 py-1.5 text-xs font-semibold text-slate-900 shadow">
+              Connecting camera...
+            </span>
+          </div>
         )}
         {camOn && cameraStatus === 'awaitingInteraction' && (
           <div className="absolute inset-0 flex items-center justify-center bg-slate-950/55 p-4">
@@ -522,7 +544,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         )}
       </div>
 
-      {!previewReady && !error && (
+      {camOn && !previewReady && !error && (
         <p className="text-center text-sm text-slate-500">
           {PREVIEW_REQUIRED_MESSAGE}
         </p>
@@ -533,7 +555,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
           type="button"
           onClick={handleGoLiveClick}
           disabled={loading || !previewReady}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition-all duration-300 hover:bg-slate-950 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition-all duration-300 hover:bg-black disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
         >
           <Radio size={14} /> {loading ? 'Starting…' : 'Start Live'}
         </button>
@@ -542,8 +564,9 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
           type="button"
           onClick={handleEndLive}
           disabled={loading}
-          className="w-full flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700 transition-colors disabled:opacity-50"
+          className="w-full flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-50"
         >
+          <span className="inline-flex h-2 w-2 animate-pulse rounded-full bg-white" />
           <VideoOff size={14} /> {loading ? 'Ending…' : 'End Live'}
         </button>
       )}
