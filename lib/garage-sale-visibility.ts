@@ -43,6 +43,13 @@ function getLifecycle(sale: GarageSaleVisibilityInput) {
 }
 
 export function isGarageSalePubliclyVisible(sale: GarageSaleVisibilityInput) {
+  if (sale.isArchived) return false;
+  if (sale.isSpam) return false;
+  if (sale.paymentStatus === 'FAILED' || sale.paymentStatus === 'REFUNDED') return false;
+  if (sale.status === 'REJECTED' || sale.status === 'HIDDEN') return false;
+
+  if (sale.isLive) return true;
+
   const reason = getGarageSaleVisibilityBlockReason(sale);
   return reason === null || reason === 'UPCOMING';
 }
@@ -56,7 +63,6 @@ export function getGarageSaleVisibilityBlockReason(
   sale: GarageSaleVisibilityInput,
   lifecycle = getLifecycle(sale),
 ): GarageSaleVisibilityBlockReason {
-
   if (sale.isArchived) return 'ARCHIVED';
   if (sale.isSpam) return 'SPAM';
   if (sale.paymentStatus === 'PENDING') return 'PAYMENT_PENDING';
@@ -95,30 +101,21 @@ export function getGarageSaleLiveControlsBlockMessage(
     return 'Live controls are unavailable because this listing payment was refunded.';
   }
   if (reason === 'PENDING_REVIEW') {
-    return 'Your listing is pending review. Live controls are unavailable until an admin approves it.';
+    return 'Live controls unlock after admin review approves your garage sale.';
   }
   if (reason === 'REJECTED') {
-    return 'Your listing was rejected. Update details and try again before using live controls.';
+    return 'Live controls are unavailable because this listing was rejected.';
   }
-  if (reason === 'UPCOMING') {
-    return 'Live controls unlock when your sale start time arrives.';
+  if (reason === 'ARCHIVED' || reason === 'EXPIRED') {
+    return 'Live controls are unavailable because this listing has ended. Repost it to go live again.';
   }
-  if (reason === 'EXPIRED') {
-    return 'Live controls are unavailable because this listing has expired.';
+  if (reason === 'SPAM') {
+    return 'Live controls are unavailable while this listing is under review.';
   }
   if (reason === 'HIDDEN') {
     return 'Live controls are unavailable while this listing is hidden.';
   }
-  if (reason === 'ARCHIVED') {
-    return 'Live controls are unavailable for archived listings.';
-  }
-  if (reason === 'SPAM') {
-    return 'Live controls are unavailable while this listing is flagged for review.';
-  }
-  if (reason === 'UNKNOWN_STATUS') {
-    return 'Live controls are unavailable until this listing becomes visible.';
-  }
-  return '';
+  return 'You can go live when your garage sale is public and within its scheduled window.';
 }
 
 export function getGarageSaleOwnerHiddenStatusMessage(
@@ -126,37 +123,34 @@ export function getGarageSaleOwnerHiddenStatusMessage(
   reason = getGarageSaleVisibilityBlockReason(sale),
 ) {
   if (reason === 'PAYMENT_PENDING') {
-    return 'Your payment is still pending. This listing is hidden and live controls are unavailable until payment is confirmed.';
+    return 'Your garage sale is hidden until payment is confirmed.';
   }
   if (reason === 'PAYMENT_FAILED') {
-    return 'Payment failed for this listing. Repost and pay again to publish it.';
+    return 'Your payment failed, so this garage sale is hidden from other users.';
   }
   if (reason === 'PAYMENT_REFUNDED') {
-    return 'Payment was refunded. This listing is no longer visible.';
+    return 'This garage sale was refunded and is hidden from other users.';
   }
   if (reason === 'PENDING_REVIEW') {
-    return 'Your listing is pending review.';
+    return 'Your garage sale is still under review and not visible to other users yet.';
   }
   if (reason === 'REJECTED') {
-    return 'Your listing was rejected. Update details and try again.';
-  }
-  if (reason === 'UPCOMING') {
-    return 'Your listing is scheduled. Live controls unlock when your sale start time arrives.';
-  }
-  if (reason === 'EXPIRED') {
-    return 'This listing has expired and is no longer visible.';
-  }
-  if (reason === 'HIDDEN') {
-    return 'This listing is currently hidden.';
+    return 'Your garage sale was rejected and is not visible to other users.';
   }
   if (reason === 'ARCHIVED') {
-    return 'This listing is archived and no longer visible.';
+    return 'This garage sale is archived and hidden from other users.';
+  }
+  if (reason === 'EXPIRED') {
+    return 'This garage sale has expired and is no longer visible to other users.';
   }
   if (reason === 'SPAM') {
-    return 'This listing is under review and currently hidden.';
+    return 'This garage sale is under review and hidden from other users.';
   }
-  if (reason === 'UNKNOWN_STATUS') {
-    return 'This listing is not currently visible.';
+  if (reason === 'HIDDEN') {
+    return 'This garage sale is hidden from other users.';
   }
-  return '';
+  if (reason === 'UPCOMING') {
+    return 'Your garage sale is scheduled and visible before it starts.';
+  }
+  return 'Your garage sale visibility is limited right now.';
 }
