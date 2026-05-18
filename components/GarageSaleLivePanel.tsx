@@ -59,6 +59,25 @@ function logCameraAccessError(name: string, error: unknown) {
   });
 }
 
+async function requestCameraStream(nextFacingMode: 'user' | 'environment', preferFacingMode: boolean) {
+  if (!preferFacingMode) {
+    return navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+  }
+
+  try {
+    return await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: nextFacingMode } },
+      audio: true,
+    });
+  } catch (err) {
+    const errorName = err instanceof DOMException ? err.name : '';
+    if (errorName === 'OverconstrainedError' || errorName === 'NotFoundError') {
+      return navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    }
+    throw err;
+  }
+}
+
 export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -247,25 +266,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     try {
       const isRetryingExistingStream = Boolean(streamRef.current);
       streamRef.current?.getTracks().forEach((track) => track.stop());
-
-      let stream: MediaStream;
-      if (isRetryingExistingStream) {
-        try {
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: { ideal: nextFacingMode } },
-            audio: true,
-          });
-        } catch (err) {
-          const errorName = err instanceof DOMException ? err.name : '';
-          if (errorName === 'OverconstrainedError' || errorName === 'NotFoundError') {
-            stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-          } else {
-            throw err;
-          }
-        }
-      } else {
-        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      }
+      const stream = await requestCameraStream(nextFacingMode, isRetryingExistingStream);
 
       stream.getAudioTracks().forEach((t) => { t.enabled = micOnRef.current; });
       streamRef.current = stream;
@@ -504,7 +505,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   const previewButtonLabel = (() => {
     if (cameraStatus === 'connecting') return CAMERA_CONNECTING_MESSAGE;
     if (cameraStatus === 'denied' || cameraStatus === 'blocked') return 'Retry Camera Access';
-    if (cameraStatus === 'insecure') return 'Retry on HTTPS';
+    if (cameraStatus === 'insecure') return 'HTTPS Required';
     return 'Preview Camera';
   })();
 
@@ -601,7 +602,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
           <button
             type="button"
             onClick={() => void startCamera()}
-            disabled={loading || cameraStatus === 'connecting'}
+            disabled={loading || cameraStatus === 'connecting' || cameraStatus === 'insecure'}
             className="btn-outline flex-1 flex items-center justify-center gap-1.5 text-xs disabled:opacity-60"
           >
             <Video size={13} /> {previewButtonLabel}
