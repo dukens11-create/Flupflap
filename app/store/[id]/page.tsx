@@ -27,12 +27,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         where: { id, deletedAt: null, role: 'SELLER' },
         select: { name: true, shopName: true },
       }),
-      prisma.product.findFirst({
+      prisma.product.findMany({
         where: { sellerId: id, status: { in: ['APPROVED', 'ACTIVE'] } },
         select: { id: true },
+        take: 1,
       }),
     ]);
-    if (!seller || !activeListing) {
+    if (!seller || activeListing.length === 0) {
       return createPageMetadata({
         title: 'Seller Store',
         description: 'The requested seller store could not be found.',

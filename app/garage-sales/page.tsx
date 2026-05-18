@@ -27,11 +27,7 @@ export async function generateMetadata({
   searchParams: Promise<SearchParams>;
 }): Promise<Metadata> {
   const sp = await searchParams;
-  const hasFilters = Object.entries(sp).some(([key, value]) => {
-    if (typeof value !== 'string' || value.trim().length === 0) return false;
-    if (key === 'page') return value !== '1';
-    return true;
-  });
+  const hasFilters = Object.values(sp).some((value) => typeof value === 'string' && value.trim().length > 0);
 
   return createPageMetadata({
     title: 'Garage Sales Near You | FlupFlap',
