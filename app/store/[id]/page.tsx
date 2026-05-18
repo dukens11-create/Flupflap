@@ -22,7 +22,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
   try {
     const { id } = await params;
-    const [seller, activeListing] = await Promise.all([
+    const [seller, activeListings] = await Promise.all([
       prisma.user.findUnique({
         where: { id, deletedAt: null, role: 'SELLER' },
         select: { name: true, shopName: true },
@@ -33,7 +33,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         take: 1,
       }),
     ]);
-    if (!seller || activeListing.length === 0) {
+    if (!seller || activeListings.length === 0) {
       return createPageMetadata({
         title: 'Seller Store',
         description: 'The requested seller store could not be found.',

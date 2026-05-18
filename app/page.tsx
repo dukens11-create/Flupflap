@@ -29,8 +29,8 @@ export const dynamic = 'force-dynamic';
 const CATEGORY_PARAM_KEYS = new Set(['category', 'subcategory', 'refineCategory']);
 
 function buildDefaultCategorySlugMap(
-  nodes: DefaultCategoryNode[] = DEFAULT_CATEGORY_TREE,
-  map = new Map<string, string>(),
+  nodes: DefaultCategoryNode[],
+  map: Map<string, string>,
 ): Map<string, string> {
   for (const node of nodes) {
     map.set(node.id, node.slug);
@@ -39,7 +39,7 @@ function buildDefaultCategorySlugMap(
   return map;
 }
 
-const DEFAULT_CATEGORY_SLUG_BY_ID = buildDefaultCategorySlugMap();
+const DEFAULT_CATEGORY_SLUG_BY_ID = buildDefaultCategorySlugMap(DEFAULT_CATEGORY_TREE, new Map<string, string>());
 
 async function resolveCategoryCanonicalPath(sp: SearchParams): Promise<string | null> {
   const targetCategoryId = sp.refineCategory || sp.subcategory || sp.category;
