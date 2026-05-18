@@ -28,17 +28,18 @@ export const dynamic = 'force-dynamic';
 
 const CATEGORY_PARAM_KEYS = new Set(['category', 'subcategory', 'refineCategory']);
 
-function getCategorySlugFromDefaults(
-  categoryId: string,
+function buildDefaultCategorySlugMap(
   nodes: DefaultCategoryNode[] = DEFAULT_CATEGORY_TREE,
-): string | null {
+  map = new Map<string, string>(),
+): Map<string, string> {
   for (const node of nodes) {
-    if (node.id === categoryId) return node.slug;
-    const childMatch = getCategorySlugFromDefaults(categoryId, node.children);
-    if (childMatch) return childMatch;
+    map.set(node.id, node.slug);
+    buildDefaultCategorySlugMap(node.children, map);
   }
-  return null;
+  return map;
 }
+
+const DEFAULT_CATEGORY_SLUG_BY_ID = buildDefaultCategorySlugMap();
 
 async function resolveCategoryCanonicalPath(sp: SearchParams): Promise<string | null> {
   const targetCategoryId = sp.refineCategory || sp.subcategory || sp.category;
@@ -58,7 +59,7 @@ async function resolveCategoryCanonicalPath(sp: SearchParams): Promise<string | 
     }
   }
 
-  const fallbackSlug = getCategorySlugFromDefaults(targetCategoryId);
+  const fallbackSlug = DEFAULT_CATEGORY_SLUG_BY_ID.get(targetCategoryId);
   return fallbackSlug ? `/category/${fallbackSlug}` : null;
 }
 
@@ -68,10 +69,16 @@ export async function generateMetadata({
   searchParams: Promise<SearchParams>;
 }): Promise<Metadata> {
   const sp = await searchParams;
-  const hasParams = Object.values(sp).some((value) => typeof value === 'string' && value.trim().length > 0);
-  const hasNonCategoryFilters = Object.entries(sp).some(([key, value]) => (
-    !CATEGORY_PARAM_KEYS.has(key) && typeof value === 'string' && value.trim().length > 0
-  ));
+  let hasParams = false;
+  let hasNonCategoryFilters = false;
+  for (const [key, value] of Object.entries(sp)) {
+    if (typeof value !== 'string' || value.trim().length === 0) continue;
+    hasParams = true;
+    if (!CATEGORY_PARAM_KEYS.has(key)) {
+      hasNonCategoryFilters = true;
+      break;
+    }
+  }
   const categoryCanonicalPath = hasParams && !hasNonCategoryFilters
     ? await resolveCategoryCanonicalPath(sp)
     : null;
