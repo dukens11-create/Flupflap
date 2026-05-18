@@ -314,7 +314,7 @@ export async function POST(req: Request) {
     try {
       await expirePromotions();
     } catch (err) {
-      logWarn('Promotion expiry failed during checkout webhook', {
+      logError('Promotion expiry failed during checkout webhook', err, {
         tag: 'stripe/webhook',
         action: 'expirePromotions',
         eventType: event.type,
