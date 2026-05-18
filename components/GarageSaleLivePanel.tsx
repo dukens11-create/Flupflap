@@ -355,7 +355,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
 
   useEffect(() => {
     const hasTouchUi = window.matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
-    if (!hasTouchUi && !navigator.mediaDevices?.enumerateDevices) return;
+    if (!navigator.mediaDevices?.enumerateDevices && !hasTouchUi) return;
 
     let cancelled = false;
     const detectCameras = async () => {

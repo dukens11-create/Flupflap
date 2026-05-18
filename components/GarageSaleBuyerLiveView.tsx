@@ -126,28 +126,26 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     if (viewerIdRef.current) return viewerIdRef.current;
 
     const storageKey = `garage-sale-live-viewer:${saleId}`;
-    const stored = typeof window !== 'undefined' ? window.sessionStorage.getItem(storageKey) : null;
+    const stored = window.sessionStorage.getItem(storageKey);
     if (stored) {
       viewerIdRef.current = stored;
       return stored;
     }
 
     let nextId: string;
-    if (typeof window !== 'undefined' && window.crypto?.randomUUID) {
+    if (window.crypto?.randomUUID) {
       nextId = window.crypto.randomUUID();
-    } else if (typeof window !== 'undefined' && window.crypto?.getRandomValues) {
+    } else if (window.crypto?.getRandomValues) {
       const bytes = new Uint32Array(2);
       window.crypto.getRandomValues(bytes);
       nextId = `viewer-${bytes[0].toString(36)}-${bytes[1].toString(36)}`;
     } else {
-      const perfNow = typeof window !== 'undefined' && window.performance?.now
+      const perfNow = window.performance?.now
         ? window.performance.now().toString(36).replace('.', '')
         : '0';
       nextId = `viewer-${Date.now().toString(36)}-${perfNow}`;
     }
-    if (typeof window !== 'undefined') {
-      window.sessionStorage.setItem(storageKey, nextId);
-    }
+    window.sessionStorage.setItem(storageKey, nextId);
     viewerIdRef.current = nextId;
     return nextId;
   }, [saleId]);
