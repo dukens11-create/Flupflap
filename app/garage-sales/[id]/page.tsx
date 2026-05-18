@@ -75,7 +75,7 @@ export default async function GarageSaleDetailPage({ params }: Params) {
   const openNow = lifecycle.openNow;
   const visibilityBlockReason = getGarageSaleVisibilityBlockReason(sale);
   const blockedLiveControlsMessage = getGarageSaleLiveControlsBlockMessage(sale);
-  const ownerHiddenStatusMessage = getGarageSaleOwnerHiddenStatusMessage(sale);
+  const ownerHiddenStatusMessage = getGarageSaleOwnerHiddenStatusMessage(sale) ?? 'This listing is not currently visible.';
   const hiddenStatusLabel = (() => {
     if (visibilityBlockReason === 'SPAM') return 'UNDER REVIEW';
     if (visibilityBlockReason === 'UNKNOWN_STATUS') return 'NOT VISIBLE';
@@ -85,7 +85,7 @@ export default async function GarageSaleDetailPage({ params }: Params) {
     if (lifecycle.state === 'PAYMENT_REFUNDED') return 'REFUNDED';
     if (lifecycle.state === 'REJECTED') return 'REJECTED';
     if (lifecycle.state === 'EXPIRED') return 'EXPIRED';
-    return lifecycle.state;
+    return 'HIDDEN';
   })();
   const hiddenStatusBadgeClass = lifecycle.state === 'PAYMENT_PENDING' || lifecycle.state === 'PENDING_REVIEW'
     ? 'bg-yellow-100 text-yellow-700'

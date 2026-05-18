@@ -144,5 +144,5 @@ export function getGarageSaleOwnerHiddenStatusMessage(sale: GarageSaleVisibility
   if (reason === 'UNKNOWN_STATUS') {
     return 'This listing is not currently visible.';
   }
-  return 'This listing is visible.';
+  return null;
 }
