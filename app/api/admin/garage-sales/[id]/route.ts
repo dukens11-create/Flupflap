@@ -49,7 +49,7 @@ export async function PATCH(req: Request, { params }: Params) {
     case 'approve': {
       if (sale.paymentStatus !== 'PAID') {
         return NextResponse.json(
-          { error: 'Cannot approve listing: payment must be completed before approval.' },
+          { error: 'Payment must be completed before approval.' },
           { status: 422 },
         );
       }

@@ -117,7 +117,7 @@ export function getGarageSaleLiveControlsBlockMessage(
   if (reason === 'UNKNOWN_STATUS') {
     return 'Live controls are unavailable until this listing becomes visible.';
   }
-  return 'Live controls are unavailable for this listing right now.';
+  return '';
 }
 
 export function getGarageSaleOwnerHiddenStatusMessage(
@@ -157,5 +157,5 @@ export function getGarageSaleOwnerHiddenStatusMessage(
   if (reason === 'UNKNOWN_STATUS') {
     return 'This listing is not currently visible.';
   }
-  return 'This listing is not currently visible.';
+  return '';
 }
