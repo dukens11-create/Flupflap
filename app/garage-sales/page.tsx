@@ -172,6 +172,7 @@ function buildWhere(sp: SearchParams, now: Date) {
   const where: Record<string, unknown> = {
     status: 'APPROVED',
     isSpam: false,
+    isArchived: false,
     paymentStatus: 'PAID',
   };
 

@@ -92,8 +92,8 @@ export default function GarageSaleCard({ sale }: { sale: GarageSaleSummary }) {
           </span>
         )}
         {sale.isLive && (
-          <span className="absolute left-3 top-3 rounded-full bg-red-500 px-2.5 py-1 text-[11px] font-bold text-white shadow-sm animate-pulse">
-            🔴 LIVE NOW
+          <span className="absolute left-3 top-3 rounded-full bg-emerald-600 px-2.5 py-1 text-[11px] font-bold text-white shadow-sm">
+            🟢 LIVE NOW
           </span>
         )}
         {openNow && !sale.isLive && (

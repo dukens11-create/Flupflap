@@ -145,8 +145,8 @@ export default async function GarageSaleDetailPage({ params }: Params) {
           </span>
         )}
         {sale.isLive && (
-          <span className="inline-flex items-center rounded-full bg-red-500 px-3 py-1 text-xs font-bold text-white animate-pulse">
-            🔴 LIVE NOW
+          <span className="inline-flex items-center rounded-full bg-emerald-600 px-3 py-1 text-xs font-bold text-white">
+            🟢 LIVE NOW
           </span>
         )}
         {openNow ? (

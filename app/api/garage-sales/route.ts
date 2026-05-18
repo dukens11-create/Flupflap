@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { appUrl, stripe } from '@/lib/stripe';
 import { calculateGarageSalePricing } from '@/lib/garage-sale-pricing';
 import { expireGarageSales, getGarageSalePricingSettings } from '@/lib/garage-sales';
+import { getGarageSaleTimeValidationError } from '@/lib/garage-sale-time-validation';
 
 export const dynamic = 'force-dynamic';
 
@@ -99,6 +100,7 @@ export async function GET(req: Request) {
   const where: Record<string, unknown> = {
     status: 'APPROVED',
     isSpam: false,
+    isArchived: false,
     paymentStatus: 'PAID',
   };
 
@@ -195,8 +197,9 @@ export async function POST(req: Request) {
   const start = new Date(data.startDate);
   const end = new Date(data.endDate);
 
-  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start) {
-    return NextResponse.json({ error: 'End date must be after start date' }, { status: 422 });
+  const timeValidationError = getGarageSaleTimeValidationError(start, end);
+  if (timeValidationError) {
+    return NextResponse.json({ error: timeValidationError }, { status: 422 });
   }
 
   const activeCount = await prisma.garageSale.count({

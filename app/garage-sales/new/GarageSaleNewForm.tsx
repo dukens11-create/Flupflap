@@ -1,5 +1,5 @@
 'use client';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Upload, X, MapPin, AlertCircle } from 'lucide-react';
 import {
@@ -7,6 +7,7 @@ import {
   centsToDollars,
   DEFAULT_GARAGE_SALE_PRICING_SETTINGS,
 } from '@/lib/garage-sale-pricing';
+import { getGarageSaleTimeValidationError } from '@/lib/garage-sale-time-validation';
 
 const SALE_TYPES = [
   { label: 'Garage Sale', value: 'GARAGE_SALE' },
@@ -46,6 +47,7 @@ export default function GarageSaleNewForm() {
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [timeError, setTimeError] = useState<string | null>(null);
   const [geoStatus, setGeoStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
   const latRef = useRef<HTMLInputElement>(null);
   const lngRef = useRef<HTMLInputElement>(null);
@@ -55,7 +57,7 @@ export default function GarageSaleNewForm() {
     if (!startDate || !endDate) return null;
     const start = new Date(startDate);
     const end = new Date(endDate);
-    if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start) return null;
+    if (getGarageSaleTimeValidationError(start, end)) return null;
     return calculateGarageSalePricing({
       listingType: 'STANDARD',
       startDate: start,
@@ -65,6 +67,14 @@ export default function GarageSaleNewForm() {
       settings: DEFAULT_GARAGE_SALE_PRICING_SETTINGS,
     });
   }, [endDate, startDate]);
+
+  useEffect(() => {
+    if (!startDate || !endDate) {
+      setTimeError(null);
+      return;
+    }
+    setTimeError(getGarageSaleTimeValidationError(new Date(startDate), new Date(endDate)));
+  }, [startDate, endDate]);
 
   function toggleCategory(cat: string) {
     setCategories((prev) =>
@@ -168,8 +178,9 @@ export default function GarageSaleNewForm() {
     if (!payload.startDate || !payload.endDate) {
       setError('Start and end dates are required'); setSubmitting(false); return;
     }
-    if (new Date(payload.endDate) <= new Date(payload.startDate)) {
-      setError('End date must be after start date'); setSubmitting(false); return;
+    const validationError = getGarageSaleTimeValidationError(new Date(payload.startDate), new Date(payload.endDate));
+    if (validationError) {
+      setError(validationError); setSubmitting(false); return;
     }
 
     try {
@@ -324,6 +335,7 @@ export default function GarageSaleNewForm() {
               type="datetime-local"
               className="input"
               required
+              step={60}
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
             />
@@ -335,11 +347,18 @@ export default function GarageSaleNewForm() {
               type="datetime-local"
               className="input"
               required
+              step={60}
+              min={startDate || undefined}
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
             />
           </div>
         </div>
+        {timeError ? (
+          <p className="text-xs text-red-600">{timeError}</p>
+        ) : (
+          <p className="text-xs text-slate-500">End time must be later than start time. On mobile, verify both date and time before checkout.</p>
+        )}
       </div>
 
       {/* Photos */}

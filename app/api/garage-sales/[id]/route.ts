@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { calculateGarageSaleDurationDays } from '@/lib/garage-sale-pricing';
 import { expireGarageSales } from '@/lib/garage-sales';
 import { deriveGarageSaleLifecycle } from '@/lib/garage-sale-lifecycle';
+import { getGarageSaleTimeValidationError } from '@/lib/garage-sale-time-validation';
 
 export const dynamic = 'force-dynamic';
 
@@ -139,9 +140,13 @@ export async function PATCH(req: Request, { params }: Params) {
 
   const maybeStart = (updates.startDate as Date | undefined) ?? sale.startDate;
   const maybeEnd = (updates.endDate as Date | undefined) ?? sale.endDate;
+  const timeValidationError = getGarageSaleTimeValidationError(maybeStart, maybeEnd);
+  if (timeValidationError) {
+    return NextResponse.json({ error: timeValidationError }, { status: 422 });
+  }
   const durationDays = calculateGarageSaleDurationDays(maybeStart, maybeEnd);
   if (durationDays <= 0) {
-    return NextResponse.json({ error: 'End date must be after start date' }, { status: 422 });
+    return NextResponse.json({ error: 'End time must be after start time.' }, { status: 422 });
   }
   updates.durationDays = durationDays;
 

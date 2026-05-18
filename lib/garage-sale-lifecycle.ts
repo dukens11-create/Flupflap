@@ -68,7 +68,7 @@ export function deriveGarageSaleLifecycle(sale: GarageSaleLifecycleInput, now = 
 export function ownerLifecycleMessage(state: GarageSaleLifecycleState) {
   switch (state) {
     case 'PAYMENT_PENDING':
-      return 'Payment is still processing. Your listing remains hidden until payment is confirmed.';
+      return 'Confirming payment… We will publish your listing as soon as Stripe confirms it.';
     case 'PAYMENT_FAILED':
       return 'Payment failed. Repost and pay again to publish this listing.';
     case 'PAYMENT_REFUNDED':

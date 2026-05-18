@@ -7,6 +7,7 @@ import { expireGarageSales } from '@/lib/garage-sales';
 import { syncGarageSaleCheckoutSessionForSeller } from '@/lib/garage-sale-payment-sync';
 import { logWarn } from '@/lib/logger';
 import { deriveGarageSaleLifecycle } from '@/lib/garage-sale-lifecycle';
+import PaymentReconciliationBanner from './PaymentReconciliationBanner';
 
 export const metadata: Metadata = {
   title: 'My Garage Sales',
@@ -16,7 +17,7 @@ export const metadata: Metadata = {
 export const dynamic = 'force-dynamic';
 
 const STATUS_BADGE: Record<string, string> = {
-  LIVE: 'badge-red',
+  LIVE: 'badge-green',
   OPEN: 'badge-green',
   UPCOMING: 'badge-blue',
   PENDING_REVIEW: 'badge-yellow',
@@ -41,7 +42,7 @@ const STATUS_LABEL: Record<string, string> = {
   OPEN: 'OPEN NOW',
   UPCOMING: 'UPCOMING',
   PENDING_REVIEW: 'PENDING REVIEW',
-  PAYMENT_PENDING: 'PAYMENT PENDING',
+  PAYMENT_PENDING: 'CONFIRMING PAYMENT',
   PAYMENT_FAILED: 'PAYMENT FAILED',
   PAYMENT_REFUNDED: 'REFUNDED',
   REJECTED: 'REJECTED',
@@ -51,11 +52,17 @@ const STATUS_LABEL: Record<string, string> = {
 
 const PAYMENT_LABEL: Record<string, string> = {
   PAID: 'Paid',
-  PENDING: 'Awaiting confirmation',
+  PENDING: 'Confirming payment…',
   FAILED: 'Failed',
   REFUNDED: 'Refunded',
 };
 const PAID_QUERY_FLAG = '1';
+const SALE_TYPE_LABEL: Record<string, string> = {
+  GARAGE_SALE: 'Garage Sale',
+  YARD_SALE: 'Yard Sale',
+  ESTATE_SALE: 'Estate Sale',
+  MOVING_SALE: 'Moving Sale',
+};
 
 function shouldWarnOnSyncFailure(reason?: string) {
   return reason !== 'already_paid' && reason !== 'payment_not_paid';
@@ -103,6 +110,7 @@ export default async function SellerGarageSalesPage({
     select: {
       id: true,
       title: true,
+      saleType: true,
       city: true,
       state: true,
       status: true,
@@ -139,12 +147,16 @@ export default async function SellerGarageSalesPage({
         </div>
       )}
       {sp.paid === PAID_QUERY_FLAG && (
-        <div className={`card p-4 text-sm ${focusedSaleLifecycle?.state === 'PAYMENT_PENDING' ? 'border-yellow-200 bg-yellow-50 text-yellow-900' : 'border-green-200 bg-green-50 text-green-900'}`}>
-          {focusedSaleLifecycle?.state === 'PAYMENT_PENDING'
-            ? 'Payment confirmation is still pending. We will publish your listing as soon as Stripe confirms it.'
-            : 'Payment confirmed.'}{' '}
-          {focusedSaleLifecycle ? focusedSaleLifecycle.ownerMessage : 'Your listing appears below.'}
-        </div>
+        saleId ? (
+          <PaymentReconciliationBanner
+            saleId={saleId}
+            checkoutSessionId={sessionId}
+            initialState={focusedSaleLifecycle?.state}
+            initialOwnerMessage={focusedSaleLifecycle?.ownerMessage}
+          />
+        ) : (
+          <div className="card border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">Confirming payment…</div>
+        )
       )}
 
       {sales.length === 0 ? (
@@ -168,13 +180,16 @@ export default async function SellerGarageSalesPage({
                       {lifecycle.ownerMessage}
                     </p>
                   </div>
-                  <div className="flex flex-col items-end gap-2">
-                    <div className="flex gap-2">
-                      <span className={`badge ${STATUS_BADGE[lifecycle.state] ?? 'badge-slate'}`}>
+                  <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end">
+                    <div className="flex flex-wrap gap-2 sm:justify-end">
+                      <span className={`badge ${STATUS_BADGE[lifecycle.state] ?? 'badge-slate'} text-[10px] sm:text-xs`}>
                         {STATUS_LABEL[lifecycle.state] ?? lifecycle.state}
                       </span>
+                      <span className="badge badge-blue text-[10px] sm:text-xs">
+                        {SALE_TYPE_LABEL[sale.saleType] ?? sale.saleType}
+                      </span>
                     </div>
-                    <p className="text-[11px] font-semibold text-slate-500">Payment: {PAYMENT_LABEL[sale.paymentStatus] ?? sale.paymentStatus}</p>
+                    <p className="text-[11px] font-semibold text-slate-500 sm:text-right">Payment: {PAYMENT_LABEL[sale.paymentStatus] ?? sale.paymentStatus}</p>
                     <div className="flex gap-2">
                       <Link href={`/garage-sales/${sale.id}`} className="btn-outline text-xs">Open</Link>
                       <Link href={`/garage-sales/${sale.id}/edit`} className="btn-outline text-xs">Manage</Link>

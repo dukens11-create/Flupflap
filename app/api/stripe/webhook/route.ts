@@ -16,9 +16,10 @@ import { isSellerVerificationApproved } from '@/lib/seller-verification';
 import { createNotification, createNotifications, type CreateNotificationInput } from '@/lib/notifications';
 import { purchaseShipmentRate, buildTrackingUrl } from '@/lib/shipping';
 import { sendEmail } from '@/lib/email';
-import { logError, logWarn } from '@/lib/logger';
+import { logError, logInfo, logWarn } from '@/lib/logger';
 import {
   failGarageSaleCheckoutSession,
+  finalizeGarageSalePaymentIntent,
   finalizeGarageSaleCheckoutSession,
   isGarageSaleCheckoutSession,
 } from '@/lib/garage-sale-payment-sync';
@@ -38,15 +39,27 @@ export async function POST(req: Request) {
   const body = await req.text();
   const sig = (await headers()).get('stripe-signature') ?? '';
   const secret = process.env.STRIPE_WEBHOOK_SECRET ?? '';
+  if (!secret) {
+    logError('Stripe webhook secret is missing', new Error('Missing STRIPE_WEBHOOK_SECRET'), {
+      tag: 'stripe/webhook',
+      action: 'constructEvent',
+    });
+    return new NextResponse('Webhook not configured', { status: 500 });
+  }
 
   let event: any;
   try {
     event = stripe.webhooks.constructEvent(body, sig, secret);
   } catch (err: any) {
-    console.error('[webhook] signature error:', err.message);
     logWarn('Stripe webhook signature verification failed', { tag: 'stripe/webhook', message: err.message });
     return new NextResponse(`Webhook error: ${err.message}`, { status: 400 });
   }
+  logInfo('Stripe webhook received', {
+    tag: 'stripe/webhook',
+    action: 'eventReceived',
+    eventId: event.id,
+    eventType: event.type,
+  });
 
   // Mark seller onboarding complete when Stripe confirms the connected account
   // is fully set up and payouts are enabled.
@@ -306,6 +319,23 @@ export async function POST(req: Request) {
     return new NextResponse('ok', { status: 200 });
   }
 
+  if (event.type === 'payment_intent.succeeded') {
+    const intent = event.data.object as Stripe.PaymentIntent;
+    try {
+      await finalizeGarageSalePaymentIntent(intent);
+      return new NextResponse('ok', { status: 200 });
+    } catch (err) {
+      logError('Garage sale payment_intent.succeeded processing failed', err, {
+        tag: 'stripe/webhook',
+        action: 'garageSalePaymentIntentSucceeded',
+        eventType: event.type,
+        stripePaymentId: intent.id,
+        saleId: intent.metadata?.saleId,
+      });
+      return new NextResponse('Webhook processing error', { status: 500 });
+    }
+  }
+
   // ── Checkout completion: garage sales, subscriptions, promotions, orders ────
   if (CHECKOUT_COMPLETION_EVENTS.has(event.type)) {
     const cs = event.data.object as Stripe.Checkout.Session;
@@ -322,8 +352,19 @@ export async function POST(req: Request) {
     }
 
     if (isGarageSaleCheckoutSession(cs)) {
-      await finalizeGarageSaleCheckoutSession(cs);
-      return new NextResponse('ok', { status: 200 });
+      try {
+        await finalizeGarageSaleCheckoutSession(cs);
+        return new NextResponse('ok', { status: 200 });
+      } catch (err) {
+        logError('Garage sale checkout completion processing failed', err, {
+          tag: 'stripe/webhook',
+          action: 'garageSaleCheckoutCompleted',
+          eventType: event.type,
+          stripeCheckoutId: cs.id,
+          saleId: cs.metadata?.saleId,
+        });
+        return new NextResponse('Webhook processing error', { status: 500 });
+      }
     }
 
     // Handle seller subscription enrollment

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { calculateGarageSalePricing } from '@/lib/garage-sale-pricing';
 import { getGarageSalePricingSettings } from '@/lib/garage-sales';
+import { getGarageSaleTimeValidationError } from '@/lib/garage-sale-time-validation';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,7 +22,8 @@ export async function GET(req: Request) {
   if (startDateRaw && endDateRaw) {
     const startDate = new Date(startDateRaw);
     const endDate = new Date(endDateRaw);
-    if (Number.isFinite(startDate.getTime()) && Number.isFinite(endDate.getTime())) {
+    const validationError = getGarageSaleTimeValidationError(startDate, endDate);
+    if (!validationError) {
       response.estimate = calculateGarageSalePricing({
         listingType,
         startDate,
@@ -30,6 +32,8 @@ export async function GET(req: Request) {
         topLocalSearchPlacement,
         settings: pricingSettings,
       });
+    } else {
+      response.validationError = validationError;
     }
   }
 
