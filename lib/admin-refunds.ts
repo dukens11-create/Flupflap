@@ -41,7 +41,7 @@ type AdminRefundActionResult<T = Record<string, unknown>> =
 
 type AdminRefundActionInput = {
   id: string;
-  adminUserId: string;
+  adminUserId?: string;
   adminNotes?: string;
   approvedAmountCents?: number;
 };
@@ -97,6 +97,10 @@ export async function approveRefundRequest({
   approvedAmountCents: requestedApprovedAmountCents,
 }: AdminRefundActionInput): Promise<AdminRefundActionResult> {
   try {
+    if (!adminUserId) {
+      return { ok: false, status: 400, error: 'Missing admin user context.' };
+    }
+
     const refundRequest = await prisma.refundRequest.findUnique({
       where: { id },
       include: {
@@ -128,14 +132,14 @@ export async function approveRefundRequest({
       refundRequest.order.totalCents,
     );
 
-    const mergedNotes = adminNotes || null;
+    const processedNotes = adminNotes || null;
 
     await prisma.refundRequest.update({
       where: { id: refundRequest.id },
       data: {
         status: 'APPROVED',
         approvedAmountCents,
-        adminNotes: mergedNotes,
+        adminNotes: processedNotes,
       },
     });
 
@@ -163,7 +167,7 @@ export async function approveRefundRequest({
         data: {
           status: 'REFUNDED',
           approvedAmountCents,
-          adminNotes: mergedNotes,
+          adminNotes: processedNotes,
           stripeRefundId: stripeRefund.id,
           resolvedAt,
         },

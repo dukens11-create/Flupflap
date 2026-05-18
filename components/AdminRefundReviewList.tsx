@@ -35,9 +35,10 @@ export default function AdminRefundReviewList({
 
     const amountRaw = (amounts[refundRequestId] ?? '').trim();
     const approvedAmountCents = amountRaw ? Math.round(Number.parseFloat(amountRaw) * 100) : undefined;
-    if (action === 'approve' && amountRaw && (!Number.isFinite(approvedAmountCents ?? NaN) || (approvedAmountCents ?? 0) <= 0)) {
+    const approvalValidationError = validateApprovalAmount(action, amountRaw, approvedAmountCents);
+    if (approvalValidationError) {
       setPendingActionId(null);
-      setError('Approved amount must be a positive USD value.');
+      setError(approvalValidationError);
       return;
     }
 
@@ -251,7 +252,9 @@ function RefundActions({
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap gap-2">
-        <Link href={`/orders/${request.order.id}`} className="btn-outline text-xs">View</Link>
+        <Link href={`/orders/${request.order.id}`} className="btn-outline text-xs" aria-label={`View order ${request.order.id}`}>
+          View order
+        </Link>
         <button type="button" className="btn-primary text-xs" disabled={isPending || isResolved} onClick={() => runAction(request.id, 'approve')}>
           Approve refund
         </button>
@@ -286,4 +289,12 @@ function RefundActions({
 
 function shortId(id: string) {
   return id.slice(-8).toUpperCase();
+}
+
+function validateApprovalAmount(action: RefundAction, amountRaw: string, approvedAmountCents: number | undefined) {
+  if (action !== 'approve' || !amountRaw) return '';
+  if (!Number.isFinite(approvedAmountCents ?? NaN) || (approvedAmountCents ?? 0) <= 0) {
+    return 'Approved amount must be a positive USD value.';
+  }
+  return '';
 }

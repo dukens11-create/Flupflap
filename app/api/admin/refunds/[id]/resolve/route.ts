@@ -34,7 +34,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     const result = await resolveRefundRequest({
       id,
-      adminUserId: session.user.id,
       adminNotes: parsed.data.adminNotes,
     });
 
