@@ -20,8 +20,16 @@ const CAMERA_STATUS_UNKNOWN_MESSAGE = 'Camera status unknown.';
 const CAMERA_HTTPS_REQUIRED_MESSAGE = 'Live camera preview requires HTTPS (or localhost) in this browser.';
 const ANDROID_CAMERA_PERMISSION_HINT = 'On Android Chrome or Samsung Internet, if you do not see the permission popup, open the lock icon in the address bar, allow Camera and Microphone, then select Retry Camera Access.';
 const DEFAULT_CAMERA_PERMISSION_HINT = 'Allow Camera and Microphone in your browser, then select Retry Camera Access.';
+// Give mobile browsers time to emit initial stream metadata before attempting playback.
+const MEDIA_READY_TIMEOUT_MS = 1500;
+// Retry once shortly after the first play() rejection for iOS/Safari startup timing quirks.
+const PLAYBACK_RETRY_DELAY_MS = 120;
 
 type CameraStatus = 'idle' | 'connecting' | 'ready' | 'awaitingInteraction' | 'blocked' | 'denied' | 'unsupported' | 'insecure';
+
+const sleep = (ms: number) => new Promise<void>((resolve) => {
+  setTimeout(resolve, ms);
+});
 
 function getCameraMessageStyles(cameraStatus: CameraStatus, hasError: boolean) {
   if (cameraStatus === 'ready') return 'bg-emerald-50 text-emerald-700';
@@ -92,6 +100,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   const hasRemoteAnswerRef = useRef(false);
   const liveRef = useRef(initialIsLive);
   const micOnRef = useRef(true);
+  const micPermissionDeniedRef = useRef(false);
   const preferredFacingModeRef = useRef<'user' | 'environment'>('user');
 
   const [isLive, setIsLive] = useState(initialIsLive);
@@ -235,8 +244,40 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     if (!video) return false;
 
     video.muted = true;
+    video.defaultMuted = true;
     video.playsInline = true;
     video.setAttribute('playsinline', 'true');
+    video.setAttribute('webkit-playsinline', 'true');
+
+    if (video.readyState < HTMLMediaElement.HAVE_METADATA) {
+      await new Promise<void>((resolve) => {
+        let settled = false;
+        let timeoutId: ReturnType<typeof setTimeout>;
+        const cleanup = () => {
+          video.removeEventListener('loadedmetadata', onReady);
+          video.removeEventListener('loadeddata', onReady);
+          video.removeEventListener('canplay', onReady);
+          clearTimeout(timeoutId);
+        };
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          resolve();
+        };
+        const onReady = () => {
+          finish();
+        };
+
+        video.addEventListener('loadedmetadata', onReady, { once: true });
+        video.addEventListener('loadeddata', onReady, { once: true });
+        video.addEventListener('canplay', onReady, { once: true });
+
+        timeoutId = setTimeout(() => {
+          finish();
+        }, MEDIA_READY_TIMEOUT_MS);
+      });
+    }
 
     try {
       await video.play();
@@ -244,9 +285,17 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       setCameraStatus('ready');
       return true;
     } catch {
-      setPreviewReady(false);
-      setCameraStatus('awaitingInteraction');
-      return false;
+      try {
+        await sleep(PLAYBACK_RETRY_DELAY_MS);
+        await video.play();
+        setPreviewReady(true);
+        setCameraStatus('ready');
+        return true;
+      } catch {
+        setPreviewReady(false);
+        setCameraStatus('awaitingInteraction');
+        return false;
+      }
     }
   }, []);
 
@@ -273,7 +322,6 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       streamRef.current?.getTracks().forEach((track) => track.stop());
       const stream = await requestCameraStream(nextFacingMode, shouldUseFacingMode);
 
-      stream.getAudioTracks().forEach((t) => { t.enabled = micOnRef.current; });
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -347,6 +395,32 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         await startCamera();
         if (!streamRef.current) {
           throw new Error(PREVIEW_REQUIRED_MESSAGE);
+        }
+      }
+      if (
+        micOnRef.current
+        && !micPermissionDeniedRef.current
+        && streamRef.current
+        && streamRef.current.getAudioTracks().length === 0
+      ) {
+        try {
+          const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+          const audioTracks = audioStream.getAudioTracks();
+          if (audioTracks.length === 0) {
+            throw new Error('No microphone track available');
+          }
+          audioTracks.forEach((audioTrack) => {
+            audioTrack.enabled = true;
+            streamRef.current?.addTrack(audioTrack);
+          });
+          micPermissionDeniedRef.current = false;
+        } catch (err) {
+          const errorName = err instanceof DOMException ? err.name : '';
+          if (errorName === 'NotAllowedError' || errorName === 'SecurityError') {
+            micPermissionDeniedRef.current = true;
+          }
+          setMicOn(false);
+          micOnRef.current = false;
         }
       }
 
