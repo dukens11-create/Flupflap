@@ -495,6 +495,13 @@ export default async function GarageSaleDetailPage({ params, searchParams }: Par
                   </a>
                 </div>
               )}
+              {sale.paymentStatus === 'PAID' && isOwner && (
+                <form action={`/api/garage-sales/${sale.id}/refund`} method="POST">
+                  <button type="submit" className="btn-outline text-xs">
+                    Request refund
+                  </button>
+                </form>
+              )}
               {sale.payments.length === 0 ? (
                 <p className="text-xs text-slate-500">No payments yet.</p>
               ) : (
