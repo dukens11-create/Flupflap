@@ -4,6 +4,7 @@ import type { Session } from 'next-auth';
 import type { RefundRequestStatus } from '@prisma/client';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
+import { isSchemaNotInitializedError } from '@/lib/db-errors';
 
 const REFUND_MODEL_NAME = 'refundRequest';
 const REFUND_TABLE_NAME = 'RefundRequest';
@@ -124,14 +125,21 @@ export async function GET() {
       refunds: refundRequests.map(serializeRefundRequest),
     });
   } catch (error) {
+    const schemaNotInitialized = isSchemaNotInitializedError(error);
     console.error('[api/admin/refunds] Query failed', {
       model: REFUND_MODEL_NAME,
       table: REFUND_TABLE_NAME,
       adminUserId,
+      schemaNotInitialized,
       error,
     });
     return NextResponse.json(
-      { refunds: [], error: 'Unable to load refund requests' },
+      {
+        refunds: [],
+        error: schemaNotInitialized
+          ? 'Database schema not yet initialized. Run prisma migrate deploy and try again.'
+          : 'Unable to load refund requests',
+      },
       { status: 500 },
     );
   }

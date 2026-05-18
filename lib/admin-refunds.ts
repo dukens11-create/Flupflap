@@ -4,6 +4,7 @@ import { dollars } from '@/lib/money';
 import { createNotifications } from '@/lib/notifications';
 import { normalizeRefundAmountCents } from '@/lib/refunds';
 import { stripe } from '@/lib/stripe';
+import { isSchemaNotInitializedError } from '@/lib/db-errors';
 
 export type AdminRefundRecord = {
   id: string;
@@ -113,6 +114,8 @@ async function getRefundRequestForAction(refundId: string) {
 export async function getAdminRefundRequests(): Promise<{
   refundRequests: AdminRefundRecord[];
   fetchFailed: boolean;
+  fetchError?: string;
+  schemaNotInitialized?: boolean;
 }> {
   try {
     const refundRequests = await prisma.refundRequest.findMany({
@@ -148,9 +151,14 @@ export async function getAdminRefundRequests(): Promise<{
     };
   } catch (error) {
     console.error('[admin/refunds] Failed to fetch refund requests.', error);
+    const schemaNotInitialized = isSchemaNotInitializedError(error);
     return {
       refundRequests: [],
       fetchFailed: true,
+      schemaNotInitialized,
+      fetchError: schemaNotInitialized
+        ? 'Database schema not yet initialized. Run prisma migrate deploy, then reload this page.'
+        : 'Unable to load refund requests. Please refresh the page or contact support if the problem persists.',
     };
   }
 }
