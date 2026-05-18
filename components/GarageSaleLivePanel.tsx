@@ -14,8 +14,21 @@ const PREVIEW_REQUIRED_MESSAGE = 'Preview your camera before starting your live 
 const CAMERA_ACCESS_MESSAGE = 'Please allow camera access to start your live sale.';
 const CAMERA_BLOCKED_MESSAGE = 'Camera access blocked in browser settings.';
 const CAMERA_READY_MESSAGE = 'Camera ready';
+const CAMERA_CONNECTING_MESSAGE = 'Connecting camera...';
+const CAMERA_PREVIEW_PLACEHOLDER = 'Camera preview will appear here.';
+const CAMERA_STATUS_UNKNOWN_MESSAGE = 'Camera status unknown.';
 
 type CameraStatus = 'idle' | 'connecting' | 'ready' | 'awaitingInteraction' | 'blocked' | 'denied' | 'unsupported';
+
+function getCameraMessageStyles(cameraStatus: CameraStatus, hasError: boolean) {
+  if (cameraStatus === 'ready') return 'bg-emerald-50 text-emerald-700';
+  if (cameraStatus === 'blocked' || cameraStatus === 'denied' || hasError) return 'bg-red-50 text-red-700';
+  return 'bg-slate-100 text-slate-600';
+}
+
+function cx(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(' ');
+}
 
 export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -225,20 +238,16 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       return await ensurePreviewPlayback();
     } catch (err) {
       const name = err instanceof DOMException ? err.name : '';
-      let permissionState: PermissionState | null = null;
-      if ((name === 'NotAllowedError' || name === 'SecurityError') && navigator.permissions?.query) {
-        try {
-          const permissionStatus = await navigator.permissions.query({ name: 'camera' as PermissionName });
-          permissionState = permissionStatus.state;
-        } catch {
-          permissionState = null;
-        }
-      }
       setCamOn(false);
       streamRef.current = null;
       setPreviewReady(false);
-      if (name === 'NotAllowedError' || name === 'SecurityError') {
-        setCameraStatus(permissionState === 'denied' ? 'blocked' : 'denied');
+      // SecurityError generally indicates camera access is blocked by browser/security policy,
+      // while NotAllowedError usually means the user denied permission for this session.
+      if (name === 'SecurityError') {
+        setCameraStatus('blocked');
+        setError(null);
+      } else if (name === 'NotAllowedError') {
+        setCameraStatus('denied');
         setError(null);
       } else {
         setCameraStatus('idle');
@@ -404,7 +413,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   const cameraStatusLabel = (() => {
     switch (cameraStatus) {
       case 'connecting':
-        return 'Connecting camera...';
+        return CAMERA_CONNECTING_MESSAGE;
       case 'ready':
         return CAMERA_READY_MESSAGE;
       case 'awaitingInteraction':
@@ -432,12 +441,12 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       case 'ready':
         return CAMERA_READY_MESSAGE;
       case 'connecting':
-        return 'Connecting camera...';
+        return CAMERA_CONNECTING_MESSAGE;
       case 'awaitingInteraction':
       case 'idle':
         return PREVIEW_REQUIRED_MESSAGE;
       default:
-        return null;
+        return CAMERA_STATUS_UNKNOWN_MESSAGE;
     }
   })();
 
@@ -492,7 +501,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         {!camOn && (
           <div className="flex flex-col items-center gap-2 px-4 text-center text-slate-300">
             <VideoOff size={40} />
-            <p className="text-sm font-medium">Camera preview will appear here.</p>
+            <p className="text-sm font-medium">{CAMERA_PREVIEW_PLACEHOLDER}</p>
           </div>
         )}
         {isLive && (
@@ -506,7 +515,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         {camOn && cameraStatus === 'connecting' && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-slate-950/45 px-4 transition-opacity duration-300">
             <span className="rounded-full bg-white/95 px-3 py-1.5 text-xs font-semibold text-slate-900 shadow">
-              Connecting camera...
+              {CAMERA_CONNECTING_MESSAGE}
             </span>
           </div>
         )}
@@ -524,14 +533,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       </div>
 
       {cameraMessage && (
-        <p className={`rounded-lg px-3 py-2 text-xs font-medium ${
-          cameraStatus === 'ready'
-            ? 'bg-emerald-50 text-emerald-700'
-            : (cameraStatus === 'blocked' || cameraStatus === 'denied' || error)
-              ? 'bg-red-50 text-red-700'
-              : 'bg-slate-100 text-slate-600'
-        }`}
-        >
+        <p className={cx('rounded-lg px-3 py-2 text-xs font-medium', getCameraMessageStyles(cameraStatus, Boolean(error)))}>
           {cameraMessage}
         </p>
       )}
@@ -544,7 +546,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
             disabled={loading || cameraStatus === 'connecting'}
             className="btn-outline flex-1 flex items-center justify-center gap-1.5 text-xs disabled:opacity-60"
           >
-            <Video size={13} /> {cameraStatus === 'connecting' ? 'Connecting camera...' : 'Preview Camera'}
+            <Video size={13} /> {cameraStatus === 'connecting' ? CAMERA_CONNECTING_MESSAGE : 'Preview Camera'}
           </button>
         ) : (
           <>

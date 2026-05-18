@@ -118,8 +118,11 @@ export default async function GarageSaleDetailPage({ params }: Params) {
             Upcoming
           </span>
         ) : (isOwner || isAdmin) ? (
-          <span className="inline-flex items-center rounded-full bg-slate-200 px-3 py-1 text-xs font-bold text-slate-700">
-            HIDDEN
+          <span
+            aria-label="Listing is hidden from public view"
+            className="inline-flex items-center rounded-full bg-slate-200 px-3 py-1 text-xs font-bold text-slate-700"
+          >
+            Hidden
           </span>
         ) : null}
         {(isOwner || isAdmin) && !listingIsPubliclyVisible && (
