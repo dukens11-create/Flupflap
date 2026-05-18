@@ -488,9 +488,9 @@ export default async function GarageSaleDetailPage({ params, searchParams }: Par
             <div className="card p-4 space-y-2">
               <h2 className="text-xs font-bold uppercase tracking-wide text-slate-500">Payment history</h2>
               {sale.paymentStatus === 'PENDING' && (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-                  Payment is still processing. Refunds are unavailable until payment settles. If this remains pending, contact support.
-                  <a href="mailto:support@flupflap.com?subject=Garage%20sale%20payment%20pending" className="mt-2 inline-block font-semibold text-[var(--ff-primary-navy)] hover:underline">
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900"><p>
+                  Payment is still processing. Refunds are unavailable until payment settles. If this remains pending, contact support.</p>
+                  <a href="mailto:support@flupflap.com?subject=Garage%20sale%20payment%20pending" className="inline-block font-semibold text-[var(--ff-primary-navy)] hover:underline">
                     Contact support
                   </a>
                 </div>
