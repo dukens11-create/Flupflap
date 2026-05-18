@@ -26,10 +26,10 @@ export default async function GarageSaleManageRedirectPage({ params, searchParam
   const isAdmin = session.user.role === 'ADMIN';
   if (!isOwner && !isAdmin) notFound();
 
-  const query = new URLSearchParams({ saleId: sale.id });
   if (sp.payment === 'cancelled') {
-    query.set('payment', 'cancelled');
+    const query = new URLSearchParams({ saleId: sale.id, payment: 'cancelled' });
+    redirect(`/seller/garage-sales?${query.toString()}`);
   }
 
-  redirect(`/seller/garage-sales?${query.toString()}`);
+  redirect(`/garage-sales/${sale.id}`);
 }
