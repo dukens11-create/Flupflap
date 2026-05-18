@@ -278,6 +278,13 @@ export async function POST(req: Request) {
   if (event.type === 'checkout.session.expired' || event.type === 'checkout.session.async_payment_failed') {
     const cs = event.data.object as Stripe.Checkout.Session;
     if (isGarageSaleCheckoutSession(cs)) {
+      logWarn('Garage sale checkout failed', {
+        tag: 'stripe/webhook',
+        action: 'garageSaleCheckoutFailed',
+        eventType: event.type,
+        stripeCheckoutId: cs.id,
+        saleId: cs.metadata?.saleId,
+      });
       await failGarageSaleCheckoutSession(cs);
     }
     return new NextResponse('ok', { status: 200 });

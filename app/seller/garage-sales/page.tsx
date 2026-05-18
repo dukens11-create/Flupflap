@@ -63,10 +63,10 @@ export default async function SellerGarageSalesPage({
       saleId: sp.saleId,
       sellerId,
     });
-    if (!syncResult.synced && syncResult.reason && syncResult.reason !== 'already_paid') {
+    if (!syncResult.synced && syncResult.reason !== 'already_paid') {
       console.warn('[seller/garage-sales] payment sync did not finalize', {
         saleId: sp.saleId,
-        reason: syncResult.reason,
+        reason: syncResult.reason ?? 'unknown',
       });
     }
   }

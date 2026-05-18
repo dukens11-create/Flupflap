@@ -44,6 +44,7 @@ export async function finalizeGarageSaleCheckoutSession(cs: Stripe.Checkout.Sess
   const sellerId = cs.metadata?.sellerId ?? sale.sellerId;
   const paymentIntentId = cs.payment_intent ? String(cs.payment_intent) : null;
   const receiptUrl = await getReceiptUrl(paymentIntentId);
+  const paidAmountCents = typeof cs.amount_total === 'number' ? cs.amount_total : sale.totalPaidCents;
   const now = new Date();
 
   await prisma.$transaction([
@@ -56,21 +57,21 @@ export async function finalizeGarageSaleCheckoutSession(cs: Stripe.Checkout.Sess
         paidAt: now,
         activatedAt: now,
         isFeatured: sale.listingType === 'FEATURED',
-        totalPaidCents: typeof cs.amount_total === 'number' ? cs.amount_total : sale.totalPaidCents,
+        totalPaidCents: paidAmountCents,
       },
     }),
     prisma.garageSalePayment.upsert({
       where: { stripeCheckoutId: cs.id },
       update: {
         status: 'PAID',
-        amountCents: typeof cs.amount_total === 'number' ? cs.amount_total : sale.totalPaidCents,
+        amountCents: paidAmountCents,
         stripePaymentId: paymentIntentId,
         stripeReceiptUrl: receiptUrl,
       },
       create: {
         saleId,
         sellerId,
-        amountCents: typeof cs.amount_total === 'number' ? cs.amount_total : sale.totalPaidCents,
+        amountCents: paidAmountCents,
         status: 'PAID',
         stripeCheckoutId: cs.id,
         stripePaymentId: paymentIntentId,
