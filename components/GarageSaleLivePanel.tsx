@@ -13,8 +13,9 @@ const RTC_CONFIG: RTCConfiguration = {
 const PREVIEW_REQUIRED_MESSAGE = 'Preview your camera before starting your live garage sale.';
 const CAMERA_ACCESS_MESSAGE = 'Please allow camera access to start your live sale.';
 const CAMERA_BLOCKED_MESSAGE = 'Camera access blocked in browser settings.';
+const CAMERA_DENIED_MESSAGE = 'Camera permission denied.';
 
-type CameraStatus = 'idle' | 'connecting' | 'ready' | 'awaitingInteraction' | 'blocked' | 'unsupported';
+type CameraStatus = 'idle' | 'connecting' | 'ready' | 'awaitingInteraction' | 'blocked' | 'denied' | 'unsupported';
 
 export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -240,7 +241,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       setCamOn(false);
       streamRef.current = null;
       setPreviewReady(false);
-      setCameraStatus(name === 'NotAllowedError' || name === 'SecurityError' ? 'blocked' : 'idle');
+      setCameraStatus(name === 'NotAllowedError' || name === 'SecurityError' ? 'denied' : 'idle');
       setError(
         name === 'NotAllowedError' || name === 'SecurityError'
           ? CAMERA_ACCESS_MESSAGE
@@ -413,12 +414,18 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         return 'Tap to resume preview';
       case 'blocked':
         return CAMERA_BLOCKED_MESSAGE;
+      case 'denied':
+        return CAMERA_DENIED_MESSAGE;
       case 'unsupported':
         return 'Camera preview is not supported in this browser.';
       default:
         return PREVIEW_REQUIRED_MESSAGE;
     }
   })();
+
+  const videoPreviewClassName = camOn
+    ? `h-full w-full rounded-2xl object-cover transition-opacity duration-500 ${previewReady ? 'opacity-100' : 'opacity-0'}`
+    : 'hidden';
 
   return (
     <div className="card space-y-4 p-4 sm:space-y-5 sm:p-5 transition-all duration-300">
@@ -462,7 +469,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
           autoPlay
           playsInline
           muted
-          className={`h-full w-full rounded-2xl object-cover transition-opacity duration-500 ${camOn ? (previewReady ? 'opacity-100' : 'opacity-0') : 'hidden'}`}
+          className={videoPreviewClassName}
         />
         {!camOn && (
           <div className="flex flex-col items-center gap-2 px-4 text-center text-slate-300">
@@ -471,8 +478,11 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
           </div>
         )}
         {isLive && (
-          <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-red-500 px-2.5 py-1 text-[11px] font-bold text-white animate-pulse shadow-lg">
-            🔴 LIVE <Eye size={11} /> {viewerCount}
+          <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-red-500 px-2.5 py-1 text-[11px] font-bold text-white animate-pulse shadow-lg" aria-live="polite">
+            <span aria-hidden="true" className="inline-flex items-center gap-1.5">
+              <span>🔴</span> LIVE <Eye size={11} /> {viewerCount}
+            </span>
+            <span className="sr-only">{viewerCount} viewers watching</span>
           </span>
         )}
         {camOn && cameraStatus === 'connecting' && (
