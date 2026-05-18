@@ -8,7 +8,7 @@ import { prisma } from '@/lib/db';
 import { MapPin, Calendar, Phone, Tag, Eye, Heart, ExternalLink } from 'lucide-react';
 import { expireGarageSales } from '@/lib/garage-sales';
 import {
-  getGarageSaleLiveControlsUnavailableMessage,
+  getGarageSaleLiveControlsBlockMessage,
   getGarageSaleVisibilityBlockReason,
   isGarageSalePubliclyVisible,
 } from '@/lib/garage-sale-visibility';
@@ -75,7 +75,8 @@ export default async function GarageSaleDetailPage({ params }: Params) {
   if (!listingIsPubliclyVisible && !isOwner && !isAdmin) notFound();
 
   const visibilityBlockReason = getGarageSaleVisibilityBlockReason(sale);
-  const blockedLiveControlsMessage = getGarageSaleLiveControlsUnavailableMessage(sale);
+  const blockedLiveControlsMessage = getGarageSaleLiveControlsBlockMessage(sale)
+    ?? 'Live controls will appear once your listing is approved and visible.';
   const hiddenStatusLabel = visibilityBlockReason === 'PAYMENT_PENDING' ? 'AWAITING PAYMENT' : sale.status;
   const hiddenStatusBadgeClass = (visibilityBlockReason === 'PAYMENT_PENDING' || sale.status === 'PENDING')
     ? 'bg-yellow-100 text-yellow-700'

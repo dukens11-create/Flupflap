@@ -30,7 +30,7 @@ export function getGarageSaleVisibilityBlockReason(sale: GarageSaleVisibilityInp
   return null;
 }
 
-export function getGarageSaleLiveControlsUnavailableMessage(sale: GarageSaleVisibilityInput) {
+export function getGarageSaleLiveControlsBlockMessage(sale: GarageSaleVisibilityInput) {
   const reason = getGarageSaleVisibilityBlockReason(sale);
   if (reason === 'PAYMENT_PENDING') {
     return 'Live controls are unavailable while payment is pending. Your listing stays hidden until payment is confirmed.';
@@ -50,5 +50,5 @@ export function getGarageSaleLiveControlsUnavailableMessage(sale: GarageSaleVisi
   if (reason === 'SPAM') {
     return 'Live controls are unavailable while this listing is flagged for review.';
   }
-  return 'Live controls are available.';
+  return null;
 }

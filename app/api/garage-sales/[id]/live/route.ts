@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
-import { getGarageSaleLiveControlsUnavailableMessage, isGarageSalePubliclyVisible } from '@/lib/garage-sale-visibility';
+import { getGarageSaleLiveControlsBlockMessage, isGarageSalePubliclyVisible } from '@/lib/garage-sale-visibility';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,7 +28,10 @@ export async function POST(req: Request, { params }: Params) {
   }
 
   if (!isGarageSalePubliclyVisible(sale)) {
-    return NextResponse.json({ error: getGarageSaleLiveControlsUnavailableMessage(sale) }, { status: 422 });
+    return NextResponse.json(
+      { error: getGarageSaleLiveControlsBlockMessage(sale) ?? 'Live controls are unavailable for this listing.' },
+      { status: 422 },
+    );
   }
 
   let body: unknown;
