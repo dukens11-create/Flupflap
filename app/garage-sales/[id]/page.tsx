@@ -19,6 +19,7 @@ import GarageSaleLivePanel from '@/components/GarageSaleLivePanel';
 import GarageSaleBuyerLiveView from '@/components/GarageSaleBuyerLiveView';
 import GarageSaleShareButton from '@/components/GarageSaleShareButton';
 import GarageSalePaymentStatusBanner from '@/components/GarageSalePaymentStatusBanner';
+import GarageSalePaymentSyncButton from '@/components/GarageSalePaymentSyncButton';
 import { deriveGarageSaleLifecycle } from '@/lib/garage-sale-lifecycle';
 import { createPageMetadata } from '@/lib/seo';
 import { syncGarageSaleCheckoutSessionForSeller } from '@/lib/garage-sale-payment-sync';
@@ -102,6 +103,13 @@ function formatTime(date: Date) {
   return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
+function formatPaymentAmount(amountCents: number) {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+  }).format(amountCents / 100);
+}
+
 function buildPaymentCallbackUrl(
   saleId: string,
   searchParams: { payment?: string; session_id?: string; reposted?: string },
@@ -170,6 +178,7 @@ export default async function GarageSaleDetailPage({ params, searchParams }: Par
   const visibilityBlockReason = getGarageSaleVisibilityBlockReason(sale);
   const blockedLiveControlsMessage = getGarageSaleLiveControlsBlockMessage(sale, visibilityBlockReason);
   const ownerHiddenStatusMessage = getGarageSaleOwnerHiddenStatusMessage(sale, visibilityBlockReason);
+  const canShowLiveControls = isOwner && lifecycle.sellerCanGoLive && visibilityBlockReason === null;
   const hiddenStatusLabel = (() => {
     if (visibilityBlockReason === 'ARCHIVED') return 'ARCHIVED';
     if (visibilityBlockReason === 'SPAM') return 'UNDER REVIEW';
@@ -444,10 +453,10 @@ export default async function GarageSaleDetailPage({ params, searchParams }: Par
           </div>
 
           {/* Live Preview — seller controls */}
-          {isOwner && lifecycle.sellerCanGoLive && (
+          {canShowLiveControls && (
             <GarageSaleLivePanel saleId={sale.id} initialIsLive={sale.isLive} />
           )}
-          {isOwner && !lifecycle.sellerCanGoLive && (
+          {isOwner && !canShowLiveControls && (
             <div className="card p-4 text-sm text-slate-600">
               {blockedLiveControlsMessage}
             </div>
@@ -469,6 +478,7 @@ export default async function GarageSaleDetailPage({ params, searchParams }: Par
               <Link href={`/garage-sales/manage/${sale.id}`} className="btn-outline w-full text-center block">
                 Manage Listing
               </Link>
+              <GarageSalePaymentSyncButton saleId={sale.id} />
               {isAdmin && (
                 <Link href={`/admin/garage-sales`} className="btn-outline w-full text-center block text-xs">
                   Admin Panel
@@ -493,8 +503,10 @@ export default async function GarageSaleDetailPage({ params, searchParams }: Par
                 <ul className="space-y-2 text-xs">
                   {sale.payments.map((payment) => (
                     <li key={payment.id} className="rounded-lg border border-slate-200 p-2">
-                      <p className="font-semibold text-slate-800">{payment.status} · ${(payment.amountCents / 100).toFixed(2)}</p>
-                      <p className="text-slate-500">{new Date(payment.createdAt).toLocaleString()}</p>
+                      <p className="font-semibold text-slate-800">{payment.status} · {formatPaymentAmount(payment.amountCents)}</p>
+                      <p className="text-slate-500">
+                        {payment.status === 'PAID' ? 'Paid' : 'Updated'}: {new Date(payment.updatedAt).toLocaleString()}
+                      </p>
                       {payment.stripeCheckoutId && (
                         <p className="break-all text-slate-500">Session: {payment.stripeCheckoutId}</p>
                       )}

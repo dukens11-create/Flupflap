@@ -9,6 +9,22 @@ export function isGarageSaleCheckoutSession(cs: Stripe.Checkout.Session): boolea
   return cs.metadata?.type === GARAGE_SALE_CHECKOUT_TYPE;
 }
 
+async function resolveGarageSaleCheckoutContext(checkoutSessionId: string) {
+  const payment = await prisma.garageSalePayment.findUnique({
+    where: { stripeCheckoutId: checkoutSessionId },
+    select: { saleId: true, sellerId: true },
+  });
+  if (payment) return payment;
+
+  const sale = await prisma.garageSale.findUnique({
+    where: { stripeCheckoutId: checkoutSessionId },
+    select: { id: true, sellerId: true },
+  });
+  if (!sale) return null;
+
+  return { saleId: sale.id, sellerId: sale.sellerId };
+}
+
 async function getReceiptUrl(paymentIntentId: string | null): Promise<string | null> {
   if (!paymentIntentId) return null;
   try {
@@ -138,7 +154,8 @@ export async function finalizeGarageSaleCheckoutSession(cs: Stripe.Checkout.Sess
   sellerId?: string;
   reason?: 'missing_sale_id' | 'not_paid' | 'sale_not_found' | 'already_paid';
 }> {
-  const saleId = cs.metadata?.saleId;
+  const checkoutContext = await resolveGarageSaleCheckoutContext(cs.id);
+  const saleId = cs.metadata?.saleId ?? checkoutContext?.saleId;
   if (!saleId) {
     return { processed: false, reason: 'missing_sale_id' };
   }
@@ -178,7 +195,7 @@ export async function finalizeGarageSaleCheckoutSession(cs: Stripe.Checkout.Sess
 
   return confirmGarageSalePayment({
     saleId,
-    sellerId: sale.sellerId,
+    sellerId: cs.metadata?.sellerId ?? checkoutContext?.sellerId ?? sale.sellerId,
     amountCents: finalAmountCents,
     stripeCheckoutId: cs.id,
     stripePaymentId: paymentIntentId,
@@ -221,17 +238,46 @@ export async function syncGarageSaleCheckoutSessionForSeller(params: {
   });
   if (!sale || sale.sellerId !== sellerId) return { synced: false, reason: 'forbidden' };
 
+  logInfo('Running seller-triggered garage sale payment sync', {
+    tag: 'garage-sale-payment-sync',
+    action: 'sellerSyncStart',
+    saleId,
+    sellerId,
+    stripeCheckoutId: checkoutSessionId,
+  });
+
   let checkoutSession: Stripe.Checkout.Session;
   try {
     checkoutSession = await stripe.checkout.sessions.retrieve(checkoutSessionId);
-  } catch {
+  } catch (error) {
+    logWarn('Seller-triggered garage sale payment sync failed to retrieve checkout session', {
+      tag: 'garage-sale-payment-sync',
+      action: 'sellerSyncRetrieveFailed',
+      saleId,
+      sellerId,
+      stripeCheckoutId: checkoutSessionId,
+      message: error instanceof Error ? error.message : String(error),
+    });
     return { synced: false, reason: 'session_not_found' };
   }
 
-  if (!isGarageSaleCheckoutSession(checkoutSession)) return { synced: false, reason: 'not_garage_sale_checkout' };
-  if (checkoutSession.metadata?.saleId !== saleId) return { synced: false, reason: 'sale_mismatch' };
+  const checkoutContext = await resolveGarageSaleCheckoutContext(checkoutSession.id);
+  const hasMatchingSaleId = checkoutSession.metadata?.saleId === saleId || checkoutContext?.saleId === saleId;
+  if (!isGarageSaleCheckoutSession(checkoutSession) && !hasMatchingSaleId) {
+    return { synced: false, reason: 'not_garage_sale_checkout' };
+  }
+  if (!hasMatchingSaleId) return { synced: false, reason: 'sale_mismatch' };
   if (checkoutSession.payment_status !== 'paid') return { synced: false, reason: 'payment_not_paid' };
 
   const result = await finalizeGarageSaleCheckoutSession(checkoutSession);
+  logInfo('Seller-triggered garage sale payment sync completed', {
+    tag: 'garage-sale-payment-sync',
+    action: 'sellerSyncFinished',
+    saleId,
+    sellerId,
+    stripeCheckoutId: checkoutSessionId,
+    synced: result.processed,
+    reason: result.reason ?? null,
+  });
   return { synced: result.processed, reason: result.reason };
 }

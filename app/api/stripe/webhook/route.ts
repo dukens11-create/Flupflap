@@ -120,21 +120,22 @@ async function finalizeGarageSaleCheckout(cs: Stripe.Checkout.Session) {
 }
 
 async function finalizeGarageSaleFromPaymentIntent(intent: Stripe.PaymentIntent) {
-  if (intent.metadata?.type !== 'garage_sale_listing') {
-    return new NextResponse('ok', { status: 200 });
-  }
+  const hasGarageSaleIntentMetadata = intent.metadata?.type === 'garage_sale_listing';
 
   const saleId = intent.metadata?.saleId;
   const sellerId = intent.metadata?.sellerId;
-  if (!saleId || !sellerId) {
+  if (!hasGarageSaleIntentMetadata || !saleId || !sellerId) {
     try {
       const sessions = await stripe.checkout.sessions.list({
         payment_intent: intent.id,
         limit: 1,
       });
       const checkoutSession = sessions.data[0];
-      if (checkoutSession && checkoutSession.metadata?.type === 'garage_sale_listing') {
-        return finalizeGarageSaleCheckout(checkoutSession);
+      if (checkoutSession) {
+        const finalized = await finalizeGarageSaleCheckoutSession(checkoutSession);
+        if (finalized.processed || finalized.reason === 'already_paid' || finalized.reason === 'not_paid') {
+          return new NextResponse('ok', { status: 200 });
+        }
       }
       if (!checkoutSession) {
         logWarn('No checkout session found for successful garage sale payment intent', {
@@ -485,10 +486,7 @@ export async function POST(req: Request) {
 
   if (event.type === 'payment_intent.succeeded') {
     const intent = event.data.object as Stripe.PaymentIntent;
-    if (intent.metadata?.type === 'garage_sale_listing') {
-      return finalizeGarageSaleFromPaymentIntent(intent);
-    }
-    return new NextResponse('ok', { status: 200 });
+    return finalizeGarageSaleFromPaymentIntent(intent);
   }
   // ── Checkout completion: garage sales, subscriptions, promotions, orders ────
   if (CHECKOUT_COMPLETION_EVENTS.has(event.type)) {
@@ -505,7 +503,8 @@ export async function POST(req: Request) {
       });
     }
 
-    if (isGarageSaleCheckoutSession(cs)) {
+    const checkoutContext = await resolveGarageSaleCheckoutContext(cs.id);
+    if (isGarageSaleCheckoutSession(cs) || checkoutContext) {
       const finalized = await finalizeGarageSaleCheckoutSession(cs);
       if (!finalized.processed && finalized.reason === 'missing_sale_id') {
         return finalizeGarageSaleCheckout(cs);

@@ -82,7 +82,7 @@ export function ownerLifecycleMessage(state: GarageSaleLifecycleState) {
     case 'HIDDEN':
       return 'This listing is currently hidden.';
     case 'LIVE':
-      return 'You are currently live.';
+      return 'Your garage sale is live.';
     case 'OPEN':
       return 'Your listing is active and visible to buyers.';
     case 'UPCOMING':

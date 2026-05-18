@@ -26,6 +26,9 @@ export default function GarageSalePaymentStatusBanner({
   const router = useRouter();
   const [isConfirmed, setIsConfirmed] = useState(initialPaymentStatus === 'PAID' && isPubliclyVisible);
   const [attemptsExhausted, setAttemptsExhausted] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
     if (isConfirmed) return;
@@ -103,18 +106,48 @@ export default function GarageSalePaymentStatusBanner({
     };
   }, [attemptsExhausted, hasSessionId, initialListingStatus, initialPaymentStatus, isConfirmed, isReposted]);
 
+  const handleSyncPaymentStatus = async () => {
+    setIsSyncing(true);
+    setSyncError(null);
+    setSyncMessage(null);
+    try {
+      const res = await fetch(`/api/garage-sales/${saleId}/sync-payment`, {
+        method: 'POST',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.ok) {
+        throw new Error(typeof data?.reason === 'string' ? data.reason : 'sync_failed');
+      }
+      setSyncMessage('Payment sync completed. Refreshing listing state…');
+      router.refresh();
+    } catch (error) {
+      setSyncError(
+        error instanceof Error && error.message === 'payment_not_paid'
+          ? 'Stripe has not marked this checkout as paid yet. Please try again shortly.'
+          : 'Unable to sync payment right now. Please try again.',
+      );
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   return (
     <div className={`card border p-4 text-sm ${content.className}`}>
       <p className="font-semibold">{content.title}</p>
       <p className="mt-1">{content.description}</p>
       {!isConfirmed && (
-        <button
-          type="button"
-          className="btn-outline mt-3 text-xs"
-          onClick={() => router.refresh()}
-        >
-          Retry sync
-        </button>
+        <>
+          <button
+            type="button"
+            className="btn-outline mt-3 text-xs"
+            onClick={handleSyncPaymentStatus}
+            disabled={isSyncing}
+          >
+            {isSyncing ? 'Syncing…' : 'Sync Payment Status'}
+          </button>
+          {syncMessage && <p className="mt-2 text-xs text-green-700">{syncMessage}</p>}
+          {syncError && <p className="mt-2 text-xs text-red-700">{syncError}</p>}
+        </>
       )}
     </div>
   );
