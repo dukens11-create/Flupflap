@@ -3,8 +3,7 @@ import Link from 'next/link';
 import { getServerSession } from 'next-auth';
 import type { Metadata } from 'next';
 import { authOptions } from '@/lib/auth-options';
-import AdminRefundReviewList from '@/components/AdminRefundReviewList';
-import { getAdminRefundRequests } from '@/lib/admin-refunds';
+import AdminRefundsDataLoader from '@/components/AdminRefundsDataLoader';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Admin Refund Requests' };
@@ -17,7 +16,7 @@ export default async function AdminRefundsPage() {
       <main className="mx-auto max-w-3xl px-4 py-12">
         <div className="card p-8 text-center">
           <p className="text-4xl" aria-hidden="true">🔒</p>
-          <h1 className="mt-3 text-2xl font-black text-slate-900">Access denied</h1>
+          <h1 className="mt-3 text-2xl font-black text-slate-900">Admin access required.</h1>
           <p className="mt-2 text-sm text-slate-500">
             You must be an administrator to review refund requests.
           </p>
@@ -30,8 +29,6 @@ export default async function AdminRefundsPage() {
     );
   }
 
-  const { refundRequests, fetchFailed } = await getAdminRefundRequests();
-
   return (
     <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6">
       <div>
@@ -42,13 +39,7 @@ export default async function AdminRefundsPage() {
         </p>
       </div>
 
-      {fetchFailed && (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Unable to load refund requests. Please refresh the page to try again.
-        </div>
-      )}
-
-      <AdminRefundReviewList initialRefundRequests={refundRequests} allowEmptyState={!fetchFailed} />
+      <AdminRefundsDataLoader />
     </main>
   );
 }
