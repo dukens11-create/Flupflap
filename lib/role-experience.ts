@@ -66,7 +66,6 @@ const sellerNav: RoleNavItem[] = [
   { label: 'Refunds', href: '/seller/refunds' },
   { label: 'Payouts', href: '/seller/payouts' },
   { label: 'Verification Status', href: '/seller/verification-status' },
-  { label: 'Shop by Culture', href: '/seller/shop-by-culture' },
 ];
 
 const adminNav: RoleNavItem[] = [
@@ -101,20 +100,22 @@ function isRoleNavItemActiveInternal(
   if (!pathname) return false;
   if (visited.has(item)) return false;
   visited.add(item);
-  if (item.matchPrefixes?.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) {
+
+  if (item.href === pathname) return true;
+  if (item.matchPrefixes?.some((prefix) => pathname.startsWith(prefix))) return true;
+
+  if (
+    item.href !== '/'
+    && item.href !== '#'
+    && !item.href.includes('#')
+    && pathname.startsWith(`${item.href}/`)
+  ) {
     return true;
   }
-  if (item.href) {
-    const hrefPath = item.href.split('#')[0];
-    if (pathname === hrefPath) return true;
-  }
+
   return item.children?.some((child) => isRoleNavItemActiveInternal(child, pathname, visited)) ?? false;
 }
 
-export function isRoleNavItemActive(
-  item: RoleNavItem,
-  pathname?: string | null,
-  visited: Set<RoleNavItem> = new Set(),
-): boolean {
-  return isRoleNavItemActiveInternal(item, pathname, visited);
+export function isRoleNavItemActive(item: RoleNavItem, pathname: string | null | undefined): boolean {
+  return isRoleNavItemActiveInternal(item, pathname, new Set<RoleNavItem>());
 }
