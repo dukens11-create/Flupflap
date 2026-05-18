@@ -504,9 +504,10 @@ export default async function GarageSaleDetailPage({ params, searchParams }: Par
                   {sale.payments.map((payment) => (
                     <li key={payment.id} className="rounded-lg border border-slate-200 p-2">
                       <p className="font-semibold text-slate-800">{payment.status} · {formatPaymentAmount(payment.amountCents)}</p>
-                      <p className="text-slate-500">
-                        Last updated: {new Date(payment.updatedAt).toLocaleString()}
-                      </p>
+                      <p className="text-slate-500">Created: {new Date(payment.createdAt).toLocaleString()}</p>
+                      {new Date(payment.updatedAt).getTime() !== new Date(payment.createdAt).getTime() && (
+                        <p className="text-slate-500">Last updated: {new Date(payment.updatedAt).toLocaleString()}</p>
+                      )}
                       {payment.stripeCheckoutId && (
                         <p className="break-all text-slate-500">Session: {payment.stripeCheckoutId}</p>
                       )}

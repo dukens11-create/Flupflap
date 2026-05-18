@@ -122,8 +122,9 @@ export default function GarageSalePaymentStatusBanner({
       let data: GarageSalePaymentSyncResponse = {};
       try {
         data = await res.json();
-      } catch (parseError) {
-        console.warn('[garage-sale-payment-banner] failed to parse sync response JSON', parseError);
+      } catch {
+        setSyncError('Unexpected response while syncing payment. Please try again.');
+        return;
       }
       const reason = typeof data?.reason === 'string' ? data.reason : 'sync_failed';
       if (!res.ok || !data?.ok) {
