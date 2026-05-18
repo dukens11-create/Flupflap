@@ -108,7 +108,7 @@ async function finalizeGarageSaleCheckout(cs: Stripe.Checkout.Session) {
         status: 'APPROVED',
         paymentStatus: 'PAID',
         stripePaymentId: paymentIntentId,
-        stripeCheckoutId: cs.id,
+        stripeCheckoutId: sale.stripeCheckoutId ?? cs.id,
         paidAt: now,
         activatedAt: now,
         isFeatured: sale.listingType === 'FEATURED',
@@ -152,6 +152,12 @@ async function finalizeGarageSaleFromPaymentIntent(intent: Stripe.PaymentIntent)
     if (checkoutSession && checkoutSession.metadata?.type === 'garage_sale_listing') {
       return finalizeGarageSaleCheckout(checkoutSession);
     }
+    if (!checkoutSession) {
+      logWarn('No checkout session found for successful garage sale payment intent', {
+        tag: 'stripe/webhook',
+        paymentIntentId: intent.id,
+      });
+    }
   } catch (error) {
     logWarn('Unable to list checkout sessions by payment intent for garage sale', {
       tag: 'stripe/webhook',
@@ -191,7 +197,15 @@ async function finalizeGarageSaleFromPaymentIntent(intent: Stripe.PaymentIntent)
     }
   }
 
-  const amountPaidCents = intent.amount_received > 0 ? intent.amount_received : sale.totalPaidCents;
+  const amountPaidCents = intent.amount_received;
+  if (amountPaidCents <= 0) {
+    logWarn('Garage sale payment intent succeeded with non-positive amount_received', {
+      tag: 'stripe/webhook',
+      paymentIntentId: intent.id,
+      saleId,
+      amountReceived: amountPaidCents,
+    });
+  }
   const existingPayment = await prisma.garageSalePayment.findFirst({
     where: { saleId },
     orderBy: { createdAt: 'desc' },
