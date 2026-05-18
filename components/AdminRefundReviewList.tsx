@@ -14,7 +14,9 @@ type RefundResponse = {
   error?: string;
 };
 
-function shortId(value: string): string {
+const CLOSED_REFUND_STATUSES = new Set<AdminRefundListItem['status']>(['DENIED', 'REFUNDED']);
+
+function truncateId(value: string): string {
   return value.length > 10 ? `${value.slice(0, 10)}…` : value;
 }
 
@@ -24,7 +26,7 @@ function getEffectiveAmount(request: AdminRefundListItem): number {
 
 function isClosedRefund(request: AdminRefundListItem): boolean {
   // `resolvedAt` is set by "Mark as resolved" for non-refunded outcomes, so it should also lock actions.
-  return request.status === 'DENIED' || request.status === 'REFUNDED' || Boolean(request.resolvedAt);
+  return CLOSED_REFUND_STATUSES.has(request.status) || Boolean(request.resolvedAt);
 }
 
 export default function AdminRefundReviewList({
@@ -130,10 +132,10 @@ export default function AdminRefundReviewList({
           return (
             <div key={request.id} className="card p-4 space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-xs font-mono text-slate-500">{shortId(request.id)}</p>
+                <p className="text-xs font-mono text-slate-500">{truncateId(request.id)}</p>
                 <span className={`badge ${refundStatusBadge(request.status)}`}>{REFUND_STATUS_LABELS[request.status]}</span>
               </div>
-              <p className="text-sm"><span className="font-semibold">Order:</span> {shortId(request.orderId)}</p>
+              <p className="text-sm"><span className="font-semibold">Order:</span> {truncateId(request.orderId)}</p>
               <p className="text-sm"><span className="font-semibold">Buyer:</span> {request.buyer}</p>
               <p className="text-sm"><span className="font-semibold">Seller:</span> {request.seller}</p>
               <p className="text-sm"><span className="font-semibold">Amount:</span> {dollars(amount)}</p>
@@ -209,8 +211,8 @@ export default function AdminRefundReviewList({
 
               return (
                 <tr key={request.id} className="align-top">
-                  <td className="px-3 py-3 font-mono text-xs text-slate-600" title={request.id}>{shortId(request.id)}</td>
-                  <td className="px-3 py-3 font-mono text-xs text-slate-600" title={request.orderId}>{shortId(request.orderId)}</td>
+                  <td className="px-3 py-3 font-mono text-xs text-slate-600" title={request.id}>{truncateId(request.id)}</td>
+                  <td className="px-3 py-3 font-mono text-xs text-slate-600" title={request.orderId}>{truncateId(request.orderId)}</td>
                   <td className="px-3 py-3">{request.buyer}</td>
                   <td className="px-3 py-3">{request.seller}</td>
                   <td className="px-3 py-3">{dollars(amount)}</td>
@@ -231,7 +233,7 @@ export default function AdminRefundReviewList({
                     <span className={`badge ${refundStatusBadge(request.status)}`}>{REFUND_STATUS_LABELS[request.status]}</span>
                   </td>
                   <td className="px-3 py-3 font-mono text-xs text-slate-600" title={request.stripePaymentIntentId ?? ''}>
-                    {request.stripePaymentIntentId ? shortId(request.stripePaymentIntentId) : '—'}
+                    {request.stripePaymentIntentId ? truncateId(request.stripePaymentIntentId) : '—'}
                   </td>
                   <td className="px-3 py-3 text-xs text-slate-500">{new Date(request.createdAt).toLocaleString()}</td>
                   <td className="px-3 py-3">

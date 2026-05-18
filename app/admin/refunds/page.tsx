@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { getServerSession } from 'next-auth';
 import type { Metadata } from 'next';
 import { authOptions } from '@/lib/auth-options';
-import { getAdminRefunds } from '@/lib/admin-refunds';
+import { getRefundsForAdminDashboard } from '@/lib/admin-refunds';
 import AdminRefundReviewList from '@/components/AdminRefundReviewList';
 
 export const dynamic = 'force-dynamic';
@@ -14,7 +14,7 @@ export default async function AdminRefundsPage() {
   if (!session?.user) redirect('/login');
   if (session.user.role !== 'ADMIN') redirect('/');
 
-  const { refunds, fetchFailed } = await getAdminRefunds();
+  const { refunds, fetchFailed } = await getRefundsForAdminDashboard();
 
   return (
     <main className="mx-auto max-w-5xl space-y-6">

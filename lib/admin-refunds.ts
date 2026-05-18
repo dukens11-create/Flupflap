@@ -18,7 +18,7 @@ export type AdminRefundListItem = {
   resolvedAt: string | null;
 };
 
-export async function getAdminRefunds(): Promise<{ refunds: AdminRefundListItem[]; fetchFailed: boolean }> {
+export async function getRefundsForAdminDashboard(): Promise<{ refunds: AdminRefundListItem[]; fetchFailed: boolean }> {
   try {
     const refundRequests = await prisma.refundRequest.findMany({
       orderBy: { createdAt: 'desc' },
