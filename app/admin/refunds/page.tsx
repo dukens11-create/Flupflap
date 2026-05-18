@@ -3,7 +3,8 @@ import Link from 'next/link';
 import { getServerSession } from 'next-auth';
 import type { Metadata } from 'next';
 import { authOptions } from '@/lib/auth-options';
-import AdminRefundsDataLoader from '@/components/AdminRefundsDataLoader';
+import { getAdminRefundRequests } from '@/lib/admin-refunds';
+import AdminRefundReviewList from '@/components/AdminRefundReviewList';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Admin Refund Requests' };
@@ -29,6 +30,8 @@ export default async function AdminRefundsPage() {
     );
   }
 
+  const { refundRequests, fetchFailed } = await getAdminRefundRequests();
+
   return (
     <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6">
       <div>
@@ -39,7 +42,13 @@ export default async function AdminRefundsPage() {
         </p>
       </div>
 
-      <AdminRefundsDataLoader />
+      {fetchFailed ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Unable to load refund requests. Please refresh the page or contact support if the problem persists.
+        </div>
+      ) : (
+        <AdminRefundReviewList initialRefundRequests={refundRequests} allowEmptyState />
+      )}
     </main>
   );
 }
