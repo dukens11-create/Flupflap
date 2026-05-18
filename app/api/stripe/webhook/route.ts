@@ -210,6 +210,7 @@ async function finalizeGarageSaleFromPaymentIntent(intent: Stripe.PaymentIntent)
       saleId,
       amountReceived: amountPaidCents,
     });
+    return new NextResponse('ok', { status: 200 });
   }
   const existingPayment = await findLatestGarageSalePayment(saleId);
 
@@ -243,7 +244,6 @@ async function finalizeGarageSaleFromPaymentIntent(intent: Stripe.PaymentIntent)
           sellerId,
           amountCents: amountPaidCents,
           status: 'PAID',
-          stripeCheckoutId: sale.stripeCheckoutId,
           stripePaymentId: intent.id,
           stripeReceiptUrl: receiptUrl,
         },
