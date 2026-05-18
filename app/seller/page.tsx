@@ -1142,7 +1142,21 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                 <div key={o.id} className="card p-4">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs text-slate-400 font-mono">{o.id.slice(-8)}</span>
-                    <span className={`badge ${o.status === 'PAID' || o.status === 'SHIPPED' || o.status === 'DELIVERED' ? 'badge-green' : 'badge-yellow'}`}>{o.status}</span>
+                    <span
+                      className={`badge ${
+                        o.status === 'REFUNDED'
+                          ? 'badge-slate'
+                          : o.status === 'PARTIALLY_REFUNDED'
+                            ? 'badge-blue'
+                            : o.status === 'REFUND_REQUESTED'
+                              ? 'badge-yellow'
+                              : o.status === 'PAID' || o.status === 'SHIPPED' || o.status === 'DELIVERED'
+                                ? 'badge-green'
+                                : 'badge-yellow'
+                      }`}
+                    >
+                      {o.status}
+                    </span>
                   </div>
                   {o.items.map(i => (
                     <p key={i.id} className="text-sm text-slate-700">{i.product.title} × {i.quantity}</p>

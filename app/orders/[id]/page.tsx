@@ -7,6 +7,7 @@ import { getStoredLineSubtotalCents } from '@/lib/commission';
 import { buildTrackingUrl } from '@/lib/shipping';
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import OrderRefundRequestCard from '@/components/OrderRefundRequestCard';
 
 export const metadata: Metadata = { title: 'Order Details' };
 
@@ -15,6 +16,8 @@ const STATUS_LABELS: Record<string, string> = {
   PAID: 'Paid',
   SHIPPED: 'Shipped',
   DELIVERED: 'Delivered',
+  REFUND_REQUESTED: 'Refund Requested',
+  PARTIALLY_REFUNDED: 'Partially Refunded',
   CANCELLED: 'Cancelled',
   REFUNDED: 'Refunded',
   READY_FOR_PICKUP: 'Ready for Pickup',
@@ -27,6 +30,8 @@ function statusBadge(status: string) {
     PAID: 'badge-blue',
     SHIPPED: 'badge-green',
     DELIVERED: 'badge-green',
+    REFUND_REQUESTED: 'badge-yellow',
+    PARTIALLY_REFUNDED: 'badge-blue',
     CANCELLED: 'badge-red',
     REFUNDED: 'badge-slate',
     READY_FOR_PICKUP: 'badge-blue',
@@ -52,6 +57,22 @@ export default async function OrderDetailPage({
     },
     include: {
       buyer: { select: { name: true, email: true } },
+      refundRequest: {
+        select: {
+          id: true,
+          status: true,
+          reason: true,
+          details: true,
+          requestedAmountCents: true,
+          approvedAmountCents: true,
+          adminNotes: true,
+          sellerResponse: true,
+          stripeRefundId: true,
+          createdAt: true,
+          updatedAt: true,
+          resolvedAt: true,
+        },
+      },
       items: {
         include: {
           product: {
@@ -69,6 +90,14 @@ export default async function OrderDetailPage({
 
   if (!order) notFound();
   const trackingUrl = order.trackingUrl ?? buildTrackingUrl(order.carrier ?? order.shippingCarrier, order.trackingNumber);
+  const refundRequest = order.refundRequest
+    ? {
+        ...order.refundRequest,
+        createdAt: order.refundRequest.createdAt.toISOString(),
+        updatedAt: order.refundRequest.updatedAt.toISOString(),
+        resolvedAt: order.refundRequest.resolvedAt?.toISOString() ?? null,
+      }
+    : null;
 
   return (
     <main className="max-w-2xl mx-auto">
@@ -134,6 +163,13 @@ export default async function OrderDetailPage({
           <span>{dollars(order.totalCents)}</span>
         </div>
       </div>
+
+      <OrderRefundRequestCard
+        orderId={order.id}
+        orderStatus={order.status}
+        totalCents={order.totalCents}
+        initialRefundRequest={refundRequest}
+      />
 
       {/* Pickup info */}
       {order.isPickup && (

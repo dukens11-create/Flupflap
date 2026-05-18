@@ -125,10 +125,20 @@ enum OrderStatus {
   PAID
   SHIPPED
   DELIVERED
+  REFUND_REQUESTED
+  PARTIALLY_REFUNDED
   CANCELLED
   REFUNDED
   READY_FOR_PICKUP
   PICKED_UP
+}
+
+enum RefundRequestStatus {
+  REQUESTED
+  SELLER_REVIEW
+  APPROVED
+  DENIED
+  REFUNDED
 }
 
 // ── Garage Sales ──────────────────────────────────────────────────────────────
@@ -216,6 +226,8 @@ model User {
   promotions               Promotion[]
   salesPromotions          SalesPromotion[]
   notifications            Notification[]
+  buyerRefundRequests      RefundRequest[]           @relation("RefundRequestBuyer")
+  sellerRefundRequests     RefundRequest[]           @relation("RefundRequestSeller")
   sellerPlanId             String?
   sellerPlan               SellerPlan?               @relation(fields: [sellerPlanId], references: [id])
   checkoutSessionSnapshots CheckoutSessionSnapshot[]
@@ -421,6 +433,33 @@ model Order {
   createdAt             DateTime    @default(now())
   updatedAt             DateTime    @updatedAt
   items                 OrderItem[]
+  refundRequest         RefundRequest?
+}
+
+model RefundRequest {
+  id                   String              @id @default(cuid())
+  orderId              String              @unique
+  order                Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  buyerId              String
+  buyer                User                @relation("RefundRequestBuyer", fields: [buyerId], references: [id])
+  sellerId             String
+  seller               User                @relation("RefundRequestSeller", fields: [sellerId], references: [id])
+  status               RefundRequestStatus @default(REQUESTED)
+  reason               String
+  details              String?
+  evidenceUrls         String[]            @default([])
+  requestedAmountCents Int
+  approvedAmountCents  Int?
+  adminNotes           String?
+  sellerResponse       String?
+  stripeRefundId       String?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  resolvedAt           DateTime?
+
+  @@index([buyerId, createdAt])
+  @@index([sellerId, createdAt])
+  @@index([status, createdAt])
 }
 
 model OrderItem {
