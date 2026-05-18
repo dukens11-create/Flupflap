@@ -126,6 +126,13 @@ export async function POST(req: Request, { params }: Params) {
       durationDays: String(pricing.durationDays),
       repostOfId: source.id,
     },
+    payment_intent_data: {
+      metadata: {
+        type: 'garage_sale_listing',
+        saleId: repost.id,
+        sellerId: repost.sellerId,
+      },
+    },
   });
 
   await prisma.$transaction([

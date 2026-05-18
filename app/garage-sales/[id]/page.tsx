@@ -11,16 +11,63 @@ import GarageSaleLivePanel from '@/components/GarageSaleLivePanel';
 import GarageSaleBuyerLiveView from '@/components/GarageSaleBuyerLiveView';
 import GarageSaleShareButton from '@/components/GarageSaleShareButton';
 import { deriveGarageSaleLifecycle } from '@/lib/garage-sale-lifecycle';
+import { createPageMetadata } from '@/lib/seo';
 
 export const dynamic = 'force-dynamic';
 
 type Params = { params: Promise<{ id: string }> };
+const META_DESCRIPTION_MAX_LENGTH = 160;
+
+function truncateMetaDescription(input: string): string {
+  const trimmed = input.trim();
+  if (trimmed.length <= META_DESCRIPTION_MAX_LENGTH) return trimmed;
+
+  const truncated = trimmed.slice(0, META_DESCRIPTION_MAX_LENGTH);
+  const lastSpace = truncated.lastIndexOf(' ');
+  const safeCutoff = lastSpace > 80 ? lastSpace : META_DESCRIPTION_MAX_LENGTH;
+  return `${truncated.slice(0, safeCutoff).trimEnd()}…`;
+}
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { id } = await params;
-  const sale = await prisma.garageSale.findUnique({ where: { id }, select: { title: true, city: true, state: true } });
-  if (!sale) return { title: 'Garage Sale Not Found' };
-  return { title: `${sale.title} – ${sale.city}, ${sale.state} | FlupFlap` };
+  const sale = await prisma.garageSale.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      title: true,
+      city: true,
+      state: true,
+      description: true,
+      status: true,
+      paymentStatus: true,
+      isArchived: true,
+      startDate: true,
+      endDate: true,
+      isLive: true,
+      isSpam: true,
+    },
+  });
+  if (!sale) {
+    return createPageMetadata({
+      title: 'Garage Sale Not Found',
+      description: 'The requested garage sale could not be found.',
+      noIndex: true,
+    });
+  }
+
+  const lifecycle = deriveGarageSaleLifecycle(sale);
+  const isPubliclyIndexable = lifecycle.publiclyVisible && !sale.isSpam;
+  const trimmedDescription = sale.description?.trim();
+  const description = trimmedDescription
+    ? truncateMetaDescription(trimmedDescription)
+    : `View sale details for ${sale.title} in ${sale.city}, ${sale.state}.`;
+
+  return createPageMetadata({
+    title: `${sale.title} – ${sale.city}, ${sale.state} | FlupFlap`,
+    description,
+    path: `/garage-sales/${sale.id}`,
+    noIndex: !isPubliclyIndexable,
+  });
 }
 
 const SALE_TYPE_LABELS: Record<string, string> = {
