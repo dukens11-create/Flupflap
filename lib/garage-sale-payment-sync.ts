@@ -103,7 +103,7 @@ export async function syncGarageSaleCheckoutSessionForSeller(params: {
   sellerId: string;
 }): Promise<{ synced: boolean; reason?: string }> {
   const { checkoutSessionId, saleId, sellerId } = params;
-  if (!checkoutSessionId || !saleId || !sellerId) return { synced: false, reason: 'missing_inputs' };
+  if (!checkoutSessionId || !saleId || !sellerId) return { synced: false, reason: 'invalid_inputs' };
 
   const sale = await prisma.garageSale.findUnique({
     where: { id: saleId },

@@ -55,6 +55,7 @@ const PAYMENT_LABEL: Record<string, string> = {
   FAILED: 'Failed',
   REFUNDED: 'Refunded',
 };
+const PAID_QUERY_FLAG = '1';
 
 function shouldWarnOnSyncFailure(reason?: string) {
   return reason !== 'already_paid' && reason !== 'payment_not_paid';
@@ -70,7 +71,7 @@ export default async function SellerGarageSalesPage({
   const saleId = typeof sp.saleId === 'string' ? sp.saleId : undefined;
   const sessionId = typeof sp.session_id === 'string' ? sp.session_id : undefined;
 
-  if (sp.paid === '1' && saleId && sessionId) {
+  if (sp.paid === PAID_QUERY_FLAG && saleId && sessionId) {
     const syncResult = await syncGarageSaleCheckoutSessionForSeller({
       checkoutSessionId: sessionId,
       saleId,
@@ -131,7 +132,7 @@ export default async function SellerGarageSalesPage({
           Garage sale created successfully. Use the actions below to open or edit it.
         </div>
       )}
-      {sp.paid === '1' && (
+      {sp.paid === PAID_QUERY_FLAG && (
         <div className={`card p-4 text-sm ${focusedSaleLifecycle?.state === 'PAYMENT_PENDING' ? 'border-yellow-200 bg-yellow-50 text-yellow-900' : 'border-green-200 bg-green-50 text-green-900'}`}>
           {focusedSaleLifecycle?.state === 'PAYMENT_PENDING'
             ? 'Payment confirmation is still pending. We will publish your listing as soon as Stripe confirms it.'

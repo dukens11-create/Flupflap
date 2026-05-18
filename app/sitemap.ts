@@ -29,7 +29,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: absoluteUrl('/legal/refund'), lastModified: now, changeFrequency: 'yearly', priority: 0.2 },
   ];
 
-  // ── Category pages (homepage query-param URLs) ─────────────────────────────
+  // ── Category pages ───────────────────────────────────────────────────────────
+  // Keep both URL forms:
+  // - `/?category=...` deep-links to the homepage filtered experience users share.
+  // - `/category/{slug}` provides clean canonical discovery routes for SEO.
   const categoryEntries = flattenCategoryEntries(DEFAULT_CATEGORY_TREE);
   const categoryRoutes: MetadataRoute.Sitemap = categoryEntries.map((entry) => ({
     url: absoluteUrl(`/?category=${entry.id}`),
