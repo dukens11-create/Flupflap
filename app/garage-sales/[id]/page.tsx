@@ -493,6 +493,15 @@ export default async function GarageSaleDetailPage({ params, searchParams }: Par
                   <a href="mailto:support@flupflap.com?subject=Garage%20sale%20payment%20pending" className="inline-block font-semibold text-[var(--ff-primary-navy)] hover:underline">
                     Contact support
                   </a>
+                  {sale.stripeCheckoutId && (
+                    <form action={`/garage-sales/${sale.id}`} method="GET" className="mt-2">
+                      <input type="hidden" name="payment" value="success" />
+                      <input type="hidden" name="session_id" value={sale.stripeCheckoutId} />
+                      <button type="submit" className="btn-outline text-xs">
+                        Sync payment status
+                      </button>
+                    </form>
+                  )}
                 </div>
               )}
               {sale.paymentStatus === 'PAID' && isOwner && (
