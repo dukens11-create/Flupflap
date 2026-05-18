@@ -501,26 +501,32 @@ export default async function GarageSaleDetailPage({ params, searchParams }: Par
                 <p className="text-xs text-slate-500">No payments yet.</p>
               ) : (
                 <ul className="space-y-2 text-xs">
-                  {sale.payments.map((payment) => (
-                    <li key={payment.id} className="rounded-lg border border-slate-200 p-2">
-                      <p className="font-semibold text-slate-800">{payment.status} · {formatPaymentAmount(payment.amountCents)}</p>
-                      <p className="text-slate-500">Created: {new Date(payment.createdAt).toLocaleString()}</p>
-                      {new Date(payment.updatedAt).getTime() !== new Date(payment.createdAt).getTime() && (
-                        <p className="text-slate-500">Last updated: {new Date(payment.updatedAt).toLocaleString()}</p>
-                      )}
-                      {payment.stripeCheckoutId && (
-                        <p className="break-all text-slate-500">Session: {payment.stripeCheckoutId}</p>
-                      )}
-                      {payment.stripePaymentId && (
-                        <p className="break-all text-slate-500">Transaction: {payment.stripePaymentId}</p>
-                      )}
-                      {payment.stripeReceiptUrl && (
-                        <a href={payment.stripeReceiptUrl} target="_blank" rel="noopener noreferrer" className="text-[var(--ff-primary-navy)] hover:underline">
-                          View receipt
-                        </a>
-                      )}
-                    </li>
-                  ))}
+                  {sale.payments.map((payment) => {
+                    const createdAt = new Date(payment.createdAt);
+                    const updatedAt = new Date(payment.updatedAt);
+                    const createdAtLabel = createdAt.toLocaleString();
+                    const updatedAtLabel = updatedAt.toLocaleString();
+                    return (
+                      <li key={payment.id} className="rounded-lg border border-slate-200 p-2">
+                        <p className="font-semibold text-slate-800">{payment.status} · {formatPaymentAmount(payment.amountCents)}</p>
+                        <p className="text-slate-500">Created: {createdAtLabel}</p>
+                        {updatedAt.getTime() !== createdAt.getTime() && (
+                          <p className="text-slate-500">Last updated: {updatedAtLabel}</p>
+                        )}
+                        {payment.stripeCheckoutId && (
+                          <p className="break-all text-slate-500">Session: {payment.stripeCheckoutId}</p>
+                        )}
+                        {payment.stripePaymentId && (
+                          <p className="break-all text-slate-500">Transaction: {payment.stripePaymentId}</p>
+                        )}
+                        {payment.stripeReceiptUrl && (
+                          <a href={payment.stripeReceiptUrl} target="_blank" rel="noopener noreferrer" className="text-[var(--ff-primary-navy)] hover:underline">
+                            View receipt
+                          </a>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </div>
