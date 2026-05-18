@@ -38,8 +38,14 @@ export function getGarageSaleLiveControlsBlockMessage(sale: GarageSaleVisibility
   if (reason === 'PAYMENT_UNPAID') {
     return 'Live controls are unavailable because payment is not completed for this listing.';
   }
+  if (sale.status === 'PENDING') {
+    return 'Your listing is pending review. Live controls are unavailable until an admin approves it.';
+  }
+  if (sale.status === 'REJECTED') {
+    return 'Your listing was rejected. Update details and try again before using live controls.';
+  }
   if (reason === 'NOT_APPROVED') {
-    return 'Live controls are unavailable until an admin approves this listing.';
+    return 'Live controls are unavailable until this listing is approved and visible.';
   }
   if (reason === 'HIDDEN') {
     return 'Live controls are unavailable while this listing is hidden.';
@@ -50,5 +56,5 @@ export function getGarageSaleLiveControlsBlockMessage(sale: GarageSaleVisibility
   if (reason === 'SPAM') {
     return 'Live controls are unavailable while this listing is flagged for review.';
   }
-  return null;
+  return 'Live controls are unavailable for this listing right now.';
 }

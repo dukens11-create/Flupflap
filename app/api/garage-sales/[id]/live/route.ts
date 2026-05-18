@@ -28,10 +28,7 @@ export async function POST(req: Request, { params }: Params) {
   }
 
   if (!isGarageSalePubliclyVisible(sale)) {
-    return NextResponse.json(
-      { error: getGarageSaleLiveControlsBlockMessage(sale) ?? 'Live controls are unavailable for this listing.' },
-      { status: 422 },
-    );
+    return NextResponse.json({ error: getGarageSaleLiveControlsBlockMessage(sale) }, { status: 422 });
   }
 
   let body: unknown;
