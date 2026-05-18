@@ -60,8 +60,8 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   const [loading, setLoading] = useState(false);
   const [cameraStatus, setCameraStatus] = useState<CameraStatus>('idle');
   const [viewerCount, setViewerCount] = useState(0);
-  const [preferredFacingMode, setPreferredFacingMode] = useState<'user' | 'environment'>('user');
   const [canSwitchCamera, setCanSwitchCamera] = useState(false);
+  const [currentCamera, setCurrentCamera] = useState<'front' | 'back'>('front');
 
   const logMobileCameraIssue = useCallback((issue: string, details?: Record<string, unknown>) => {
     if (details) {
@@ -191,10 +191,6 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     micOnRef.current = micOn;
   }, [micOn]);
 
-  useEffect(() => {
-    preferredFacingModeRef.current = preferredFacingMode;
-  }, [preferredFacingMode]);
-
   const ensurePreviewPlayback = useCallback(async () => {
     const video = videoRef.current;
     if (!video) return false;
@@ -320,6 +316,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         videoRef.current.srcObject = stream;
       }
       setCamOn(true);
+      setCurrentCamera(nextFacingMode === 'user' ? 'front' : 'back');
       const previewStarted = await ensurePreviewPlayback();
       if (!previewStarted) {
         logMobileCameraIssue('stream initialization failure', { reason: 'preview playback blocked' });
@@ -377,10 +374,95 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
 
   const handleSwitchCamera = useCallback(async () => {
     if (cameraStatus === 'connecting') return;
-    const nextFacingMode = preferredFacingMode === 'user' ? 'environment' : 'user';
-    setPreferredFacingMode(nextFacingMode);
-    await startCamera(nextFacingMode);
-  }, [cameraStatus, preferredFacingMode, startCamera]);
+    const nextCamera = currentCamera === 'front' ? 'back' : 'front';
+    const nextFacingMode = nextCamera === 'back' ? 'environment' : 'user';
+
+    setCameraStatus('connecting');
+    setError(null);
+
+    // Stop current video tracks only; keep audio tracks alive.
+    const existingAudioTracks = streamRef.current?.getAudioTracks() ?? [];
+    streamRef.current?.getVideoTracks().forEach((t) => t.stop());
+
+    let newVideoStream: MediaStream | null = null;
+    try {
+      if (nextCamera === 'back') {
+        try {
+          // First attempt: exact environment constraint.
+          newVideoStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { exact: 'environment' } },
+            audio: false,
+          });
+        } catch {
+          // Fallback: non-exact environment constraint.
+          try {
+            newVideoStream = await navigator.mediaDevices.getUserMedia({
+              video: { facingMode: 'environment' },
+              audio: false,
+            });
+          } catch (err) {
+            const name = err instanceof DOMException ? err.name : '';
+            logMobileCameraIssue('media device unavailable', { reason: 'back camera not found', error: name });
+            setError('Back camera is not available on this device.');
+            setCameraStatus('ready');
+            return;
+          }
+        }
+      } else {
+        newVideoStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user' },
+          audio: false,
+        });
+      }
+
+      const [newVideoTrack] = newVideoStream.getVideoTracks();
+      if (!newVideoTrack) {
+        newVideoStream.getTracks().forEach((t) => t.stop());
+        setError(nextCamera === 'back' ? 'Back camera is not available on this device.' : 'Camera unavailable.');
+        setCameraStatus('ready');
+        return;
+      }
+
+      // Build a unified stream: new video track + existing audio tracks.
+      const newStream = new MediaStream([newVideoTrack, ...existingAudioTracks]);
+      streamRef.current = newStream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = newStream;
+      }
+
+      // If live, replace the video track in the peer connection without renegotiating.
+      if (isLive && peerRef.current) {
+        const videoSender = peerRef.current.getSenders().find((s) => s.track?.kind === 'video');
+        if (videoSender) {
+          try {
+            await videoSender.replaceTrack(newVideoTrack);
+          } catch (replaceErr) {
+            logMobileCameraIssue('camera constraint fallback', {
+              reason: 'replaceTrack failed during live switch',
+              error: replaceErr instanceof Error ? replaceErr.message : 'unknown',
+            });
+          }
+        }
+      }
+
+      setCurrentCamera(nextCamera);
+      // Keep the ref in sync so startCamera uses the correct default facing mode.
+      preferredFacingModeRef.current = nextFacingMode;
+      try {
+        await ensurePreviewPlayback();
+      } catch {
+        // ensurePreviewPlayback handles its own state; set a safe fallback if it throws.
+        setCameraStatus('ready');
+      }
+    } catch (err) {
+      logMobileCameraIssue('stream initialization failure', {
+        reason: 'camera switch failed',
+        error: err instanceof Error ? err.message : 'unknown',
+      });
+      setError(err instanceof Error ? err.message : 'Failed to switch camera.');
+      setCameraStatus('ready');
+    }
+  }, [cameraStatus, currentCamera, ensurePreviewPlayback, isLive, logMobileCameraIssue]);
 
   const handleGoLiveClick = () => {
     setShowWarning(true);
@@ -691,6 +773,18 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
             >
               <VideoOff size={13} /> Stop Camera
             </button>
+            {canSwitchCamera && (
+              <button
+                type="button"
+                onClick={() => void handleSwitchCamera()}
+                disabled={loading || cameraStatus === 'connecting'}
+                className="btn-outline flex items-center justify-center gap-1.5 px-3 text-xs disabled:opacity-60"
+                title="Switch camera"
+              >
+                <RefreshCcw size={13} />
+                <span>{currentCamera === 'front' ? 'Use Back Camera' : 'Use Front Camera'}</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={toggleMic}
@@ -701,17 +795,6 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
               {micOn ? <Mic size={13} /> : <MicOff size={13} />}
               <span className="sm:hidden">{micOn ? 'Mute Mic' : 'Unmute Mic'}</span>
             </button>
-            {canSwitchCamera && !isLive && (
-              <button
-                type="button"
-                onClick={() => void handleSwitchCamera()}
-                disabled={loading || cameraStatus === 'connecting'}
-                className="btn-outline flex items-center justify-center gap-1.5 px-3 text-xs disabled:opacity-60"
-                title="Switch camera"
-              >
-                <RefreshCcw size={13} /> <span className="sm:hidden">Switch Camera</span>
-              </button>
-            )}
           </>
         )}
       </div>
