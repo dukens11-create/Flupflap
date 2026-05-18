@@ -34,7 +34,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   try {
     const updated = await rejectRefundRequest({
       id,
-      adminNotes: parsed.data.adminNote,
+      adminNote: parsed.data.adminNote,
     });
 
     return NextResponse.json(updated);

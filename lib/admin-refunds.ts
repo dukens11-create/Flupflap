@@ -181,12 +181,12 @@ export async function approveRefundRequest({
   id,
   adminId,
   approvedAmountCents,
-  adminNotes,
+  adminNote,
 }: {
   id: string;
   adminId: string;
   approvedAmountCents?: number;
-  adminNotes?: string;
+  adminNote?: string;
 }) {
   const refundRequest = await getRefundRequestForAdminAction(id);
   ensureRefundRequestIsOpen(refundRequest.status);
@@ -199,7 +199,7 @@ export async function approveRefundRequest({
     approvedAmountCents ?? refundRequest.requestedAmountCents,
     refundRequest.order.totalCents,
   );
-  const mergedNotes = adminNotes?.trim() || null;
+  const normalizedAdminNote = adminNote?.trim() || null;
 
   const stripeRefund = await stripe.refunds.create({
     payment_intent: refundRequest.order.stripePaymentIntentId,
@@ -225,7 +225,7 @@ export async function approveRefundRequest({
       data: {
         status: 'REFUNDED',
         approvedAmountCents: normalizedAmountCents,
-        adminNotes: mergedNotes,
+        adminNotes: normalizedAdminNote,
         stripeRefundId: stripeRefund.id,
         resolvedAt,
       },
@@ -256,10 +256,10 @@ export async function approveRefundRequest({
 
 export async function rejectRefundRequest({
   id,
-  adminNotes,
+  adminNote,
 }: {
   id: string;
-  adminNotes?: string;
+  adminNote?: string;
 }) {
   const refundRequest = await getRefundRequestForAdminAction(id);
   ensureRefundRequestIsOpen(refundRequest.status);
@@ -268,7 +268,7 @@ export async function rejectRefundRequest({
     where: { id: refundRequest.id },
     data: {
       status: 'DENIED',
-      adminNotes: adminNotes?.trim() || null,
+      adminNotes: adminNote?.trim() || null,
       resolvedAt: new Date(),
     },
   });
@@ -289,10 +289,10 @@ export async function rejectRefundRequest({
 
 export async function resolveRefundRequest({
   id,
-  adminNotes,
+  adminNote,
 }: {
   id: string;
-  adminNotes?: string;
+  adminNote?: string;
 }) {
   const refundRequest = await getRefundRequestForAdminAction(id);
 
@@ -307,7 +307,7 @@ export async function resolveRefundRequest({
   return prisma.refundRequest.update({
     where: { id: refundRequest.id },
     data: {
-      adminNotes: adminNotes?.trim() || refundRequest.adminNotes,
+      adminNotes: adminNote?.trim() || refundRequest.adminNotes,
       resolvedAt: new Date(),
       status: refundRequest.stripeRefundId && refundRequest.status === 'APPROVED' ? 'REFUNDED' : refundRequest.status,
     },

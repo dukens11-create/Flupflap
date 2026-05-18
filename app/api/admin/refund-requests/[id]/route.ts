@@ -37,13 +37,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const updated = parsed.data.action === 'deny'
       ? await rejectRefundRequest({
           id,
-          adminNotes: parsed.data.adminNotes,
+          adminNote: parsed.data.adminNotes,
         })
       : await approveRefundRequest({
           id,
           adminId: session.user.id,
           approvedAmountCents: parsed.data.approvedAmountCents,
-          adminNotes: parsed.data.adminNotes,
+          adminNote: parsed.data.adminNotes,
         });
 
     return NextResponse.json(updated);

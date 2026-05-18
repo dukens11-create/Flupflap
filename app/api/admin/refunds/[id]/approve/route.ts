@@ -37,7 +37,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       id,
       adminId: session.user.id,
       approvedAmountCents: parsed.data.approvedAmountCents,
-      adminNotes: parsed.data.adminNote,
+      adminNote: parsed.data.adminNote,
     });
 
     return NextResponse.json(updated);
