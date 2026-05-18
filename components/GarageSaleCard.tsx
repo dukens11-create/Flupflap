@@ -19,6 +19,7 @@ export type GarageSaleSummary = {
   priceRangeMax: number | null;
   isFeatured: boolean;
   isLive: boolean;
+  liveViewerCount?: number | null;
   viewCount: number;
   latitude?: number | null;
   longitude?: number | null;
@@ -94,6 +95,11 @@ export default function GarageSaleCard({ sale }: { sale: GarageSaleSummary }) {
         {sale.isLive && (
           <span className="absolute left-3 top-3 rounded-full bg-red-500 px-2.5 py-1 text-[11px] font-bold text-white shadow-sm animate-pulse">
             🔴 LIVE NOW
+          </span>
+        )}
+        {sale.isLive && (sale.liveViewerCount ?? 0) > 0 && (
+          <span className="absolute right-3 top-3 rounded-full bg-slate-900/70 px-2 py-0.5 text-[11px] font-semibold text-white">
+            👀 {sale.liveViewerCount} watching
           </span>
         )}
         {openNow && !sale.isLive && (

@@ -1,9 +1,13 @@
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { logInfo, logWarn } from '@/lib/logger';
 import {
   DEFAULT_GARAGE_SALE_PRICING_SETTINGS,
   type GarageSalePricingSettings,
 } from '@/lib/garage-sale-pricing';
+
+// Matches the window used in the live signaling route (35-second active heartbeat window)
+const ACTIVE_VIEWER_WINDOW_MS = 35_000;
 
 export async function getGarageSalePricingSettings(): Promise<GarageSalePricingSettings> {
   return { ...DEFAULT_GARAGE_SALE_PRICING_SETTINGS };
@@ -44,6 +48,37 @@ export function buildPublicGarageSaleWhere(now = new Date()) {
       { endDate: { gte: now } },
     ],
   };
+}
+
+/**
+ * Batch-fetches active viewer counts for a list of live sale IDs.
+ * Uses a single SQL query to avoid N+1 DB calls in listing/browse views.
+ * Returns a Map of saleId → viewer count (only entries with count > 0 are included).
+ */
+export async function batchGetLiveViewerCounts(saleIds: string[]): Promise<Map<string, number>> {
+  if (saleIds.length === 0) return new Map();
+
+  const activeSince = new Date(Date.now() - ACTIVE_VIEWER_WINDOW_MS);
+
+  const rows = await prisma.$queryRaw<Array<{ saleId: string; viewerCount: bigint | number }>>(
+    Prisma.sql`
+      SELECT "saleId", COUNT(DISTINCT payload->>'viewerId') AS "viewerCount"
+      FROM "GarageSaleLiveSignal"
+      WHERE "saleId" = ANY(${saleIds}::text[])
+        AND sender = 'BUYER'
+        AND kind = 'VIEWER_HEARTBEAT'
+        AND "createdAt" >= ${activeSince}
+        AND COALESCE(payload->>'viewerId', '') <> ''
+      GROUP BY "saleId"
+    `,
+  );
+
+  const map = new Map<string, number>();
+  for (const row of rows) {
+    const count = typeof row.viewerCount === 'bigint' ? Number(row.viewerCount) : row.viewerCount;
+    if (count > 0) map.set(row.saleId, count);
+  }
+  return map;
 }
 
 export function extractGarageSaleId(routeParam: string) {
