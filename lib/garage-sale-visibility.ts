@@ -1,32 +1,60 @@
+import { deriveGarageSaleLifecycle } from '@/lib/garage-sale-lifecycle';
+
 type GarageSaleVisibilityInput = {
   status: string;
   paymentStatus: string;
   isArchived?: boolean | null;
   isSpam?: boolean | null;
+  startDate?: Date;
+  endDate?: Date;
+  isLive?: boolean;
 };
 
 export type GarageSaleVisibilityBlockReason =
   | 'ARCHIVED'
   | 'SPAM'
   | 'PAYMENT_PENDING'
+  | 'PAYMENT_FAILED'
+  | 'PAYMENT_REFUNDED'
   | 'PAYMENT_UNPAID'
   | 'PENDING_REVIEW'
   | 'REJECTED'
+  | 'UPCOMING'
+  | 'EXPIRED'
   | 'HIDDEN'
   | 'UNKNOWN_STATUS'
   | null;
 
+function getLifecycle(sale: GarageSaleVisibilityInput) {
+  if (!sale.startDate || !sale.endDate || typeof sale.isLive !== 'boolean') return null;
+
+  return deriveGarageSaleLifecycle({
+    status: sale.status as 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXPIRED' | 'HIDDEN',
+    paymentStatus: sale.paymentStatus as 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED',
+    isArchived: Boolean(sale.isArchived),
+    startDate: sale.startDate,
+    endDate: sale.endDate,
+    isLive: sale.isLive,
+  });
+}
+
 export function isGarageSalePubliclyVisible(sale: GarageSaleVisibilityInput) {
-  return sale.status === 'APPROVED' && sale.paymentStatus === 'PAID' && !sale.isArchived && !sale.isSpam;
+  if (sale.isSpam) return false;
+  const lifecycle = getLifecycle(sale);
+  return lifecycle ? lifecycle.publiclyVisible : sale.status === 'APPROVED' && sale.paymentStatus === 'PAID' && !sale.isArchived;
 }
 
 export function getGarageSaleVisibilityBlockReason(sale: GarageSaleVisibilityInput): GarageSaleVisibilityBlockReason {
-  // Priority is intentional: archived/spam are hard stops, then payment gates,
-  // then moderation/hidden status gates.
+  const lifecycle = getLifecycle(sale);
+
   if (sale.isArchived) return 'ARCHIVED';
   if (sale.isSpam) return 'SPAM';
   if (sale.paymentStatus === 'PENDING') return 'PAYMENT_PENDING';
+  if (sale.paymentStatus === 'FAILED') return 'PAYMENT_FAILED';
+  if (sale.paymentStatus === 'REFUNDED') return 'PAYMENT_REFUNDED';
   if (sale.paymentStatus !== 'PAID') return 'PAYMENT_UNPAID';
+  if (lifecycle?.state === 'UPCOMING') return 'UPCOMING';
+  if (lifecycle?.state === 'EXPIRED') return 'EXPIRED';
   if (sale.status === 'PENDING') return 'PENDING_REVIEW';
   if (sale.status === 'REJECTED') return 'REJECTED';
   if (sale.status === 'HIDDEN') return 'HIDDEN';
@@ -39,6 +67,12 @@ export function getGarageSaleLiveControlsBlockMessage(sale: GarageSaleVisibility
   if (reason === 'PAYMENT_PENDING') {
     return 'Live controls are unavailable while payment is pending. Your listing stays hidden until payment is confirmed.';
   }
+  if (reason === 'PAYMENT_FAILED') {
+    return 'Live controls are unavailable because payment failed for this listing.';
+  }
+  if (reason === 'PAYMENT_REFUNDED') {
+    return 'Live controls are unavailable because this listing payment was refunded.';
+  }
   if (reason === 'PAYMENT_UNPAID') {
     return 'Live controls are unavailable because payment is not completed for this listing.';
   }
@@ -47,6 +81,12 @@ export function getGarageSaleLiveControlsBlockMessage(sale: GarageSaleVisibility
   }
   if (reason === 'REJECTED') {
     return 'Your listing was rejected. Update details and try again before using live controls.';
+  }
+  if (reason === 'UPCOMING') {
+    return 'Live controls unlock when your sale start time arrives.';
+  }
+  if (reason === 'EXPIRED') {
+    return 'Live controls are unavailable because this listing has expired.';
   }
   if (reason === 'HIDDEN') {
     return 'Live controls are unavailable while this listing is hidden.';
@@ -68,6 +108,12 @@ export function getGarageSaleOwnerHiddenStatusMessage(sale: GarageSaleVisibility
   if (reason === 'PAYMENT_PENDING') {
     return 'Your payment is still pending. This listing is hidden and live controls are unavailable until payment is confirmed.';
   }
+  if (reason === 'PAYMENT_FAILED') {
+    return 'Payment failed for this listing. Repost and pay again to publish it.';
+  }
+  if (reason === 'PAYMENT_REFUNDED') {
+    return 'Payment was refunded. This listing is no longer visible.';
+  }
   if (reason === 'PAYMENT_UNPAID') {
     return 'Payment is not completed for this listing, so it is not visible to buyers.';
   }
@@ -76,6 +122,12 @@ export function getGarageSaleOwnerHiddenStatusMessage(sale: GarageSaleVisibility
   }
   if (reason === 'REJECTED') {
     return 'Your listing was rejected. Update details and try again.';
+  }
+  if (reason === 'UPCOMING') {
+    return 'Your listing is visible and scheduled. Live controls unlock when your sale start time arrives.';
+  }
+  if (reason === 'EXPIRED') {
+    return 'This listing has expired and is no longer visible.';
   }
   if (reason === 'HIDDEN') {
     return 'This listing is currently hidden.';

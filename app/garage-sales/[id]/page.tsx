@@ -16,6 +16,7 @@ import {
 import GarageSaleLivePanel from '@/components/GarageSaleLivePanel';
 import GarageSaleBuyerLiveView from '@/components/GarageSaleBuyerLiveView';
 import GarageSaleShareButton from '@/components/GarageSaleShareButton';
+import { deriveGarageSaleLifecycle } from '@/lib/garage-sale-lifecycle';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,11 +44,6 @@ function formatTime(date: Date) {
   return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
-function isOpenNow(startDate: Date, endDate: Date) {
-  const now = Date.now();
-  return now >= startDate.getTime() && now <= endDate.getTime();
-}
-
 export default async function GarageSaleDetailPage({ params }: Params) {
   const { id } = await params;
   await expireGarageSales();
@@ -71,28 +67,31 @@ export default async function GarageSaleDetailPage({ params }: Params) {
   const session = await getServerSession(authOptions);
   const isOwner = session?.user?.id === sale.sellerId;
   const isAdmin = session?.user?.role === 'ADMIN';
-  const listingIsPubliclyVisible = isGarageSalePubliclyVisible(sale);
+  const lifecycle = deriveGarageSaleLifecycle(sale);
 
-  if (!listingIsPubliclyVisible && !isOwner && !isAdmin) notFound();
+  if (!lifecycle.publiclyVisible && !isOwner && !isAdmin) notFound();
 
+  const listingIsPubliclyVisible = lifecycle.publiclyVisible;
+  const openNow = lifecycle.openNow;
   const visibilityBlockReason = getGarageSaleVisibilityBlockReason(sale);
   const blockedLiveControlsMessage = getGarageSaleLiveControlsBlockMessage(sale);
   const ownerHiddenStatusMessage = getGarageSaleOwnerHiddenStatusMessage(sale);
   const hiddenStatusLabel = (() => {
-    if (visibilityBlockReason === 'PAYMENT_PENDING') return 'AWAITING PAYMENT';
-    if (visibilityBlockReason === 'PAYMENT_UNPAID') return 'PAYMENT REQUIRED';
-    if (visibilityBlockReason === 'PENDING_REVIEW') return 'PENDING REVIEW';
+    if (lifecycle.state === 'PAYMENT_PENDING') return 'PAYMENT PENDING';
+    if (lifecycle.state === 'PENDING_REVIEW') return 'PENDING REVIEW';
+    if (lifecycle.state === 'PAYMENT_FAILED') return 'PAYMENT FAILED';
+    if (lifecycle.state === 'PAYMENT_REFUNDED') return 'REFUNDED';
+    if (lifecycle.state === 'REJECTED') return 'REJECTED';
+    if (lifecycle.state === 'EXPIRED') return 'EXPIRED';
     if (visibilityBlockReason === 'SPAM') return 'UNDER REVIEW';
-    if (visibilityBlockReason === 'REJECTED') return 'REJECTED';
-    if (visibilityBlockReason === 'ARCHIVED') return 'ARCHIVED';
-    if (visibilityBlockReason === 'HIDDEN') return 'HIDDEN';
     if (visibilityBlockReason === 'UNKNOWN_STATUS') return 'NOT VISIBLE';
-    return sale.status;
+    return lifecycle.state;
   })();
-  const hiddenStatusBadgeClass = (visibilityBlockReason === 'PAYMENT_PENDING' || sale.status === 'PENDING')
+  const hiddenStatusBadgeClass = lifecycle.state === 'PAYMENT_PENDING' || lifecycle.state === 'PENDING_REVIEW'
     ? 'bg-yellow-100 text-yellow-700'
-    : 'bg-red-100 text-red-700';
-  const openNow = listingIsPubliclyVisible && isOpenNow(sale.startDate, sale.endDate);
+    : lifecycle.state === 'PAYMENT_FAILED' || lifecycle.state === 'PAYMENT_REFUNDED' || lifecycle.state === 'REJECTED'
+      ? 'bg-red-100 text-red-700'
+      : 'bg-slate-200 text-slate-700';
   const saleTypeLabel = SALE_TYPE_LABELS[sale.saleType] ?? sale.saleType;
   const priceRange = sale.priceRangeMin != null && sale.priceRangeMax != null
     ? `$${sale.priceRangeMin}–$${sale.priceRangeMax}`
@@ -315,17 +314,17 @@ export default async function GarageSaleDetailPage({ params }: Params) {
           </div>
 
           {/* Live Preview — seller controls */}
-          {isOwner && listingIsPubliclyVisible && (
+          {isOwner && lifecycle.sellerCanGoLive && (
             <GarageSaleLivePanel saleId={sale.id} initialIsLive={sale.isLive} />
           )}
-          {isOwner && !listingIsPubliclyVisible && (
+          {isOwner && !lifecycle.sellerCanGoLive && (
             <div className="card p-4 text-sm text-slate-600">
               {blockedLiveControlsMessage}
             </div>
           )}
 
           {/* Live Preview — buyer view */}
-          {!isOwner && (
+          {!isOwner && listingIsPubliclyVisible && (
             <GarageSaleBuyerLiveView
               saleId={sale.id}
               initialIsLive={sale.isLive}
