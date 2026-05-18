@@ -77,14 +77,14 @@ export default async function GarageSaleDetailPage({ params }: Params) {
   const blockedLiveControlsMessage = getGarageSaleLiveControlsBlockMessage(sale);
   const ownerHiddenStatusMessage = getGarageSaleOwnerHiddenStatusMessage(sale);
   const hiddenStatusLabel = (() => {
+    if (visibilityBlockReason === 'SPAM') return 'UNDER REVIEW';
+    if (visibilityBlockReason === 'UNKNOWN_STATUS') return 'NOT VISIBLE';
     if (lifecycle.state === 'PAYMENT_PENDING') return 'PAYMENT PENDING';
     if (lifecycle.state === 'PENDING_REVIEW') return 'PENDING REVIEW';
     if (lifecycle.state === 'PAYMENT_FAILED') return 'PAYMENT FAILED';
     if (lifecycle.state === 'PAYMENT_REFUNDED') return 'REFUNDED';
     if (lifecycle.state === 'REJECTED') return 'REJECTED';
     if (lifecycle.state === 'EXPIRED') return 'EXPIRED';
-    if (visibilityBlockReason === 'SPAM') return 'UNDER REVIEW';
-    if (visibilityBlockReason === 'UNKNOWN_STATUS') return 'NOT VISIBLE';
     return lifecycle.state;
   })();
   const hiddenStatusBadgeClass = lifecycle.state === 'PAYMENT_PENDING' || lifecycle.state === 'PENDING_REVIEW'

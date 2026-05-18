@@ -41,7 +41,7 @@ function getLifecycle(sale: GarageSaleVisibilityInput) {
 export function isGarageSalePubliclyVisible(sale: GarageSaleVisibilityInput) {
   if (sale.isSpam) return false;
   const lifecycle = getLifecycle(sale);
-  return lifecycle ? lifecycle.publiclyVisible : sale.status === 'APPROVED' && sale.paymentStatus === 'PAID' && !sale.isArchived;
+  return lifecycle ? lifecycle.publiclyVisible : false;
 }
 
 export function getGarageSaleVisibilityBlockReason(sale: GarageSaleVisibilityInput): GarageSaleVisibilityBlockReason {
