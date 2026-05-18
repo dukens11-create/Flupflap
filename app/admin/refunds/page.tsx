@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { getServerSession } from 'next-auth';
 import type { Metadata } from 'next';
 import { authOptions } from '@/lib/auth-options';
-import { prisma } from '@/lib/db';
+import { getAdminRefunds } from '@/lib/admin-refunds';
 import AdminRefundReviewList from '@/components/AdminRefundReviewList';
 
 export const dynamic = 'force-dynamic';
@@ -14,44 +14,7 @@ export default async function AdminRefundsPage() {
   if (!session?.user) redirect('/login');
   if (session.user.role !== 'ADMIN') redirect('/');
 
-  const refundRequests = await prisma.refundRequest.findMany({
-    include: {
-      order: {
-        select: {
-          id: true,
-          status: true,
-          totalCents: true,
-          buyer: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-          items: {
-            select: {
-              id: true,
-              quantity: true,
-              product: {
-                select: {
-                  id: true,
-                  title: true,
-                  seller: {
-                    select: {
-                      id: true,
-                      name: true,
-                      email: true,
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-    },
-    orderBy: { createdAt: 'desc' },
-  });
+  const { refunds, fetchFailed } = await getAdminRefunds();
 
   return (
     <main className="mx-auto max-w-5xl space-y-6">
@@ -63,7 +26,7 @@ export default async function AdminRefundsPage() {
         </p>
       </div>
 
-      <AdminRefundReviewList initialRefundRequests={refundRequests} />
+      <AdminRefundReviewList initialRefundRequests={refunds} fetchFailed={fetchFailed} />
     </main>
   );
 }

@@ -1,182 +1,269 @@
 'use client';
 
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { dollars } from '@/lib/money';
+import type { AdminRefundListItem } from '@/lib/admin-refunds';
 import { REFUND_STATUS_LABELS, refundStatusBadge } from '@/lib/refunds';
 
-type AdminRefundRequest = {
-  id: string;
-  status: 'REQUESTED' | 'SELLER_REVIEW' | 'APPROVED' | 'DENIED' | 'REFUNDED';
-  reason: string;
-  details: string | null;
-  requestedAmountCents: number;
-  approvedAmountCents: number | null;
-  adminNotes: string | null;
-  sellerResponse: string | null;
-  stripeRefundId: string | null;
-  order: {
-    id: string;
-    status: string;
-    totalCents: number;
-    buyer: { id: string; name: string | null; email: string };
-    items: Array<{
-      id: string;
-      quantity: number;
-      product: { id: string; title: string; seller: { id: string; name: string | null; email: string } };
-    }>;
-  };
+type RefundAction = 'approve' | 'reject' | 'resolve';
+type RefundResponse = {
+  success: boolean;
+  refund: Pick<AdminRefundListItem, 'id' | 'status' | 'approvedAmountCents' | 'adminNotes' | 'stripeRefundId' | 'resolvedAt'>;
+  error?: string;
 };
 
-export default function AdminRefundReviewList({ initialRefundRequests }: { initialRefundRequests: AdminRefundRequest[] }) {
+function shortId(value: string): string {
+  return value.length > 10 ? `${value.slice(0, 10)}…` : value;
+}
+
+export default function AdminRefundReviewList({
+  initialRefundRequests,
+  fetchFailed,
+}: {
+  initialRefundRequests: AdminRefundListItem[];
+  fetchFailed: boolean;
+}) {
+  const router = useRouter();
   const [refundRequests, setRefundRequests] = useState(initialRefundRequests);
   const [notes, setNotes] = useState<Record<string, string>>({});
-  const [amounts, setAmounts] = useState<Record<string, string>>({});
-  const [submittingId, setSubmittingId] = useState<string | null>(null);
+  const [submittingKey, setSubmittingKey] = useState<string | null>(null);
   const [error, setError] = useState('');
 
-  async function patchRequest(refundRequestId: string, action: 'approve' | 'deny') {
-    if (submittingId) return;
-    setSubmittingId(refundRequestId);
+  async function runAction(refundId: string, action: RefundAction) {
+    if (submittingKey) return;
+    const note = (notes[refundId] ?? '').trim();
+    const key = `${refundId}:${action}`;
+    setSubmittingKey(key);
     setError('');
 
-    const amountRaw = (amounts[refundRequestId] ?? '').trim();
-    const approvedAmountCents = amountRaw ? Math.round(Number.parseFloat(amountRaw) * 100) : undefined;
-
-    if (amountRaw && (!Number.isFinite(approvedAmountCents ?? NaN) || (approvedAmountCents ?? 0) <= 0)) {
-      setSubmittingId(null);
-      setError('Approved amount must be a positive USD value.');
-      return;
-    }
-
     try {
-      const res = await fetch(`/api/admin/refund-requests/${refundRequestId}`, {
-        method: 'PATCH',
+      const res = await fetch(`/api/admin/refunds/${refundId}/${action}`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action,
-          approvedAmountCents,
-          adminNotes: notes[refundRequestId] || undefined,
-        }),
+        body: JSON.stringify({ note: note || undefined }),
       });
-      const data = await res.json();
-      if (!res.ok) {
+
+      let data: RefundResponse | { error?: string } = {};
+      try {
+        data = await res.json();
+      } catch {
+        data = {};
+      }
+
+      if (!res.ok || !('success' in data) || !data.success) {
         setError(data.error ?? 'Unable to update refund request.');
         return;
       }
 
       setRefundRequests((current) => current.map((request) => (
-        request.id === refundRequestId
+        request.id === refundId
           ? {
               ...request,
-              status: data.status,
-              approvedAmountCents: data.approvedAmountCents,
-              adminNotes: data.adminNotes,
-              stripeRefundId: data.stripeRefundId,
+              status: data.refund.status,
+              approvedAmountCents: data.refund.approvedAmountCents,
+              adminNotes: data.refund.adminNotes,
+              stripeRefundId: data.refund.stripeRefundId,
+              resolvedAt: data.refund.resolvedAt,
             }
           : request
       )));
     } catch {
       setError('Network error. Please try again.');
     } finally {
-      setSubmittingId(null);
+      setSubmittingKey(null);
     }
   }
 
+  const isBusy = (refundId: string, action: RefundAction) => submittingKey === `${refundId}:${action}`;
+
   if (refundRequests.length === 0) {
-    return <div className="card p-6 text-sm text-slate-500">No refund requests found.</div>;
+    return (
+      <div className="space-y-3">
+        {fetchFailed && (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            Refund data could not be loaded. Showing an empty fallback.
+            <button
+              type="button"
+              className="ml-3 underline"
+              onClick={() => router.refresh()}
+            >
+              Retry
+            </button>
+          </div>
+        )}
+        <div className="card p-6 text-sm text-slate-500">No refund requests yet.</div>
+      </div>
+    );
   }
 
   return (
     <div className="space-y-4">
+      {fetchFailed && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          Refund data could not be fully loaded. Please retry.
+          <button type="button" className="ml-3 underline" onClick={() => router.refresh()}>
+            Retry
+          </button>
+        </div>
+      )}
       {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
       )}
-      {refundRequests.map((request) => {
-        const sellers = Array.from(
-          new Map(
-            request.order.items.map((item) => [item.product.seller.id, item.product.seller]),
-          ).values(),
-        );
-        const resolved = request.status === 'DENIED' || request.status === 'REFUNDED';
 
-        return (
-          <div key={request.id} className="card p-5 space-y-3">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-xs text-slate-400 font-mono">Order #{request.order.id.slice(-8).toUpperCase()}</p>
-                <p className="text-sm text-slate-600">Buyer: {request.order.buyer.name ?? request.order.buyer.email}</p>
-                {sellers.length > 0 && (
-                  <p className="text-sm text-slate-600">
-                    Seller{ sellers.length > 1 ? 's' : '' }: {sellers.map((seller) => seller.name ?? seller.email).join(', ')}
-                  </p>
-                ) }
+      <div className="md:hidden space-y-3">
+        {refundRequests.map((request) => {
+          const amount = request.approvedAmountCents ?? request.requestedAmountCents;
+          const closed = request.status === 'DENIED' || request.status === 'REFUNDED' || Boolean(request.resolvedAt);
+          const missingIntent = !request.stripePaymentIntentId;
+
+          return (
+            <div key={request.id} className="card p-4 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-mono text-slate-500">{shortId(request.id)}</p>
+                <span className={`badge ${refundStatusBadge(request.status)}`}>{REFUND_STATUS_LABELS[request.status]}</span>
               </div>
-              <span className={`badge ${refundStatusBadge(request.status)}`}>{REFUND_STATUS_LABELS[request.status]}</span>
-            </div>
+              <p className="text-sm"><span className="font-semibold">Order:</span> {shortId(request.orderId)}</p>
+              <p className="text-sm"><span className="font-semibold">Buyer:</span> {request.buyer}</p>
+              <p className="text-sm"><span className="font-semibold">Seller:</span> {request.seller}</p>
+              <p className="text-sm"><span className="font-semibold">Amount:</span> {dollars(amount)}</p>
+              <p className="text-sm"><span className="font-semibold">Reason:</span> {request.reason}</p>
+              <p className="text-sm"><span className="font-semibold">Payment intent:</span> {request.stripePaymentIntentId ?? '—'}</p>
+              <p className="text-xs text-slate-500">{new Date(request.createdAt).toLocaleString()}</p>
 
-            <div className="text-sm text-slate-700 space-y-1">
-              <p><span className="font-semibold">Reason:</span> {request.reason}</p>
-              {request.details && <p><span className="font-semibold">Details:</span> {request.details}</p>}
-              <p>
-                <span className="font-semibold">Requested amount:</span> {dollars(request.requestedAmountCents)}
-                {request.approvedAmountCents !== null && (
-                  <> · <span className="font-semibold">Approved amount:</span> {dollars(request.approvedAmountCents)}</>
+              <textarea
+                className="input h-20 resize-none text-sm"
+                maxLength={2000}
+                placeholder="Admin note (optional)"
+                value={notes[request.id] ?? ''}
+                onChange={(event) => setNotes((current) => ({ ...current, [request.id]: event.target.value }))}
+              />
+
+              <div className="flex flex-wrap gap-2">
+                <Link href={`/orders/${request.orderId}`} className="btn-outline text-xs py-1 px-2">View</Link>
+                {!closed && (
+                  <>
+                    <button
+                      type="button"
+                      className="btn-primary text-xs py-1 px-2"
+                      disabled={isBusy(request.id, 'approve') || missingIntent}
+                      onClick={() => runAction(request.id, 'approve')}
+                    >
+                      Approve refund
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-outline text-xs py-1 px-2"
+                      disabled={isBusy(request.id, 'reject')}
+                      onClick={() => runAction(request.id, 'reject')}
+                    >
+                      Reject refund
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-outline text-xs py-1 px-2"
+                      disabled={isBusy(request.id, 'resolve')}
+                      onClick={() => runAction(request.id, 'resolve')}
+                    >
+                      Mark as resolved
+                    </button>
+                  </>
                 )}
-              </p>
-              {request.sellerResponse && <p><span className="font-semibold">Seller response:</span> {request.sellerResponse}</p>}
-              {request.adminNotes && <p><span className="font-semibold">Admin notes:</span> {request.adminNotes}</p>}
-              {request.stripeRefundId && <p className="text-green-700"><span className="font-semibold">Stripe refund:</span> {request.stripeRefundId}</p>}
-            </div>
-
-            {!resolved && (
-              <div className="space-y-2 border-t border-slate-100 pt-3">
-                <div>
-                  <label className="label">Approved amount (USD, optional)</label>
-                  <input
-                    className="input"
-                    inputMode="decimal"
-                    value={amounts[request.id] ?? ''}
-                    onChange={(event) => setAmounts((prev) => ({ ...prev, [request.id]: event.target.value }))}
-                    placeholder={(request.requestedAmountCents / 100).toFixed(2)}
-                  />
-                  <p className="mt-1 text-xs text-slate-500">Leave blank to approve the requested amount.</p>
-                </div>
-                <div>
-                  <label className="label">Admin notes (optional)</label>
-                  <textarea
-                    className="input h-20 resize-none"
-                    maxLength={2000}
-                    value={notes[request.id] ?? ''}
-                    onChange={(event) => setNotes((prev) => ({ ...prev, [request.id]: event.target.value }))}
-                    placeholder="Review notes visible on the refund timeline."
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    className="btn-primary text-sm"
-                    disabled={submittingId === request.id}
-                    onClick={() => patchRequest(request.id, 'approve')}
-                  >
-                    Approve + Refund
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-outline text-sm"
-                    disabled={submittingId === request.id}
-                    onClick={() => patchRequest(request.id, 'deny')}
-                  >
-                    Deny Request
-                  </button>
-                </div>
-                <p className="text-xs text-amber-700">
-                  Payout reversal for Stripe Connect seller transfers is currently a manual follow-up step after refund approval.
-                </p>
               </div>
-            )}
-          </div>
-        );
-      })}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="hidden md:block card overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-slate-100 bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500">
+              <th className="px-3 py-3 text-left">Refund ID</th>
+              <th className="px-3 py-3 text-left">Order ID</th>
+              <th className="px-3 py-3 text-left">Buyer</th>
+              <th className="px-3 py-3 text-left">Seller</th>
+              <th className="px-3 py-3 text-left">Amount</th>
+              <th className="px-3 py-3 text-left">Reason</th>
+              <th className="px-3 py-3 text-left">Status</th>
+              <th className="px-3 py-3 text-left">Stripe payment intent</th>
+              <th className="px-3 py-3 text-left">Created</th>
+              <th className="px-3 py-3 text-left">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {refundRequests.map((request) => {
+              const amount = request.approvedAmountCents ?? request.requestedAmountCents;
+              const closed = request.status === 'DENIED' || request.status === 'REFUNDED' || Boolean(request.resolvedAt);
+              const missingIntent = !request.stripePaymentIntentId;
+
+              return (
+                <tr key={request.id} className="align-top">
+                  <td className="px-3 py-3 font-mono text-xs text-slate-600" title={request.id}>{shortId(request.id)}</td>
+                  <td className="px-3 py-3 font-mono text-xs text-slate-600" title={request.orderId}>{shortId(request.orderId)}</td>
+                  <td className="px-3 py-3">{request.buyer}</td>
+                  <td className="px-3 py-3">{request.seller}</td>
+                  <td className="px-3 py-3">{dollars(amount)}</td>
+                  <td className="px-3 py-3 max-w-56">
+                    <p>{request.reason}</p>
+                    {request.details && <p className="text-xs text-slate-500">{request.details}</p>}
+                    {request.adminNotes && <p className="text-xs text-slate-500">Note: {request.adminNotes}</p>}
+                    {request.stripeRefundId && <p className="text-xs text-green-700">Stripe refund: {request.stripeRefundId}</p>}
+                    <textarea
+                      className="input mt-2 h-20 resize-none text-xs"
+                      maxLength={2000}
+                      placeholder="Admin note (optional)"
+                      value={notes[request.id] ?? ''}
+                      onChange={(event) => setNotes((current) => ({ ...current, [request.id]: event.target.value }))}
+                    />
+                  </td>
+                  <td className="px-3 py-3">
+                    <span className={`badge ${refundStatusBadge(request.status)}`}>{REFUND_STATUS_LABELS[request.status]}</span>
+                  </td>
+                  <td className="px-3 py-3 font-mono text-xs text-slate-600" title={request.stripePaymentIntentId ?? ''}>
+                    {request.stripePaymentIntentId ? shortId(request.stripePaymentIntentId) : '—'}
+                  </td>
+                  <td className="px-3 py-3 text-xs text-slate-500">{new Date(request.createdAt).toLocaleString()}</td>
+                  <td className="px-3 py-3">
+                    <div className="flex flex-wrap gap-2">
+                      <Link href={`/orders/${request.orderId}`} className="btn-outline text-xs py-1 px-2">View</Link>
+                      {!closed && (
+                        <>
+                          <button
+                            type="button"
+                            className="btn-primary text-xs py-1 px-2"
+                            disabled={isBusy(request.id, 'approve') || missingIntent}
+                            onClick={() => runAction(request.id, 'approve')}
+                          >
+                            Approve refund
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-outline text-xs py-1 px-2"
+                            disabled={isBusy(request.id, 'reject')}
+                            onClick={() => runAction(request.id, 'reject')}
+                          >
+                            Reject refund
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-outline text-xs py-1 px-2"
+                            disabled={isBusy(request.id, 'resolve')}
+                            onClick={() => runAction(request.id, 'resolve')}
+                          >
+                            Mark as resolved
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
