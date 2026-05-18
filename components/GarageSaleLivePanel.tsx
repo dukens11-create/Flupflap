@@ -587,6 +587,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     if (cameraStatus === 'insecure') return 'HTTPS Required';
     return 'Preview Camera';
   })();
+  const hasPreviewStream = camOn || Boolean(streamRef.current);
 
   const videoPreviewClassName = camOn
     ? `h-full w-full rounded-2xl object-cover transition-opacity duration-500 ${previewReady ? 'opacity-100' : 'opacity-0'}`
@@ -682,6 +683,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
             type="button"
             onClick={() => void startCamera()}
             disabled={loading || cameraStatus === 'connecting' || cameraStatus === 'insecure'}
+            aria-label={cameraStatus === 'insecure' ? 'Preview Camera (HTTPS connection required)' : 'Preview Camera'}
             className="btn-outline flex-1 flex items-center justify-center gap-1.5 text-xs disabled:opacity-60"
           >
             <Video size={13} /> {previewButtonLabel}
@@ -725,7 +727,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         <button
           type="button"
           onClick={handleGoLiveClick}
-          disabled={loading || !camOn}
+          disabled={loading || !hasPreviewStream}
           className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition-all duration-300 hover:bg-black disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
         >
           <Radio size={14} /> {loading ? 'Starting…' : 'Start Live'}
