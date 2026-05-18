@@ -15,6 +15,11 @@ type RetryAction = {
   action: RefundAction;
 };
 
+type RefundActionResponse = {
+  refund?: AdminRefundRecord;
+  error?: string;
+};
+
 function formatDate(value: string) {
   return new Date(value).toLocaleDateString('en-US', {
     month: 'short',
@@ -55,7 +60,7 @@ export default function AdminRefundReviewList({
     const approvedAmountCents = amountRaw ? Math.round(Number.parseFloat(amountRaw) * 100) : undefined;
 
     if (amountRaw && (!Number.isFinite(approvedAmountCents ?? NaN) || (approvedAmountCents ?? 0) <= 0)) {
-      setActionError('Approved amount must be a positive USD value.');
+      setActionError('The approved amount must be a positive dollar value.');
       setRetryAction(null);
       return;
     }
@@ -74,19 +79,30 @@ export default function AdminRefundReviewList({
         }),
       });
 
-      const data = await res.json().catch(() => ({}));
+      let data: RefundActionResponse = {};
+      try {
+        data = await res.json() as RefundActionResponse;
+      } catch (error) {
+        console.error('[admin/refunds] Failed to parse action response.', error);
+      }
       if (!res.ok) {
         setActionError(data.error ?? 'Unable to update refund request.');
         setRetryAction({ refundRequestId, action });
         return;
       }
+      if (!data.refund) {
+        setActionError('Unable to complete the refund action. Please try again.');
+        setRetryAction({ refundRequestId, action });
+        return;
+      }
+      const updatedRefund = data.refund;
 
       setRefundRequests((current) => current.map((request) => (
-        request.id === refundRequestId ? data.refund : request
+        request.id === refundRequestId ? updatedRefund : request
       )));
       router.refresh();
     } catch {
-      setActionError('We couldn’t reach the refund API. Please try again.');
+      setActionError('Network error: Unable to connect to the server. Please try again.');
       setRetryAction({ refundRequestId, action });
     } finally {
       setSubmittingId(null);
@@ -96,7 +112,7 @@ export default function AdminRefundReviewList({
   if (refundRequests.length === 0) {
     return (
       <div className="card p-8 text-center text-sm text-slate-500">
-        {allowEmptyState ? 'No refund requests yet.' : 'Refund requests are temporarily unavailable.'}
+        {allowEmptyState ? 'No refund requests yet.' : 'Unable to display refund requests.'}
       </div>
     );
   }
@@ -187,6 +203,7 @@ export default function AdminRefundReviewList({
                             onReject={() => submitAction(request.id, 'reject')}
                             onResolve={() => submitAction(request.id, 'resolve')}
                             disableApprove={disableApprove}
+                            disableReject={isResolved}
                             disableResolve={isResolved}
                             disabled={submittingId === request.id}
                           />
@@ -248,6 +265,7 @@ export default function AdminRefundReviewList({
                   onReject={() => submitAction(request.id, 'reject')}
                   onResolve={() => submitAction(request.id, 'resolve')}
                   disableApprove={disableApprove}
+                  disableReject={isResolved}
                   disableResolve={isResolved}
                   disabled={submittingId === request.id}
                 />
@@ -323,7 +341,7 @@ function RefundDetails({
 
       <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
         <div>
-          <label className="label">Amount to refund or resolve (USD)</label>
+          <label className="label">Amount (USD)</label>
           <input
             className="input"
             inputMode="decimal"
@@ -360,6 +378,7 @@ function ActionButtons({
   onReject,
   onResolve,
   disableApprove,
+  disableReject,
   disableResolve,
   disabled,
 }: {
@@ -369,6 +388,7 @@ function ActionButtons({
   onReject: () => void;
   onResolve: () => void;
   disableApprove: boolean;
+  disableReject: boolean;
   disableResolve: boolean;
   disabled: boolean;
 }) {
@@ -380,7 +400,7 @@ function ActionButtons({
       <button type="button" className="btn-primary text-xs" onClick={onApprove} disabled={disabled || disableApprove}>
         Approve refund
       </button>
-      <button type="button" className="btn-outline text-xs" onClick={onReject} disabled={disabled || disableResolve}>
+      <button type="button" className="btn-outline text-xs" onClick={onReject} disabled={disabled || disableReject}>
         Reject refund
       </button>
       <button type="button" className="btn-outline text-xs" onClick={onResolve} disabled={disabled || disableResolve}>

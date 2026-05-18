@@ -1,5 +1,6 @@
 import { NotificationType, type RefundRequestStatus } from '@prisma/client';
 import { prisma } from '@/lib/db';
+import { dollars } from '@/lib/money';
 import { createNotifications } from '@/lib/notifications';
 import { normalizeRefundAmountCents } from '@/lib/refunds';
 import { stripe } from '@/lib/stripe';
@@ -175,6 +176,7 @@ export async function approveAdminRefund(input: RefundActionInput): Promise<Refu
       refundRequest.order.totalCents,
     );
     const adminNotes = input.adminNote?.trim() || null;
+    const amountLabel = dollars(approvedAmountCents);
 
     const stripeRefund = await stripe.refunds.create({
       payment_intent: refundRequest.order.stripePaymentIntentId,
@@ -235,7 +237,7 @@ export async function approveAdminRefund(input: RefundActionInput): Promise<Refu
         userId: refundRequest.buyerId,
         type: NotificationType.ORDER_UPDATE,
         title: 'Refund request approved',
-        body: `A refund of $${(approvedAmountCents / 100).toFixed(2)} was issued to your original payment method.`,
+        body: `A refund of ${amountLabel} has been issued to your original payment method.`,
         link: `/orders/${refundRequest.orderId}`,
         data: {
           orderId: refundRequest.orderId,
@@ -301,8 +303,8 @@ export async function rejectAdminRefund(input: RefundActionInput): Promise<Refun
       {
         userId: refundRequest.buyerId,
         type: NotificationType.ORDER_UPDATE,
-        title: 'Refund request rejected',
-        body: 'Your refund request was reviewed and rejected by support.',
+        title: 'Refund request denied',
+        body: 'Your refund request was reviewed and denied. Please check your order page for more details or contact support.',
         link: `/orders/${refundRequest.orderId}`,
         data: { orderId: refundRequest.orderId, refundRequestId: refundRequest.id, status: 'DENIED' },
       },
@@ -345,7 +347,7 @@ export async function resolveAdminRefund(input: RefundActionInput): Promise<Refu
         data: {
           status: 'REFUNDED',
           approvedAmountCents,
-          adminNotes: input.adminNote?.trim() || 'Marked as resolved by admin.',
+          adminNotes: input.adminNote?.trim() || null,
           resolvedAt,
         },
         include: {

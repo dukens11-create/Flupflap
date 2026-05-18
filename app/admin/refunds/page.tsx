@@ -23,7 +23,7 @@ export default async function AdminRefundsPage() {
           </p>
           <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
             <Link href="/" className="btn-outline">Go home</Link>
-            <Link href="/admin" className="btn-primary">Back to admin dashboard</Link>
+            <Link href="/admin" className="btn-primary">← Back to admin dashboard</Link>
           </div>
         </div>
       </main>
@@ -44,7 +44,7 @@ export default async function AdminRefundsPage() {
 
       {fetchFailed && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          We couldn&apos;t load refund requests from the database right now. The dashboard stayed online and will show new requests once the connection recovers.
+          Unable to load refund requests. Please refresh the page to try again.
         </div>
       )}
 
