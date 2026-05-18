@@ -1,57 +1,37 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { getServerSession } from 'next-auth';
+import type { Session } from 'next-auth';
 import type { Metadata } from 'next';
 import { authOptions } from '@/lib/auth-options';
-import { prisma } from '@/lib/db';
+import { getAdminRefundRequests } from '@/lib/admin-refunds';
 import AdminRefundReviewList from '@/components/AdminRefundReviewList';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Admin Refund Requests' };
 
 export default async function AdminRefundsPage() {
-  const session = await getServerSession(authOptions);
+  let session: Session | null = null;
+  try {
+    session = await getServerSession(authOptions);
+  } catch (error) {
+    console.error('[admin/refunds] Failed to load admin session.', error);
+    return (
+      <main className="mx-auto max-w-4xl py-12">
+        <div className="card p-6">
+          <h1 className="text-xl font-bold text-slate-900">Unable to verify access</h1>
+          <p className="mt-2 text-sm text-slate-600">
+            Please refresh and try again.
+          </p>
+        </div>
+      </main>
+    );
+  }
+
   if (!session?.user) redirect('/login');
   if (session.user.role !== 'ADMIN') redirect('/');
 
-  const refundRequests = await prisma.refundRequest.findMany({
-    include: {
-      order: {
-        select: {
-          id: true,
-          status: true,
-          totalCents: true,
-          buyer: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-          items: {
-            select: {
-              id: true,
-              quantity: true,
-              product: {
-                select: {
-                  id: true,
-                  title: true,
-                  seller: {
-                    select: {
-                      id: true,
-                      name: true,
-                      email: true,
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-    },
-    orderBy: { createdAt: 'desc' },
-  });
+  const { refunds: refundRequests, loadError } = await getAdminRefundRequests();
 
   return (
     <main className="mx-auto max-w-5xl space-y-6">
@@ -63,7 +43,7 @@ export default async function AdminRefundsPage() {
         </p>
       </div>
 
-      <AdminRefundReviewList initialRefundRequests={refundRequests} />
+      <AdminRefundReviewList initialRefundRequests={refundRequests} initialLoadError={loadError} />
     </main>
   );
 }
