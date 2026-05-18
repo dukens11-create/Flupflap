@@ -57,10 +57,11 @@ export default function GarageSaleBrowseClient({
   const [date, setDate] = useState(searchParams.date ?? '');
   const [sort, setSort] = useState(searchParams.sort ?? 'newest');
   const [radius, setRadius] = useState(searchParams.radius ?? '50');
+  const [live, setLive] = useState(searchParams.live ?? '');
 
   function buildSearchUrl(overrides: Record<string, string> = {}) {
     const params = new URLSearchParams();
-    const current = { q, city, zip, saleType, category, date, sort, radius };
+    const current = { q, city, zip, saleType, category, date, sort, radius, live };
     const merged = { ...current, ...overrides, page: '1' };
     Object.entries(merged).forEach(([k, v]) => {
       if (v) params.set(k, v);
@@ -74,7 +75,7 @@ export default function GarageSaleBrowseClient({
   }
 
   function handleReset() {
-    setQ(''); setCity(''); setZip(''); setSaleType(''); setCategory(''); setDate(''); setSort('newest'); setRadius('50');
+    setQ(''); setCity(''); setZip(''); setSaleType(''); setCategory(''); setDate(''); setSort('newest'); setRadius('50'); setLive('');
     router.push('/garage-sales');
   }
 
@@ -202,6 +203,24 @@ export default function GarageSaleBrowseClient({
               {d.label}
             </button>
           ))}
+
+          {/* Live filter chip — defaults to Nationwide radius so live sales are broadly discoverable */}
+          <button
+            type="button"
+            onClick={() => {
+              const newLive = live === 'true' ? '' : 'true';
+              setLive(newLive);
+              const overrides: Record<string, string> = { live: newLive };
+              if (newLive === 'true' && radius !== '99999') {
+                setRadius('99999');
+                overrides.radius = '99999';
+              }
+              router.push(buildSearchUrl(overrides));
+            }}
+            className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${live === 'true' ? 'border-red-500 bg-red-500 text-white' : 'border-slate-300 text-slate-600 hover:bg-slate-50'}`}
+          >
+            🔴 Live
+          </button>
 
           <div className="ml-auto flex items-center gap-2">
             <button

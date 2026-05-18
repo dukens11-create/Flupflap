@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { prisma, isDatabaseConfigured } from '@/lib/db';
 import GarageSaleCard from '@/components/GarageSaleCard';
 import GarageSaleBrowseClient from './GarageSaleBrowseClient';
-import { buildPublicGarageSaleWhere, expireGarageSales } from '@/lib/garage-sales';
+import { buildPublicGarageSaleWhere, expireGarageSales, batchGetLiveViewerCounts } from '@/lib/garage-sales';
 import { createPageMetadata } from '@/lib/seo';
 
 export const dynamic = 'force-dynamic';
@@ -18,6 +18,7 @@ interface SearchParams {
   date?: string;
   sort?: string;
   radius?: string;
+  live?: string;
   page?: string;
 }
 
@@ -43,12 +44,10 @@ export async function generateMetadata({
 }
 
 const RADIUS_OPTIONS = [
-  { label: '1 mile', value: '1' },
-  { label: '5 miles', value: '5' },
-  { label: '10 miles', value: '10' },
+  { label: 'Closest (10 mi)', value: '10' },
   { label: '25 miles', value: '25' },
   { label: '50 miles', value: '50' },
-  { label: '100 miles', value: '100' },
+  { label: 'Far (100 mi)', value: '100' },
   { label: '250 miles', value: '250' },
   { label: 'Nationwide', value: '99999' },
 ];
@@ -105,6 +104,7 @@ export default async function GarageSalesPage({
   let sales: Awaited<ReturnType<typeof prisma.garageSale.findMany>> = [];
   let total = 0;
   let dbError = false;
+  let viewerCountMap = new Map<string, number>();
 
   if (isDatabaseConfigured()) {
     try {
@@ -124,12 +124,24 @@ export default async function GarageSalesPage({
         }),
         prisma.garageSale.count({ where }),
       ]);
+
+      // Batch-fetch viewer counts for live sales (single query, avoids N+1)
+      const liveSaleIds = sales.filter(s => s.isLive).map(s => s.id);
+      if (liveSaleIds.length > 0) {
+        viewerCountMap = await batchGetLiveViewerCounts(liveSaleIds);
+      }
     } catch {
       dbError = true;
     }
   }
 
   const totalPages = Math.max(1, Math.ceil(total / perPage));
+
+  // Merge viewer counts into sales data for the client component
+  const salesWithViewers = sales.map(s => ({
+    ...s,
+    liveViewerCount: viewerCountMap.get(s.id),
+  }));
 
   return (
     <div className="space-y-6">
@@ -151,7 +163,7 @@ export default async function GarageSalesPage({
 
       {/* Client-side search & map component */}
       <GarageSaleBrowseClient
-        initialSales={JSON.parse(JSON.stringify(sales))}
+        initialSales={JSON.parse(JSON.stringify(salesWithViewers))}
         initialTotal={total}
         initialPage={page}
         totalPages={totalPages}
@@ -186,13 +198,17 @@ function buildWhere(sp: SearchParams, now: Date) {
   }
   if (sp.category) where.categories = { has: sp.category };
 
-  // Date-range filters — each branch sets both startDate and endDate together
-  // to avoid conflicting constraints from multiple assignments.
+  // Only show live sales when the live filter is active
+  if (sp.live === 'true') where.isLive = true;
+
+  // Date-range filters — each branch sets startDate (and endDate where needed).
+  // Note: buildPublicGarageSaleWhere already provides OR: [{ isLive: true }, { endDate: { gte: now } }]
+  // so we don't need an extra top-level endDate constraint for the default case — that would
+  // create an AND that neutralises the isLive OR branch for live sales with a past endDate.
   if (sp.date === 'today') {
     const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const dayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
     where.startDate = { gte: dayStart, lte: dayEnd };
-    where.endDate = { gte: now }; // must not be expired
   } else if (sp.date === 'tomorrow') {
     const tomorrow = new Date(now);
     tomorrow.setDate(now.getDate() + 1);
@@ -200,7 +216,6 @@ function buildWhere(sp: SearchParams, now: Date) {
       gte: new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate()),
       lte: new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 23, 59, 59),
     };
-    where.endDate = { gte: now }; // must not be expired
   } else if (sp.date === 'weekend') {
     const day = now.getDay();
     const sat = new Date(now);
@@ -209,22 +224,17 @@ function buildWhere(sp: SearchParams, now: Date) {
     const sun = new Date(sat);
     sun.setDate(sat.getDate() + 1);
     sun.setHours(23, 59, 59, 999);
-    // Sale must start by end of Sunday and end on or after Saturday
+    // Sale must start by end of Sunday and end on or after Saturday (or now if later)
     where.startDate = { lte: sun };
-    // endDate must be >= sat AND >= now (take the later of the two)
     where.endDate = { gte: sat > now ? sat : now };
   } else if (sp.date === 'open_now') {
     where.startDate = { lte: now };
-    where.endDate = { gte: now };
   } else if (sp.date === 'starting_soon') {
     const soon = new Date(now);
     soon.setHours(now.getHours() + 24);
     where.startDate = { gte: now, lte: soon };
-    where.endDate = { gte: now }; // must not be expired
-  } else {
-    // Default: hide expired listings
-    where.endDate = { gte: now };
   }
+  // Default (no date filter): buildPublicGarageSaleWhere's OR already handles endDate >= now
 
   return where;
 }

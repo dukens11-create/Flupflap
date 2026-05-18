@@ -5,7 +5,7 @@ import { prisma } from '@/lib/db';
 import { z } from 'zod';
 import { appUrl, stripe } from '@/lib/stripe';
 import { calculateGarageSalePricing } from '@/lib/garage-sale-pricing';
-import { buildPublicGarageSaleWhere, expireGarageSales, getGarageSalePricingSettings } from '@/lib/garage-sales';
+import { buildPublicGarageSaleWhere, expireGarageSales, getGarageSalePricingSettings, batchGetLiveViewerCounts } from '@/lib/garage-sales';
 import { logInfo } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
@@ -51,6 +51,7 @@ export async function GET(req: Request) {
   const category = url.searchParams.get('category') ?? '';
   const dateFilter = url.searchParams.get('date') ?? ''; // today|tomorrow|weekend|open_now|starting_soon
   const sort = url.searchParams.get('sort') ?? 'newest'; // newest|closest|most_viewed|featured
+  const live = url.searchParams.get('live') === 'true'; // only show live sales
   const lat = parseFloat(url.searchParams.get('lat') ?? '');
   const lng = parseFloat(url.searchParams.get('lng') ?? '');
   const radius = parseFloat(url.searchParams.get('radius') ?? '50'); // miles
@@ -121,7 +122,17 @@ export async function GET(req: Request) {
     if (startBefore) startDateFilter.lte = startBefore;
     where.startDate = startDateFilter;
   }
-  where.endDate = { gte: endAfter != null && endAfter > now ? endAfter : now };
+  // For the weekend filter we need an explicit endDate lower-bound so that non-live sales
+  // that haven't started the weekend yet are excluded. All other cases are handled by the
+  // OR: [{ isLive: true }, { endDate: { gte: now } }] inside buildPublicGarageSaleWhere —
+  // adding an extra top-level endDate here would create an AND that neutralises that OR for
+  // live sales whose scheduled window has just closed (before expiry archives them).
+  if (dateFilter === 'weekend' && endAfter != null) {
+    where.endDate = { gte: endAfter > now ? endAfter : now };
+  }
+
+  // Only show live sales when the live filter is requested
+  if (live) where.isLive = true;
 
   let orderBy: Record<string, string> | Record<string, string>[];
   if (sort === 'most_viewed') {
@@ -164,7 +175,15 @@ export async function GET(req: Request) {
 
   const total = await prisma.garageSale.count({ where });
 
-  return NextResponse.json({ sales, total, page, perPage });
+  // Batch-fetch active viewer counts for live sales (single query, avoids N+1)
+  const liveSaleIds = sales.filter(s => s.isLive).map(s => s.id);
+  const viewerCountMap = liveSaleIds.length > 0 ? await batchGetLiveViewerCounts(liveSaleIds) : new Map<string, number>();
+  const salesWithViewers = sales.map(s => ({
+    ...s,
+    liveViewerCount: viewerCountMap.get(s.id),
+  }));
+
+  return NextResponse.json({ sales: salesWithViewers, total, page, perPage });
 }
 
 /** POST /api/garage-sales — create a garage sale listing and payment checkout */
