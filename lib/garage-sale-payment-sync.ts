@@ -72,6 +72,23 @@ export async function confirmGarageSalePayment(params: {
   }
 
   const resolvedSellerId = sellerId ?? sale.sellerId;
+
+  if (
+    sale.paymentStatus === 'PAID'
+    && (
+      (stripeCheckoutId && sale.stripeCheckoutId === stripeCheckoutId)
+      || (stripePaymentId && sale.stripePaymentId === stripePaymentId)
+    )
+  ) {
+    logInfo('Garage sale payment confirmation skipped because payment was already applied', {
+      tag: 'garage-sale-payment-sync',
+      saleId,
+      sellerId: resolvedSellerId,
+      source,
+    });
+    return { processed: true, saleId, sellerId: resolvedSellerId, alreadyProcessed: true as const };
+  }
+
   const now = new Date();
   const activationData = buildGarageSaleActivationData(sale, now, amountCents, stripePaymentId ?? sale.stripePaymentId ?? null);
   const paymentSelector = stripeCheckoutId

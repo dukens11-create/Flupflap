@@ -81,6 +81,12 @@ async function finalizeGarageSaleCheckout(cs: Stripe.Checkout.Session) {
   const saleId: string | undefined = cs.metadata?.saleId ?? checkoutContext?.saleId;
   const sellerId: string | undefined = cs.metadata?.sellerId ?? checkoutContext?.sellerId;
   if (!saleId || !sellerId) {
+    logWarn('Garage sale checkout session missing metadata and could not be resolved', {
+      tag: 'stripe/webhook',
+      checkoutSessionId: cs.id,
+      saleId: saleId ?? null,
+      sellerId: sellerId ?? null,
+    });
     return new NextResponse('Missing garage sale metadata', { status: 400 });
   }
 

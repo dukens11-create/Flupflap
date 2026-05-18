@@ -143,7 +143,7 @@ export default async function GarageSaleDetailPage({ params, searchParams }: Par
   const isOwner = session?.user?.id === sale.sellerId;
   const isAdmin = session?.user?.role === 'ADMIN';
 
-  if (sp.payment === 'success' && sp.session_id && isOwner) {
+  if (sp.payment === 'success' && sp.session_id && isOwner && sale.paymentStatus !== 'PAID') {
     const syncResult = await syncGarageSaleCheckoutSessionForSeller({
       checkoutSessionId: sp.session_id,
       saleId: sale.id,

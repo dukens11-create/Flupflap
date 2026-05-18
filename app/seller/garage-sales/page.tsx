@@ -71,30 +71,6 @@ export default async function SellerGarageSalesPage({
   const saleId = typeof sp.saleId === 'string' ? sp.saleId : undefined;
   const sessionId = typeof sp.session_id === 'string' ? sp.session_id : undefined;
 
-  if (sp.paid === PAID_QUERY_FLAG && saleId && sessionId) {
-    const syncResult = await syncGarageSaleCheckoutSessionForSeller({
-      checkoutSessionId: sessionId,
-      saleId,
-      sellerId,
-    });
-    if (!syncResult.synced && shouldWarnOnSyncFailure(syncResult.reason)) {
-      logWarn('Seller garage sale payment sync did not finalize', {
-        tag: 'seller/garage-sales',
-        action: 'syncGarageSaleCheckoutSessionForSeller',
-        saleId,
-        reason: syncResult.reason ?? 'unknown',
-      });
-    }
-    if (syncResult.synced || syncResult.reason === 'already_paid') {
-      const ownedSale = await prisma.garageSale.findFirst({
-        where: { id: saleId, sellerId },
-        select: { id: true },
-      });
-      if (ownedSale) {
-        redirect(`/seller/garage-sales?paid=1&saleId=${encodeURIComponent(ownedSale.id)}`);
-      }
-    }
-  }
   await expireGarageSales();
 
   const sales = await prisma.garageSale.findMany({
@@ -116,6 +92,32 @@ export default async function SellerGarageSalesPage({
   });
 
   const focusedSale = saleId ? sales.find((sale) => sale.id === saleId) : null;
+
+  if (
+    sp.paid === PAID_QUERY_FLAG
+    && saleId
+    && sessionId
+    && focusedSale
+    && focusedSale.paymentStatus !== 'PAID'
+  ) {
+    const syncResult = await syncGarageSaleCheckoutSessionForSeller({
+      checkoutSessionId: sessionId,
+      saleId,
+      sellerId,
+    });
+    if (!syncResult.synced && shouldWarnOnSyncFailure(syncResult.reason)) {
+      logWarn('Seller garage sale payment sync did not finalize', {
+        tag: 'seller/garage-sales',
+        action: 'syncGarageSaleCheckoutSessionForSeller',
+        saleId,
+        reason: syncResult.reason ?? 'unknown',
+      });
+    }
+    if (syncResult.synced || syncResult.reason === 'already_paid') {
+      redirect(`/seller/garage-sales?paid=1&saleId=${encodeURIComponent(saleId)}`);
+    }
+  }
+
   const focusedSaleLifecycle = focusedSale ? deriveGarageSaleLifecycle(focusedSale) : null;
 
   return (
