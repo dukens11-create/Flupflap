@@ -114,7 +114,12 @@ export default function GarageSalePaymentStatusBanner({
       const res = await fetch(`/api/garage-sales/${saleId}/sync-payment`, {
         method: 'POST',
       });
-      const data = await res.json().catch(() => ({}));
+      let data: any = {};
+      try {
+        data = await res.json();
+      } catch (parseError) {
+        console.warn('[garage-sale-payment-banner] failed to parse sync response JSON', parseError);
+      }
       const reason = typeof data?.reason === 'string' ? data.reason : 'sync_failed';
       if (!res.ok || !data?.ok) {
         if (reason === 'payment_not_paid') {

@@ -19,7 +19,12 @@ export default function GarageSalePaymentSyncButton({ saleId }: Props) {
     setError(null);
     try {
       const res = await fetch(`/api/garage-sales/${saleId}/sync-payment`, { method: 'POST' });
-      const data = await res.json().catch(() => ({}));
+      let data: any = {};
+      try {
+        data = await res.json();
+      } catch (parseError) {
+        console.warn('[garage-sale-payment-sync-button] failed to parse sync response JSON', parseError);
+      }
       if (!res.ok || !data?.ok) {
         const reason = typeof data?.reason === 'string' ? data.reason : 'sync_failed';
         if (reason === 'payment_not_paid') {
