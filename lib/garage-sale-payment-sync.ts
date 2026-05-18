@@ -263,6 +263,8 @@ export async function syncGarageSaleCheckoutSessionForSeller(params: {
 
   const checkoutContext = await resolveGarageSaleCheckoutContext(checkoutSession.id);
   const hasMatchingSaleId = checkoutSession.metadata?.saleId === saleId || checkoutContext?.saleId === saleId;
+  // Some legacy/live Stripe sessions can miss garage-sale metadata. If the
+  // checkout ID is already linked to this sale in our DB, allow reconciliation.
   if (!isGarageSaleCheckoutSession(checkoutSession) && !hasMatchingSaleId) {
     return { synced: false, reason: 'not_garage_sale_checkout' };
   }

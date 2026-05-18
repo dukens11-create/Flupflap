@@ -58,7 +58,7 @@ export function getGarageSaleVisibilityBlockReason(
 ): GarageSaleVisibilityBlockReason {
 
   if (sale.isArchived) return 'ARCHIVED';
-  if (sale.isSpam && sale.status !== 'APPROVED') return 'SPAM';
+  if (sale.status !== 'APPROVED' && sale.isSpam) return 'SPAM';
   if (sale.paymentStatus === 'PENDING') return 'PAYMENT_PENDING';
   if (sale.paymentStatus === 'FAILED') return 'PAYMENT_FAILED';
   if (sale.paymentStatus === 'REFUNDED') return 'PAYMENT_REFUNDED';

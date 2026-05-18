@@ -133,6 +133,14 @@ async function finalizeGarageSaleFromPaymentIntent(intent: Stripe.PaymentIntent)
       const checkoutSession = sessions.data[0];
       if (checkoutSession) {
         const finalized = await finalizeGarageSaleCheckoutSession(checkoutSession);
+        if (finalized.reason === 'not_paid') {
+          logWarn('Garage sale checkout session found from payment intent but payment is not marked paid', {
+            tag: 'stripe/webhook',
+            paymentIntentId: intent.id,
+            stripeCheckoutId: checkoutSession.id,
+            saleId: finalized.saleId ?? null,
+          });
+        }
         if (finalized.processed || finalized.reason === 'already_paid' || finalized.reason === 'not_paid') {
           return new NextResponse('ok', { status: 200 });
         }

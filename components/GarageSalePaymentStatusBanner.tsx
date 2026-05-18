@@ -115,17 +115,19 @@ export default function GarageSalePaymentStatusBanner({
         method: 'POST',
       });
       const data = await res.json().catch(() => ({}));
+      const reason = typeof data?.reason === 'string' ? data.reason : 'sync_failed';
       if (!res.ok || !data?.ok) {
-        throw new Error(typeof data?.reason === 'string' ? data.reason : 'sync_failed');
+        if (reason === 'payment_not_paid') {
+          setSyncError('Stripe has not marked this checkout as paid yet. Please try again shortly.');
+          return;
+        }
+        setSyncError('Unable to sync payment right now. Please try again.');
+        return;
       }
       setSyncMessage('Payment sync completed. Refreshing listing state…');
       router.refresh();
-    } catch (error) {
-      setSyncError(
-        error instanceof Error && error.message === 'payment_not_paid'
-          ? 'Stripe has not marked this checkout as paid yet. Please try again shortly.'
-          : 'Unable to sync payment right now. Please try again.',
-      );
+    } catch {
+      setSyncError('Unable to sync payment right now. Please try again.');
     } finally {
       setIsSyncing(false);
     }
