@@ -43,7 +43,10 @@ function isAndroidChromeOrSamsungBrowser() {
   if (typeof navigator === 'undefined') return false;
 
   const ua = navigator.userAgent;
-  return /Android/i.test(ua) && (/\bChrome\//i.test(ua) || /SamsungBrowser\//i.test(ua));
+  return /Android/i.test(ua) && (
+    /SamsungBrowser\//i.test(ua)
+    || (/\bChrome\//i.test(ua) && !/\b(?:EdgA?|OPR|Brave)\//i.test(ua))
+  );
 }
 
 function logCameraAccessError(name: string, error: unknown) {
@@ -475,8 +478,8 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   })();
 
   const browserPermissionHint = isAndroidChromeOrSamsungBrowser()
-    ? 'On Android Chrome or Samsung Internet, if you do not see the permission popup, open the lock icon in the address bar, allow Camera and Microphone, then tap Retry Camera Access.'
-    : 'Allow Camera and Microphone in your browser, then tap Retry Camera Access.';
+    ? 'On Android Chrome or Samsung Internet, if you do not see the permission popup, open the lock icon in the address bar, allow Camera and Microphone, then select Retry Camera Access.'
+    : 'Allow Camera and Microphone in your browser, then select Retry Camera Access.';
 
   const cameraMessage = (() => {
     if (error) return error;
