@@ -43,12 +43,13 @@ function getLifecycle(sale: GarageSaleVisibilityInput) {
 }
 
 export function isGarageSalePubliclyVisible(sale: GarageSaleVisibilityInput) {
-  return getGarageSaleVisibilityBlockReason(sale) === null;
+  const reason = getGarageSaleVisibilityBlockReason(sale);
+  return reason === null || reason === 'UPCOMING';
 }
 
 export function isGarageSalePubliclyOpenNow(sale: GarageSaleVisibilityInput) {
   const lifecycle = getLifecycle(sale);
-  return getGarageSaleVisibilityBlockReason(sale, lifecycle) === null && Boolean(lifecycle?.openNow);
+  return isGarageSalePubliclyVisible(sale) && Boolean(lifecycle?.openNow);
 }
 
 export function getGarageSaleVisibilityBlockReason(
@@ -140,7 +141,7 @@ export function getGarageSaleOwnerHiddenStatusMessage(
     return 'Your listing was rejected. Update details and try again.';
   }
   if (reason === 'UPCOMING') {
-    return 'Your listing is visible and scheduled. Live controls unlock when your sale start time arrives.';
+    return 'Your listing is scheduled. Live controls unlock when your sale start time arrives.';
   }
   if (reason === 'EXPIRED') {
     return 'This listing has expired and is no longer visible.';
