@@ -5,7 +5,8 @@ import { prisma } from '@/lib/db';
 import { z } from 'zod';
 import { appUrl, stripe } from '@/lib/stripe';
 import { calculateGarageSalePricing } from '@/lib/garage-sale-pricing';
-import { expireGarageSales, getGarageSalePricingSettings } from '@/lib/garage-sales';
+import { buildPublicGarageSaleWhere, expireGarageSales, getGarageSalePricingSettings } from '@/lib/garage-sales';
+import { logInfo } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -96,11 +97,7 @@ export async function GET(req: Request) {
     startBefore = soon;
   }
 
-  const where: Record<string, unknown> = {
-    status: 'APPROVED',
-    isSpam: false,
-    paymentStatus: 'PAID',
-  };
+  const where: Record<string, unknown> = buildPublicGarageSaleWhere(now);
 
   if (q) {
     where.OR = [
@@ -264,6 +261,15 @@ export async function POST(req: Request) {
     },
   });
 
+  logInfo('Garage sale listing created', {
+    tag: 'garage-sales/POST',
+    saleId: sale.id,
+    sellerId: session.user.id,
+    requiresPayment: pricing.totalCents > 0,
+    initialStatus: sale.status,
+    paymentStatus: sale.paymentStatus,
+  });
+
   if (pricing.totalCents === 0) {
     await prisma.garageSalePayment.create({
       data: {
@@ -272,6 +278,11 @@ export async function POST(req: Request) {
         amountCents: 0,
         status: 'PAID',
       },
+    });
+    logInfo('Garage sale listing activated without checkout', {
+      tag: 'garage-sales/POST',
+      saleId: sale.id,
+      sellerId: session.user.id,
     });
     return NextResponse.json({ id: sale.id, checkoutUrl: null, requiresPayment: false }, { status: 201 });
   }
@@ -294,8 +305,8 @@ export async function POST(req: Request) {
     mode: 'payment',
     payment_method_types: ['card'],
     line_items: lineItems,
-    success_url: `${appUrl}/seller/garage-sales?paid=1&saleId=${sale.id}&session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${appUrl}/seller/garage-sales?payment=cancelled&saleId=${sale.id}`,
+    success_url: `${appUrl}/garage-sales/${sale.id}?payment=success&session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${appUrl}/garage-sales/manage/${sale.id}?payment=cancelled`,
     customer_email: session.user.email ?? undefined,
     metadata: {
       type: 'garage_sale_listing',
@@ -328,6 +339,13 @@ export async function POST(req: Request) {
       },
     }),
   ]);
+
+  logInfo('Garage sale checkout session created', {
+    tag: 'garage-sales/POST',
+    saleId: sale.id,
+    sellerId: session.user.id,
+    stripeCheckoutId: checkout.id,
+  });
 
   return NextResponse.json({ id: sale.id, checkoutUrl: checkout.url, requiresPayment: true }, { status: 201 });
 }

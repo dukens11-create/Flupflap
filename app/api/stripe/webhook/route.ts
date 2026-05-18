@@ -16,8 +16,9 @@ import { isSellerVerificationApproved } from '@/lib/seller-verification';
 import { createNotification, createNotifications, type CreateNotificationInput } from '@/lib/notifications';
 import { purchaseShipmentRate, buildTrackingUrl } from '@/lib/shipping';
 import { sendEmail } from '@/lib/email';
-import { logError, logWarn } from '@/lib/logger';
+import { logError, logInfo, logWarn } from '@/lib/logger';
 import {
+  confirmGarageSalePayment,
   failGarageSaleCheckoutSession,
   finalizeGarageSaleCheckoutSession,
   isGarageSaleCheckoutSession,
@@ -75,14 +76,6 @@ async function resolveGarageSaleCheckoutContext(checkoutId: string) {
   return { saleId: sale.id, sellerId: sale.sellerId };
 }
 
-async function findLatestGarageSalePayment(saleId: string) {
-  return prisma.garageSalePayment.findFirst({
-    where: { saleId },
-    orderBy: { createdAt: 'desc' },
-    select: { id: true },
-  });
-}
-
 async function finalizeGarageSaleCheckout(cs: Stripe.Checkout.Session) {
   const checkoutContext = await resolveGarageSaleCheckoutContext(cs.id);
   const saleId: string | undefined = cs.metadata?.saleId ?? checkoutContext?.saleId;
@@ -99,7 +92,6 @@ async function finalizeGarageSaleCheckout(cs: Stripe.Checkout.Session) {
     return new NextResponse('ok', { status: 200 });
   }
 
-  if (sale.paymentStatus === 'PAID') return new NextResponse('Already processed', { status: 200 });
   const paymentIntentId = typeof cs.payment_intent === 'string' ? cs.payment_intent : cs.payment_intent?.id ?? null;
 
   let receiptUrl: string | null = null;
@@ -114,39 +106,15 @@ async function finalizeGarageSaleCheckout(cs: Stripe.Checkout.Session) {
     }
   }
 
-  const now = new Date();
-  await prisma.$transaction([
-    prisma.garageSale.update({
-      where: { id: saleId },
-      data: {
-        status: 'APPROVED',
-        paymentStatus: 'PAID',
-        stripePaymentId: paymentIntentId,
-        paidAt: now,
-        activatedAt: now,
-        isFeatured: sale.listingType === 'FEATURED',
-        totalPaidCents: typeof cs.amount_total === 'number' ? cs.amount_total : sale.totalPaidCents,
-      },
-    }),
-    prisma.garageSalePayment.upsert({
-      where: { stripeCheckoutId: cs.id },
-      update: {
-        status: 'PAID',
-        amountCents: typeof cs.amount_total === 'number' ? cs.amount_total : sale.totalPaidCents,
-        stripePaymentId: paymentIntentId,
-        stripeReceiptUrl: receiptUrl,
-      },
-      create: {
-        saleId,
-        sellerId,
-        amountCents: typeof cs.amount_total === 'number' ? cs.amount_total : sale.totalPaidCents,
-        status: 'PAID',
-        stripeCheckoutId: cs.id,
-        stripePaymentId: paymentIntentId,
-        stripeReceiptUrl: receiptUrl,
-      },
-    }),
-  ]);
+  await confirmGarageSalePayment({
+    saleId,
+    sellerId,
+    amountCents: typeof cs.amount_total === 'number' ? cs.amount_total : sale.totalPaidCents,
+    stripeCheckoutId: cs.id,
+    stripePaymentId: paymentIntentId,
+    stripeReceiptUrl: receiptUrl,
+    source: 'checkout_session',
+  });
 
   return new NextResponse('ok', { status: 200 });
 }
@@ -185,7 +153,7 @@ async function finalizeGarageSaleFromPaymentIntent(intent: Stripe.PaymentIntent)
   }
 
   const sale = await prisma.garageSale.findUnique({ where: { id: saleId } });
-  if (!sale || sale.paymentStatus === 'PAID') {
+  if (!sale) {
     return new NextResponse('ok', { status: 200 });
   }
 
@@ -218,43 +186,14 @@ async function finalizeGarageSaleFromPaymentIntent(intent: Stripe.PaymentIntent)
     });
     return new NextResponse('ok', { status: 200 });
   }
-  const existingPayment = await findLatestGarageSalePayment(saleId);
-
-  const now = new Date();
-  await prisma.$transaction([
-    prisma.garageSale.update({
-      where: { id: saleId },
-      data: {
-        status: 'APPROVED',
-        paymentStatus: 'PAID',
-        stripePaymentId: intent.id,
-        paidAt: now,
-        activatedAt: now,
-        isFeatured: sale.listingType === 'FEATURED',
-        totalPaidCents: amountPaidCents,
-      },
-    }),
-    existingPayment
-      ? prisma.garageSalePayment.update({
-        where: { id: existingPayment.id },
-        data: {
-          status: 'PAID',
-          amountCents: amountPaidCents,
-          stripePaymentId: intent.id,
-          stripeReceiptUrl: receiptUrl,
-        },
-      })
-      : prisma.garageSalePayment.create({
-        data: {
-          saleId,
-          sellerId,
-          amountCents: amountPaidCents,
-          status: 'PAID',
-          stripePaymentId: intent.id,
-          stripeReceiptUrl: receiptUrl,
-        },
-      }),
-  ]);
+  await confirmGarageSalePayment({
+    saleId,
+    sellerId,
+    amountCents: amountPaidCents,
+    stripePaymentId: intent.id,
+    stripeReceiptUrl: receiptUrl,
+    source: 'payment_intent',
+  });
 
   return new NextResponse('ok', { status: 200 });
 }
@@ -270,6 +209,19 @@ export async function POST(req: Request) {
     console.error('[webhook] signature error:', err.message);
     logWarn('Stripe webhook signature verification failed', { tag: 'stripe/webhook', message: err.message });
     return new NextResponse(`Webhook error: ${err.message}`, { status: 400 });
+  }
+
+  if (
+    event.type === 'payment_intent.succeeded'
+    || CHECKOUT_COMPLETION_EVENTS.has(event.type)
+    || event.type === 'checkout.session.expired'
+    || event.type === 'checkout.session.async_payment_failed'
+  ) {
+    logInfo('Stripe webhook received for garage sale payment flow', {
+      tag: 'stripe/webhook',
+      eventType: event.type,
+      eventId: event.id,
+    });
   }
 
   // Mark seller onboarding complete when Stripe confirms the connected account

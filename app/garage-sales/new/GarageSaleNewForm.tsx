@@ -188,7 +188,7 @@ export default function GarageSaleNewForm() {
         window.location.href = data.checkoutUrl;
         return;
       }
-      router.push(`/seller/garage-sales?created=1&paid=1&saleId=${data.id}`);
+      router.push(`/garage-sales/${data.id}?payment=success`);
     } catch {
       setError('Network error. Please try again.');
       setSubmitting(false);
@@ -322,7 +322,7 @@ export default function GarageSaleNewForm() {
             <input
               name="startDate"
               type="datetime-local"
-              className="input"
+              className="input min-h-11 text-base sm:text-sm"
               required
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
@@ -333,7 +333,7 @@ export default function GarageSaleNewForm() {
             <input
               name="endDate"
               type="datetime-local"
-              className="input"
+              className="input min-h-11 text-base sm:text-sm"
               required
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
