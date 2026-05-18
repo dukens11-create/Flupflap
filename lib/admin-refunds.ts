@@ -1,17 +1,89 @@
 import { NotificationType, type RefundRequestStatus } from '@prisma/client';
 import { prisma } from '@/lib/db';
+import { dollars } from '@/lib/money';
 import { createNotifications } from '@/lib/notifications';
-import { logError } from '@/lib/logger';
 import { normalizeRefundAmountCents } from '@/lib/refunds';
 import { stripe } from '@/lib/stripe';
 
-const adminRefundDashboardInclude = {
-  order: {
-    select: {
-      id: true,
-      status: true,
-      totalCents: true,
-      stripePaymentIntentId: true,
+export type AdminRefundRecord = {
+  id: string;
+  orderId: string;
+  orderStatus: string;
+  buyer: {
+    id: string;
+    name: string | null;
+    email: string;
+  };
+  seller: {
+    id: string;
+    name: string | null;
+    email: string;
+  };
+  reason: string;
+  details: string | null;
+  requestedAmountCents: number;
+  approvedAmountCents: number | null;
+  adminNotes: string | null;
+  sellerResponse: string | null;
+  status: RefundRequestStatus;
+  stripePaymentIntentId: string | null;
+  stripeRefundId: string | null;
+  createdAt: string;
+  resolvedAt: string | null;
+};
+
+type RefundActionInput = {
+  refundId: string;
+  adminUserId: string;
+  adminNote?: string | null;
+  approvedAmountCents?: number;
+};
+
+type RefundActionResult =
+  | { ok: true; refund: AdminRefundRecord }
+  | { ok: false; status: number; error: string };
+
+function toAdminRefundRecord(refundRequest: {
+  id: string;
+  orderId: string;
+  reason: string;
+  details: string | null;
+  requestedAmountCents: number;
+  approvedAmountCents: number | null;
+  adminNotes: string | null;
+  sellerResponse: string | null;
+  status: RefundRequestStatus;
+  stripeRefundId: string | null;
+  createdAt: Date;
+  resolvedAt: Date | null;
+  buyer: { id: string; name: string | null; email: string };
+  seller: { id: string; name: string | null; email: string };
+  order: { id: string; status: string; stripePaymentIntentId: string | null };
+}): AdminRefundRecord {
+  return {
+    id: refundRequest.id,
+    orderId: refundRequest.orderId,
+    orderStatus: refundRequest.order.status,
+    buyer: refundRequest.buyer,
+    seller: refundRequest.seller,
+    reason: refundRequest.reason,
+    details: refundRequest.details,
+    requestedAmountCents: refundRequest.requestedAmountCents,
+    approvedAmountCents: refundRequest.approvedAmountCents,
+    adminNotes: refundRequest.adminNotes,
+    sellerResponse: refundRequest.sellerResponse,
+    status: refundRequest.status,
+    stripePaymentIntentId: refundRequest.order.stripePaymentIntentId,
+    stripeRefundId: refundRequest.stripeRefundId,
+    createdAt: refundRequest.createdAt.toISOString(),
+    resolvedAt: refundRequest.resolvedAt?.toISOString() ?? null,
+  };
+}
+
+async function getRefundRequestForAction(refundId: string) {
+  return prisma.refundRequest.findUnique({
+    where: { id: refundId },
+    include: {
       buyer: {
         select: {
           id: true,
@@ -19,290 +91,305 @@ const adminRefundDashboardInclude = {
           email: true,
         },
       },
-      items: {
+      seller: {
         select: {
           id: true,
-          quantity: true,
-          product: {
-            select: {
-              id: true,
-              title: true,
-              seller: {
-                select: {
-                  id: true,
-                  name: true,
-                  email: true,
-                },
-              },
-            },
-          },
+          name: true,
+          email: true,
+        },
+      },
+      order: {
+        select: {
+          id: true,
+          status: true,
+          totalCents: true,
+          stripePaymentIntentId: true,
         },
       },
     },
-  },
-} as const;
-
-const adminRefundActionInclude = {
-  order: {
-    select: {
-      id: true,
-      status: true,
-      totalCents: true,
-      stripePaymentIntentId: true,
-    },
-  },
-} as const;
-
-async function findAdminRefundDashboardRows() {
-  return prisma.refundRequest.findMany({
-    include: adminRefundDashboardInclude,
-    orderBy: { createdAt: 'desc' },
   });
 }
 
-async function findAdminRefundActionRecord(refundRequestId: string) {
-  return prisma.refundRequest.findUnique({
-    where: { id: refundRequestId },
-    include: adminRefundActionInclude,
-  });
-}
-
-type AdminRefundDashboardRecord = Awaited<ReturnType<typeof findAdminRefundDashboardRows>>[number];
-type AdminRefundActionRecord = NonNullable<Awaited<ReturnType<typeof findAdminRefundActionRecord>>>;
-
-export type AdminRefundDashboardItem = {
-  id: string;
-  status: RefundRequestStatus;
-  reason: string;
-  details: string | null;
-  requestedAmountCents: number;
-  approvedAmountCents: number | null;
-  adminNotes: string | null;
-  sellerResponse: string | null;
-  stripeRefundId: string | null;
-  createdAt: string;
-  updatedAt: string;
-  resolvedAt: string | null;
-  order: {
-    id: string;
-    status: string;
-    totalCents: number;
-    stripePaymentIntentId: string | null;
-    buyer: { id: string; name: string | null; email: string };
-    items: Array<{
-      id: string;
-      quantity: number;
-      product: {
-        id: string;
-        title: string;
-        seller: { id: string; name: string | null; email: string };
-      };
-    }>;
-  };
-};
-
-export type AdminRefundMutationResult = {
-  id: string;
-  status: RefundRequestStatus;
-  approvedAmountCents: number | null;
-  adminNotes: string | null;
-  stripeRefundId: string | null;
-  resolvedAt: string | null;
-};
-
-export class AdminRefundActionError extends Error {
-  constructor(
-    message: string,
-    public readonly status: number,
-  ) {
-    super(message);
-    this.name = 'AdminRefundActionError';
-  }
-}
-
-function serializeAdminRefundRequest(request: AdminRefundDashboardRecord): AdminRefundDashboardItem {
-  return {
-    ...request,
-    createdAt: request.createdAt.toISOString(),
-    updatedAt: request.updatedAt.toISOString(),
-    resolvedAt: request.resolvedAt?.toISOString() ?? null,
-  };
-}
-
-function serializeMutationResult(request: {
-  id: string;
-  status: RefundRequestStatus;
-  approvedAmountCents: number | null;
-  adminNotes: string | null;
-  stripeRefundId: string | null;
-  resolvedAt: Date | null;
-}): AdminRefundMutationResult {
-  return {
-    id: request.id,
-    status: request.status,
-    approvedAmountCents: request.approvedAmountCents,
-    adminNotes: request.adminNotes,
-    stripeRefundId: request.stripeRefundId,
-    resolvedAt: request.resolvedAt?.toISOString() ?? null,
-  };
-}
-
-async function requireRefundRequest(refundRequestId: string): Promise<AdminRefundActionRecord> {
-  const refundRequest = await findAdminRefundActionRecord(refundRequestId);
-  if (!refundRequest) {
-    throw new AdminRefundActionError('Refund request not found.', 404);
-  }
-  return refundRequest;
-}
-
-function assertRefundRequestOpen(refundRequest: AdminRefundActionRecord) {
-  if (refundRequest.status === 'DENIED' || refundRequest.status === 'REFUNDED') {
-    throw new AdminRefundActionError('This refund request is already resolved.', 400);
-  }
-}
-
-export async function getAdminRefundRequests(): Promise<AdminRefundDashboardItem[]> {
+export async function getAdminRefundRequests(): Promise<{
+  refundRequests: AdminRefundRecord[];
+  fetchFailed: boolean;
+}> {
   try {
-    const refundRequests = await findAdminRefundDashboardRows();
-    return refundRequests.map(serializeAdminRefundRequest);
-  } catch (error) {
-    logError('Failed to load admin refunds dashboard data.', error, {
-      tag: 'admin/refunds/page',
+    const refundRequests = await prisma.refundRequest.findMany({
+      include: {
+        buyer: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        seller: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        order: {
+          select: {
+            id: true,
+            status: true,
+            stripePaymentIntentId: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
     });
-    return [];
+
+    return {
+      refundRequests: refundRequests.map(toAdminRefundRecord),
+      fetchFailed: false,
+    };
+  } catch (error) {
+    console.error('[admin/refunds] Failed to fetch refund requests.', error);
+    return {
+      refundRequests: [],
+      fetchFailed: true,
+    };
   }
 }
 
-export async function approveAdminRefundRequest({
-  refundRequestId,
-  adminUserId,
-  approvedAmountCents,
-  adminNotes,
-}: {
-  refundRequestId: string;
-  adminUserId: string;
-  approvedAmountCents?: number;
-  adminNotes?: string;
-}): Promise<AdminRefundMutationResult> {
-  const refundRequest = await requireRefundRequest(refundRequestId);
-  assertRefundRequestOpen(refundRequest);
+export async function approveAdminRefund(input: RefundActionInput): Promise<RefundActionResult> {
+  try {
+    const refundRequest = await getRefundRequestForAction(input.refundId);
 
-  if (!refundRequest.order.stripePaymentIntentId) {
-    throw new AdminRefundActionError('No Stripe payment intent found for this order.', 400);
-  }
+    if (!refundRequest) {
+      return { ok: false, status: 404, error: 'Refund request not found.' };
+    }
 
-  const normalizedApprovedAmountCents = normalizeRefundAmountCents(
-    approvedAmountCents ?? refundRequest.requestedAmountCents,
-    refundRequest.order.totalCents,
-  );
-  const mergedNotes = adminNotes?.trim() || null;
+    if (['DENIED', 'REFUNDED'].includes(refundRequest.status)) {
+      return { ok: false, status: 400, error: 'This refund request is already resolved.' };
+    }
 
-  const stripeRefund = await stripe.refunds.create({
-    payment_intent: refundRequest.order.stripePaymentIntentId,
-    amount: normalizedApprovedAmountCents,
-    metadata: {
-      orderId: refundRequest.orderId,
-      refundRequestId: refundRequest.id,
-      approvedBy: adminUserId,
-    },
-  });
+    if (!refundRequest.order.stripePaymentIntentId) {
+      return { ok: false, status: 400, error: 'No Stripe payment intent found for this refund.' };
+    }
 
-  const resolvedAt = new Date();
-  const nextOrderStatus =
-    normalizedApprovedAmountCents < refundRequest.order.totalCents
-      ? 'PARTIALLY_REFUNDED'
-      : 'REFUNDED';
+    const approvedAmountCents = normalizeRefundAmountCents(
+      input.approvedAmountCents ?? refundRequest.requestedAmountCents,
+      refundRequest.order.totalCents,
+    );
+    const adminNotes = input.adminNote?.trim() || null;
+    const amountLabel = dollars(approvedAmountCents);
 
-  const updated = await prisma.$transaction(async (tx) => {
-    await tx.order.update({
-      where: { id: refundRequest.orderId },
-      data: { status: nextOrderStatus },
-    });
-
-    return tx.refundRequest.update({
-      where: { id: refundRequest.id },
-      data: {
-        status: 'REFUNDED',
-        approvedAmountCents: normalizedApprovedAmountCents,
-        adminNotes: mergedNotes,
-        stripeRefundId: stripeRefund.id,
-        resolvedAt,
-      },
-    });
-  });
-
-  await createNotifications([
-    {
-      userId: refundRequest.buyerId,
-      type: NotificationType.ORDER_UPDATE,
-      title: 'Refund completed',
-      body: `A refund of $${(normalizedApprovedAmountCents / 100).toFixed(2)} was issued to your original payment method.`,
-      link: `/orders/${refundRequest.orderId}`,
-      data: {
+    const stripeRefund = await stripe.refunds.create({
+      payment_intent: refundRequest.order.stripePaymentIntentId,
+      amount: approvedAmountCents,
+      metadata: {
         orderId: refundRequest.orderId,
         refundRequestId: refundRequest.id,
-        status: 'REFUNDED',
-        stripeRefundId: stripeRefund.id,
+        approvedBy: input.adminUserId,
       },
-    },
-  ]);
+    });
 
-  return serializeMutationResult(updated);
-}
+    const resolvedAt = new Date();
+    const nextOrderStatus = approvedAmountCents < refundRequest.order.totalCents ? 'PARTIALLY_REFUNDED' : 'REFUNDED';
 
-export async function rejectAdminRefundRequest({
-  refundRequestId,
-  adminNotes,
-}: {
-  refundRequestId: string;
-  adminNotes?: string;
-}): Promise<AdminRefundMutationResult> {
-  const refundRequest = await requireRefundRequest(refundRequestId);
-  assertRefundRequestOpen(refundRequest);
+    const updated = await prisma.$transaction(async (tx) => {
+      await tx.order.update({
+        where: { id: refundRequest.orderId },
+        data: { status: nextOrderStatus },
+      });
 
-  const denied = await prisma.refundRequest.update({
-    where: { id: refundRequest.id },
-    data: {
-      status: 'DENIED',
-      adminNotes: adminNotes?.trim() || null,
-      resolvedAt: new Date(),
-    },
-  });
+      return tx.refundRequest.update({
+        where: { id: refundRequest.id },
+        data: {
+          status: 'REFUNDED',
+          approvedAmountCents,
+          adminNotes,
+          stripeRefundId: stripeRefund.id,
+          resolvedAt,
+        },
+        include: {
+          buyer: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+          seller: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+          order: {
+            select: {
+              id: true,
+              status: true,
+              stripePaymentIntentId: true,
+            },
+          },
+        },
+      });
+    });
 
-  await createNotifications([
-    {
-      userId: refundRequest.buyerId,
-      type: NotificationType.ORDER_UPDATE,
-      title: 'Refund request denied',
-      body: 'Your refund request was denied after review by support.',
-      link: `/orders/${refundRequest.orderId}`,
-      data: { orderId: refundRequest.orderId, refundRequestId: refundRequest.id, status: 'DENIED' },
-    },
-  ]);
+    await createNotifications([
+      {
+        userId: refundRequest.buyerId,
+        type: NotificationType.ORDER_UPDATE,
+        title: 'Refund request approved',
+        body: `A refund of ${amountLabel} has been issued to your original payment method.`,
+        link: `/orders/${refundRequest.orderId}`,
+        data: {
+          orderId: refundRequest.orderId,
+          refundRequestId: refundRequest.id,
+          status: 'REFUNDED',
+          stripeRefundId: stripeRefund.id,
+        },
+      },
+    ]);
 
-  return serializeMutationResult(denied);
-}
-
-export async function resolveAdminRefundRequest({
-  refundRequestId,
-  adminNotes,
-}: {
-  refundRequestId: string;
-  adminNotes?: string;
-}): Promise<AdminRefundMutationResult> {
-  const refundRequest = await requireRefundRequest(refundRequestId);
-
-  if (refundRequest.resolvedAt) {
-    return serializeMutationResult(refundRequest);
+    return { ok: true, refund: toAdminRefundRecord(updated) };
+  } catch (error) {
+    console.error(`[admin/refunds] Failed to approve refund ${input.refundId}.`, error);
+    return { ok: false, status: 500, error: 'Unable to approve this refund right now.' };
   }
+}
 
-  const updated = await prisma.refundRequest.update({
-    where: { id: refundRequest.id },
-    data: {
-      adminNotes: adminNotes?.trim() || refundRequest.adminNotes || null,
-      resolvedAt: new Date(),
-    },
-  });
+export async function rejectAdminRefund(input: RefundActionInput): Promise<RefundActionResult> {
+  try {
+    const refundRequest = await getRefundRequestForAction(input.refundId);
 
-  return serializeMutationResult(updated);
+    if (!refundRequest) {
+      return { ok: false, status: 404, error: 'Refund request not found.' };
+    }
+
+    if (['DENIED', 'REFUNDED'].includes(refundRequest.status)) {
+      return { ok: false, status: 400, error: 'This refund request is already resolved.' };
+    }
+
+    const updated = await prisma.refundRequest.update({
+      where: { id: refundRequest.id },
+      data: {
+        status: 'DENIED',
+        adminNotes: input.adminNote?.trim() || null,
+        resolvedAt: new Date(),
+      },
+      include: {
+        buyer: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        seller: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        order: {
+          select: {
+            id: true,
+            status: true,
+            stripePaymentIntentId: true,
+          },
+        },
+      },
+    });
+
+    await createNotifications([
+      {
+        userId: refundRequest.buyerId,
+        type: NotificationType.ORDER_UPDATE,
+        title: 'Refund request denied',
+        body: 'Your refund request was reviewed and denied. Please check your order page for more details or contact support.',
+        link: `/orders/${refundRequest.orderId}`,
+        data: { orderId: refundRequest.orderId, refundRequestId: refundRequest.id, status: 'DENIED' },
+      },
+    ]);
+
+    return { ok: true, refund: toAdminRefundRecord(updated) };
+  } catch (error) {
+    console.error(`[admin/refunds] Failed to reject refund ${input.refundId}.`, error);
+    return { ok: false, status: 500, error: 'Unable to reject this refund right now.' };
+  }
+}
+
+export async function resolveAdminRefund(input: RefundActionInput): Promise<RefundActionResult> {
+  try {
+    const refundRequest = await getRefundRequestForAction(input.refundId);
+
+    if (!refundRequest) {
+      return { ok: false, status: 404, error: 'Refund request not found.' };
+    }
+
+    if (['DENIED', 'REFUNDED'].includes(refundRequest.status)) {
+      return { ok: false, status: 400, error: 'This refund request is already resolved.' };
+    }
+
+    const approvedAmountCents = normalizeRefundAmountCents(
+      input.approvedAmountCents ?? refundRequest.requestedAmountCents,
+      refundRequest.order.totalCents,
+    );
+    const resolvedAt = new Date();
+    const nextOrderStatus = approvedAmountCents < refundRequest.order.totalCents ? 'PARTIALLY_REFUNDED' : 'REFUNDED';
+
+    const updated = await prisma.$transaction(async (tx) => {
+      await tx.order.update({
+        where: { id: refundRequest.orderId },
+        data: { status: nextOrderStatus },
+      });
+
+      return tx.refundRequest.update({
+        where: { id: refundRequest.id },
+        data: {
+          status: 'REFUNDED',
+          approvedAmountCents,
+          adminNotes: input.adminNote?.trim() || null,
+          resolvedAt,
+        },
+        include: {
+          buyer: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+          seller: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+          order: {
+            select: {
+              id: true,
+              status: true,
+              stripePaymentIntentId: true,
+            },
+          },
+        },
+      });
+    });
+
+    await createNotifications([
+      {
+        userId: refundRequest.buyerId,
+        type: NotificationType.ORDER_UPDATE,
+        title: 'Refund request resolved',
+        body: 'Your refund request was resolved by support.',
+        link: `/orders/${refundRequest.orderId}`,
+        data: { orderId: refundRequest.orderId, refundRequestId: refundRequest.id, status: 'REFUNDED' },
+      },
+    ]);
+
+    return { ok: true, refund: toAdminRefundRecord(updated) };
+  } catch (error) {
+    console.error(`[admin/refunds] Failed to resolve refund ${input.refundId}.`, error);
+    return { ok: false, status: 500, error: 'Unable to mark this refund as resolved right now.' };
+  }
 }

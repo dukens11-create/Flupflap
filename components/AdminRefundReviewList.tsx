@@ -1,373 +1,411 @@
 'use client';
 
 import Link from 'next/link';
+import type { ReactNode } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
-import type { AdminRefundDashboardItem } from '@/lib/admin-refunds';
 import { dollars } from '@/lib/money';
 import { REFUND_STATUS_LABELS, refundStatusBadge } from '@/lib/refunds';
+import type { AdminRefundRecord } from '@/lib/admin-refunds';
 
 type RefundAction = 'approve' | 'reject' | 'resolve';
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+type RetryAction = {
+  refundRequestId: string;
+  action: RefundAction;
+};
+
+type RefundActionResponse = {
+  refund?: AdminRefundRecord;
+  error?: string;
+};
+
+function formatDate(value: string) {
+  return new Date(value).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
 }
 
-function getPersonLabel(person: { name: string | null; email: string }) {
-  return person.name ?? person.email;
+function displayName(user: { name: string | null; email: string }) {
+  return user.name?.trim() || user.email;
 }
 
-function getSellerLabels(refundRequest: AdminRefundDashboardItem) {
-  return Array.from(
-    new Map(
-      refundRequest.order.items.map((item) => [item.product.seller.id, item.product.seller]),
-    ).values(),
-  ).map((seller) => getPersonLabel(seller));
-}
-
-function isRefundResolved(refundRequest: AdminRefundDashboardItem) {
-  return Boolean(refundRequest.resolvedAt) || refundRequest.status === 'DENIED' || refundRequest.status === 'REFUNDED';
-}
-
-export default function AdminRefundReviewList({ initialRefundRequests }: { initialRefundRequests: AdminRefundDashboardItem[] }) {
+export default function AdminRefundReviewList({
+  initialRefundRequests,
+  allowEmptyState = true,
+}: {
+  initialRefundRequests: AdminRefundRecord[];
+  allowEmptyState?: boolean;
+}) {
   const router = useRouter();
-  const [notes, setNotes] = useState<Record<string, string>>(() => Object.fromEntries(
-    initialRefundRequests
-      .filter((request): request is AdminRefundDashboardItem & { adminNotes: string } => Boolean(request.adminNotes))
-      .map((request) => [request.id, request.adminNotes]),
-  ));
+  const [refundRequests, setRefundRequests] = useState(initialRefundRequests);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [notes, setNotes] = useState<Record<string, string>>({});
   const [amounts, setAmounts] = useState<Record<string, string>>({});
-  const [submittingAction, setSubmittingAction] = useState<{ refundRequestId: string; action: RefundAction } | null>(null);
-  const [apiError, setApiError] = useState('');
-  const [validationError, setValidationError] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
-  const [retryAction, setRetryAction] = useState<{ refundRequestId: string; action: RefundAction } | null>(null);
+  const [submittingId, setSubmittingId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState('');
+  const [retryAction, setRetryAction] = useState<RetryAction | null>(null);
 
-  async function submitRefundAction(refundRequestId: string, action: RefundAction) {
-    if (submittingAction) return;
-    setSubmittingAction({ refundRequestId, action });
-    setApiError('');
-    setValidationError('');
-    setSuccessMessage('');
-    setRetryAction({ refundRequestId, action });
+  const refundCountLabel = useMemo(
+    () => `${refundRequests.length} request${refundRequests.length === 1 ? '' : 's'}`,
+    [refundRequests.length],
+  );
 
-    const body: Record<string, unknown> = {};
-    const note = (notes[refundRequestId] ?? '').trim();
-    if (note) {
-      body.adminNotes = note;
+  async function submitAction(refundRequestId: string, action: RefundAction) {
+    if (submittingId) return;
+
+    const amountRaw = (amounts[refundRequestId] ?? '').trim();
+    const approvedAmountCents = amountRaw ? Math.round(Number.parseFloat(amountRaw) * 100) : undefined;
+
+    if (amountRaw && (!Number.isFinite(approvedAmountCents ?? NaN) || (approvedAmountCents ?? 0) <= 0)) {
+      setActionError('The approved amount must be a positive dollar value.');
+      setRetryAction(null);
+      return;
     }
 
-    if (action === 'approve') {
-      const amountRaw = (amounts[refundRequestId] ?? '').trim();
-      const approvedAmountCents = amountRaw ? Math.round(Number.parseFloat(amountRaw) * 100) : undefined;
-
-      if (amountRaw && (!Number.isFinite(approvedAmountCents ?? NaN) || (approvedAmountCents ?? 0) <= 0)) {
-        setSubmittingAction(null);
-        setValidationError('Approved amount must be a positive USD value.');
-        return;
-      }
-
-      if (approvedAmountCents) {
-        body.approvedAmountCents = approvedAmountCents;
-      }
-    }
+    setSubmittingId(refundRequestId);
+    setActionError('');
+    setRetryAction(null);
 
     try {
       const res = await fetch(`/api/admin/refunds/${refundRequestId}/${action}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify({
+          adminNote: notes[refundRequestId] || undefined,
+          approvedAmountCents,
+        }),
       });
-      const data = await res.json().catch(() => ({}));
+
+      let data: RefundActionResponse = {};
+      try {
+        data = await res.json() as RefundActionResponse;
+      } catch (error) {
+        console.error('[admin/refunds] Failed to parse action response.', error);
+      }
       if (!res.ok) {
-        setApiError((data as { error?: string }).error ?? 'Unable to update refund request.');
+        setActionError(data.error ?? 'Unable to update refund request.');
+        setRetryAction({ refundRequestId, action });
         return;
       }
+      if (!data.refund) {
+        setActionError('Unable to complete the refund action. Please try again.');
+        setRetryAction({ refundRequestId, action });
+        return;
+      }
+      const updatedRefund = data.refund;
 
-      setRetryAction(null);
-      setSuccessMessage(
-        action === 'approve'
-          ? 'Refund approved successfully.'
-          : action === 'reject'
-            ? 'Refund rejected successfully.'
-            : 'Refund request marked as resolved.',
-      );
+      setRefundRequests((current) => current.map((request) => (
+        request.id === refundRequestId ? updatedRefund : request
+      )));
       router.refresh();
     } catch {
-      setApiError('Unable to reach the refunds API. Please try again.');
+      setActionError('Network error: Unable to connect to the server. Please try again.');
+      setRetryAction({ refundRequestId, action });
     } finally {
-      setSubmittingAction(null);
+      setSubmittingId(null);
     }
   }
 
-  function renderActionControls(request: AdminRefundDashboardItem) {
-    const resolved = isRefundResolved(request);
-    const missingPaymentIntent = !request.order.stripePaymentIntentId;
-    const approving = submittingAction?.refundRequestId === request.id && submittingAction.action === 'approve';
-    const rejecting = submittingAction?.refundRequestId === request.id && submittingAction.action === 'reject';
-    const resolving = submittingAction?.refundRequestId === request.id && submittingAction.action === 'resolve';
-    const amountPlaceholder = ((request.approvedAmountCents ?? request.requestedAmountCents) / 100).toFixed(2);
-
+  if (refundRequests.length === 0) {
     return (
-      <div className="space-y-3">
-        <div className="space-y-2">
-          <div>
-            <label className="label">Approved amount (USD, optional)</label>
-            <input
-              className="input"
-              inputMode="decimal"
-              value={amounts[request.id] ?? ''}
-              onChange={(event) => setAmounts((prev) => ({ ...prev, [request.id]: event.target.value }))}
-              placeholder={amountPlaceholder}
-              disabled={resolved}
-            />
-            <p className="mt-1 text-xs text-slate-500">Leave blank to approve the requested amount.</p>
-          </div>
-          <div>
-            <label className="label">Admin note (optional)</label>
-            <textarea
-              className="input h-20 resize-none"
-              maxLength={2000}
-              value={notes[request.id] ?? ''}
-              onChange={(event) => setNotes((prev) => ({ ...prev, [request.id]: event.target.value }))}
-              placeholder="Review notes visible on the refund timeline."
-            />
-          </div>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <Link href={`/orders/${request.order.id}`} className="btn-outline text-sm">
-            View
-          </Link>
-          <button
-            type="button"
-            className="btn-primary text-sm disabled:opacity-60"
-            disabled={resolved || missingPaymentIntent || approving}
-            onClick={() => submitRefundAction(request.id, 'approve')}
-          >
-            {approving ? 'Approving…' : 'Approve refund'}
-          </button>
-          <button
-            type="button"
-            className="btn-outline text-sm disabled:opacity-60"
-            disabled={resolved || rejecting}
-            onClick={() => submitRefundAction(request.id, 'reject')}
-          >
-            {rejecting ? 'Rejecting…' : 'Reject refund'}
-          </button>
-          <button
-            type="button"
-            className="btn-outline text-sm disabled:opacity-60"
-            disabled={resolved || resolving}
-            onClick={() => submitRefundAction(request.id, 'resolve')}
-          >
-            {resolving ? 'Resolving…' : 'Mark as resolved'}
-          </button>
-        </div>
-
-        {missingPaymentIntent && !resolved && (
-          <p className="text-xs text-amber-700">No Stripe payment intent is available for this order, so it cannot be refunded automatically.</p>
-        )}
-        {!resolved && (
-          <p className="text-xs text-amber-700">
-            Payout reversal for Stripe Connect seller transfers is currently a manual follow-up step after refund approval.
-          </p>
-        )}
+      <div className="card p-8 text-center text-sm text-slate-500">
+        {allowEmptyState ? 'No refund requests yet.' : 'Unable to display refund requests.'}
       </div>
     );
   }
 
-  if (initialRefundRequests.length === 0) {
-    return <div className="card p-6 text-sm text-slate-500">No refund requests yet.</div>;
-  }
-
   return (
-    <div className="space-y-4">
-      {validationError && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{validationError}</div>
-      )}
-      {apiError && (
-        <div className="flex flex-col gap-3 rounded-xl border border-red-200 bg-red-50 px-3 py-3 text-sm text-red-700 sm:flex-row sm:items-center sm:justify-between">
-          <span>{apiError}</span>
-          {retryAction && (
-            <button
-              type="button"
-              className="btn-outline text-sm"
-              onClick={() => submitRefundAction(retryAction.refundRequestId, retryAction.action)}
-            >
-              Try again
-            </button>
-          )}
+    <section className="space-y-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-slate-900">Refund dashboard</h2>
+          <p className="text-sm text-slate-500">{refundCountLabel}</p>
         </div>
-      )}
-      {successMessage && (
-        <div className="rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">{successMessage}</div>
-      )}
+      </div>
 
-      <div className="card overflow-hidden">
-        <div className="border-b border-slate-100 px-4 py-4 sm:px-6">
-          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h2 className="text-lg font-bold text-slate-900">Refund requests</h2>
-              <p className="text-sm text-slate-500">Review, refund, reject, or manually resolve marketplace refund requests.</p>
-            </div>
-            <p className="text-sm text-slate-500">{initialRefundRequests.length} request{initialRefundRequests.length === 1 ? '' : 's'}</p>
+      {actionError && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <span>{actionError}</span>
+            {retryAction && (
+              <button
+                type="button"
+                className="btn-outline text-sm"
+                onClick={() => submitAction(retryAction.refundRequestId, retryAction.action)}
+                disabled={submittingId === retryAction.refundRequestId}
+              >
+                Retry
+              </button>
+            )}
           </div>
         </div>
+      )}
 
-        <div className="hidden overflow-x-auto lg:block">
-          <table className="min-w-full divide-y divide-slate-200 text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-              <tr>
-                <th className="px-4 py-3">Refund ID</th>
-                <th className="px-4 py-3">Order ID</th>
-                <th className="px-4 py-3">Buyer</th>
-                <th className="px-4 py-3">Seller</th>
-                <th className="px-4 py-3">Amount</th>
-                <th className="px-4 py-3">Reason</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Stripe payment intent</th>
-                <th className="px-4 py-3">Created date</th>
-                <th className="px-4 py-3">Actions</th>
+      <div className="hidden md:block card overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50">
+                <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Refund ID</th>
+                <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Order ID</th>
+                <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Buyer</th>
+                <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Seller</th>
+                <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Amount</th>
+                <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Reason</th>
+                <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Status</th>
+                <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Stripe payment intent</th>
+                <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Created</th>
+                <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 align-top">
-              {initialRefundRequests.map((request) => {
-                const sellers = getSellerLabels(request);
-                const resolved = isRefundResolved(request);
+            <tbody className="divide-y divide-slate-100">
+              {refundRequests.map((request) => {
+                const isExpanded = expandedId === request.id;
+                const isResolved = request.status === 'DENIED' || request.status === 'REFUNDED';
+                const disableApprove = !request.stripePaymentIntentId || isResolved;
+                const currentAmount = request.approvedAmountCents ?? request.requestedAmountCents;
 
                 return (
-                  <tr key={request.id}>
-                    <td className="px-4 py-4 font-mono text-xs text-slate-600 break-words">{request.id}</td>
-                    <td className="px-4 py-4">
-                      <Link href={`/orders/${request.order.id}`} className="font-mono text-xs text-blue-600 hover:text-blue-700 break-words">
-                        {request.order.id}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-4 text-slate-700">
-                      <div className="space-y-1">
-                        <p className="font-medium text-slate-900">{getPersonLabel(request.order.buyer)}</p>
-                        <p className="text-xs text-slate-500 break-all">{request.order.buyer.email}</p>
-                      </div>
-                    </td>
-                    <td className="px-4 py-4 text-slate-700">{sellers.length > 0 ? sellers.join(', ') : '—'}</td>
-                    <td className="px-4 py-4 text-slate-700">
-                      <div className="space-y-1">
-                        <p>{dollars(request.requestedAmountCents)}</p>
-                        {request.approvedAmountCents !== null && (
-                          <p className="text-xs text-slate-500">Approved {dollars(request.approvedAmountCents)}</p>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-4 text-slate-700">
-                      <div className="space-y-1">
-                        <p className="font-medium text-slate-900">{request.reason}</p>
-                        {request.details && <p className="text-xs text-slate-500">{request.details}</p>}
-                        {request.sellerResponse && <p className="text-xs text-slate-500">Seller: {request.sellerResponse}</p>}
-                        {request.adminNotes && <p className="text-xs text-slate-500">Admin: {request.adminNotes}</p>}
-                      </div>
-                    </td>
-                    <td className="px-4 py-4">
-                      <div className="space-y-2">
-                        <span className={`badge ${refundStatusBadge(request.status)}`}>{REFUND_STATUS_LABELS[request.status]}</span>
-                        {resolved && <p className="text-xs text-slate-500">Resolved</p>}
-                        {request.stripeRefundId && (
-                          <p className="text-xs break-all text-green-700">Refund {request.stripeRefundId}</p>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-4 font-mono text-xs text-slate-600 break-words">{request.order.stripePaymentIntentId ?? '—'}</td>
-                    <td className="px-4 py-4 text-slate-700">
-                      <div className="space-y-1">
-                        <p>{formatDate(request.createdAt)}</p>
-                        {request.resolvedAt && <p className="text-xs text-slate-500">Resolved {formatDate(request.resolvedAt)}</p>}
-                      </div>
-                    </td>
-                    <td className="min-w-[22rem] px-4 py-4">{renderActionControls(request)}</td>
-                  </tr>
+                  <FragmentRow
+                    key={request.id}
+                    expanded={isExpanded}
+                    summary={(
+                      <tr className="align-top transition-colors hover:bg-slate-50">
+                        <td className="px-3 py-3 font-mono text-xs text-slate-500">{request.id.slice(-8).toUpperCase()}</td>
+                        <td className="px-3 py-3 font-mono text-xs text-slate-500">{request.orderId.slice(-8).toUpperCase()}</td>
+                        <td className="px-3 py-3">
+                          <p className="font-medium text-slate-900">{displayName(request.buyer)}</p>
+                          <p className="text-xs text-slate-500">{request.buyer.email}</p>
+                        </td>
+                        <td className="px-3 py-3">
+                          <p className="font-medium text-slate-900">{displayName(request.seller)}</p>
+                          <p className="text-xs text-slate-500">{request.seller.email}</p>
+                        </td>
+                        <td className="px-3 py-3 text-right font-medium text-slate-900">{dollars(currentAmount)}</td>
+                        <td className="px-3 py-3 text-slate-700">{request.reason}</td>
+                        <td className="px-3 py-3">
+                          <span className={`badge ${refundStatusBadge(request.status)}`}>{REFUND_STATUS_LABELS[request.status]}</span>
+                        </td>
+                        <td className="px-3 py-3">
+                          <span className="font-mono text-xs text-slate-500">
+                            {request.stripePaymentIntentId ?? 'Not available'}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3 whitespace-nowrap text-xs text-slate-500">{formatDate(request.createdAt)}</td>
+                        <td className="px-3 py-3">
+                          <ActionButtons
+                            isExpanded={isExpanded}
+                            onView={() => setExpandedId(isExpanded ? null : request.id)}
+                            onApprove={() => submitAction(request.id, 'approve')}
+                            onReject={() => submitAction(request.id, 'reject')}
+                            onResolve={() => submitAction(request.id, 'resolve')}
+                            disableApprove={disableApprove}
+                            disableReject={isResolved}
+                            disableResolve={isResolved}
+                            disabled={submittingId === request.id}
+                          />
+                        </td>
+                      </tr>
+                    )}
+                    details={isExpanded ? (
+                      <tr className="bg-slate-50">
+                        <td colSpan={10} className="px-4 py-4">
+                          <RefundDetails
+                            request={request}
+                            amountValue={amounts[request.id] ?? ''}
+                            noteValue={notes[request.id] ?? ''}
+                            onAmountChange={(value) => setAmounts((current) => ({ ...current, [request.id]: value }))}
+                            onNoteChange={(value) => setNotes((current) => ({ ...current, [request.id]: value }))}
+                          />
+                        </td>
+                      </tr>
+                    ) : null}
+                  />
                 );
               })}
             </tbody>
           </table>
         </div>
+      </div>
 
-        <div className="space-y-4 p-4 lg:hidden">
-          {initialRefundRequests.map((request) => {
-            const sellers = getSellerLabels(request);
-            const resolved = isRefundResolved(request);
+      <div className="space-y-3 md:hidden">
+        {refundRequests.map((request) => {
+          const isExpanded = expandedId === request.id;
+          const isResolved = request.status === 'DENIED' || request.status === 'REFUNDED';
+          const disableApprove = !request.stripePaymentIntentId || isResolved;
+          const currentAmount = request.approvedAmountCents ?? request.requestedAmountCents;
 
-            return (
-              <div key={request.id} className="rounded-2xl border border-slate-200 p-4 shadow-sm">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 space-y-1">
-                    <p className="text-xs font-mono text-slate-400 break-words">{request.id}</p>
-                    <Link href={`/orders/${request.order.id}`} className="text-sm font-semibold text-blue-600 hover:text-blue-700 break-words">
-                      Order {request.order.id}
-                    </Link>
-                  </div>
-                  <span className={`badge ${refundStatusBadge(request.status)}`}>{REFUND_STATUS_LABELS[request.status]}</span>
+          return (
+            <div key={request.id} className="card p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-mono text-xs text-slate-400">Refund #{request.id.slice(-8).toUpperCase()}</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-900">Order #{request.orderId.slice(-8).toUpperCase()}</p>
+                  <p className="text-xs text-slate-500">{formatDate(request.createdAt)}</p>
                 </div>
-
-                <div className="mt-4 grid gap-3 text-sm text-slate-700">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Buyer</p>
-                    <p>{getPersonLabel(request.order.buyer)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Seller</p>
-                    <p>{sellers.length > 0 ? sellers.join(', ') : '—'}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Amount</p>
-                    <p>{dollars(request.requestedAmountCents)}</p>
-                    {request.approvedAmountCents !== null && (
-                      <p className="text-xs text-slate-500">Approved {dollars(request.approvedAmountCents)}</p>
-                    )}
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Reason</p>
-                    <p>{request.reason}</p>
-                    {request.details && <p className="mt-1 text-xs text-slate-500">{request.details}</p>}
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Stripe payment intent</p>
-                    <p className="font-mono text-xs break-words">{request.order.stripePaymentIntentId ?? '—'}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Created date</p>
-                    <p>{formatDate(request.createdAt)}</p>
-                    {resolved && request.resolvedAt && (
-                      <p className="text-xs text-slate-500">Resolved {formatDate(request.resolvedAt)}</p>
-                    )}
-                  </div>
-                  {request.sellerResponse && (
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Seller response</p>
-                      <p>{request.sellerResponse}</p>
-                    </div>
-                  )}
-                  {request.adminNotes && (
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Admin note</p>
-                      <p>{request.adminNotes}</p>
-                    </div>
-                  )}
-                  {request.stripeRefundId && (
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Stripe refund</p>
-                      <p className="font-mono text-xs break-words text-green-700">{request.stripeRefundId}</p>
-                    </div>
-                  )}
-                </div>
-
-                <div className="mt-4 border-t border-slate-100 pt-4">
-                  {renderActionControls(request)}
-                </div>
+                <span className={`badge ${refundStatusBadge(request.status)}`}>{REFUND_STATUS_LABELS[request.status]}</span>
               </div>
-            );
-          })}
+
+              <div className="mt-3 grid gap-2 text-sm text-slate-700">
+                <p><span className="font-semibold text-slate-900">Buyer:</span> {displayName(request.buyer)}</p>
+                <p><span className="font-semibold text-slate-900">Seller:</span> {displayName(request.seller)}</p>
+                <p><span className="font-semibold text-slate-900">Amount:</span> {dollars(currentAmount)}</p>
+                <p><span className="font-semibold text-slate-900">Reason:</span> {request.reason}</p>
+                <p><span className="font-semibold text-slate-900">Payment intent:</span> <span className="font-mono text-xs">{request.stripePaymentIntentId ?? 'Not available'}</span></p>
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <ActionButtons
+                  isExpanded={isExpanded}
+                  onView={() => setExpandedId(isExpanded ? null : request.id)}
+                  onApprove={() => submitAction(request.id, 'approve')}
+                  onReject={() => submitAction(request.id, 'reject')}
+                  onResolve={() => submitAction(request.id, 'resolve')}
+                  disableApprove={disableApprove}
+                  disableReject={isResolved}
+                  disableResolve={isResolved}
+                  disabled={submittingId === request.id}
+                />
+              </div>
+
+              {isExpanded && (
+                <div className="mt-4 border-t border-slate-100 pt-4">
+                  <RefundDetails
+                    request={request}
+                    amountValue={amounts[request.id] ?? ''}
+                    noteValue={notes[request.id] ?? ''}
+                    onAmountChange={(value) => setAmounts((current) => ({ ...current, [request.id]: value }))}
+                    onNoteChange={(value) => setNotes((current) => ({ ...current, [request.id]: value }))}
+                  />
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function FragmentRow({
+  expanded,
+  summary,
+  details,
+}: {
+  expanded: boolean;
+  summary: ReactNode;
+  details: ReactNode;
+}) {
+  return (
+    <>
+      {summary}
+      {expanded ? details : null}
+    </>
+  );
+}
+
+function RefundDetails({
+  request,
+  amountValue,
+  noteValue,
+  onAmountChange,
+  onNoteChange,
+}: {
+  request: AdminRefundRecord;
+  amountValue: string;
+  noteValue: string;
+  onAmountChange: (value: string) => void;
+  onNoteChange: (value: string) => void;
+}) {
+  return (
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="space-y-2 text-sm text-slate-700">
+        <p><span className="font-semibold text-slate-900">Reason:</span> {request.reason}</p>
+        {request.details && <p><span className="font-semibold text-slate-900">Details:</span> {request.details}</p>}
+        <p><span className="font-semibold text-slate-900">Order status:</span> {request.orderStatus}</p>
+        <p><span className="font-semibold text-slate-900">Requested amount:</span> {dollars(request.requestedAmountCents)}</p>
+        {request.approvedAmountCents !== null && (
+          <p><span className="font-semibold text-slate-900">Approved amount:</span> {dollars(request.approvedAmountCents)}</p>
+        )}
+        {request.sellerResponse && <p><span className="font-semibold text-slate-900">Seller response:</span> {request.sellerResponse}</p>}
+        {request.adminNotes && <p><span className="font-semibold text-slate-900">Admin note:</span> {request.adminNotes}</p>}
+        {request.stripeRefundId && <p><span className="font-semibold text-slate-900">Stripe refund:</span> <span className="font-mono text-xs">{request.stripeRefundId}</span></p>}
+        {request.resolvedAt && <p><span className="font-semibold text-slate-900">Resolved:</span> {formatDate(request.resolvedAt)}</p>}
+        <div className="pt-2">
+          <Link href={`/orders/${request.orderId}`} className="btn-outline text-sm">View order</Link>
         </div>
       </div>
+
+      <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
+        <div>
+          <label className="label">Amount (USD)</label>
+          <input
+            className="input"
+            inputMode="decimal"
+            value={amountValue}
+            onChange={(event) => onAmountChange(event.target.value)}
+            placeholder={(request.requestedAmountCents / 100).toFixed(2)}
+          />
+          <p className="mt-1 text-xs text-slate-500">Leave blank to use the requested amount.</p>
+        </div>
+        <div>
+          <label className="label">Admin note</label>
+          <textarea
+            className="input h-24 resize-none"
+            maxLength={2000}
+            value={noteValue}
+            onChange={(event) => onNoteChange(event.target.value)}
+            placeholder="Add context for the buyer and your admin team."
+          />
+        </div>
+        {!request.stripePaymentIntentId && request.status !== 'DENIED' && request.status !== 'REFUNDED' && (
+          <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            This refund has no Stripe payment intent, so use <strong>Mark as resolved</strong> for manual handling.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ActionButtons({
+  isExpanded,
+  onView,
+  onApprove,
+  onReject,
+  onResolve,
+  disableApprove,
+  disableReject,
+  disableResolve,
+  disabled,
+}: {
+  isExpanded: boolean;
+  onView: () => void;
+  onApprove: () => void;
+  onReject: () => void;
+  onResolve: () => void;
+  disableApprove: boolean;
+  disableReject: boolean;
+  disableResolve: boolean;
+  disabled: boolean;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      <button type="button" className="btn-outline text-xs" onClick={onView}>
+        {isExpanded ? 'Hide' : 'View'}
+      </button>
+      <button type="button" className="btn-primary text-xs" onClick={onApprove} disabled={disabled || disableApprove}>
+        Approve refund
+      </button>
+      <button type="button" className="btn-outline text-xs" onClick={onReject} disabled={disabled || disableReject}>
+        Reject refund
+      </button>
+      <button type="button" className="btn-outline text-xs" onClick={onResolve} disabled={disabled || disableResolve}>
+        Mark as resolved
+      </button>
     </div>
   );
 }

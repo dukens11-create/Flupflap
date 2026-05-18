@@ -2,11 +2,10 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth-options';
-import { AdminRefundActionError, rejectAdminRefundRequest } from '@/lib/admin-refunds';
-import { logError } from '@/lib/logger';
+import { rejectAdminRefund } from '@/lib/admin-refunds';
 
 const rejectRefundSchema = z.object({
-  adminNotes: z.string().trim().max(2000).optional(),
+  adminNote: z.string().trim().max(2000).optional(),
 });
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -18,14 +17,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const { id } = await params;
-
-  let body: unknown = {};
+  let body: unknown;
   try {
-    const payload = await req.text();
-    body = payload ? JSON.parse(payload) : {};
+    body = await req.json();
   } catch {
-    return NextResponse.json({ error: 'Invalid JSON payload.' }, { status: 400 });
+    body = {};
   }
 
   const parsed = rejectRefundSchema.safeParse(body);
@@ -33,21 +29,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Invalid payload.' }, { status: 422 });
   }
 
-  try {
-    const rejected = await rejectAdminRefundRequest({
-      refundRequestId: id,
-      adminNotes: parsed.data.adminNotes,
-    });
-    return NextResponse.json(rejected);
-  } catch (error) {
-    if (error instanceof AdminRefundActionError) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
+  const { id } = await params;
+  const result = await rejectAdminRefund({
+    refundId: id,
+    adminUserId: session.user.id,
+    adminNote: parsed.data.adminNote,
+  });
 
-    logError('Failed to reject admin refund request.', error, {
-      tag: 'api/admin/refunds/[id]/reject/POST',
-      refundRequestId: id,
-    });
-    return NextResponse.json({ error: 'Unable to reject this refund right now.' }, { status: 500 });
+  if (!result.ok) {
+    return NextResponse.json({ error: result.error }, { status: result.status });
   }
+
+  return NextResponse.json({ refund: result.refund });
 }
