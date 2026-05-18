@@ -308,7 +308,7 @@ export async function POST(req: Request) {
 
   // ── Stripe Connect: seller onboarding ────────────────────────────────────────
   if (CHECKOUT_COMPLETION_EVENTS.has(event.type)) {
-    const cs = event.data.object as any;
+    const cs = event.data.object as Stripe.Checkout.Session;
     // Keep promotion statuses fresh on all successful checkout completions
     // so stale boosts are cleaned even when there are no promotion-only requests.
     try {
@@ -334,11 +334,14 @@ export async function POST(req: Request) {
 
     // Handle seller subscription enrollment
     if (cs.metadata?.type === 'seller_subscription') {
-      const sellerId: string = cs.metadata?.sellerId;
+      const sellerId = cs.metadata?.sellerId;
       if (!sellerId) return new NextResponse('Missing sellerId', { status: 400 });
 
       // Retrieve the Stripe subscription to get period details
-      const subscriptionId: string | null = cs.subscription ?? null;
+      const subscriptionId: string | null =
+        typeof cs.subscription === 'string'
+          ? cs.subscription
+          : cs.subscription?.id ?? null;
       let periodEnd: Date | null = null;
       if (subscriptionId) {
         try {
@@ -398,7 +401,7 @@ export async function POST(req: Request) {
 
     // Handle promotion payments separately from product purchases
     if (cs.metadata?.type === 'promotion') {
-      const promotionId: string = cs.metadata?.promotionId;
+      const promotionId = cs.metadata?.promotionId;
       if (!promotionId) return new NextResponse('Missing promotionId', { status: 400 });
 
       // Avoid duplicate processing
@@ -418,10 +421,10 @@ export async function POST(req: Request) {
 
       return new NextResponse('ok', { status: 200 });
     }
-    const metadataBuyerId: string = cs.metadata?.buyerId;
-    const rawItems: string = cs.metadata?.items ?? '[]';
+    const metadataBuyerId = cs.metadata?.buyerId;
+    const rawItems = cs.metadata?.items ?? '[]';
     const metadataItems: { productId: string; quantity: number }[] = JSON.parse(rawItems);
-    const rawPickupIds: string = cs.metadata?.pickupItemIds ?? '[]';
+    const rawPickupIds = cs.metadata?.pickupItemIds ?? '[]';
     const metadataPickupItemIds: string[] = JSON.parse(rawPickupIds);
 
     // Avoid duplicate processing
@@ -546,7 +549,9 @@ export async function POST(req: Request) {
         sellerPayoutCents: totalCents - platformFeeCents,
         status: 'PAID',
         stripeCheckoutId: cs.id,
-        stripePaymentIntentId: cs.payment_intent ?? null,
+        stripePaymentIntentId: typeof cs.payment_intent === 'string'
+          ? cs.payment_intent
+          : cs.payment_intent?.id ?? null,
         isPickup: isPickupOrder,
         pickupCode: isPickupOrder ? generatePickupCode() : null,
         pickupCity: isPickupOrder ? (firstPickupProduct?.pickupCity ?? null) : null,

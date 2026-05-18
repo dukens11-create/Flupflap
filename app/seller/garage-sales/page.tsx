@@ -6,7 +6,6 @@ import { requireSeller } from '@/lib/require-seller';
 import { expireGarageSales } from '@/lib/garage-sales';
 import { syncGarageSaleCheckoutSessionForSeller } from '@/lib/garage-sale-payment-sync';
 import { logWarn } from '@/lib/logger';
-import { stripe } from '@/lib/stripe';
 import { deriveGarageSaleLifecycle } from '@/lib/garage-sale-lifecycle';
 
 export const metadata: Metadata = {
@@ -57,75 +56,6 @@ const PAYMENT_LABEL: Record<string, string> = {
   REFUNDED: 'Refunded',
 };
 
-async function reconcileSuccessfulCheckout({
-  sellerId,
-  saleId,
-  sessionId,
-}: {
-  sellerId: string;
-  saleId?: string;
-  sessionId?: string;
-}) {
-  if (!saleId || !sessionId) return;
-
-  const sale = await prisma.garageSale.findFirst({
-    where: { id: saleId, sellerId },
-    select: {
-      id: true,
-      listingType: true,
-      paymentStatus: true,
-      status: true,
-      stripeCheckoutId: true,
-      totalPaidCents: true,
-    },
-  });
-
-  if (!sale || sale.paymentStatus === 'PAID' || sale.stripeCheckoutId !== sessionId) return;
-
-  try {
-    const checkout = await stripe.checkout.sessions.retrieve(sessionId);
-    if (checkout.metadata?.type !== 'garage_sale_listing' || checkout.metadata?.saleId !== sale.id) return;
-    if (checkout.payment_status !== 'paid') return;
-    const paymentIntentId = typeof checkout.payment_intent === 'string'
-      ? checkout.payment_intent
-      : checkout.payment_intent?.id ?? null;
-
-    const now = new Date();
-    await prisma.$transaction([
-      prisma.garageSale.update({
-        where: { id: sale.id },
-        data: {
-          status: 'APPROVED',
-          paymentStatus: 'PAID',
-          stripePaymentId: paymentIntentId,
-          paidAt: now,
-          activatedAt: now,
-          isFeatured: sale.listingType === 'FEATURED',
-          totalPaidCents: typeof checkout.amount_total === 'number' ? checkout.amount_total : sale.totalPaidCents,
-        },
-      }),
-      prisma.garageSalePayment.upsert({
-        where: { stripeCheckoutId: checkout.id },
-        update: {
-          status: 'PAID',
-          amountCents: typeof checkout.amount_total === 'number' ? checkout.amount_total : sale.totalPaidCents,
-          stripePaymentId: paymentIntentId,
-        },
-        create: {
-          saleId: sale.id,
-          sellerId,
-          amountCents: typeof checkout.amount_total === 'number' ? checkout.amount_total : sale.totalPaidCents,
-          status: 'PAID',
-          stripeCheckoutId: checkout.id,
-          stripePaymentId: paymentIntentId,
-        },
-      }),
-    ]);
-  } catch {
-    // Non-fatal. Webhook reconciliation will retry.
-  }
-}
-
 export default async function SellerGarageSalesPage({
   searchParams,
 }: {
@@ -152,7 +82,6 @@ export default async function SellerGarageSalesPage({
     }
   }
   await expireGarageSales();
-  await reconcileSuccessfulCheckout({ sellerId, saleId: sp.saleId, sessionId: sp.session_id });
 
   const sales = await prisma.garageSale.findMany({
     where: { sellerId },
