@@ -35,6 +35,12 @@ function stripImageFields(target: unknown) {
   Reflect.deleteProperty(target, 'picture');
 }
 
+function getTokenUserId(token: { id?: unknown; sub?: unknown }) {
+  if (typeof token.id === 'string' && token.id.length > 0) return token.id;
+  if (typeof token.sub === 'string' && token.sub.length > 0) return token.sub;
+  return null;
+}
+
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   session: { strategy: 'jwt' },
@@ -147,10 +153,23 @@ export const authOptions: NextAuthOptions = {
         token.stripeAccountId = user.stripeAccountId;
         token.stripeOnboardingComplete = user.stripeOnboardingComplete;
       }
+      const normalizedTokenUserId = getTokenUserId(token);
+      if (normalizedTokenUserId) {
+        token.id = normalizedTokenUserId;
+      }
       // On session update refetch lightweight account fields from DB.
       if (trigger === 'update') {
+        const tokenUserId = getTokenUserId(token);
+        if (!tokenUserId) {
+          console.warn('[auth] missing token user id during jwt update callback', {
+            trigger,
+            hasId: typeof token.id === 'string',
+            hasSub: typeof token.sub === 'string',
+          });
+          return token;
+        }
         const dbUser = await prisma.user.findUnique({
-          where: { id: token.id as string },
+          where: { id: tokenUserId },
           select: { name: true },
         });
         if (dbUser) {
@@ -161,8 +180,16 @@ export const authOptions: NextAuthOptions = {
     },
     async session({ session, token }) {
       if (session.user) {
+        const tokenUserId = getTokenUserId(token);
+        if (!tokenUserId) {
+          console.warn('[auth] missing token user id during session callback', {
+            hasId: typeof token.id === 'string',
+            hasSub: typeof token.sub === 'string',
+          });
+          return session;
+        }
         stripImageFields(session.user);
-        session.user.id = token.id as string;
+        session.user.id = tokenUserId;
         session.user.role = token.role as Role;
         session.user.stripeAccountId = typeof token.stripeAccountId === 'string' ? token.stripeAccountId : null;
         session.user.stripeOnboardingComplete = Boolean(token.stripeOnboardingComplete);
