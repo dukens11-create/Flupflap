@@ -47,7 +47,7 @@ export default function AdminRefundReviewList({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           approvedAmountCents,
-          adminNote: notes[refundRequestId] || undefined,
+          adminNotes: notes[refundRequestId] || undefined,
         }),
       });
 

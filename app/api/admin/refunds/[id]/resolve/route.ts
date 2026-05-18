@@ -5,7 +5,7 @@ import { authOptions } from '@/lib/auth-options';
 import { resolveRefundRequest } from '@/lib/admin-refunds';
 
 const resolveSchema = z.object({
-  adminNote: z.string().trim().max(2000).optional(),
+  adminNotes: z.string().trim().max(2000).optional(),
 });
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -35,7 +35,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const result = await resolveRefundRequest({
       id,
       adminUserId: session.user.id,
-      adminNotes: parsed.data.adminNote,
+      adminNotes: parsed.data.adminNotes,
     });
 
     if (!result.ok) {

@@ -6,7 +6,7 @@ import { approveRefundRequest } from '@/lib/admin-refunds';
 
 const approveSchema = z.object({
   approvedAmountCents: z.number().int().positive().optional(),
-  adminNote: z.string().trim().max(2000).optional(),
+  adminNotes: z.string().trim().max(2000).optional(),
 });
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -37,7 +37,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       id,
       adminUserId: session.user.id,
       approvedAmountCents: parsed.data.approvedAmountCents,
-      adminNotes: parsed.data.adminNote,
+      adminNotes: parsed.data.adminNotes,
     });
 
     if (!result.ok) {
