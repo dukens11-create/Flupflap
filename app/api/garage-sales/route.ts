@@ -177,10 +177,10 @@ export async function GET(req: Request) {
 
   // Batch-fetch active viewer counts for live sales (single query, avoids N+1)
   const liveSaleIds = sales.filter(s => s.isLive).map(s => s.id);
-  const viewerCountMap = await batchGetLiveViewerCounts(liveSaleIds);
+  const viewerCountMap = liveSaleIds.length > 0 ? await batchGetLiveViewerCounts(liveSaleIds) : new Map<string, number>();
   const salesWithViewers = sales.map(s => ({
     ...s,
-    liveViewerCount: s.isLive ? (viewerCountMap.get(s.id) ?? 0) : undefined,
+    liveViewerCount: viewerCountMap.get(s.id),
   }));
 
   return NextResponse.json({ sales: salesWithViewers, total, page, perPage });

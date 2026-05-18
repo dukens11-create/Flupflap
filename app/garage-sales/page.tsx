@@ -44,10 +44,10 @@ export async function generateMetadata({
 }
 
 const RADIUS_OPTIONS = [
-  { label: 'Closest', value: '10' },
+  { label: 'Closest (10 mi)', value: '10' },
   { label: '25 miles', value: '25' },
   { label: '50 miles', value: '50' },
-  { label: 'Far', value: '100' },
+  { label: 'Far (100 mi)', value: '100' },
   { label: '250 miles', value: '250' },
   { label: 'Nationwide', value: '99999' },
 ];
@@ -140,7 +140,7 @@ export default async function GarageSalesPage({
   // Merge viewer counts into sales data for the client component
   const salesWithViewers = sales.map(s => ({
     ...s,
-    liveViewerCount: s.isLive ? (viewerCountMap.get(s.id) ?? 0) : undefined,
+    liveViewerCount: viewerCountMap.get(s.id),
   }));
 
   return (

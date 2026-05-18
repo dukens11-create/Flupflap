@@ -58,13 +58,18 @@ export function buildPublicGarageSaleWhere(now = new Date()) {
 export async function batchGetLiveViewerCounts(saleIds: string[]): Promise<Map<string, number>> {
   if (saleIds.length === 0) return new Map();
 
+  // Validate IDs to prevent unexpected input reaching the raw SQL query.
+  // Prisma cuids are exactly 25 characters: 'c' followed by 24 lowercase alphanumeric chars.
+  const safeIds = saleIds.filter(id => /^c[a-z0-9]{24}$/.test(id));
+  if (safeIds.length === 0) return new Map();
+
   const activeSince = new Date(Date.now() - ACTIVE_VIEWER_WINDOW_MS);
 
   const rows = await prisma.$queryRaw<Array<{ saleId: string; viewerCount: bigint | number }>>(
     Prisma.sql`
       SELECT "saleId", COUNT(DISTINCT payload->>'viewerId') AS "viewerCount"
       FROM "GarageSaleLiveSignal"
-      WHERE "saleId" = ANY(${saleIds}::text[])
+      WHERE "saleId" = ANY(${safeIds}::text[])
         AND sender = 'BUYER'
         AND kind = 'VIEWER_HEARTBEAT'
         AND "createdAt" >= ${activeSince}
