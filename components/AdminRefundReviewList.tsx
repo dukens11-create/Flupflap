@@ -33,9 +33,10 @@ export default function AdminRefundReviewList({
     setPendingActionId(`${refundRequestId}:${action}`);
     setError('');
 
+    const request = refundRequests.find((item) => item.id === refundRequestId);
     const amountRaw = (amounts[refundRequestId] ?? '').trim();
     const approvedAmountCents = amountRaw ? Math.round(Number.parseFloat(amountRaw) * 100) : undefined;
-    const approvalValidationError = validateApprovalAmount(action, amountRaw, approvedAmountCents);
+    const approvalValidationError = validateApprovalAmount(action, amountRaw, approvedAmountCents, request?.order.totalCents);
     if (approvalValidationError) {
       setPendingActionId(null);
       setError(approvalValidationError);
@@ -292,10 +293,18 @@ function shortId(id: string) {
   return id.slice(-8).toUpperCase();
 }
 
-function validateApprovalAmount(action: RefundAction, amountRaw: string, approvedAmountCents: number | undefined) {
+function validateApprovalAmount(
+  action: RefundAction,
+  amountRaw: string,
+  approvedAmountCents: number | undefined,
+  orderTotalCents: number | undefined,
+) {
   if (action !== 'approve' || !amountRaw) return '';
   if (!Number.isFinite(approvedAmountCents ?? NaN) || (approvedAmountCents ?? 0) <= 0) {
     return 'Approved amount must be a positive USD value.';
+  }
+  if (orderTotalCents !== undefined && (approvedAmountCents ?? 0) > orderTotalCents) {
+    return 'Approved amount cannot exceed the order total.';
   }
   return '';
 }

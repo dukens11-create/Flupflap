@@ -268,11 +268,16 @@ export async function resolveRefundRequest({
       select: {
         id: true,
         status: true,
+        resolvedAt: true,
       },
     });
 
     if (!refundRequest) {
       return { ok: false, status: 404, error: 'Refund request not found.' };
+    }
+
+    if (refundRequest.resolvedAt || ['DENIED', 'REFUNDED'].includes(refundRequest.status)) {
+      return { ok: false, status: 400, error: 'This refund request is already resolved.' };
     }
 
     const resolved = await prisma.refundRequest.update({
