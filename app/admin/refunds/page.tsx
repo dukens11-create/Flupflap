@@ -14,44 +14,66 @@ export default async function AdminRefundsPage() {
   if (!session?.user) redirect('/login');
   if (session.user.role !== 'ADMIN') redirect('/');
 
-  const refundRequests = await prisma.refundRequest.findMany({
-    include: {
-      order: {
-        select: {
-          id: true,
-          status: true,
-          totalCents: true,
-          buyer: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
+  let refundRequests: Array<{
+    id: string;
+    status: 'REQUESTED' | 'SELLER_REVIEW' | 'APPROVED' | 'DENIED' | 'REFUNDED';
+    reason: string;
+    details: string | null;
+    requestedAmountCents: number;
+    approvedAmountCents: number | null;
+    adminNotes: string | null;
+    sellerResponse: string | null;
+    stripeRefundId: string | null;
+    createdAt: string;
+    order: {
+      id: string;
+      status: string;
+      totalCents: number;
+      stripePaymentIntentId: string | null;
+    };
+    buyer: { id: string; name: string | null; email: string };
+    seller: { id: string; name: string | null; email: string };
+  }> = [];
+  let refundFetchError = false;
+
+  try {
+    const records = await prisma.refundRequest.findMany({
+      include: {
+        order: {
+          select: {
+            id: true,
+            status: true,
+            totalCents: true,
+            stripePaymentIntentId: true,
           },
-          items: {
-            select: {
-              id: true,
-              quantity: true,
-              product: {
-                select: {
-                  id: true,
-                  title: true,
-                  seller: {
-                    select: {
-                      id: true,
-                      name: true,
-                      email: true,
-                    },
-                  },
-                },
-              },
-            },
+        },
+        buyer: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        seller: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
           },
         },
       },
-    },
-    orderBy: { createdAt: 'desc' },
-  });
+      orderBy: { createdAt: 'desc' },
+    });
+
+    refundRequests = records.map((request) => ({
+      ...request,
+      createdAt: request.createdAt.toISOString(),
+    }));
+  } catch (error) {
+    refundFetchError = true;
+    refundRequests = [];
+    console.error('[admin/refunds] Failed to fetch refund requests', error);
+  }
 
   return (
     <main className="mx-auto max-w-5xl space-y-6">
@@ -63,7 +85,7 @@ export default async function AdminRefundsPage() {
         </p>
       </div>
 
-      <AdminRefundReviewList initialRefundRequests={refundRequests} />
+      <AdminRefundReviewList initialRefundRequests={refundRequests} refundFetchError={refundFetchError} />
     </main>
   );
 }
