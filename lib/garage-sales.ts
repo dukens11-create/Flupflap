@@ -35,10 +35,14 @@ const GARAGE_SALE_ID_PATTERN = /c[a-z0-9]{24,}/;
 
 export function buildPublicGarageSaleWhere(now = new Date()) {
   return {
-    status: 'APPROVED' as const,
     isSpam: false,
+    isArchived: false,
     paymentStatus: 'PAID' as const,
-    endDate: { gte: now },
+    status: { notIn: ['REJECTED', 'HIDDEN', 'EXPIRED'] as const },
+    OR: [
+      { isLive: true },
+      { endDate: { gte: now } },
+    ],
   };
 }
 
