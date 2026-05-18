@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { dollars } from '@/lib/money';
 import { REFUND_STATUS_LABELS, refundStatusBadge } from '@/lib/refunds';
@@ -47,6 +47,11 @@ export default function AdminRefundReviewList({
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState('');
   const [retryAction, setRetryAction] = useState<RetryAction | null>(null);
+
+  // Sync list when the server re-renders fresh data (e.g. after router.refresh()).
+  useEffect(() => {
+    setRefundRequests(initialRefundRequests);
+  }, [initialRefundRequests]);
 
   const refundCountLabel = useMemo(
     () => `${refundRequests.length} request${refundRequests.length === 1 ? '' : 's'}`,
