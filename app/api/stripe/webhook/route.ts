@@ -322,13 +322,7 @@ export async function POST(req: Request) {
     }
 
     if (isGarageSaleCheckoutSession(cs)) {
-      const result = await finalizeGarageSaleCheckoutSession(cs);
-      if (result.reason === 'missing_sale_id') {
-        return new NextResponse('ok', { status: 200 });
-      }
-      if (result.reason === 'sale_not_found') {
-        return new NextResponse('ok', { status: 200 });
-      }
+      await finalizeGarageSaleCheckoutSession(cs);
       return new NextResponse('ok', { status: 200 });
     }
 

@@ -91,9 +91,14 @@ export async function finalizeGarageSaleCheckoutSession(cs: Stripe.Checkout.Sess
 export async function failGarageSaleCheckoutSession(cs: Stripe.Checkout.Session): Promise<void> {
   const saleId = cs.metadata?.saleId;
   if (!saleId) return;
+  const sale = await prisma.garageSale.findUnique({
+    where: { id: saleId },
+    select: { stripeCheckoutId: true },
+  });
+  if (!sale || sale.stripeCheckoutId !== cs.id) return;
   await prisma.$transaction([
     prisma.garageSale.updateMany({
-      where: { id: saleId, paymentStatus: 'PENDING' },
+      where: { id: saleId, stripeCheckoutId: cs.id, paymentStatus: 'PENDING' },
       data: { paymentStatus: 'FAILED', status: 'HIDDEN', isFeatured: false },
     }),
     prisma.garageSalePayment.updateMany({
