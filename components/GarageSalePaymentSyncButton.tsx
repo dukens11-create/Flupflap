@@ -7,6 +7,11 @@ type Props = {
   saleId: string;
 };
 
+type GarageSalePaymentSyncResponse = {
+  ok?: boolean;
+  reason?: string;
+};
+
 export default function GarageSalePaymentSyncButton({ saleId }: Props) {
   const router = useRouter();
   const [isSyncing, setIsSyncing] = useState(false);
@@ -19,7 +24,7 @@ export default function GarageSalePaymentSyncButton({ saleId }: Props) {
     setError(null);
     try {
       const res = await fetch(`/api/garage-sales/${saleId}/sync-payment`, { method: 'POST' });
-      let data: any = {};
+      let data: GarageSalePaymentSyncResponse = {};
       try {
         data = await res.json();
       } catch (parseError) {

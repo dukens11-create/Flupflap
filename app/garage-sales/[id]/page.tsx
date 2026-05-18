@@ -110,14 +110,6 @@ function formatPaymentAmount(amountCents: number) {
   }).format(amountCents / 100);
 }
 
-function formatPaymentTimelineLabel(status: string) {
-  if (status === 'PAID') return 'Paid';
-  if (status === 'PENDING') return 'Updated';
-  if (status === 'FAILED') return 'Failed';
-  if (status === 'REFUNDED') return 'Refunded';
-  return 'Updated';
-}
-
 function buildPaymentCallbackUrl(
   saleId: string,
   searchParams: { payment?: string; session_id?: string; reposted?: string },
@@ -513,7 +505,7 @@ export default async function GarageSaleDetailPage({ params, searchParams }: Par
                     <li key={payment.id} className="rounded-lg border border-slate-200 p-2">
                       <p className="font-semibold text-slate-800">{payment.status} · {formatPaymentAmount(payment.amountCents)}</p>
                       <p className="text-slate-500">
-                        {formatPaymentTimelineLabel(payment.status)}: {new Date(payment.updatedAt).toLocaleString()}
+                        Last updated: {new Date(payment.updatedAt).toLocaleString()}
                       </p>
                       {payment.stripeCheckoutId && (
                         <p className="break-all text-slate-500">Session: {payment.stripeCheckoutId}</p>

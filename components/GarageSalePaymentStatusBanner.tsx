@@ -12,6 +12,11 @@ type Props = {
   hasSessionId: boolean;
 };
 
+type GarageSalePaymentSyncResponse = {
+  ok?: boolean;
+  reason?: string;
+};
+
 const POLL_INTERVAL_MS = 3000;
 const MAX_POLL_ATTEMPTS = 10;
 
@@ -114,7 +119,7 @@ export default function GarageSalePaymentStatusBanner({
       const res = await fetch(`/api/garage-sales/${saleId}/sync-payment`, {
         method: 'POST',
       });
-      let data: any = {};
+      let data: GarageSalePaymentSyncResponse = {};
       try {
         data = await res.json();
       } catch (parseError) {
