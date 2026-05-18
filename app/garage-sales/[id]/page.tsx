@@ -11,6 +11,7 @@ import GarageSaleLivePanel from '@/components/GarageSaleLivePanel';
 import GarageSaleBuyerLiveView from '@/components/GarageSaleBuyerLiveView';
 import GarageSaleShareButton from '@/components/GarageSaleShareButton';
 import { deriveGarageSaleLifecycle } from '@/lib/garage-sale-lifecycle';
+import { createPageMetadata } from '@/lib/seo';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,9 +19,32 @@ type Params = { params: Promise<{ id: string }> };
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { id } = await params;
-  const sale = await prisma.garageSale.findUnique({ where: { id }, select: { title: true, city: true, state: true } });
-  if (!sale) return { title: 'Garage Sale Not Found' };
-  return { title: `${sale.title} – ${sale.city}, ${sale.state} | FlupFlap` };
+  const sale = await prisma.garageSale.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      title: true,
+      city: true,
+      state: true,
+      status: true,
+      paymentStatus: true,
+      isSpam: true,
+    },
+  });
+  if (!sale) {
+    return createPageMetadata({
+      title: 'Garage Sale Not Found',
+      description: 'The requested garage sale could not be found.',
+      noIndex: true,
+    });
+  }
+  const isPubliclyIndexable = sale.status === 'APPROVED' && sale.paymentStatus === 'PAID' && !sale.isSpam;
+  return createPageMetadata({
+    title: `${sale.title} – ${sale.city}, ${sale.state} | FlupFlap`,
+    description: `View sale details for ${sale.title} in ${sale.city}, ${sale.state}.`,
+    path: `/garage-sales/${sale.id}`,
+    noIndex: !isPubliclyIndexable,
+  });
 }
 
 const SALE_TYPE_LABELS: Record<string, string> = {

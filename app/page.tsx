@@ -13,6 +13,8 @@ import { getSellerResponseStatsForSellers } from '@/lib/messages';
 import { authOptions } from '@/lib/auth-options';
 import { getRoleDefaultPath, normalizeExperienceRole } from '@/lib/role-experience';
 import GarageSalesPromoBanner from '@/components/GarageSalesPromoBanner';
+import { createPageMetadata } from '@/lib/seo';
+import { DEFAULT_CATEGORY_TREE, type DefaultCategoryNode } from '@/lib/default-categories';
 import {
   buildProductSearchableText,
   normalizeSearchText,
@@ -24,7 +26,62 @@ import { isSchemaNotInitializedError } from '@/lib/db-errors';
 
 export const dynamic = 'force-dynamic';
 
-export const metadata: Metadata = { title: 'Browse Products' };
+const CATEGORY_PARAM_KEYS = new Set(['category', 'subcategory', 'refineCategory']);
+
+function getCategorySlugFromDefaults(
+  categoryId: string,
+  nodes: DefaultCategoryNode[] = DEFAULT_CATEGORY_TREE,
+): string | null {
+  for (const node of nodes) {
+    if (node.id === categoryId) return node.slug;
+    const childMatch = getCategorySlugFromDefaults(categoryId, node.children);
+    if (childMatch) return childMatch;
+  }
+  return null;
+}
+
+async function resolveCategoryCanonicalPath(sp: SearchParams): Promise<string | null> {
+  const targetCategoryId = sp.refineCategory || sp.subcategory || sp.category;
+  if (!targetCategoryId) return null;
+
+  if (isDatabaseConfigured()) {
+    try {
+      const category = await prisma.category.findUnique({
+        where: { id: targetCategoryId },
+        select: { slug: true },
+      });
+      if (category?.slug) {
+        return `/category/${category.slug}`;
+      }
+    } catch {
+      // Fallback to default category definitions.
+    }
+  }
+
+  const fallbackSlug = getCategorySlugFromDefaults(targetCategoryId);
+  return fallbackSlug ? `/category/${fallbackSlug}` : null;
+}
+
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}): Promise<Metadata> {
+  const sp = await searchParams;
+  const hasParams = Object.values(sp).some((value) => typeof value === 'string' && value.trim().length > 0);
+  const hasNonCategoryFilters = Object.entries(sp).some(([key, value]) => (
+    !CATEGORY_PARAM_KEYS.has(key) && typeof value === 'string' && value.trim().length > 0
+  ));
+  const categoryCanonicalPath = hasParams && !hasNonCategoryFilters
+    ? await resolveCategoryCanonicalPath(sp)
+    : null;
+
+  return createPageMetadata({
+    title: 'Browse Products',
+    path: categoryCanonicalPath ?? '/',
+    noIndex: hasNonCategoryFilters,
+  });
+}
 
 interface SearchParams {
   q?: string;

@@ -4,10 +4,9 @@ import { prisma, isDatabaseConfigured } from '@/lib/db';
 import GarageSaleCard from '@/components/GarageSaleCard';
 import GarageSaleBrowseClient from './GarageSaleBrowseClient';
 import { expireGarageSales } from '@/lib/garage-sales';
+import { createPageMetadata } from '@/lib/seo';
 
 export const dynamic = 'force-dynamic';
-
-export const metadata: Metadata = { title: 'Garage Sales Near You | FlupFlap' };
 
 interface SearchParams {
   q?: string;
@@ -20,6 +19,26 @@ interface SearchParams {
   sort?: string;
   radius?: string;
   page?: string;
+}
+
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}): Promise<Metadata> {
+  const sp = await searchParams;
+  const hasFilters = Object.entries(sp).some(([key, value]) => {
+    if (typeof value !== 'string' || value.trim().length === 0) return false;
+    if (key === 'page') return value !== '1';
+    return true;
+  });
+
+  return createPageMetadata({
+    title: 'Garage Sales Near You | FlupFlap',
+    description: 'Discover verified local garage, yard, estate, and moving sales near you on FlupFlap.',
+    path: '/garage-sales',
+    noIndex: hasFilters,
+  });
 }
 
 const RADIUS_OPTIONS = [
