@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import { prisma } from '@/lib/db';
-import { appUrl, getCurrentStripeMode, stripe } from '@/lib/stripe';
+import { appUrl, extractStripeResourceId, getCurrentStripeMode, stripe } from '@/lib/stripe';
 import { calculateCommissionCents, calculateSellerNetCents, getMarketplaceSettings, resolveCommissionForSeller } from '@/lib/commission';
 import type { CheckoutCommissionItem } from '@/lib/commission';
 import crypto from 'crypto';
@@ -32,10 +32,6 @@ function generatePickupCode(): string {
   // possible codes. Access is gated behind seller authentication and order
   // ownership, making brute force impractical.
   return String(crypto.randomInt(100000, 1000000));
-}
-
-function extractStripeResourceId(value: string | { id: string } | null | undefined): string | null {
-  return typeof value === 'string' ? value : value?.id ?? null;
 }
 
 export async function POST(req: Request) {

@@ -1,15 +1,11 @@
 import Stripe from 'stripe';
 import { prisma } from '@/lib/db';
-import { stripe } from '@/lib/stripe';
+import { extractStripeResourceId, stripe } from '@/lib/stripe';
 
 const GARAGE_SALE_METADATA_TYPE = 'garage_sale_listing';
 
 export function isGarageSaleCheckoutSession(cs: Stripe.Checkout.Session): boolean {
   return cs.metadata?.type === GARAGE_SALE_METADATA_TYPE;
-}
-
-function extractStripeResourceId(value: string | { id: string } | null | undefined): string | null {
-  return typeof value === 'string' ? value : value?.id ?? null;
 }
 
 async function getReceiptUrl(paymentIntentId: string | null): Promise<string | null> {

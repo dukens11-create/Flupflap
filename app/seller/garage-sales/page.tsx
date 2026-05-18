@@ -82,7 +82,7 @@ export default async function SellerGarageSalesPage({
       });
     }
     if (syncResult.synced || syncResult.reason === 'already_paid') {
-      redirect(`/seller/garage-sales?paid=1&saleId=${encodeURIComponent(sp.saleId)}&session_id=${encodeURIComponent(sp.session_id)}`);
+      redirect(`/seller/garage-sales?paid=1&saleId=${encodeURIComponent(sp.saleId)}`);
     }
   }
   await expireGarageSales();
