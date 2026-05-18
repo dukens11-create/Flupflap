@@ -56,7 +56,7 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Refund request not found.' }, { status: 404 });
     }
 
-    if (['DENIED', 'REFUNDED'].includes(refundRequest.status)) {
+    if (['APPROVED', 'DENIED', 'REFUNDED'].includes(refundRequest.status)) {
       return NextResponse.json({ success: false, error: 'This refund request is already resolved.' }, { status: 400 });
     }
 

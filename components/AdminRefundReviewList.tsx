@@ -23,6 +23,7 @@ function getEffectiveAmount(request: AdminRefundListItem): number {
 }
 
 function isClosedRefund(request: AdminRefundListItem): boolean {
+  // `resolvedAt` is set by "Mark as resolved" for non-refunded outcomes, so it should also lock actions.
   return request.status === 'DENIED' || request.status === 'REFUNDED' || Boolean(request.resolvedAt);
 }
 
