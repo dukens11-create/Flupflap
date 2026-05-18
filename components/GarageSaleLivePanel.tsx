@@ -232,6 +232,9 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
           setError(null);
           return false;
         }
+        if (permissionStatus.state === 'prompt') {
+          setCameraStatus('idle');
+        }
       } catch {
         // Ignore unsupported camera permission query implementations.
       }
@@ -244,7 +247,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       streamRef.current?.getTracks().forEach((track) => track.stop());
 
       // Android Chrome/Samsung Internet PWAs reliably trigger permission prompts
-      // with the baseline video+audio request before extra camera constraints.
+      // when getUserMedia(video+audio) is requested before facingMode constraints.
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       const [videoTrack] = stream.getVideoTracks();
       if (!videoTrack) {
@@ -256,8 +259,8 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       try {
         await videoTrack.applyConstraints({ facingMode: { ideal: nextFacingMode } });
       } catch (constraintError) {
-        logMobileCameraIssue('stream initialization failure', {
-          reason: 'facingMode constraint unsupported',
+        logMobileCameraIssue('camera constraint fallback', {
+          reason: 'facingMode not applied',
           facingMode: nextFacingMode,
           error: constraintError instanceof Error ? constraintError.message : 'unknown',
         });
@@ -269,7 +272,10 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         videoRef.current.srcObject = stream;
       }
       setCamOn(true);
-      await ensurePreviewPlayback();
+      const previewStarted = await ensurePreviewPlayback();
+      if (!previewStarted) {
+        logMobileCameraIssue('stream initialization failure', { reason: 'preview playback blocked' });
+      }
       return true;
     } catch (err) {
       const name = err instanceof DOMException ? err.name : '';
