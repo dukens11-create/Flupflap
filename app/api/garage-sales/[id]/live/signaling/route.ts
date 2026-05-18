@@ -9,7 +9,10 @@ export const dynamic = 'force-dynamic';
 type Params = { params: Promise<{ id: string }> };
 
 const SIGNAL_ROLES = ['SELLER', 'BUYER'] as const;
-const SIGNAL_KINDS = ['OFFER', 'ANSWER', 'ICE'] as const;
+const SIGNAL_KINDS = ['OFFER', 'ANSWER', 'ICE', 'VIEWER_HEARTBEAT'] as const;
+// Buyer heartbeats are sent every 15 seconds, so a 35-second window keeps the
+// count responsive while tolerating a missed poll or brief network delay.
+const ACTIVE_VIEWER_WINDOW_MS = 35_000;
 
 type SignalRole = (typeof SIGNAL_ROLES)[number];
 type SignalKind = (typeof SIGNAL_KINDS)[number];
@@ -39,6 +42,28 @@ async function requireSellerOwner(saleSellerId: string) {
   return { ok: true as const };
 }
 
+async function getActiveViewerCount(saleId: string, liveStartedAt: Date | null) {
+  const activeSince = new Date(
+    Math.max(
+      Date.now() - ACTIVE_VIEWER_WINDOW_MS,
+      liveStartedAt?.getTime() ?? 0,
+    ),
+  );
+
+  const rows = await prisma.$queryRaw<Array<{ viewerCount: bigint | number }>>(Prisma.sql`
+    SELECT COUNT(DISTINCT payload->>'viewerId') AS "viewerCount"
+    FROM "GarageSaleLiveSignal"
+    WHERE "saleId" = ${saleId}
+      AND sender = 'BUYER'
+      AND kind = 'VIEWER_HEARTBEAT'
+      AND "createdAt" >= ${activeSince}
+      AND COALESCE(payload->>'viewerId', '') <> ''
+  `);
+
+  const viewerCount = rows[0]?.viewerCount ?? 0;
+  return typeof viewerCount === 'bigint' ? Number(viewerCount) : viewerCount;
+}
+
 /** GET /api/garage-sales/[id]/live/signaling?role=BUYER|SELLER&since=ISO_DATE */
 export async function GET(req: Request, { params }: Params) {
   const { id } = await params;
@@ -63,7 +88,7 @@ export async function GET(req: Request, { params }: Params) {
   }
 
   if (!sale.isLive) {
-    return NextResponse.json({ isLive: false, liveStartedAt: sale.liveStartedAt, signals: [] });
+    return NextResponse.json({ isLive: false, liveStartedAt: sale.liveStartedAt, viewerCount: 0, signals: [] });
   }
 
   const sinceDate = parseSince(url.searchParams.get('since'));
@@ -90,7 +115,9 @@ export async function GET(req: Request, { params }: Params) {
     select: { id: true, sender: true, kind: true, payload: true, createdAt: true },
   });
 
-  return NextResponse.json({ isLive: true, liveStartedAt: sale.liveStartedAt, signals });
+  const viewerCount = await getActiveViewerCount(id, sale.liveStartedAt);
+
+  return NextResponse.json({ isLive: true, liveStartedAt: sale.liveStartedAt, viewerCount, signals });
 }
 
 /** POST /api/garage-sales/[id]/live/signaling */
@@ -112,7 +139,7 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: 'role must be BUYER or SELLER' }, { status: 400 });
   }
   if (!isSignalKind(kind)) {
-    return NextResponse.json({ error: 'kind must be OFFER, ANSWER, or ICE' }, { status: 400 });
+    return NextResponse.json({ error: 'kind must be OFFER, ANSWER, ICE, or VIEWER_HEARTBEAT' }, { status: 400 });
   }
 
   if (role === 'SELLER' && kind === 'ANSWER') {
@@ -120,6 +147,9 @@ export async function POST(req: Request, { params }: Params) {
   }
   if (role === 'BUYER' && kind === 'OFFER') {
     return NextResponse.json({ error: 'Buyer cannot send OFFER' }, { status: 400 });
+  }
+  if (role === 'SELLER' && kind === 'VIEWER_HEARTBEAT') {
+    return NextResponse.json({ error: 'Seller cannot send VIEWER_HEARTBEAT' }, { status: 400 });
   }
 
   if (payload == null || typeof payload !== 'object') {

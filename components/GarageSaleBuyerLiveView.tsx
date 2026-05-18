@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { MessageCircle, Send, Radio } from 'lucide-react';
+import { MessageCircle, Send, Radio, Eye } from 'lucide-react';
 
 const DEFAULT_GUEST_NAME = 'Guest';
 const RTC_CONFIG: RTCConfiguration = {
@@ -30,6 +30,8 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
   const [error, setError] = useState<string | null>(null);
   const [streamError, setStreamError] = useState<string | null>(null);
   const [streamConnected, setStreamConnected] = useState(false);
+  const [playbackBlocked, setPlaybackBlocked] = useState(false);
+  const [viewerCount, setViewerCount] = useState(0);
 
   const lastSeenRef = useRef<string | null>(null);
   const chatBottomRef = useRef<HTMLDivElement>(null);
@@ -41,6 +43,8 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
   const signalPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const signalCursorRef = useRef<string | null>(null);
   const activeOfferSignalRef = useRef<string | null>(null);
+  const viewerHeartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const viewerIdRef = useRef<string | null>(null);
 
   const fetchMessages = useCallback(async () => {
     try {
@@ -89,8 +93,24 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     remoteStreamRef.current = null;
     activeOfferSignalRef.current = null;
     setStreamConnected(false);
+    setPlaybackBlocked(false);
     if (videoRef.current) {
       videoRef.current.srcObject = null;
+    }
+  }, []);
+
+  const playRemoteStream = useCallback(async () => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    video.playsInline = true;
+    video.setAttribute('playsinline', 'true');
+
+    try {
+      await video.play();
+      setPlaybackBlocked(false);
+    } catch {
+      setPlaybackBlocked(true);
     }
   }, []);
 
@@ -102,9 +122,59 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     });
   }, [saleId]);
 
+  const getViewerId = useCallback(() => {
+    if (viewerIdRef.current) return viewerIdRef.current;
+
+    const storageKey = `garage-sale-live-viewer:${saleId}`;
+    const stored = window.sessionStorage.getItem(storageKey);
+    if (stored) {
+      viewerIdRef.current = stored;
+      return stored;
+    }
+
+    let nextId: string;
+    if (window.crypto?.randomUUID) {
+      nextId = window.crypto.randomUUID();
+    } else if (window.crypto?.getRandomValues) {
+      const bytes = new Uint32Array(2);
+      window.crypto.getRandomValues(bytes);
+      nextId = `viewer-${bytes[0].toString(36)}-${bytes[1].toString(36)}`;
+    } else {
+      const perfNow = window.performance?.now
+        ? window.performance.now().toString(36).replace('.', '')
+        : '0';
+      nextId = `viewer-${Date.now().toString(36)}-${perfNow}`;
+    }
+    window.sessionStorage.setItem(storageKey, nextId);
+    viewerIdRef.current = nextId;
+    return nextId;
+  }, [saleId]);
+
+  const sendViewerHeartbeat = useCallback(async () => {
+    if (!isLive) return;
+
+    try {
+      await fetch(`/api/garage-sales/${saleId}/live/signaling`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          role: 'BUYER',
+          kind: 'VIEWER_HEARTBEAT',
+          payload: { viewerId: getViewerId() },
+        }),
+      });
+    } catch {
+      // Silent fail — the next heartbeat will retry
+    }
+  }, [getViewerId, isLive, saleId]);
+
   const handleSellerOffer = useCallback(async (signalId: string, payload: { type?: string; sdp?: string }) => {
     const type = payload.type === 'offer' ? payload.type : null;
     if (!type || !payload.sdp) return;
+    if (typeof RTCPeerConnection === 'undefined') {
+      setStreamError('Live streaming is not supported in this browser.');
+      return;
+    }
 
     closePeerConnection();
 
@@ -120,6 +190,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
         remoteStream.addTrack(track);
       }
       setStreamConnected(remoteStream.getTracks().length > 0);
+      void playRemoteStream();
     };
 
     pc.onicecandidate = (event) => {
@@ -141,7 +212,8 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     if (videoRef.current) {
       videoRef.current.srcObject = remoteStream;
     }
-  }, [closePeerConnection, postSignal]);
+    void playRemoteStream();
+  }, [closePeerConnection, playRemoteStream, postSignal]);
 
   const pollSignals = useCallback(async () => {
     if (!isLive) return;
@@ -154,13 +226,17 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
 
       const data = await res.json() as {
         isLive: boolean;
+        viewerCount?: number;
         signals: Array<{ id: string; kind: string; payload: unknown; createdAt: string }>;
       };
 
       if (!data.isLive) {
         setIsLive(false);
+        setViewerCount(0);
         return;
       }
+
+      setViewerCount(data.viewerCount ?? 0);
 
       for (const signal of data.signals) {
         signalCursorRef.current = signal.createdAt;
@@ -201,9 +277,27 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
   }, [closePeerConnection, isLive, pollSignals, stopSignalPolling]);
 
   useEffect(() => {
+    if (!isLive) {
+      if (viewerHeartbeatRef.current) clearInterval(viewerHeartbeatRef.current);
+      return;
+    }
+
+    if (viewerHeartbeatRef.current) clearInterval(viewerHeartbeatRef.current);
+    void sendViewerHeartbeat();
+    viewerHeartbeatRef.current = setInterval(() => {
+      void sendViewerHeartbeat();
+    }, 15000);
+
+    return () => {
+      if (viewerHeartbeatRef.current) clearInterval(viewerHeartbeatRef.current);
+    };
+  }, [isLive, sendViewerHeartbeat]);
+
+  useEffect(() => {
     return () => {
       stopSignalPolling();
       closePeerConnection();
+      if (viewerHeartbeatRef.current) clearInterval(viewerHeartbeatRef.current);
     };
   }, [closePeerConnection, stopSignalPolling]);
 
@@ -254,15 +348,18 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
   }
 
   return (
-    <div className="card p-4 space-y-4">
-      <div className="flex items-center gap-2">
+    <div className="card space-y-4 p-4">
+      <div className="flex flex-wrap items-center gap-2">
         <span className="inline-flex items-center gap-1.5 rounded-full bg-red-500 px-3 py-1 text-xs font-bold text-white animate-pulse">
           🔴 LIVE NOW
         </span>
         <p className="text-xs text-slate-500">The seller is live! Ask questions below.</p>
+        <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+          <Eye size={12} /> {viewerCount} watching
+        </span>
       </div>
 
-      <div className="rounded-xl bg-slate-900 aspect-video relative overflow-hidden">
+      <div className="relative aspect-[4/5] overflow-hidden rounded-2xl bg-slate-900 sm:aspect-video">
         <video
           ref={videoRef}
           autoPlay
@@ -277,6 +374,17 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
             <p className="text-xs text-slate-300 px-4 text-center">
               If playback does not start, keep this page open for a moment.
             </p>
+          </div>
+        )}
+        {streamConnected && playbackBlocked && (
+          <div className="absolute inset-0 flex items-center justify-center bg-slate-950/50 p-4">
+            <button
+              type="button"
+              onClick={() => void playRemoteStream()}
+              className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-900 shadow-lg transition hover:bg-slate-100"
+            >
+              Tap to watch live
+            </button>
           </div>
         )}
       </div>
@@ -324,7 +432,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
           />
         )}
 
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row">
           <input
             type="text"
             value={input}
