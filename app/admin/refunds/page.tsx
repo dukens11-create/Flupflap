@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import type { Metadata } from 'next';
 import { authOptions } from '@/lib/auth-options';
 import { getAdminRefundRequests } from '@/lib/admin-refunds';
+import { ADMIN_REFUNDS_LOAD_ERROR } from '@/lib/admin-refunds-errors';
 import AdminRefundReviewList from '@/components/AdminRefundReviewList';
 
 export const dynamic = 'force-dynamic';
@@ -53,7 +54,7 @@ export default async function AdminRefundsPage() {
               </p>
             </>
           ) : (
-            fetchError ?? 'Unable to load refund requests. Please refresh the page or contact support if the problem persists.'
+            fetchError ?? ADMIN_REFUNDS_LOAD_ERROR
           )}
         </div>
       ) : (

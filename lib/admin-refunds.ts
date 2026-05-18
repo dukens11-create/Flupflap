@@ -5,6 +5,7 @@ import { createNotifications } from '@/lib/notifications';
 import { normalizeRefundAmountCents } from '@/lib/refunds';
 import { stripe } from '@/lib/stripe';
 import { isSchemaNotInitializedError } from '@/lib/db-errors';
+import { ADMIN_REFUNDS_LOAD_ERROR, ADMIN_REFUNDS_SCHEMA_INIT_ERROR } from '@/lib/admin-refunds-errors';
 
 export type AdminRefundRecord = {
   id: string;
@@ -157,8 +158,8 @@ export async function getAdminRefundRequests(): Promise<{
       fetchFailed: true,
       schemaNotInitialized,
       fetchError: schemaNotInitialized
-        ? 'Database schema not yet initialized. Run prisma migrate deploy, then reload this page.'
-        : 'Unable to load refund requests. Please refresh the page or contact support if the problem persists.',
+        ? ADMIN_REFUNDS_SCHEMA_INIT_ERROR
+        : ADMIN_REFUNDS_LOAD_ERROR,
     };
   }
 }
