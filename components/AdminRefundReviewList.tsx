@@ -55,7 +55,8 @@ export default function AdminRefundReviewList({
       let data: Record<string, unknown> = {};
       try {
         data = await res.json();
-      } catch {
+      } catch (parseError) {
+        console.warn('[admin/refunds] Failed to parse action response JSON.', parseError);
         data = {};
       }
 

@@ -1,7 +1,6 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { getServerSession } from 'next-auth';
-import type { Session } from 'next-auth';
 import type { Metadata } from 'next';
 import { authOptions } from '@/lib/auth-options';
 import { getAdminRefundRequests } from '@/lib/admin-refunds';
@@ -11,23 +10,7 @@ export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Admin Refund Requests' };
 
 export default async function AdminRefundsPage() {
-  let session: Session | null = null;
-  try {
-    session = await getServerSession(authOptions);
-  } catch (error) {
-    console.error('[admin/refunds] Failed to load admin session.', error);
-    return (
-      <main className="mx-auto max-w-4xl py-12">
-        <div className="card p-6">
-          <h1 className="text-xl font-bold text-slate-900">Unable to verify access</h1>
-          <p className="mt-2 text-sm text-slate-600">
-            Please refresh and try again.
-          </p>
-        </div>
-      </main>
-    );
-  }
-
+  const session = await getServerSession(authOptions);
   if (!session?.user) redirect('/login');
   if (session.user.role !== 'ADMIN') redirect('/');
 
