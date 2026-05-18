@@ -10,6 +10,7 @@ import { expireGarageSales } from '@/lib/garage-sales';
 import GarageSaleLivePanel from '@/components/GarageSaleLivePanel';
 import GarageSaleBuyerLiveView from '@/components/GarageSaleBuyerLiveView';
 import GarageSaleShareButton from '@/components/GarageSaleShareButton';
+import { deriveGarageSaleLifecycle } from '@/lib/garage-sale-lifecycle';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,11 +38,6 @@ function formatTime(date: Date) {
   return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
-function isOpenNow(startDate: Date, endDate: Date) {
-  const now = Date.now();
-  return now >= startDate.getTime() && now <= endDate.getTime();
-}
-
 export default async function GarageSaleDetailPage({ params }: Params) {
   const { id } = await params;
   await expireGarageSales();
@@ -65,11 +61,12 @@ export default async function GarageSaleDetailPage({ params }: Params) {
   const session = await getServerSession(authOptions);
   const isOwner = session?.user?.id === sale.sellerId;
   const isAdmin = session?.user?.role === 'ADMIN';
+  const lifecycle = deriveGarageSaleLifecycle(sale);
 
-  if (sale.status !== 'APPROVED' && !isOwner && !isAdmin) notFound();
+  if (!lifecycle.publiclyVisible && !isOwner && !isAdmin) notFound();
 
-  const listingIsPubliclyVisible = sale.status === 'APPROVED';
-  const openNow = listingIsPubliclyVisible && isOpenNow(sale.startDate, sale.endDate);
+  const listingIsPubliclyVisible = lifecycle.publiclyVisible;
+  const openNow = lifecycle.openNow;
   const saleTypeLabel = SALE_TYPE_LABELS[sale.saleType] ?? sale.saleType;
   const priceRange = sale.priceRangeMin != null && sale.priceRangeMax != null
     ? `$${sale.priceRangeMin}–$${sale.priceRangeMax}`
@@ -80,7 +77,7 @@ export default async function GarageSaleDetailPage({ params }: Params) {
   const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${sale.address}, ${sale.city}, ${sale.state} ${sale.zipCode}`)}`;
 
   // Increment view count (fire-and-forget, log errors)
-  if (sale.status === 'APPROVED' && !isOwner) {
+  if (listingIsPubliclyVisible && !isOwner) {
     prisma.garageSale.update({ where: { id }, data: { viewCount: { increment: 1 } } }).catch((err) => {
       console.error('[garage-sales] view count increment failed', err);
     });
@@ -126,8 +123,22 @@ export default async function GarageSaleDetailPage({ params }: Params) {
           </span>
         ) : null}
         {(isOwner || isAdmin) && !listingIsPubliclyVisible && (
-          <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-bold ${sale.status === 'PENDING' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>
-            {sale.status}
+          <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-bold ${
+            lifecycle.state === 'PAYMENT_PENDING' || lifecycle.state === 'PENDING_REVIEW'
+              ? 'bg-yellow-100 text-yellow-700'
+              : lifecycle.state === 'PAYMENT_FAILED' || lifecycle.state === 'REJECTED' || lifecycle.state === 'PAYMENT_REFUNDED'
+                ? 'bg-red-100 text-red-700'
+                : 'bg-slate-200 text-slate-700'
+          }`}>
+            {lifecycle.state === 'PAYMENT_PENDING'
+              ? 'PAYMENT PENDING'
+              : lifecycle.state === 'PENDING_REVIEW'
+                ? 'PENDING REVIEW'
+                : lifecycle.state === 'PAYMENT_FAILED'
+                  ? 'PAYMENT FAILED'
+                  : lifecycle.state === 'PAYMENT_REFUNDED'
+                    ? 'REFUNDED'
+                    : lifecycle.state}
           </span>
         )}
         <span className="inline-flex items-center rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">
@@ -136,15 +147,7 @@ export default async function GarageSaleDetailPage({ params }: Params) {
       </div>
       {isOwner && !listingIsPubliclyVisible && (
         <div className="card border-yellow-300 bg-yellow-50 p-4 text-sm text-yellow-900">
-          <p className="font-semibold">
-            {sale.paymentStatus === 'PENDING'
-              ? 'Your payment is processing. This listing is hidden until payment clears.'
-              : sale.status === 'PENDING'
-                ? 'Your listing is pending review.'
-                : sale.status === 'REJECTED'
-                  ? 'Your listing was rejected. Update details and try again.'
-                  : 'This listing is currently hidden.'}
-          </p>
+          <p className="font-semibold">{lifecycle.ownerMessage}</p>
           <Link href="/seller/garage-sales" className="mt-2 inline-block font-semibold underline">
             Open My Garage Sales
           </Link>
@@ -300,17 +303,19 @@ export default async function GarageSaleDetailPage({ params }: Params) {
           </div>
 
           {/* Live Preview — seller controls */}
-          {isOwner && listingIsPubliclyVisible && (
+          {isOwner && lifecycle.sellerCanGoLive && (
             <GarageSaleLivePanel saleId={sale.id} initialIsLive={sale.isLive} />
           )}
-          {isOwner && !listingIsPubliclyVisible && (
+          {isOwner && !lifecycle.sellerCanGoLive && (
             <div className="card p-4 text-sm text-slate-600">
-              Live controls will appear once your listing is approved and visible.
+              {lifecycle.state === 'UPCOMING'
+                ? 'Live controls unlock when your sale start time arrives.'
+                : 'Live controls appear only when your listing is paid, approved, and visible.'}
             </div>
           )}
 
           {/* Live Preview — buyer view */}
-          {!isOwner && (
+          {!isOwner && listingIsPubliclyVisible && (
             <GarageSaleBuyerLiveView
               saleId={sale.id}
               initialIsLive={sale.isLive}

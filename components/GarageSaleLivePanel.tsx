@@ -37,7 +37,6 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   const signalPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const signalCursorRef = useRef<string | null>(null);
   const hasRemoteAnswerRef = useRef(false);
-  const autoRequestedRef = useRef(false);
   const liveRef = useRef(initialIsLive);
   const micOnRef = useRef(true);
   const preferredFacingModeRef = useRef<'user' | 'environment'>('user');
@@ -370,12 +369,6 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   }, [closePeerConnection, endLiveOnPageLeave, stopSignalPolling]);
 
   useEffect(() => {
-    if (autoRequestedRef.current) return;
-    autoRequestedRef.current = true;
-    void startCamera();
-  }, [startCamera]);
-
-  useEffect(() => {
     const hasTouchUi = window.matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
     if (!navigator.mediaDevices?.enumerateDevices && !hasTouchUi) return;
 
@@ -443,6 +436,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       case 'connecting':
         return CAMERA_CONNECTING_MESSAGE;
       case 'awaitingInteraction':
+        return 'Tap to resume preview playback.';
       case 'idle':
         return PREVIEW_REQUIRED_MESSAGE;
       default:
