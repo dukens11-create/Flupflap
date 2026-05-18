@@ -68,7 +68,8 @@ export default async function GarageSaleDetailPage({ params }: Params) {
 
   if (sale.status !== 'APPROVED' && !isOwner && !isAdmin) notFound();
 
-  const openNow = isOpenNow(sale.startDate, sale.endDate);
+  const listingIsPubliclyVisible = sale.status === 'APPROVED';
+  const openNow = listingIsPubliclyVisible && isOpenNow(sale.startDate, sale.endDate);
   const saleTypeLabel = SALE_TYPE_LABELS[sale.saleType] ?? sale.saleType;
   const priceRange = sale.priceRangeMin != null && sale.priceRangeMax != null
     ? `$${sale.priceRangeMin}–$${sale.priceRangeMax}`
@@ -108,16 +109,20 @@ export default async function GarageSaleDetailPage({ params }: Params) {
           <span className="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">
             🟢 Open Now
           </span>
-        ) : sale.endDate < new Date() ? (
+        ) : listingIsPubliclyVisible && sale.endDate < new Date() ? (
           <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
             Sale Ended
           </span>
-        ) : (
+        ) : listingIsPubliclyVisible ? (
           <span className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
             Upcoming
           </span>
-        )}
-        {(isOwner || isAdmin) && sale.status !== 'APPROVED' && (
+        ) : (isOwner || isAdmin) ? (
+          <span className="inline-flex items-center rounded-full bg-slate-200 px-3 py-1 text-xs font-bold text-slate-700">
+            HIDDEN
+          </span>
+        ) : null}
+        {(isOwner || isAdmin) && !listingIsPubliclyVisible && (
           <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-bold ${sale.status === 'PENDING' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>
             {sale.status}
           </span>
@@ -126,7 +131,7 @@ export default async function GarageSaleDetailPage({ params }: Params) {
           {saleTypeLabel}
         </span>
       </div>
-      {isOwner && sale.status !== 'APPROVED' && (
+      {isOwner && !listingIsPubliclyVisible && (
         <div className="card border-yellow-300 bg-yellow-50 p-4 text-sm text-yellow-900">
           <p className="font-semibold">
             {sale.paymentStatus === 'PENDING'
@@ -292,8 +297,13 @@ export default async function GarageSaleDetailPage({ params }: Params) {
           </div>
 
           {/* Live Preview — seller controls */}
-          {isOwner && (
+          {isOwner && listingIsPubliclyVisible && (
             <GarageSaleLivePanel saleId={sale.id} initialIsLive={sale.isLive} />
+          )}
+          {isOwner && !listingIsPubliclyVisible && (
+            <div className="card p-4 text-sm text-slate-600">
+              Live controls will appear once your listing is approved and visible.
+            </div>
           )}
 
           {/* Live Preview — buyer view */}
