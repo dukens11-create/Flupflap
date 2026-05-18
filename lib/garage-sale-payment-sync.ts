@@ -105,6 +105,12 @@ export async function syncGarageSaleCheckoutSessionForSeller(params: {
   const { checkoutSessionId, saleId, sellerId } = params;
   if (!checkoutSessionId || !saleId || !sellerId) return { synced: false, reason: 'missing_inputs' };
 
+  const sale = await prisma.garageSale.findUnique({
+    where: { id: saleId },
+    select: { sellerId: true },
+  });
+  if (!sale || sale.sellerId !== sellerId) return { synced: false, reason: 'forbidden' };
+
   let checkoutSession: Stripe.Checkout.Session;
   try {
     checkoutSession = await stripe.checkout.sessions.retrieve(checkoutSessionId);
@@ -115,12 +121,6 @@ export async function syncGarageSaleCheckoutSessionForSeller(params: {
   if (!isGarageSaleCheckoutSession(checkoutSession)) return { synced: false, reason: 'not_garage_sale_checkout' };
   if (checkoutSession.metadata?.saleId !== saleId) return { synced: false, reason: 'sale_mismatch' };
   if (checkoutSession.payment_status !== 'paid') return { synced: false, reason: 'payment_not_paid' };
-
-  const sale = await prisma.garageSale.findUnique({
-    where: { id: saleId },
-    select: { sellerId: true },
-  });
-  if (!sale || sale.sellerId !== sellerId) return { synced: false, reason: 'forbidden' };
 
   const result = await finalizeGarageSaleCheckoutSession(checkoutSession);
   return { synced: result.processed, reason: result.reason };

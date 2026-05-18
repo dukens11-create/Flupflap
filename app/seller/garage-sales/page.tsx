@@ -58,11 +58,17 @@ export default async function SellerGarageSalesPage({
   const { sellerId } = await requireSeller();
   const sp = await searchParams;
   if (sp.paid === '1' && sp.saleId && sp.session_id) {
-    await syncGarageSaleCheckoutSessionForSeller({
+    const syncResult = await syncGarageSaleCheckoutSessionForSeller({
       checkoutSessionId: sp.session_id,
       saleId: sp.saleId,
       sellerId,
     });
+    if (!syncResult.synced && syncResult.reason && syncResult.reason !== 'already_paid') {
+      console.warn('[seller/garage-sales] payment sync did not finalize', {
+        saleId: sp.saleId,
+        reason: syncResult.reason,
+      });
+    }
   }
   await expireGarageSales();
 
