@@ -183,6 +183,9 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   }, []);
 
   const startCamera = useCallback(async (nextFacingMode = preferredFacingModeRef.current) => {
+    if (cameraStatus === 'connecting') {
+      return false;
+    }
     if (!navigator.mediaDevices?.getUserMedia) {
       setCameraStatus('unsupported');
       setError('Your browser does not support live camera preview.');
@@ -230,7 +233,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       );
       return false;
     }
-  }, [ensurePreviewPlayback]);
+  }, [cameraStatus, ensurePreviewPlayback]);
 
   const stopCamera = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -249,10 +252,11 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   }, [micOn]);
 
   const handleSwitchCamera = useCallback(async () => {
+    if (cameraStatus === 'connecting') return;
     const nextFacingMode = preferredFacingMode === 'user' ? 'environment' : 'user';
     setPreferredFacingMode(nextFacingMode);
     await startCamera(nextFacingMode);
-  }, [preferredFacingMode, startCamera]);
+  }, [cameraStatus, preferredFacingMode, startCamera]);
 
   const handleGoLiveClick = () => {
     setShowWarning(true);

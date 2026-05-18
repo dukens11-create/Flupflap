@@ -284,6 +284,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
       return;
     }
 
+    if (viewerHeartbeatRef.current) clearInterval(viewerHeartbeatRef.current);
     void sendViewerHeartbeat();
     viewerHeartbeatRef.current = setInterval(() => {
       void sendViewerHeartbeat();
