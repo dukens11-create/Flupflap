@@ -294,8 +294,8 @@ export async function POST(req: Request) {
     mode: 'payment',
     payment_method_types: ['card'],
     line_items: lineItems,
-    success_url: `${appUrl}/garage-sales/${sale.id}?paid=1`,
-    cancel_url: `${appUrl}/garage-sales/new?payment=cancelled`,
+    success_url: `${appUrl}/seller/garage-sales?paid=1&saleId=${sale.id}`,
+    cancel_url: `${appUrl}/seller/garage-sales?payment=cancelled&saleId=${sale.id}`,
     customer_email: session.user.email ?? undefined,
     metadata: {
       type: 'garage_sale_listing',
