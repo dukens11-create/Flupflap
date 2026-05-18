@@ -11,12 +11,14 @@ const RTC_CONFIG: RTCConfiguration = {
   iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }],
 };
 const PREVIEW_REQUIRED_MESSAGE = 'Preview your camera before starting your live garage sale.';
-const CAMERA_ACCESS_MESSAGE = 'Please allow camera access to start your live sale.';
-const CAMERA_BLOCKED_MESSAGE = 'Camera access blocked in browser settings.';
+const CAMERA_ACCESS_MESSAGE = 'Camera access blocked';
+const CAMERA_BLOCKED_MESSAGE = 'Camera access blocked';
 const CAMERA_READY_MESSAGE = 'Camera ready';
 const CAMERA_CONNECTING_MESSAGE = 'Connecting camera...';
 const CAMERA_PREVIEW_PLACEHOLDER = 'Camera preview will appear here.';
 const CAMERA_STATUS_UNKNOWN_MESSAGE = 'Camera status unknown.';
+const INSECURE_CAMERA_CONTEXT_MESSAGE = 'Camera requires HTTPS in this browser.';
+const MOBILE_CAMERA_LOG_PREFIX = '[GarageSaleLivePanel][mobile-camera]';
 
 type CameraStatus = 'idle' | 'connecting' | 'ready' | 'awaitingInteraction' | 'blocked' | 'denied' | 'unsupported';
 
@@ -52,6 +54,14 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   const [viewerCount, setViewerCount] = useState(0);
   const [preferredFacingMode, setPreferredFacingMode] = useState<'user' | 'environment'>('user');
   const [canSwitchCamera, setCanSwitchCamera] = useState(false);
+
+  const logMobileCameraIssue = useCallback((issue: string, details?: Record<string, unknown>) => {
+    if (details) {
+      console.warn(`${MOBILE_CAMERA_LOG_PREFIX} ${issue}`, details);
+      return;
+    }
+    console.warn(`${MOBILE_CAMERA_LOG_PREFIX} ${issue}`);
+  }, []);
 
   const stopSignalPolling = useCallback(() => {
     if (signalPollRef.current) {
@@ -201,10 +211,31 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     if (cameraStatus === 'connecting') {
       return false;
     }
+    if (!window.isSecureContext) {
+      logMobileCameraIssue('insecure context', { protocol: window.location.protocol });
+      setCameraStatus('blocked');
+      setError(INSECURE_CAMERA_CONTEXT_MESSAGE);
+      return false;
+    }
     if (!navigator.mediaDevices?.getUserMedia) {
+      logMobileCameraIssue('media device unavailable', { reason: 'getUserMedia unsupported' });
       setCameraStatus('unsupported');
       setError('Your browser does not support live camera preview.');
       return false;
+    }
+
+    if (navigator.permissions?.query) {
+      try {
+        const permissionStatus = await navigator.permissions.query({ name: 'camera' as PermissionName });
+        if (permissionStatus.state === 'denied') {
+          logMobileCameraIssue('permission denied', { source: 'permissions.query' });
+          setCameraStatus('denied');
+          setError(null);
+          return false;
+        }
+      } catch {
+        // Ignore unsupported camera permission query implementations.
+      }
     }
 
     setError(null);
@@ -213,18 +244,19 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     try {
       streamRef.current?.getTracks().forEach((track) => track.stop());
 
-      let stream: MediaStream;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: nextFacingMode } },
-          audio: true,
-        });
-      } catch (err) {
-        const errorName = err instanceof DOMException ? err.name : '';
-        if (errorName === 'OverconstrainedError' || errorName === 'NotFoundError') {
-          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        } else {
-          throw err;
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      const [videoTrack] = stream.getVideoTracks();
+      if (!videoTrack) {
+        logMobileCameraIssue('media device unavailable', { reason: 'missing video track' });
+        stream.getTracks().forEach((track) => track.stop());
+        throw new Error('Camera device unavailable.');
+      }
+
+      if (nextFacingMode === 'user' || nextFacingMode === 'environment') {
+        try {
+          await videoTrack.applyConstraints({ facingMode: { ideal: nextFacingMode } });
+        } catch {
+          // Ignore unsupported camera facingMode constraints on mobile browsers.
         }
       }
 
@@ -234,7 +266,8 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         videoRef.current.srcObject = stream;
       }
       setCamOn(true);
-      return await ensurePreviewPlayback();
+      await ensurePreviewPlayback();
+      return true;
     } catch (err) {
       const name = err instanceof DOMException ? err.name : '';
       setCamOn(false);
@@ -243,18 +276,31 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       // SecurityError generally indicates camera access is blocked by browser/security policy,
       // while NotAllowedError usually means the user denied permission for this session.
       if (name === 'SecurityError') {
+        logMobileCameraIssue('insecure context', { error: name });
         setCameraStatus('blocked');
         setError(null);
       } else if (name === 'NotAllowedError') {
+        logMobileCameraIssue('permission denied', { error: name });
         setCameraStatus('denied');
         setError(null);
+      } else if (name === 'NotFoundError') {
+        logMobileCameraIssue('media device unavailable', { error: name });
+        setCameraStatus('idle');
+        setError('Camera or microphone is unavailable on this device.');
+      } else if (name === 'NotReadableError') {
+        logMobileCameraIssue('stream initialization failure', { error: name });
+        setCameraStatus('idle');
+        setError('Camera is busy in another app. Close other apps and try again.');
       } else {
+        logMobileCameraIssue('stream initialization failure', {
+          error: name || (err instanceof Error ? err.message : 'unknown'),
+        });
         setCameraStatus('idle');
         setError(err instanceof Error ? err.message : 'Unable to connect to your camera right now.');
       }
       return false;
     }
-  }, [cameraStatus, ensurePreviewPlayback]);
+  }, [cameraStatus, ensurePreviewPlayback, logMobileCameraIssue]);
 
   const stopCamera = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -288,9 +334,9 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     setLoading(true);
     setError(null);
     try {
-      if (!camOn || !previewReady) {
-        const previewStarted = await startCamera();
-        if (!previewStarted || !streamRef.current) {
+      if (!camOn || !streamRef.current) {
+        await startCamera();
+        if (!streamRef.current) {
           throw new Error(PREVIEW_REQUIRED_MESSAGE);
         }
       }
@@ -531,6 +577,16 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
           {cameraMessage}
         </p>
       )}
+      {(cameraStatus === 'denied' || cameraStatus === 'blocked') && !camOn && (
+        <button
+          type="button"
+          onClick={() => void startCamera()}
+          disabled={loading}
+          className="btn-outline w-full text-xs disabled:opacity-60"
+        >
+          Retry Camera Permission
+        </button>
+      )}
 
       <div className="flex flex-col gap-2 sm:flex-row">
         {!camOn ? (
@@ -581,7 +637,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         <button
           type="button"
           onClick={handleGoLiveClick}
-          disabled={loading || !previewReady}
+          disabled={loading || !camOn}
           className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition-all duration-300 hover:bg-black disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
         >
           <Radio size={14} /> {loading ? 'Starting…' : 'Start Live'}
