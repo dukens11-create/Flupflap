@@ -28,7 +28,7 @@ export default function GarageSalePaymentStatusBanner({
   const [attemptsExhausted, setAttemptsExhausted] = useState(false);
 
   useEffect(() => {
-    if (isConfirmed) return;
+    if (isConfirmed || initialPaymentStatus !== 'PENDING') return;
 
     let isMounted = true;
     let attempts = 0;
@@ -64,6 +64,14 @@ export default function GarageSalePaymentStatusBanner({
           router.refresh();
           return;
         }
+
+        if (sale.paymentStatus !== 'PENDING') {
+          if (!isMounted) return;
+          stopPolling();
+          setAttemptsExhausted(false);
+          router.refresh();
+          return;
+        }
       } catch {
         // Retry on the next interval while Stripe/webhook settlement completes.
       }
@@ -83,9 +91,25 @@ export default function GarageSalePaymentStatusBanner({
       isMounted = false;
       stopPolling();
     };
-  }, [isConfirmed, isReposted, router, saleId]);
+  }, [initialPaymentStatus, isConfirmed, isReposted, router, saleId]);
 
   const content = useMemo(() => {
+    if (initialPaymentStatus === 'REFUNDED') {
+      return {
+        className: 'border-slate-200 bg-slate-50 text-slate-900',
+        title: 'Payment refunded',
+        description: 'This payment was refunded and the listing is now hidden.',
+      };
+    }
+
+    if (initialPaymentStatus === 'FAILED') {
+      return {
+        className: 'border-red-200 bg-red-50 text-red-900',
+        title: 'Payment failed',
+        description: 'Stripe did not confirm this payment. Repost and pay again if you want to publish this listing.',
+      };
+    }
+
     if (isConfirmed) {
       return {
         className: 'border-green-200 bg-green-50 text-green-900',
@@ -107,7 +131,7 @@ export default function GarageSalePaymentStatusBanner({
     <div className={`card border p-4 text-sm ${content.className}`}>
       <p className="font-semibold">{content.title}</p>
       <p className="mt-1">{content.description}</p>
-      {!isConfirmed && (
+      {!isConfirmed && initialPaymentStatus === 'PENDING' && (
         <button
           type="button"
           className="btn-outline mt-3 text-xs"
