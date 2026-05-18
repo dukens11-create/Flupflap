@@ -39,11 +39,10 @@ export default function RefundPage() {
 
       <section>
         <h2 className="text-xl font-bold mb-2">7. Contact</h2>
-        <p className="text-slate-700">To open a dispute or request a refund, email support@flupflap.com with your order number and a description of the issue.</p>
+        <p className="text-slate-700">To open a dispute or request a refund, use the refund request option in your order details when available, or email support@flupflap.com with your order number and a description of the issue.</p>
       </section>
 
       <p className="text-xs text-slate-400 border-t pt-4">This is a starter refund policy. Have an attorney review it before going live.</p>
     </main>
   );
 }
-

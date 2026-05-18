@@ -417,6 +417,8 @@ export default async function AdminPage({
                 <tbody className="divide-y divide-slate-100">
                   {recentOrders.map((o: (typeof recentOrders)[number]) => {
                     const isPaid = o.status === 'PAID' || o.status === 'SHIPPED' || o.status === 'DELIVERED';
+                    const isRefundFlow = o.status === 'REFUND_REQUESTED' || o.status === 'PARTIALLY_REFUNDED';
+                    const isRefunded = o.status === 'REFUNDED';
                     return (
                       <tr key={o.id} className="hover:bg-slate-50 transition-colors">
                         <td className="px-3 py-2.5 font-mono text-xs text-slate-400">{o.id.slice(-10)}</td>
@@ -426,7 +428,7 @@ export default async function AdminPage({
                           {o.createdAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                         </td>
                         <td className="px-3 py-2.5">
-                          <span className={`badge ${isPaid ? 'badge-green' : 'badge-yellow'}`}>{o.status}</span>
+                          <span className={`badge ${isRefunded ? 'badge-slate' : isRefundFlow ? 'badge-blue' : isPaid ? 'badge-green' : 'badge-yellow'}`}>{o.status}</span>
                         </td>
                       </tr>
                     );
