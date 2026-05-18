@@ -4,10 +4,15 @@ import { prisma, isDatabaseConfigured } from '@/lib/db';
 import GarageSaleCard from '@/components/GarageSaleCard';
 import GarageSaleBrowseClient from './GarageSaleBrowseClient';
 import { expireGarageSales } from '@/lib/garage-sales';
+import { createPageMetadata } from '@/lib/seo';
 
 export const dynamic = 'force-dynamic';
 
-export const metadata: Metadata = { title: 'Garage Sales Near You | FlupFlap' };
+export const metadata: Metadata = createPageMetadata({
+  title: 'Garage Sales Near You | FlupFlap',
+  description: 'Find local garage sales, yard sales, and estate sales near you on FlupFlap.',
+  path: '/garage-sales',
+});
 
 interface SearchParams {
   q?: string;

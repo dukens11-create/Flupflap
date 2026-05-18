@@ -20,11 +20,17 @@ import {
   searchTextMatchesQueryWithoutFuzzy,
 } from '@/lib/smart-search';
 
+import { createPageMetadata, DEFAULT_SEO_DESCRIPTION } from '@/lib/seo';
+
 import { isSchemaNotInitializedError } from '@/lib/db-errors';
 
 export const dynamic = 'force-dynamic';
 
-export const metadata: Metadata = { title: 'Browse Products' };
+export const metadata: Metadata = createPageMetadata({
+  title: 'Browse Products | FlupFlap Marketplace',
+  description: DEFAULT_SEO_DESCRIPTION,
+  path: '/',
+});
 
 interface SearchParams {
   q?: string;

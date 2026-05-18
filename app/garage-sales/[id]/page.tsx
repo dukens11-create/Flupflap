@@ -18,9 +18,53 @@ type Params = { params: Promise<{ id: string }> };
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { id } = await params;
-  const sale = await prisma.garageSale.findUnique({ where: { id }, select: { title: true, city: true, state: true } });
-  if (!sale) return { title: 'Garage Sale Not Found' };
-  return { title: `${sale.title} – ${sale.city}, ${sale.state} | FlupFlap` };
+  const sale = await prisma.garageSale.findUnique({
+    where: { id },
+    select: {
+      title: true,
+      city: true,
+      state: true,
+      description: true,
+      status: true,
+      paymentStatus: true,
+      isArchived: true,
+      startDate: true,
+      endDate: true,
+      isLive: true,
+    },
+  });
+  if (!sale) return { title: 'Garage Sale Not Found', robots: { index: false, follow: false } };
+
+  const lifecycle = deriveGarageSaleLifecycle(sale);
+  const pageTitle = `${sale.title} – ${sale.city}, ${sale.state} | FlupFlap`;
+
+  if (!lifecycle.publiclyVisible) {
+    // Hidden, unpaid, or unapproved sales must not be indexed by search engines.
+    return { title: pageTitle, robots: { index: false, follow: false } };
+  }
+
+  const canonicalPath = `/garage-sales/${id}`;
+  const description = sale.description?.trim()
+    ? sale.description.slice(0, 160)
+    : `Browse details for ${sale.title} in ${sale.city}, ${sale.state}.`.slice(0, 160);
+
+  return {
+    title: pageTitle,
+    description,
+    alternates: { canonical: canonicalPath },
+    robots: { index: true, follow: true },
+    openGraph: {
+      title: pageTitle,
+      description,
+      url: canonicalPath,
+      type: 'website',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: pageTitle,
+      description,
+    },
+  };
 }
 
 const SALE_TYPE_LABELS: Record<string, string> = {

@@ -14,22 +14,45 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!isDatabaseConfigured()) {
-    return { title: 'Seller Store' };
+    return { title: 'Seller Store', robots: { index: false, follow: false } };
   }
   try {
     const { id } = await params;
     const seller = await prisma.user.findUnique({
       where: { id, deletedAt: null, role: 'SELLER' },
-      select: { name: true, shopName: true },
+      select: {
+        id: true,
+        name: true,
+        shopName: true,
+        shopDescription: true,
+        products: {
+          where: { status: { in: ['APPROVED', 'ACTIVE'] } },
+          select: { id: true },
+          take: 1,
+        },
+      },
     });
-    if (!seller) return { title: 'Seller Store' };
+    if (!seller || seller.products.length === 0) {
+      return { title: 'Seller Store', robots: { index: false, follow: false } };
+    }
     const publicName = seller.shopName?.trim() || 'FlupFlap Seller';
+    const description = seller.shopDescription?.trim()
+      ? seller.shopDescription
+      : `Browse products listed by ${publicName} on FlupFlap Marketplace.`;
     return {
       title: `${publicName}'s Store`,
-      description: `Browse products listed by ${publicName} on FlupFlap Marketplace.`,
+      description,
+      alternates: { canonical: `/store/${seller.id}` },
+      robots: { index: true, follow: true },
+      openGraph: {
+        title: `${publicName}'s Store`,
+        description,
+        url: `/store/${seller.id}`,
+        type: 'website',
+      },
     };
   } catch {
-    return { title: 'Seller Store' };
+    return { title: 'Seller Store', robots: { index: false, follow: false } };
   }
 }
 
@@ -141,6 +164,10 @@ export default async function SellerStorePage({ params }: Props) {
 
   if (!seller) notFound();
 
+  // A seller store with no active listings is a thin page and should not be
+  // indexed or reachable via a public 200 response.
+  if (products.length === 0) notFound();
+
   const isVerified = seller.verificationSubmission?.status === 'APPROVED';
   const sellerPublicName = seller.shopName?.trim() || 'FlupFlap Seller';
 
@@ -172,11 +199,7 @@ export default async function SellerStorePage({ params }: Props) {
         </div>
       </section>
 
-      {products.length === 0 ? (
-        <div className="rounded-[28px] border border-dashed border-slate-300 bg-white p-10 text-center text-slate-500 shadow-sm">
-          This seller has no active listings.
-        </div>
-      ) : (
+      {products.length > 0 && (
         <section className="space-y-4">
           <h2 className="text-xl font-bold text-slate-900">Listings</h2>
           <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
