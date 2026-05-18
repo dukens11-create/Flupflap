@@ -26,10 +26,7 @@ function buildGarageSaleActivationData(
   totalPaidCents: number,
   stripePaymentId: string | null,
 ) {
-  const shouldActivateListing = (sale.paymentStatus !== 'PAID' || !sale.activatedAt)
-    && sale.status !== 'REJECTED'
-    && sale.status !== 'EXPIRED'
-    && !sale.isArchived;
+  const shouldActivateListing = shouldActivateGarageSaleListing(sale);
 
   return {
     paymentStatus: 'PAID' as const,
@@ -44,6 +41,14 @@ function buildGarageSaleActivationData(
       isFeatured: sale.isSpam ? false : sale.listingType === 'FEATURED',
     } : {}),
   };
+}
+
+function shouldActivateGarageSaleListing(
+  sale: Awaited<ReturnType<typeof prisma.garageSale.findUniqueOrThrow>>,
+) {
+  const paymentWasNotFullyApplied = sale.paymentStatus !== 'PAID' || !sale.activatedAt;
+  const listingCanStillGoLive = sale.status !== 'REJECTED' && sale.status !== 'EXPIRED' && !sale.isArchived;
+  return paymentWasNotFullyApplied && listingCanStillGoLive;
 }
 
 export async function confirmGarageSalePayment(params: {

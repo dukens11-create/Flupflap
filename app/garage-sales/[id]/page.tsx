@@ -102,6 +102,17 @@ function formatTime(date: Date) {
   return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
+function buildPaymentCallbackUrl(
+  saleId: string,
+  searchParams: { payment?: string; session_id?: string; reposted?: string },
+) {
+  const query = new URLSearchParams();
+  if (searchParams.payment) query.set('payment', searchParams.payment);
+  if (searchParams.session_id) query.set('session_id', searchParams.session_id);
+  if (searchParams.reposted) query.set('reposted', searchParams.reposted);
+  return `/garage-sales/${saleId}${query.size ? `?${query.toString()}` : ''}`;
+}
+
 export default async function GarageSaleDetailPage({ params, searchParams }: Params) {
   const { id } = await params;
   const sp = await searchParams;
@@ -109,11 +120,7 @@ export default async function GarageSaleDetailPage({ params, searchParams }: Par
   const resolvedSale = await resolveGarageSaleByRouteParam(id, 'garage-sales/[id]/page');
   if (!resolvedSale) notFound();
   if (id !== resolvedSale.id) {
-    const query = new URLSearchParams();
-    if (sp.payment) query.set('payment', sp.payment);
-    if (sp.session_id) query.set('session_id', sp.session_id);
-    if (sp.reposted) query.set('reposted', sp.reposted);
-    redirect(`/garage-sales/${resolvedSale.id}${query.size ? `?${query.toString()}` : ''}`);
+    redirect(buildPaymentCallbackUrl(resolvedSale.id, sp));
   }
 
   const sale = await prisma.garageSale.findUnique({
@@ -185,7 +192,7 @@ export default async function GarageSaleDetailPage({ params, searchParams }: Par
 
   if (!listingIsPubliclyVisible && !isOwner && !isAdmin) {
     if (sp.payment === 'success') {
-      const callbackUrl = encodeURIComponent(`/garage-sales/${sale.id}?payment=success${sp.session_id ? `&session_id=${encodeURIComponent(sp.session_id)}` : ''}`);
+      const callbackUrl = encodeURIComponent(buildPaymentCallbackUrl(sale.id, sp));
       redirect(`/login?callbackUrl=${callbackUrl}`);
     }
     logWarn('Garage sale public route returned not found for non-visible listing', {

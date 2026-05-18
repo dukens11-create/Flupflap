@@ -32,6 +32,7 @@ export default function GarageSalePaymentStatusBanner({
 
     let isMounted = true;
     let attempts = 0;
+    let interval: number | undefined;
     const canonicalUrl = `/garage-sales/${saleId}?payment=success${isReposted ? '&reposted=1' : ''}`;
 
     const poll = async () => {
@@ -40,6 +41,7 @@ export default function GarageSalePaymentStatusBanner({
         const res = await fetch(`/api/garage-sales/${saleId}`, { cache: 'no-store' });
         if (!res.ok) {
           if (attempts >= MAX_POLL_ATTEMPTS && isMounted) {
+            if (interval) window.clearInterval(interval);
             setAttemptsExhausted(true);
           }
           return;
@@ -48,6 +50,7 @@ export default function GarageSalePaymentStatusBanner({
         const sale = await res.json();
         if (sale.paymentStatus === 'PAID' && sale.status === 'APPROVED') {
           if (!isMounted) return;
+          if (interval) window.clearInterval(interval);
           setIsConfirmed(true);
           setAttemptsExhausted(false);
           router.replace(canonicalUrl);
@@ -59,12 +62,13 @@ export default function GarageSalePaymentStatusBanner({
       }
 
       if (attempts >= MAX_POLL_ATTEMPTS && isMounted) {
+        if (interval) window.clearInterval(interval);
         setAttemptsExhausted(true);
       }
     };
 
     void poll();
-    const interval = window.setInterval(() => {
+    interval = window.setInterval(() => {
       void poll();
     }, POLL_INTERVAL_MS);
 
