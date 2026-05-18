@@ -103,9 +103,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 
   const sellerIds = Array.from(new Set(order.items.map((item) => item.product.sellerId)));
-  if (sellerIds.length !== 1 || !sellerIds[0]) {
+  if (sellerIds.length !== 1) {
     return NextResponse.json({
-      error: 'This order includes multiple sellers and must be reviewed by support manually.',
+      error: 'This order cannot be auto-routed to a single seller and must be reviewed by support manually.',
     }, { status: 400 });
   }
 

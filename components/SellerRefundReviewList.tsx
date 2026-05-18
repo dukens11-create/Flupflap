@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { dollars } from '@/lib/money';
+import { REFUND_STATUS_LABELS, refundStatusBadge } from '@/lib/refunds';
 
 type SellerRefundRequest = {
   id: string;
@@ -19,22 +20,6 @@ type SellerRefundRequest = {
     totalCents: number;
     buyer: { name: string | null; email: string };
   };
-};
-
-const STATUS_BADGE: Record<SellerRefundRequest['status'], string> = {
-  REQUESTED: 'badge-yellow',
-  SELLER_REVIEW: 'badge-blue',
-  APPROVED: 'badge-blue',
-  DENIED: 'badge-red',
-  REFUNDED: 'badge-green',
-};
-
-const STATUS_LABEL: Record<SellerRefundRequest['status'], string> = {
-  REQUESTED: 'Requested',
-  SELLER_REVIEW: 'Under seller review',
-  APPROVED: 'Approved',
-  DENIED: 'Denied',
-  REFUNDED: 'Refunded',
 };
 
 export default function SellerRefundReviewList({ initialRefundRequests }: { initialRefundRequests: SellerRefundRequest[] }) {
@@ -97,7 +82,7 @@ export default function SellerRefundReviewList({ initialRefundRequests }: { init
                 <p className="text-xs text-slate-400 font-mono">Order #{request.order.id.slice(-8).toUpperCase()}</p>
                 <p className="text-sm text-slate-600">Buyer: {request.order.buyer.name ?? request.order.buyer.email}</p>
               </div>
-              <span className={`badge ${STATUS_BADGE[request.status]}`}>{STATUS_LABEL[request.status]}</span>
+              <span className={`badge ${refundStatusBadge(request.status)}`}>{REFUND_STATUS_LABELS[request.status]}</span>
             </div>
 
             <p className="text-sm text-slate-700"><span className="font-semibold">Reason:</span> {request.reason}</p>

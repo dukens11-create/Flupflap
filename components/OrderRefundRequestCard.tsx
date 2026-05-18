@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { dollars } from '@/lib/money';
+import { isOrderRefundEligible, REFUND_STATUS_LABELS, refundStatusBadge } from '@/lib/refunds';
 
 type RefundRequestSummary = {
   id: string;
@@ -18,22 +19,6 @@ type RefundRequestSummary = {
   resolvedAt: string | null;
 };
 
-const STATUS_LABELS: Record<RefundRequestSummary['status'], string> = {
-  REQUESTED: 'Requested',
-  SELLER_REVIEW: 'Under seller review',
-  APPROVED: 'Approved',
-  DENIED: 'Denied',
-  REFUNDED: 'Refunded',
-};
-
-const STATUS_BADGES: Record<RefundRequestSummary['status'], string> = {
-  REQUESTED: 'badge-yellow',
-  SELLER_REVIEW: 'badge-blue',
-  APPROVED: 'badge-blue',
-  DENIED: 'badge-red',
-  REFUNDED: 'badge-green',
-};
-
 const REASONS = [
   'Item not received',
   'Item arrived damaged',
@@ -41,17 +26,6 @@ const REASONS = [
   'Wrong item received',
   'Other',
 ] as const;
-
-function isOrderRefundEligible(orderStatus: string): boolean {
-  return [
-    'PAID',
-    'SHIPPED',
-    'DELIVERED',
-    'READY_FOR_PICKUP',
-    'PICKED_UP',
-    'PARTIALLY_REFUNDED',
-  ].includes(orderStatus);
-}
 
 export default function OrderRefundRequestCard({
   orderId,
@@ -134,7 +108,7 @@ export default function OrderRefundRequestCard({
       <div className="flex items-center justify-between gap-3">
         <h2 className="font-bold">Refund request</h2>
         {refundRequest && (
-          <span className={`badge ${STATUS_BADGES[refundRequest.status]}`}>{STATUS_LABELS[refundRequest.status]}</span>
+          <span className={`badge ${refundStatusBadge(refundRequest.status)}`}>{REFUND_STATUS_LABELS[refundRequest.status]}</span>
         )}
       </div>
 

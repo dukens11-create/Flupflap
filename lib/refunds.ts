@@ -26,8 +26,8 @@ export function refundStatusBadge(status: RefundRequestStatus): string {
 }
 
 export function normalizeRefundAmountCents(requestedAmountCents: number | undefined, orderTotalCents: number): number {
-  if (!Number.isFinite(requestedAmountCents as number)) return orderTotalCents;
-  const value = Math.floor(Number(requestedAmountCents));
+  if (requestedAmountCents === undefined || !Number.isFinite(requestedAmountCents)) return orderTotalCents;
+  const value = Math.floor(requestedAmountCents);
   if (value <= 0) return orderTotalCents;
   if (value > orderTotalCents) return orderTotalCents;
   return value;

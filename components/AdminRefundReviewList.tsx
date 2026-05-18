@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { dollars } from '@/lib/money';
+import { REFUND_STATUS_LABELS, refundStatusBadge } from '@/lib/refunds';
 
 type AdminRefundRequest = {
   id: string;
@@ -24,22 +25,6 @@ type AdminRefundRequest = {
       product: { id: string; title: string; seller: { id: string; name: string | null; email: string } };
     }>;
   };
-};
-
-const STATUS_BADGE: Record<AdminRefundRequest['status'], string> = {
-  REQUESTED: 'badge-yellow',
-  SELLER_REVIEW: 'badge-blue',
-  APPROVED: 'badge-blue',
-  DENIED: 'badge-red',
-  REFUNDED: 'badge-green',
-};
-
-const STATUS_LABEL: Record<AdminRefundRequest['status'], string> = {
-  REQUESTED: 'Requested',
-  SELLER_REVIEW: 'Under seller review',
-  APPROVED: 'Approved',
-  DENIED: 'Denied',
-  REFUNDED: 'Refunded',
 };
 
 export default function AdminRefundReviewList({ initialRefundRequests }: { initialRefundRequests: AdminRefundRequest[] }) {
@@ -107,7 +92,11 @@ export default function AdminRefundReviewList({ initialRefundRequests }: { initi
         <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
       )}
       {refundRequests.map((request) => {
-        const seller = request.order.items[0]?.product.seller;
+        const sellers = Array.from(
+          new Map(
+            request.order.items.map((item) => [item.product.seller.id, item.product.seller]),
+          ).values(),
+        );
         const resolved = request.status === 'DENIED' || request.status === 'REFUNDED';
 
         return (
@@ -116,11 +105,13 @@ export default function AdminRefundReviewList({ initialRefundRequests }: { initi
               <div>
                 <p className="text-xs text-slate-400 font-mono">Order #{request.order.id.slice(-8).toUpperCase()}</p>
                 <p className="text-sm text-slate-600">Buyer: {request.order.buyer.name ?? request.order.buyer.email}</p>
-                {seller && (
-                  <p className="text-sm text-slate-600">Seller: {seller.name ?? seller.email}</p>
-                )}
+                {sellers.length > 0 && (
+                  <p className="text-sm text-slate-600">
+                    Seller{ sellers.length > 1 ? 's' : '' }: {sellers.map((seller) => seller.name ?? seller.email).join(', ')}
+                  </p>
+                ) }
               </div>
-              <span className={`badge ${STATUS_BADGE[request.status]}`}>{STATUS_LABEL[request.status]}</span>
+              <span className={`badge ${refundStatusBadge(request.status)}`}>{REFUND_STATUS_LABELS[request.status]}</span>
             </div>
 
             <div className="text-sm text-slate-700 space-y-1">
@@ -178,6 +169,9 @@ export default function AdminRefundReviewList({ initialRefundRequests }: { initi
                     Deny Request
                   </button>
                 </div>
+                <p className="text-xs text-amber-700">
+                  Payout reversal for Stripe Connect seller transfers is currently a manual follow-up step after refund approval.
+                </p>
               </div>
             )}
           </div>

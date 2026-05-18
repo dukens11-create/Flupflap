@@ -14,8 +14,6 @@ const adminRefundSchema = z.object({
   adminNotes: z.string().trim().max(2000).optional(),
 });
 
-const CONNECT_REVERSAL_TODO = 'TODO: Stripe Connect transfer reversal for seller payouts is not automated in this flow yet.';
-
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
@@ -94,7 +92,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     refundRequest.order.totalCents,
   );
 
-  const mergedNotes = [parsed.data.adminNotes, CONNECT_REVERSAL_TODO].filter(Boolean).join('\n');
+  const mergedNotes = parsed.data.adminNotes || null;
+
+  // TODO(connect): automate transfer reversals for Stripe Connect seller payouts.
+  // This route currently refunds the customer payment intent only.
 
   await prisma.refundRequest.update({
     where: { id: refundRequest.id },
