@@ -182,8 +182,35 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     if (!video) return false;
 
     video.muted = true;
+    video.defaultMuted = true;
+    video.autoplay = true;
     video.playsInline = true;
+    video.setAttribute('autoplay', 'true');
+    video.setAttribute('muted', 'true');
     video.setAttribute('playsinline', 'true');
+    video.setAttribute('webkit-playsinline', 'true');
+
+    if (video.readyState < 1) {
+      await new Promise<void>((resolve) => {
+        const onReady = () => {
+          video.removeEventListener('loadedmetadata', onReady);
+          video.removeEventListener('loadeddata', onReady);
+          video.removeEventListener('canplay', onReady);
+          resolve();
+        };
+
+        video.addEventListener('loadedmetadata', onReady, { once: true });
+        video.addEventListener('loadeddata', onReady, { once: true });
+        video.addEventListener('canplay', onReady, { once: true });
+
+        setTimeout(() => {
+          video.removeEventListener('loadedmetadata', onReady);
+          video.removeEventListener('loadeddata', onReady);
+          video.removeEventListener('canplay', onReady);
+          resolve();
+        }, 1500);
+      });
+    }
 
     try {
       await video.play();
@@ -191,9 +218,19 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       setCameraStatus('ready');
       return true;
     } catch {
-      setPreviewReady(false);
-      setCameraStatus('awaitingInteraction');
-      return false;
+      try {
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, 120);
+        });
+        await video.play();
+        setPreviewReady(true);
+        setCameraStatus('ready');
+        return true;
+      } catch {
+        setPreviewReady(false);
+        setCameraStatus('awaitingInteraction');
+        return false;
+      }
     }
   }, []);
 
@@ -217,18 +254,17 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       try {
         stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: { ideal: nextFacingMode } },
-          audio: true,
+          audio: false,
         });
       } catch (err) {
         const errorName = err instanceof DOMException ? err.name : '';
         if (errorName === 'OverconstrainedError' || errorName === 'NotFoundError') {
-          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
         } else {
           throw err;
         }
       }
 
-      stream.getAudioTracks().forEach((t) => { t.enabled = micOnRef.current; });
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -292,6 +328,18 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         const previewStarted = await startCamera();
         if (!previewStarted || !streamRef.current) {
           throw new Error(PREVIEW_REQUIRED_MESSAGE);
+        }
+      }
+      if (micOnRef.current && streamRef.current && streamRef.current.getAudioTracks().length === 0) {
+        try {
+          const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+          audioStream.getAudioTracks().forEach((track) => {
+            track.enabled = true;
+            streamRef.current?.addTrack(track);
+          });
+        } catch {
+          setMicOn(false);
+          micOnRef.current = false;
         }
       }
 
