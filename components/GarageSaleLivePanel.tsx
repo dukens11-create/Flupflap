@@ -10,6 +10,7 @@ interface Props {
 const RTC_CONFIG: RTCConfiguration = {
   iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }],
 };
+const PREVIEW_REQUIRED_MESSAGE = 'Preview your camera before starting your live garage sale.';
 
 type CameraStatus = 'idle' | 'connecting' | 'ready' | 'awaitingInteraction' | 'blocked' | 'unsupported';
 
@@ -115,7 +116,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   const createAndSendOffer = useCallback(async () => {
     const stream = streamRef.current;
     if (!stream) {
-      throw new Error('Preview your camera before starting your live garage sale.');
+      throw new Error(PREVIEW_REQUIRED_MESSAGE);
     }
     if (typeof RTCPeerConnection === 'undefined') {
       throw new Error('Live streaming is not supported in this browser.');
@@ -265,7 +266,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       if (!camOn || !previewReady) {
         const previewStarted = await startCamera();
         if (!previewStarted || !streamRef.current) {
-          throw new Error('Preview your camera before starting your live garage sale.');
+          throw new Error(PREVIEW_REQUIRED_MESSAGE);
         }
       }
 
@@ -396,7 +397,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       case 'unsupported':
         return 'Camera preview is not supported in this browser.';
       default:
-        return 'Preview your camera before starting your live garage sale.';
+        return PREVIEW_REQUIRED_MESSAGE;
     }
   })();
 
@@ -447,7 +448,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         {!camOn && (
           <div className="flex flex-col items-center gap-2 px-4 text-center text-slate-300">
             <VideoOff size={40} />
-            <p className="text-sm font-medium">Preview your camera before starting your live garage sale.</p>
+            <p className="text-sm font-medium">{PREVIEW_REQUIRED_MESSAGE}</p>
           </div>
         )}
         {isLive && (
@@ -519,7 +520,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
 
       {!previewReady && !error && (
         <p className="text-center text-sm text-slate-500">
-          Preview your camera before starting your live garage sale.
+          {PREVIEW_REQUIRED_MESSAGE}
         </p>
       )}
 

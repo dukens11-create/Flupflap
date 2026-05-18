@@ -140,7 +140,10 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
       window.crypto.getRandomValues(bytes);
       nextId = `viewer-${bytes[0].toString(36)}-${bytes[1].toString(36)}`;
     } else {
-      nextId = `viewer-${Date.now().toString(36)}-${window.performance.now().toString(36).replace('.', '')}`;
+      const perfNow = typeof window !== 'undefined' && window.performance?.now
+        ? window.performance.now().toString(36).replace('.', '')
+        : '0';
+      nextId = `viewer-${Date.now().toString(36)}-${perfNow}`;
     }
     if (typeof window !== 'undefined') {
       window.sessionStorage.setItem(storageKey, nextId);
