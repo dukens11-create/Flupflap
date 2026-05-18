@@ -51,6 +51,10 @@ export function modeFromStripeLivemode(livemode: boolean): StripeMode {
   return livemode ? 'live' : 'test';
 }
 
+export function extractStripeResourceId(value: string | { id: string } | null | undefined): string | null {
+  return typeof value === 'string' ? value : value?.id ?? null;
+}
+
 export function classifyStripeError(err: unknown): {
   reason: StripeErrorReason;
   message: string;

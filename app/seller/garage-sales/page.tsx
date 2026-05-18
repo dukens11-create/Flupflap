@@ -1,9 +1,11 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/db';
 import { requireSeller } from '@/lib/require-seller';
 import { expireGarageSales } from '@/lib/garage-sales';
-import { stripe } from '@/lib/stripe';
+import { syncGarageSaleCheckoutSessionForSeller } from '@/lib/garage-sale-payment-sync';
+import { logWarn } from '@/lib/logger';
 import { deriveGarageSaleLifecycle } from '@/lib/garage-sale-lifecycle';
 
 export const metadata: Metadata = {
@@ -53,74 +55,10 @@ const PAYMENT_LABEL: Record<string, string> = {
   FAILED: 'Failed',
   REFUNDED: 'Refunded',
 };
+const PAID_QUERY_FLAG = '1';
 
-async function reconcileSuccessfulCheckout({
-  sellerId,
-  saleId,
-  sessionId,
-}: {
-  sellerId: string;
-  saleId?: string;
-  sessionId?: string;
-}) {
-  if (!saleId || !sessionId) return;
-
-  const sale = await prisma.garageSale.findFirst({
-    where: { id: saleId, sellerId },
-    select: {
-      id: true,
-      listingType: true,
-      paymentStatus: true,
-      status: true,
-      stripeCheckoutId: true,
-      totalPaidCents: true,
-    },
-  });
-
-  if (!sale || sale.paymentStatus === 'PAID' || sale.stripeCheckoutId !== sessionId) return;
-
-  try {
-    const checkout = await stripe.checkout.sessions.retrieve(sessionId);
-    if (checkout.metadata?.type !== 'garage_sale_listing' || checkout.metadata?.saleId !== sale.id) return;
-    if (checkout.payment_status !== 'paid') return;
-    const paymentIntentId = typeof checkout.payment_intent === 'string'
-      ? checkout.payment_intent
-      : checkout.payment_intent?.id ?? null;
-
-    const now = new Date();
-    await prisma.$transaction([
-      prisma.garageSale.update({
-        where: { id: sale.id },
-        data: {
-          status: 'APPROVED',
-          paymentStatus: 'PAID',
-          stripePaymentId: paymentIntentId,
-          paidAt: now,
-          activatedAt: now,
-          isFeatured: sale.listingType === 'FEATURED',
-          totalPaidCents: typeof checkout.amount_total === 'number' ? checkout.amount_total : sale.totalPaidCents,
-        },
-      }),
-      prisma.garageSalePayment.upsert({
-        where: { stripeCheckoutId: checkout.id },
-        update: {
-          status: 'PAID',
-          amountCents: typeof checkout.amount_total === 'number' ? checkout.amount_total : sale.totalPaidCents,
-          stripePaymentId: paymentIntentId,
-        },
-        create: {
-          saleId: sale.id,
-          sellerId,
-          amountCents: typeof checkout.amount_total === 'number' ? checkout.amount_total : sale.totalPaidCents,
-          status: 'PAID',
-          stripeCheckoutId: checkout.id,
-          stripePaymentId: paymentIntentId,
-        },
-      }),
-    ]);
-  } catch {
-    // Non-fatal. Webhook reconciliation will retry.
-  }
+function shouldWarnOnSyncFailure(reason?: string) {
+  return reason !== 'already_paid' && reason !== 'payment_not_paid';
 }
 
 export default async function SellerGarageSalesPage({
@@ -130,8 +68,34 @@ export default async function SellerGarageSalesPage({
 }) {
   const { sellerId } = await requireSeller();
   const sp = await searchParams;
+  const saleId = typeof sp.saleId === 'string' ? sp.saleId : undefined;
+  const sessionId = typeof sp.session_id === 'string' ? sp.session_id : undefined;
+
+  if (sp.paid === PAID_QUERY_FLAG && saleId && sessionId) {
+    const syncResult = await syncGarageSaleCheckoutSessionForSeller({
+      checkoutSessionId: sessionId,
+      saleId,
+      sellerId,
+    });
+    if (!syncResult.synced && shouldWarnOnSyncFailure(syncResult.reason)) {
+      logWarn('Seller garage sale payment sync did not finalize', {
+        tag: 'seller/garage-sales',
+        action: 'syncGarageSaleCheckoutSessionForSeller',
+        saleId,
+        reason: syncResult.reason ?? 'unknown',
+      });
+    }
+    if (syncResult.synced || syncResult.reason === 'already_paid') {
+      const ownedSale = await prisma.garageSale.findFirst({
+        where: { id: saleId, sellerId },
+        select: { id: true },
+      });
+      if (ownedSale) {
+        redirect(`/seller/garage-sales?paid=1&saleId=${encodeURIComponent(ownedSale.id)}`);
+      }
+    }
+  }
   await expireGarageSales();
-  await reconcileSuccessfulCheckout({ sellerId, saleId: sp.saleId, sessionId: sp.session_id });
 
   const sales = await prisma.garageSale.findMany({
     where: { sellerId },
@@ -151,7 +115,7 @@ export default async function SellerGarageSalesPage({
     },
   });
 
-  const focusedSale = sp.saleId ? sales.find((sale) => sale.id === sp.saleId) : null;
+  const focusedSale = saleId ? sales.find((sale) => sale.id === saleId) : null;
   const focusedSaleLifecycle = focusedSale ? deriveGarageSaleLifecycle(focusedSale) : null;
 
   return (
@@ -174,7 +138,7 @@ export default async function SellerGarageSalesPage({
           Garage sale created successfully. Use the actions below to open or edit it.
         </div>
       )}
-      {sp.paid === '1' && (
+      {sp.paid === PAID_QUERY_FLAG && (
         <div className={`card p-4 text-sm ${focusedSaleLifecycle?.state === 'PAYMENT_PENDING' ? 'border-yellow-200 bg-yellow-50 text-yellow-900' : 'border-green-200 bg-green-50 text-green-900'}`}>
           {focusedSaleLifecycle?.state === 'PAYMENT_PENDING'
             ? 'Payment confirmation is still pending. We will publish your listing as soon as Stripe confirms it.'

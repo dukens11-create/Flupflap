@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import { prisma } from '@/lib/db';
-import { appUrl, getCurrentStripeMode, stripe } from '@/lib/stripe';
+import { appUrl, extractStripeResourceId, getCurrentStripeMode, stripe } from '@/lib/stripe';
 import { calculateCommissionCents, calculateSellerNetCents, getMarketplaceSettings, resolveCommissionForSeller } from '@/lib/commission';
 import type { CheckoutCommissionItem } from '@/lib/commission';
 import crypto from 'crypto';
@@ -17,8 +17,14 @@ import { createNotification, createNotifications, type CreateNotificationInput }
 import { purchaseShipmentRate, buildTrackingUrl } from '@/lib/shipping';
 import { sendEmail } from '@/lib/email';
 import { logError, logWarn } from '@/lib/logger';
+import {
+  failGarageSaleCheckoutSession,
+  finalizeGarageSaleCheckoutSession,
+  isGarageSaleCheckoutSession,
+} from '@/lib/garage-sale-payment-sync';
 
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
+const CHECKOUT_COMPLETION_EVENTS = new Set(['checkout.session.completed', 'checkout.session.async_payment_succeeded']);
 
 /** Generate a cryptographically secure 6-digit pickup confirmation code. */
 function generatePickupCode(): string {
@@ -496,7 +502,15 @@ export async function POST(req: Request) {
 
   if (event.type === 'checkout.session.expired') {
     const cs = event.data.object as Stripe.Checkout.Session;
-    if (cs.metadata?.type === 'garage_sale_listing') {
+    if (isGarageSaleCheckoutSession(cs)) {
+      logWarn('Garage sale checkout failed', {
+        tag: 'stripe/webhook',
+        action: 'garageSaleCheckoutFailed',
+        eventType: 'checkout.session.expired',
+        stripeCheckoutId: cs.id,
+        saleId: cs.metadata?.saleId,
+      });
+      await failGarageSaleCheckoutSession(cs);
       await markGarageSaleCheckoutAsFailed(cs, 'FAILED');
     }
     return new NextResponse('ok', { status: 200 });
@@ -504,16 +518,15 @@ export async function POST(req: Request) {
 
   if (event.type === 'checkout.session.async_payment_failed') {
     const cs = event.data.object as Stripe.Checkout.Session;
-    if (cs.metadata?.type === 'garage_sale_listing') {
-      await markGarageSaleCheckoutAsFailed(cs, 'FAILED');
-    }
-    return new NextResponse('ok', { status: 200 });
-  }
-
-  if (event.type === 'checkout.session.async_payment_succeeded') {
-    const cs = event.data.object as Stripe.Checkout.Session;
-    if (cs.metadata?.type === 'garage_sale_listing') {
-      return finalizeGarageSaleCheckout(cs);
+    if (isGarageSaleCheckoutSession(cs)) {
+      logWarn('Garage sale checkout async payment failed', {
+        tag: 'stripe/webhook',
+        action: 'garageSaleCheckoutAsyncPaymentFailed',
+        eventType: 'checkout.session.async_payment_failed',
+        stripeCheckoutId: cs.id,
+        saleId: cs.metadata?.saleId,
+      });
+      await failGarageSaleCheckoutSession(cs);
     }
     return new NextResponse('ok', { status: 200 });
   }
@@ -526,22 +539,36 @@ export async function POST(req: Request) {
     return new NextResponse('ok', { status: 200 });
   }
 
-  // ── Stripe Connect: seller onboarding ────────────────────────────────────────
-  if (event.type === 'checkout.session.completed') {
-    await expirePromotions();
-    const cs = event.data.object as any;
+  // ── Checkout completion: garage sales, subscriptions, promotions, orders ────
+  if (CHECKOUT_COMPLETION_EVENTS.has(event.type)) {
+    const cs = event.data.object as Stripe.Checkout.Session;
+    // Keep promotion statuses fresh on all successful checkout completions
+    // so stale boosts are cleaned even when there are no promotion-only requests.
+    try {
+      await expirePromotions();
+    } catch (err) {
+      logError('Promotion expiry failed during checkout webhook', err, {
+        tag: 'stripe/webhook',
+        action: 'expirePromotions',
+        eventType: event.type,
+      });
+    }
 
-    if (cs.metadata?.type === 'garage_sale_listing') {
-      return finalizeGarageSaleCheckout(cs);
+    if (isGarageSaleCheckoutSession(cs)) {
+      const finalized = await finalizeGarageSaleCheckoutSession(cs);
+      if (!finalized.processed && finalized.reason === 'missing_sale_id') {
+        return finalizeGarageSaleCheckout(cs);
+      }
+      return new NextResponse('ok', { status: 200 });
     }
 
     // Handle seller subscription enrollment
     if (cs.metadata?.type === 'seller_subscription') {
-      const sellerId: string = cs.metadata?.sellerId;
+      const sellerId = cs.metadata?.sellerId;
       if (!sellerId) return new NextResponse('Missing sellerId', { status: 400 });
 
       // Retrieve the Stripe subscription to get period details
-      const subscriptionId: string | null = cs.subscription ?? null;
+      const subscriptionId = extractStripeResourceId(cs.subscription);
       let periodEnd: Date | null = null;
       if (subscriptionId) {
         try {
@@ -601,7 +628,7 @@ export async function POST(req: Request) {
 
     // Handle promotion payments separately from product purchases
     if (cs.metadata?.type === 'promotion') {
-      const promotionId: string = cs.metadata?.promotionId;
+      const promotionId = cs.metadata?.promotionId;
       if (!promotionId) return new NextResponse('Missing promotionId', { status: 400 });
 
       // Avoid duplicate processing
@@ -621,7 +648,7 @@ export async function POST(req: Request) {
 
       return new NextResponse('ok', { status: 200 });
     }
-    const metadataBuyerId: string = cs.metadata?.buyerId;
+    const metadataBuyerId = cs.metadata?.buyerId;
     const rawItems: string = cs.metadata?.items ?? '[]';
     const metadataItems: { productId: string; quantity: number }[] = JSON.parse(rawItems);
     const rawPickupIds: string = cs.metadata?.pickupItemIds ?? '[]';
@@ -749,7 +776,7 @@ export async function POST(req: Request) {
         sellerPayoutCents: totalCents - platformFeeCents,
         status: 'PAID',
         stripeCheckoutId: cs.id,
-        stripePaymentIntentId: cs.payment_intent ?? null,
+        stripePaymentIntentId: extractStripeResourceId(cs.payment_intent),
         isPickup: isPickupOrder,
         pickupCode: isPickupOrder ? generatePickupCode() : null,
         pickupCity: isPickupOrder ? (firstPickupProduct?.pickupCity ?? null) : null,
