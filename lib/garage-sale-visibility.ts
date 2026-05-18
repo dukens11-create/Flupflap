@@ -1,8 +1,11 @@
 import { deriveGarageSaleLifecycle } from '@/lib/garage-sale-lifecycle';
 
+type GarageSaleStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXPIRED' | 'HIDDEN';
+type GarageSalePaymentStatus = 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED';
+
 type GarageSaleVisibilityInput = {
-  status: string;
-  paymentStatus: string;
+  status: GarageSaleStatus;
+  paymentStatus: GarageSalePaymentStatus;
   isArchived?: boolean | null;
   isSpam?: boolean | null;
   startDate?: Date;
@@ -29,8 +32,8 @@ function getLifecycle(sale: GarageSaleVisibilityInput) {
   if (!sale.startDate || !sale.endDate || typeof sale.isLive !== 'boolean') return null;
 
   return deriveGarageSaleLifecycle({
-    status: sale.status as 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXPIRED' | 'HIDDEN',
-    paymentStatus: sale.paymentStatus as 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED',
+    status: sale.status,
+    paymentStatus: sale.paymentStatus,
     isArchived: Boolean(sale.isArchived),
     startDate: sale.startDate,
     endDate: sale.endDate,

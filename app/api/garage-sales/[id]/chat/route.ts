@@ -18,7 +18,7 @@ export async function GET(req: Request, { params }: Params) {
 
   const sale = await prisma.garageSale.findUnique({
     where: { id },
-    select: { status: true, paymentStatus: true, isArchived: true, isSpam: true, isLive: true },
+    select: { status: true, paymentStatus: true, isArchived: true, isSpam: true, isLive: true, startDate: true, endDate: true },
   });
   if (!sale || !isGarageSalePubliclyVisible(sale)) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -43,7 +43,7 @@ export async function POST(req: Request, { params }: Params) {
 
   const sale = await prisma.garageSale.findUnique({
     where: { id },
-    select: { status: true, paymentStatus: true, isArchived: true, isSpam: true, isLive: true },
+    select: { status: true, paymentStatus: true, isArchived: true, isSpam: true, isLive: true, startDate: true, endDate: true },
   });
   if (!sale || !isGarageSalePubliclyVisible(sale)) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
