@@ -75,8 +75,25 @@ export default async function GarageSaleDetailPage({ params }: Params) {
   if (!listingIsPubliclyVisible && !isOwner && !isAdmin) notFound();
 
   const visibilityBlockReason = getGarageSaleVisibilityBlockReason(sale);
-  const blockedLiveControlsMessage = getGarageSaleLiveControlsBlockMessage(sale)
-    ?? 'Live controls will appear once your listing is approved and visible.';
+  const blockedLiveControlsMessage = getGarageSaleLiveControlsBlockMessage(sale) ?? 'Live controls are unavailable for this listing right now.';
+  const ownerHiddenListingMessage = (() => {
+    if (sale.paymentStatus === 'PENDING') {
+      return 'Your payment is still pending. This listing is hidden and live controls are unavailable until payment is confirmed.';
+    }
+    if (sale.status === 'PENDING') {
+      return 'Your listing is pending review.';
+    }
+    if (sale.status === 'REJECTED') {
+      return 'Your listing was rejected. Update details and try again.';
+    }
+    if (sale.paymentStatus === 'FAILED') {
+      return 'Payment failed for this listing. Repost and pay again to publish it.';
+    }
+    if (sale.paymentStatus === 'REFUNDED') {
+      return 'Payment was refunded. This listing is no longer visible.';
+    }
+    return 'This listing is currently hidden.';
+  })();
   const hiddenStatusLabel = visibilityBlockReason === 'PAYMENT_PENDING' ? 'AWAITING PAYMENT' : sale.status;
   const hiddenStatusBadgeClass = (visibilityBlockReason === 'PAYMENT_PENDING' || sale.status === 'PENDING')
     ? 'bg-yellow-100 text-yellow-700'
@@ -148,19 +165,7 @@ export default async function GarageSaleDetailPage({ params }: Params) {
       </div>
       {isOwner && !listingIsPubliclyVisible && (
         <div className="card border-yellow-300 bg-yellow-50 p-4 text-sm text-yellow-900">
-          <p className="font-semibold">
-            {sale.paymentStatus === 'PENDING'
-              ? 'Your payment is still pending. This listing is hidden and live controls are unavailable until payment is confirmed.'
-              : sale.status === 'PENDING'
-                ? 'Your listing is pending review.'
-                : sale.status === 'REJECTED'
-                  ? 'Your listing was rejected. Update details and try again.'
-                  : sale.paymentStatus === 'FAILED'
-                    ? 'Payment failed for this listing. Repost and pay again to publish it.'
-                    : sale.paymentStatus === 'REFUNDED'
-                      ? 'Payment was refunded. This listing is no longer visible.'
-                  : 'This listing is currently hidden.'}
-          </p>
+          <p className="font-semibold">{ownerHiddenListingMessage}</p>
           <Link href="/seller/garage-sales" className="mt-2 inline-block font-semibold underline">
             Open My Garage Sales
           </Link>
