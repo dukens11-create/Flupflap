@@ -18,6 +18,16 @@ export const dynamic = 'force-dynamic';
 type Params = { params: Promise<{ id: string }> };
 const META_DESCRIPTION_MAX_LENGTH = 160;
 
+function truncateMetaDescription(input: string): string {
+  const trimmed = input.trim();
+  if (trimmed.length <= META_DESCRIPTION_MAX_LENGTH) return trimmed;
+
+  const truncated = trimmed.slice(0, META_DESCRIPTION_MAX_LENGTH);
+  const lastSpace = truncated.lastIndexOf(' ');
+  const safeCutoff = lastSpace > 80 ? lastSpace : META_DESCRIPTION_MAX_LENGTH;
+  return `${truncated.slice(0, safeCutoff).trimEnd()}…`;
+}
+
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { id } = await params;
   const sale = await prisma.garageSale.findUnique({
@@ -48,7 +58,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const lifecycle = deriveGarageSaleLifecycle(sale);
   const isPubliclyIndexable = lifecycle.publiclyVisible && !sale.isSpam;
   const description = sale.description?.trim()
-    ? sale.description.slice(0, META_DESCRIPTION_MAX_LENGTH)
+    ? truncateMetaDescription(sale.description)
     : `View sale details for ${sale.title} in ${sale.city}, ${sale.state}.`;
 
   return createPageMetadata({

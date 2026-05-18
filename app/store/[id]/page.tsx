@@ -41,10 +41,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       });
     }
     const publicName = seller.shopName?.trim() || 'FlupFlap Seller';
+    const trimmedShopDescription = seller.shopDescription?.trim();
     return createPageMetadata({
       title: `${publicName}'s Store`,
-      description: seller.shopDescription?.trim()
-        ? seller.shopDescription
+      description: trimmedShopDescription
+        ? trimmedShopDescription
         : `Browse products listed by ${publicName} on FlupFlap Marketplace.`,
       path: `/store/${id}`,
     });
