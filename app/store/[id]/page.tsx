@@ -22,18 +22,17 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
   try {
     const { id } = await params;
-    const [seller, activeListings] = await Promise.all([
+    const [seller, activeListing] = await Promise.all([
       prisma.user.findUnique({
         where: { id, deletedAt: null, role: 'SELLER' },
         select: { name: true, shopName: true },
       }),
-      prisma.product.findMany({
+      prisma.product.findFirst({
         where: { sellerId: id, status: { in: ['APPROVED', 'ACTIVE'] } },
         select: { id: true },
-        take: 1,
       }),
     ]);
-    if (!seller || activeListings.length === 0) {
+    if (!seller || !activeListing) {
       return createPageMetadata({
         title: 'Seller Store',
         description: 'The requested seller store could not be found.',

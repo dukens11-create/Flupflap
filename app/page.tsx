@@ -69,16 +69,9 @@ export async function generateMetadata({
   searchParams: Promise<SearchParams>;
 }): Promise<Metadata> {
   const sp = await searchParams;
-  let hasParams = false;
-  let hasNonCategoryFilters = false;
-  for (const [key, value] of Object.entries(sp)) {
-    if (typeof value !== 'string' || value.trim().length === 0) continue;
-    hasParams = true;
-    if (!CATEGORY_PARAM_KEYS.has(key)) {
-      hasNonCategoryFilters = true;
-      break;
-    }
-  }
+  const nonEmptyParams = Object.entries(sp).filter(([, value]) => typeof value === 'string' && value.trim().length > 0);
+  const hasParams = nonEmptyParams.length > 0;
+  const hasNonCategoryFilters = nonEmptyParams.some(([key]) => !CATEGORY_PARAM_KEYS.has(key));
   const categoryCanonicalPath = hasParams && !hasNonCategoryFilters
     ? await resolveCategoryCanonicalPath(sp)
     : null;
