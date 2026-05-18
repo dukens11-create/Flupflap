@@ -113,7 +113,7 @@ export async function POST(req: Request, { params }: Params) {
     mode: 'payment',
     payment_method_types: ['card'],
     line_items: lineItems,
-    success_url: `${appUrl}/garage-sales/${repost.id}?paid=1&reposted=1`,
+    success_url: `${appUrl}/garage-sales/${repost.id}?paid=1&reposted=1&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${appUrl}/garage-sales/${source.id}?payment=cancelled`,
     customer_email: session.user.email ?? undefined,
     metadata: {

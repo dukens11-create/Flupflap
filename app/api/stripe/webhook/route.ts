@@ -17,6 +17,11 @@ import { createNotification, createNotifications, type CreateNotificationInput }
 import { purchaseShipmentRate, buildTrackingUrl } from '@/lib/shipping';
 import { sendEmail } from '@/lib/email';
 import { logError, logWarn } from '@/lib/logger';
+import {
+  failGarageSaleCheckoutSession,
+  finalizeGarageSaleCheckoutSession,
+  isGarageSaleCheckoutSession,
+} from '@/lib/garage-sale-payment-sync';
 
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -270,86 +275,34 @@ export async function POST(req: Request) {
     return new NextResponse('ok', { status: 200 });
   }
 
-  if (event.type === 'checkout.session.expired') {
+  if (event.type === 'checkout.session.expired' || event.type === 'checkout.session.async_payment_failed') {
     const cs = event.data.object as Stripe.Checkout.Session;
-    if (cs.metadata?.type === 'garage_sale_listing') {
-      const saleId = cs.metadata?.saleId;
-      if (saleId) {
-        await prisma.$transaction([
-          prisma.garageSale.updateMany({
-            where: { id: saleId, paymentStatus: 'PENDING' },
-            data: { paymentStatus: 'FAILED', status: 'HIDDEN', isFeatured: false },
-          }),
-          prisma.garageSalePayment.updateMany({
-            where: { stripeCheckoutId: cs.id, status: 'PENDING' },
-            data: { status: 'FAILED' },
-          }),
-        ]);
-      }
+    if (isGarageSaleCheckoutSession(cs)) {
+      await failGarageSaleCheckoutSession(cs);
     }
     return new NextResponse('ok', { status: 200 });
   }
 
   // ── Stripe Connect: seller onboarding ────────────────────────────────────────
-  if (event.type === 'checkout.session.completed') {
-    await expirePromotions();
+  if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
+    try {
+      await expirePromotions();
+    } catch (err) {
+      logError('Promotion expiry failed during checkout webhook', err, {
+        tag: 'stripe/webhook',
+        action: 'expirePromotions',
+      });
+    }
     const cs = event.data.object as any;
 
-    if (cs.metadata?.type === 'garage_sale_listing') {
-      const saleId: string | undefined = cs.metadata?.saleId;
-      const sellerId: string | undefined = cs.metadata?.sellerId;
-      if (!saleId || !sellerId) return new NextResponse('Missing garage sale metadata', { status: 400 });
-
-      const sale = await prisma.garageSale.findUnique({ where: { id: saleId } });
-      if (!sale) return new NextResponse('Garage sale not found', { status: 404 });
-      if (sale.paymentStatus === 'PAID') return new NextResponse('Already processed', { status: 200 });
-
-      let receiptUrl: string | null = null;
-      if (cs.payment_intent) {
-        try {
-          const intent = await stripe.paymentIntents.retrieve(String(cs.payment_intent), { expand: ['latest_charge'] });
-          if (typeof intent.latest_charge !== 'string') {
-            receiptUrl = intent.latest_charge?.receipt_url ?? null;
-          }
-        } catch {
-          // Non-fatal
-        }
+    if (isGarageSaleCheckoutSession(cs)) {
+      const result = await finalizeGarageSaleCheckoutSession(cs);
+      if (result.reason === 'missing_sale_id') {
+        return new NextResponse('Missing garage sale metadata', { status: 400 });
       }
-
-      const now = new Date();
-      await prisma.$transaction([
-        prisma.garageSale.update({
-          where: { id: saleId },
-          data: {
-            status: 'APPROVED',
-            paymentStatus: 'PAID',
-            stripePaymentId: cs.payment_intent ?? null,
-            paidAt: now,
-            activatedAt: now,
-            isFeatured: sale.listingType === 'FEATURED',
-            totalPaidCents: typeof cs.amount_total === 'number' ? cs.amount_total : sale.totalPaidCents,
-          },
-        }),
-        prisma.garageSalePayment.upsert({
-          where: { stripeCheckoutId: cs.id },
-          update: {
-            status: 'PAID',
-            amountCents: typeof cs.amount_total === 'number' ? cs.amount_total : sale.totalPaidCents,
-            stripePaymentId: cs.payment_intent ?? null,
-            stripeReceiptUrl: receiptUrl,
-          },
-          create: {
-            saleId,
-            sellerId,
-            amountCents: typeof cs.amount_total === 'number' ? cs.amount_total : sale.totalPaidCents,
-            status: 'PAID',
-            stripeCheckoutId: cs.id,
-            stripePaymentId: cs.payment_intent ?? null,
-            stripeReceiptUrl: receiptUrl,
-          },
-        }),
-      ]);
-
+      if (result.reason === 'sale_not_found') {
+        return new NextResponse('Garage sale not found', { status: 404 });
+      }
       return new NextResponse('ok', { status: 200 });
     }
 

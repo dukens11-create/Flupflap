@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { prisma } from '@/lib/db';
 import { requireSeller } from '@/lib/require-seller';
 import { expireGarageSales } from '@/lib/garage-sales';
+import { syncGarageSaleCheckoutSessionForSeller } from '@/lib/garage-sale-payment-sync';
 
 export const metadata: Metadata = {
   title: 'My Garage Sales',
@@ -24,6 +25,7 @@ type SellerGarageSalesSearchParams = Promise<{
   created?: string;
   payment?: string;
   saleId?: string;
+  session_id?: string;
 }>;
 
 function sellerStatusMessage(status: string, paymentStatus: string) {
@@ -55,6 +57,13 @@ export default async function SellerGarageSalesPage({
 }) {
   const { sellerId } = await requireSeller();
   const sp = await searchParams;
+  if (sp.paid === '1' && sp.saleId && sp.session_id) {
+    await syncGarageSaleCheckoutSessionForSeller({
+      checkoutSessionId: sp.session_id,
+      saleId: sp.saleId,
+      sellerId,
+    });
+  }
   await expireGarageSales();
 
   const sales = await prisma.garageSale.findMany({
