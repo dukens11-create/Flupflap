@@ -41,7 +41,7 @@ export async function finalizeGarageSaleCheckoutSession(cs: Stripe.Checkout.Sess
     return { processed: false, saleId, sellerId: sale.sellerId, reason: 'already_paid' };
   }
 
-  const sellerId = cs.metadata?.sellerId ?? sale.sellerId;
+  const sellerId = sale.sellerId;
   const paymentIntentId = cs.payment_intent ? String(cs.payment_intent) : null;
   const receiptUrl = await getReceiptUrl(paymentIntentId);
   const paidAmountCents = typeof cs.amount_total === 'number' ? cs.amount_total : sale.totalPaidCents;
