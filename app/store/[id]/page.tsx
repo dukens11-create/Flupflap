@@ -25,19 +25,26 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const [seller, activeListingCount] = await Promise.all([
       prisma.user.findUnique({
         where: { id, deletedAt: null, role: 'SELLER' },
-        select: { name: true, shopName: true },
+        select: { name: true, shopName: true, shopDescription: true },
       }),
       prisma.product.count({
         where: { sellerId: id, status: { in: ['APPROVED', 'ACTIVE'] } },
       }),
     ]);
-    if (!seller || activeListingCount === 0) {
+    if (!seller) {
       notFound();
     }
+    if (activeListingCount === 0) {
+      return createPageMetadata({
+        title: 'Seller Store',
+        noIndex: true,
+      });
+    }
     const publicName = seller.shopName?.trim() || 'FlupFlap Seller';
+    const trimmedShopDescription = seller.shopDescription?.trim();
     return createPageMetadata({
       title: `${publicName}'s Store`,
-      description: `Browse products listed by ${publicName} on FlupFlap Marketplace.`,
+      description: trimmedShopDescription ?? `Browse products listed by ${publicName} on FlupFlap Marketplace.`,
       path: `/store/${id}`,
     });
   } catch {
@@ -187,11 +194,7 @@ export default async function SellerStorePage({ params }: Props) {
         </div>
       </section>
 
-      {products.length === 0 ? (
-        <div className="rounded-[28px] border border-dashed border-slate-300 bg-white p-10 text-center text-slate-500 shadow-sm">
-          This seller has no active listings.
-        </div>
-      ) : (
+      {products.length > 0 && (
         <section className="space-y-4">
           <h2 className="text-xl font-bold text-slate-900">Listings</h2>
           <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">

@@ -31,6 +31,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ];
 
   // ── Category pages (SEO-friendly paths) ────────────────────────────────────
+  // Query-param category variants (/?category=...) are intentionally excluded
+  // to avoid duplicate/competing URL patterns in search indexing.
   const categoryEntries = flattenCategoryEntries(DEFAULT_CATEGORY_TREE);
   const categoryRoutes: MetadataRoute.Sitemap = categoryEntries.map((entry) => ({
     url: absoluteUrl(`/category/${entry.slug}`),
@@ -43,7 +45,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     return [...staticRoutes, ...categoryRoutes];
   }
 
-  // ── Dynamic product and seller pages ──────────────────────────────────────
+  // ── Dynamic product, seller, and garage-sale pages ─────────────────────────
   let productRoutes: MetadataRoute.Sitemap = [];
   let sellerRoutes: MetadataRoute.Sitemap = [];
   let garageSaleRoutes: MetadataRoute.Sitemap = [];

@@ -13,7 +13,7 @@ import { getSellerResponseStatsForSellers } from '@/lib/messages';
 import { authOptions } from '@/lib/auth-options';
 import { getRoleDefaultPath, normalizeExperienceRole } from '@/lib/role-experience';
 import GarageSalesPromoBanner from '@/components/GarageSalesPromoBanner';
-import { createPageMetadata } from '@/lib/seo';
+import { createPageMetadata, DEFAULT_SEO_DESCRIPTION } from '@/lib/seo';
 import { DEFAULT_CATEGORY_TREE, type DefaultCategoryNode } from '@/lib/default-categories';
 import {
   buildProductSearchableText,
@@ -82,7 +82,8 @@ export async function generateMetadata({
     : null;
 
   return createPageMetadata({
-    title: 'Browse Products',
+    title: 'Browse Products | FlupFlap Marketplace',
+    description: DEFAULT_SEO_DESCRIPTION,
     path: categoryCanonicalPath ?? '/',
     noIndex: hasNonCategoryFilters,
   });

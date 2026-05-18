@@ -16,6 +16,17 @@ import { createPageMetadata } from '@/lib/seo';
 export const dynamic = 'force-dynamic';
 
 type Params = { params: Promise<{ id: string }> };
+const META_DESCRIPTION_MAX_LENGTH = 160;
+
+function truncateMetaDescription(input: string): string {
+  const trimmed = input.trim();
+  if (trimmed.length <= META_DESCRIPTION_MAX_LENGTH) return trimmed;
+
+  const truncated = trimmed.slice(0, META_DESCRIPTION_MAX_LENGTH);
+  const lastSpace = truncated.lastIndexOf(' ');
+  const safeCutoff = lastSpace > 80 ? lastSpace : META_DESCRIPTION_MAX_LENGTH;
+  return `${truncated.slice(0, safeCutoff).trimEnd()}…`;
+}
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { id } = await params;
@@ -26,8 +37,13 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
       title: true,
       city: true,
       state: true,
+      description: true,
       status: true,
       paymentStatus: true,
+      isArchived: true,
+      startDate: true,
+      endDate: true,
+      isLive: true,
       isSpam: true,
     },
   });
@@ -38,10 +54,17 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
       noIndex: true,
     });
   }
-  const isPubliclyIndexable = sale.status === 'APPROVED' && sale.paymentStatus === 'PAID' && !sale.isSpam;
+
+  const lifecycle = deriveGarageSaleLifecycle(sale);
+  const isPubliclyIndexable = lifecycle.publiclyVisible && !sale.isSpam;
+  const trimmedDescription = sale.description?.trim();
+  const description = trimmedDescription
+    ? truncateMetaDescription(trimmedDescription)
+    : `View sale details for ${sale.title} in ${sale.city}, ${sale.state}.`;
+
   return createPageMetadata({
     title: `${sale.title} – ${sale.city}, ${sale.state} | FlupFlap`,
-    description: `View sale details for ${sale.title} in ${sale.city}, ${sale.state}.`,
+    description,
     path: `/garage-sales/${sale.id}`,
     noIndex: !isPubliclyIndexable,
   });
