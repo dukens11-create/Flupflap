@@ -74,7 +74,7 @@ export default async function GarageSaleDetailPage({ params }: Params) {
   const openNow = isGarageSalePubliclyOpenNow(sale);
   const visibilityBlockReason = getGarageSaleVisibilityBlockReason(sale);
   const blockedLiveControlsMessage = getGarageSaleLiveControlsBlockMessage(sale, visibilityBlockReason);
-  const ownerHiddenStatusMessage = getGarageSaleOwnerHiddenStatusMessage(sale, visibilityBlockReason) ?? 'This listing is not currently visible.';
+  const ownerHiddenStatusMessage = getGarageSaleOwnerHiddenStatusMessage(sale, visibilityBlockReason);
   const hiddenStatusLabel = (() => {
     if (visibilityBlockReason === 'ARCHIVED') return 'ARCHIVED';
     if (visibilityBlockReason === 'SPAM') return 'UNDER REVIEW';

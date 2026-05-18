@@ -48,11 +48,13 @@ export function isGarageSalePubliclyVisible(sale: GarageSaleVisibilityInput) {
 
 export function isGarageSalePubliclyOpenNow(sale: GarageSaleVisibilityInput) {
   const lifecycle = getLifecycle(sale);
-  return getGarageSaleVisibilityBlockReason(sale) === null && Boolean(lifecycle?.openNow);
+  return getGarageSaleVisibilityBlockReason(sale, lifecycle) === null && Boolean(lifecycle?.openNow);
 }
 
-export function getGarageSaleVisibilityBlockReason(sale: GarageSaleVisibilityInput): GarageSaleVisibilityBlockReason {
-  const lifecycle = getLifecycle(sale);
+export function getGarageSaleVisibilityBlockReason(
+  sale: GarageSaleVisibilityInput,
+  lifecycle = getLifecycle(sale),
+): GarageSaleVisibilityBlockReason {
 
   if (sale.isArchived) return 'ARCHIVED';
   if (sale.isSpam) return 'SPAM';
@@ -155,5 +157,5 @@ export function getGarageSaleOwnerHiddenStatusMessage(
   if (reason === 'UNKNOWN_STATUS') {
     return 'This listing is not currently visible.';
   }
-  return null;
+  return 'This listing is not currently visible.';
 }
