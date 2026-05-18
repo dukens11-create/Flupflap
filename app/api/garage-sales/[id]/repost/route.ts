@@ -92,7 +92,8 @@ export async function POST(req: Request, { params }: Params) {
         status: 'PAID',
       },
     });
-    return NextResponse.redirect(new URL(`/garage-sales/${repost.id}?reposted=1&paid=1`, req.url), 303);
+    const encodedRepostId = encodeURIComponent(repost.id);
+    return NextResponse.redirect(new URL(`/seller/garage-sales?paid=1&saleId=${encodedRepostId}&reposted=1`, req.url), 303);
   }
 
   const lineItems: Array<{ quantity: number; price_data: { currency: string; product_data: { name: string; description?: string }; unit_amount: number } }> = [
@@ -109,12 +110,13 @@ export async function POST(req: Request, { params }: Params) {
     },
   ];
 
+  const encodedRepostId = encodeURIComponent(repost.id);
   const checkout = await stripe.checkout.sessions.create({
     mode: 'payment',
     payment_method_types: ['card'],
     line_items: lineItems,
-    success_url: `${appUrl}/garage-sales/${repost.id}?paid=1&reposted=1&session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${appUrl}/garage-sales/${source.id}?payment=cancelled`,
+    success_url: `${appUrl}/seller/garage-sales?paid=1&saleId=${encodedRepostId}&reposted=1&session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${appUrl}/seller/garage-sales?payment=cancelled&saleId=${encodedRepostId}`,
     customer_email: session.user.email ?? undefined,
     metadata: {
       type: 'garage_sale_listing',
@@ -150,5 +152,5 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.redirect(checkout.url, 303);
   }
 
-  return NextResponse.redirect(new URL(`/garage-sales/${repost.id}?reposted=1`, req.url), 303);
+  return NextResponse.redirect(new URL(`/seller/garage-sales?saleId=${encodedRepostId}&reposted=1`, req.url), 303);
 }

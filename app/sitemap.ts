@@ -34,7 +34,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // Query-param category variants (/?category=...) are intentionally excluded
   // to avoid duplicate/competing URL patterns in search indexing.
   const categoryEntries = flattenCategoryEntries(DEFAULT_CATEGORY_TREE);
-  const categoryRoutes: MetadataRoute.Sitemap = categoryEntries.map((entry) => ({
+  const categorySeoRoutes: MetadataRoute.Sitemap = categoryEntries.map((entry) => ({
     url: absoluteUrl(`/category/${entry.slug}`),
     lastModified: now,
     changeFrequency: 'daily' as const,
@@ -42,7 +42,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }));
 
   if (!isDatabaseConfigured()) {
-    return [...staticRoutes, ...categoryRoutes];
+    return [...staticRoutes, ...categorySeoRoutes];
   }
 
   // ── Dynamic product, seller, and garage-sale pages ─────────────────────────
@@ -107,5 +107,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // Database unavailable at sitemap generation time — skip dynamic routes.
   }
 
-  return [...staticRoutes, ...categoryRoutes, ...productRoutes, ...sellerRoutes, ...garageSaleRoutes];
+  return [...staticRoutes, ...categorySeoRoutes, ...productRoutes, ...sellerRoutes, ...garageSaleRoutes];
 }
