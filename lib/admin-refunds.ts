@@ -134,15 +134,6 @@ export async function approveRefundRequest({
 
     const processedNotes = adminNotes || null;
 
-    await prisma.refundRequest.update({
-      where: { id: refundRequest.id },
-      data: {
-        status: 'APPROVED',
-        approvedAmountCents,
-        adminNotes: processedNotes,
-      },
-    });
-
     const stripeRefund = await stripe.refunds.create({
       payment_intent: refundRequest.order.stripePaymentIntentId,
       amount: approvedAmountCents,
