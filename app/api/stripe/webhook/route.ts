@@ -538,7 +538,6 @@ export async function POST(req: Request) {
     }
     return new NextResponse('ok', { status: 200 });
   }
-
   // ── Checkout completion: garage sales, subscriptions, promotions, orders ────
   if (CHECKOUT_COMPLETION_EVENTS.has(event.type)) {
     const cs = event.data.object as Stripe.Checkout.Session;

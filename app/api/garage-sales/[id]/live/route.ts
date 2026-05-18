@@ -54,6 +54,7 @@ export async function POST(req: Request, { params }: Params) {
   }
 
   const visibilityBlockReason = getGarageSaleVisibilityBlockReason(sale);
+  const visibilityBlockReason = getGarageSaleVisibilityBlockReason(sale);
 
   if (action === 'start' && visibilityBlockReason !== null) {
     return NextResponse.json({ error: getGarageSaleLiveControlsBlockMessage(sale, visibilityBlockReason) }, { status: 422 });

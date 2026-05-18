@@ -94,6 +94,7 @@ export async function GET(req: Request, { params }: Params) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
   if (!isGarageSalePubliclyVisible(sale)) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (!isGarageSalePubliclyVisible(sale)) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   if (roleParam === 'SELLER') {
     const ownerCheck = await requireSellerOwner(sale.sellerId);
@@ -191,6 +192,7 @@ export async function POST(req: Request, { params }: Params) {
   if (!sale) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
+  if (!isGarageSalePubliclyVisible(sale)) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   if (!isGarageSalePubliclyVisible(sale)) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   if (!sale.isLive) {
     return NextResponse.json({ error: 'Live session is not active' }, { status: 422 });
