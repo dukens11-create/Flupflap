@@ -11,7 +11,6 @@ const RTC_CONFIG: RTCConfiguration = {
   iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }],
 };
 const PREVIEW_REQUIRED_MESSAGE = 'Preview your camera before starting your live garage sale.';
-const CAMERA_ACCESS_MESSAGE = 'Camera access blocked';
 const CAMERA_BLOCKED_MESSAGE = 'Camera access blocked';
 const CAMERA_READY_MESSAGE = 'Camera ready';
 const CAMERA_CONNECTING_MESSAGE = 'Connecting camera...';
@@ -244,6 +243,8 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     try {
       streamRef.current?.getTracks().forEach((track) => track.stop());
 
+      // Android Chrome/Samsung Internet PWAs reliably trigger permission prompts
+      // with the baseline video+audio request before extra camera constraints.
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       const [videoTrack] = stream.getVideoTracks();
       if (!videoTrack) {
@@ -252,12 +253,10 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         throw new Error('Camera device unavailable.');
       }
 
-      if (nextFacingMode === 'user' || nextFacingMode === 'environment') {
-        try {
-          await videoTrack.applyConstraints({ facingMode: { ideal: nextFacingMode } });
-        } catch {
-          // Ignore unsupported camera facingMode constraints on mobile browsers.
-        }
+      try {
+        await videoTrack.applyConstraints({ facingMode: { ideal: nextFacingMode } });
+      } catch {
+        // Ignore unsupported camera facingMode constraints on mobile browsers.
       }
 
       stream.getAudioTracks().forEach((t) => { t.enabled = micOnRef.current; });
@@ -334,7 +333,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     setLoading(true);
     setError(null);
     try {
-      if (!camOn || !streamRef.current) {
+      if (!streamRef.current) {
         await startCamera();
         if (!streamRef.current) {
           throw new Error(PREVIEW_REQUIRED_MESSAGE);
@@ -474,7 +473,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       case 'blocked':
         return CAMERA_BLOCKED_MESSAGE;
       case 'denied':
-        return CAMERA_ACCESS_MESSAGE;
+        return CAMERA_BLOCKED_MESSAGE;
       case 'unsupported':
         return 'Camera preview is not supported in this browser.';
       case 'ready':
