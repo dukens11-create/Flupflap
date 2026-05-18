@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db';
 import { requireSeller } from '@/lib/require-seller';
 import { expireGarageSales } from '@/lib/garage-sales';
 import { syncGarageSaleCheckoutSessionForSeller } from '@/lib/garage-sale-payment-sync';
+import { logWarn } from '@/lib/logger';
 
 export const metadata: Metadata = {
   title: 'My Garage Sales',
@@ -65,7 +66,9 @@ export default async function SellerGarageSalesPage({
       sellerId,
     });
     if (!syncResult.synced && syncResult.reason !== 'already_paid') {
-      console.warn('[seller/garage-sales] payment sync did not finalize', {
+      logWarn('Seller garage sale payment sync did not finalize', {
+        tag: 'seller/garage-sales',
+        action: 'syncGarageSaleCheckoutSessionForSeller',
         saleId: sp.saleId,
         reason: syncResult.reason ?? 'unknown',
       });

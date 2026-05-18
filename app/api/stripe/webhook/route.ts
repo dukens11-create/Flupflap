@@ -24,6 +24,7 @@ import {
 } from '@/lib/garage-sale-payment-sync';
 
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
+const CHECKOUT_COMPLETION_EVENTS = new Set(['checkout.session.completed', 'checkout.session.async_payment_succeeded']);
 
 /** Generate a cryptographically secure 6-digit pickup confirmation code. */
 function generatePickupCode(): string {
@@ -306,8 +307,19 @@ export async function POST(req: Request) {
   }
 
   // ── Stripe Connect: seller onboarding ────────────────────────────────────────
-  if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
+  if (CHECKOUT_COMPLETION_EVENTS.has(event.type)) {
     const cs = event.data.object as any;
+    // Keep promotion statuses fresh on all successful checkout completions
+    // so stale boosts are cleaned even when there are no promotion-only requests.
+    try {
+      await expirePromotions();
+    } catch (err) {
+      logWarn('Promotion expiry failed during checkout webhook', {
+        tag: 'stripe/webhook',
+        action: 'expirePromotions',
+        eventType: event.type,
+      });
+    }
 
     if (isGarageSaleCheckoutSession(cs)) {
       const result = await finalizeGarageSaleCheckoutSession(cs);
@@ -386,7 +398,6 @@ export async function POST(req: Request) {
 
     // Handle promotion payments separately from product purchases
     if (cs.metadata?.type === 'promotion') {
-      await expirePromotions();
       const promotionId: string = cs.metadata?.promotionId;
       if (!promotionId) return new NextResponse('Missing promotionId', { status: 400 });
 
