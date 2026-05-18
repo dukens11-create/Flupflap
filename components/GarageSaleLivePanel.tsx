@@ -18,6 +18,8 @@ const CAMERA_CONNECTING_MESSAGE = 'Connecting camera...';
 const CAMERA_PREVIEW_PLACEHOLDER = 'Camera preview will appear here.';
 const CAMERA_STATUS_UNKNOWN_MESSAGE = 'Camera status unknown.';
 const CAMERA_HTTPS_REQUIRED_MESSAGE = 'Live camera preview requires HTTPS (or localhost) in this browser.';
+const ANDROID_CAMERA_PERMISSION_HINT = 'On Android Chrome or Samsung Internet, if you do not see the permission popup, open the lock icon in the address bar, allow Camera and Microphone, then select Retry Camera Access.';
+const DEFAULT_CAMERA_PERMISSION_HINT = 'Allow Camera and Microphone in your browser, then select Retry Camera Access.';
 
 type CameraStatus = 'idle' | 'connecting' | 'ready' | 'awaitingInteraction' | 'blocked' | 'denied' | 'unsupported' | 'insecure';
 
@@ -62,8 +64,8 @@ function logCameraAccessError(name: string, error: unknown) {
   });
 }
 
-async function requestCameraStream(nextFacingMode: 'user' | 'environment', preferFacingMode: boolean) {
-  if (!preferFacingMode) {
+async function requestCameraStream(nextFacingMode: 'user' | 'environment', shouldUseFacingMode: boolean) {
+  if (!shouldUseFacingMode) {
     return navigator.mediaDevices.getUserMedia({ video: true, audio: true });
   }
 
@@ -267,9 +269,9 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     setCameraStatus('connecting');
     setPreviewReady(false);
     try {
-      const isRetryingExistingStream = Boolean(streamRef.current);
+      const shouldUseFacingMode = Boolean(streamRef.current);
       streamRef.current?.getTracks().forEach((track) => track.stop());
-      const stream = await requestCameraStream(nextFacingMode, isRetryingExistingStream);
+      const stream = await requestCameraStream(nextFacingMode, shouldUseFacingMode);
 
       stream.getAudioTracks().forEach((t) => { t.enabled = micOnRef.current; });
       streamRef.current = stream;
@@ -342,8 +344,8 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     setError(null);
     try {
       if (!streamRef.current) {
-        const previewStarted = await startCamera();
-        if (!previewStarted && !streamRef.current) {
+        await startCamera();
+        if (!streamRef.current) {
           throw new Error(PREVIEW_REQUIRED_MESSAGE);
         }
       }
@@ -478,8 +480,8 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   })();
 
   const browserPermissionHint = isAndroidChromeOrSamsungBrowser()
-    ? 'On Android Chrome or Samsung Internet, if you do not see the permission popup, open the lock icon in the address bar, allow Camera and Microphone, then select Retry Camera Access.'
-    : 'Allow Camera and Microphone in your browser, then select Retry Camera Access.';
+    ? ANDROID_CAMERA_PERMISSION_HINT
+    : DEFAULT_CAMERA_PERMISSION_HINT;
 
   const cameraMessage = (() => {
     if (error) return error;
