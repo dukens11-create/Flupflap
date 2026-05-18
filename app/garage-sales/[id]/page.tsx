@@ -7,6 +7,14 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { MapPin, Calendar, Phone, Tag, Eye, Heart, ExternalLink } from 'lucide-react';
 import { expireGarageSales } from '@/lib/garage-sales';
+import {
+  getGarageSaleLiveControlsBlockMessage,
+  getGarageSaleOwnerHiddenStatusMessage,
+  getGarageSaleVisibilityBlockReason,
+  getGarageSaleVisibilityTone,
+  isGarageSalePubliclyVisible,
+  isGarageSalePubliclyOpenNow,
+} from '@/lib/garage-sale-visibility';
 import GarageSaleLivePanel from '@/components/GarageSaleLivePanel';
 import GarageSaleBuyerLiveView from '@/components/GarageSaleBuyerLiveView';
 import GarageSaleShareButton from '@/components/GarageSaleShareButton';
@@ -109,11 +117,32 @@ export default async function GarageSaleDetailPage({ params }: Params) {
   const isOwner = session?.user?.id === sale.sellerId;
   const isAdmin = session?.user?.role === 'ADMIN';
   const lifecycle = deriveGarageSaleLifecycle(sale);
+  const listingIsPubliclyVisible = isGarageSalePubliclyVisible(sale);
+  const openNow = isGarageSalePubliclyOpenNow(sale);
+  const visibilityBlockReason = getGarageSaleVisibilityBlockReason(sale);
+  const blockedLiveControlsMessage = getGarageSaleLiveControlsBlockMessage(sale, visibilityBlockReason);
+  const ownerHiddenStatusMessage = getGarageSaleOwnerHiddenStatusMessage(sale, visibilityBlockReason);
+  const hiddenStatusLabel = (() => {
+    if (visibilityBlockReason === 'ARCHIVED') return 'ARCHIVED';
+    if (visibilityBlockReason === 'SPAM') return 'UNDER REVIEW';
+    if (visibilityBlockReason === 'PAYMENT_PENDING') return 'PAYMENT PENDING';
+    if (visibilityBlockReason === 'PAYMENT_FAILED') return 'PAYMENT FAILED';
+    if (visibilityBlockReason === 'PAYMENT_REFUNDED') return 'REFUNDED';
+    if (visibilityBlockReason === 'PENDING_REVIEW') return 'PENDING REVIEW';
+    if (visibilityBlockReason === 'REJECTED') return 'REJECTED';
+    if (visibilityBlockReason === 'UPCOMING') return 'UPCOMING';
+    if (visibilityBlockReason === 'EXPIRED') return 'EXPIRED';
+    if (visibilityBlockReason === 'UNKNOWN_STATUS') return 'NOT VISIBLE';
+    return 'HIDDEN';
+  })();
+  const hiddenStatusTone = getGarageSaleVisibilityTone(visibilityBlockReason);
+  const hiddenStatusBadgeClass = hiddenStatusTone === 'warning'
+    ? 'bg-yellow-100 text-yellow-700'
+    : hiddenStatusTone === 'danger'
+      ? 'bg-red-100 text-red-700'
+      : 'bg-slate-200 text-slate-700';
 
-  if (!lifecycle.publiclyVisible && !isOwner && !isAdmin) notFound();
-
-  const listingIsPubliclyVisible = lifecycle.publiclyVisible;
-  const openNow = lifecycle.openNow;
+  if (!listingIsPubliclyVisible && !isOwner && !isAdmin) notFound();
   const saleTypeLabel = SALE_TYPE_LABELS[sale.saleType] ?? sale.saleType;
   const priceRange = sale.priceRangeMin != null && sale.priceRangeMax != null
     ? `$${sale.priceRangeMin}–$${sale.priceRangeMax}`
@@ -170,22 +199,8 @@ export default async function GarageSaleDetailPage({ params }: Params) {
           </span>
         ) : null}
         {(isOwner || isAdmin) && !listingIsPubliclyVisible && (
-          <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-bold ${
-            lifecycle.state === 'PAYMENT_PENDING' || lifecycle.state === 'PENDING_REVIEW'
-              ? 'bg-yellow-100 text-yellow-700'
-              : lifecycle.state === 'PAYMENT_FAILED' || lifecycle.state === 'REJECTED' || lifecycle.state === 'PAYMENT_REFUNDED'
-                ? 'bg-red-100 text-red-700'
-                : 'bg-slate-200 text-slate-700'
-          }`}>
-            {lifecycle.state === 'PAYMENT_PENDING'
-              ? 'PAYMENT PENDING'
-              : lifecycle.state === 'PENDING_REVIEW'
-                ? 'PENDING REVIEW'
-                : lifecycle.state === 'PAYMENT_FAILED'
-                  ? 'PAYMENT FAILED'
-                  : lifecycle.state === 'PAYMENT_REFUNDED'
-                    ? 'REFUNDED'
-                    : lifecycle.state}
+          <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-bold ${hiddenStatusBadgeClass}`}>
+            {hiddenStatusLabel}
           </span>
         )}
         <span className="inline-flex items-center rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">
@@ -194,7 +209,7 @@ export default async function GarageSaleDetailPage({ params }: Params) {
       </div>
       {isOwner && !listingIsPubliclyVisible && (
         <div className="card border-yellow-300 bg-yellow-50 p-4 text-sm text-yellow-900">
-          <p className="font-semibold">{lifecycle.ownerMessage}</p>
+          <p className="font-semibold">{ownerHiddenStatusMessage}</p>
           <Link href="/seller/garage-sales" className="mt-2 inline-block font-semibold underline">
             Open My Garage Sales
           </Link>
@@ -355,9 +370,7 @@ export default async function GarageSaleDetailPage({ params }: Params) {
           )}
           {isOwner && !lifecycle.sellerCanGoLive && (
             <div className="card p-4 text-sm text-slate-600">
-              {lifecycle.state === 'UPCOMING'
-                ? 'Live controls unlock when your sale start time arrives.'
-                : 'Live controls appear only when your listing is paid, approved, and visible.'}
+              {blockedLiveControlsMessage}
             </div>
           )}
 
