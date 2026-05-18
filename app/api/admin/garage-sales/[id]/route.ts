@@ -46,6 +46,12 @@ export async function PATCH(req: Request, { params }: Params) {
 
   switch (action) {
     case 'approve':
+      if (sale.paymentStatus !== 'PAID') {
+        return NextResponse.json(
+          { error: 'Cannot approve this listing until payment is marked PAID. It must remain hidden for now.' },
+          { status: 422 },
+        );
+      }
       updates.status = 'APPROVED';
       break;
     case 'reject':

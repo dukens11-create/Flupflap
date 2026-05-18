@@ -31,13 +31,22 @@ function sellerStatusMessage(status: string, paymentStatus: string) {
     return 'Your listing is active and visible to buyers.';
   }
   if (paymentStatus === 'PENDING') {
-    return 'Payment is still processing. Your listing stays hidden until payment is confirmed.';
+    return 'Payment is still pending. Your listing is hidden and live controls are unavailable until payment is confirmed.';
+  }
+  if (status === 'APPROVED' && paymentStatus !== 'PAID') {
+    return 'Your listing is approved, but it remains hidden because payment is not completed.';
   }
   if (paymentStatus === 'FAILED') {
     return 'Payment failed. Repost and pay again to publish this listing.';
   }
+  if (paymentStatus === 'REFUNDED') {
+    return 'Payment was refunded. This listing is no longer visible.';
+  }
   if (status === 'PENDING') {
     return 'Your listing is pending review.';
+  }
+  if (status === 'HIDDEN') {
+    return 'This listing is hidden and not visible to buyers.';
   }
   if (status === 'REJECTED') {
     return 'Your listing was rejected. Open it to review details and update.';

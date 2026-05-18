@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
+import { getGarageSaleLiveControlsUnavailableMessage, isGarageSalePubliclyVisible } from '@/lib/garage-sale-visibility';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,7 +19,7 @@ export async function POST(req: Request, { params }: Params) {
 
   const sale = await prisma.garageSale.findUnique({
     where: { id },
-    select: { id: true, sellerId: true, status: true, isLive: true },
+    select: { id: true, sellerId: true, status: true, paymentStatus: true, isArchived: true, isSpam: true, isLive: true },
   });
   if (!sale) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
@@ -26,8 +27,8 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  if (sale.status !== 'APPROVED') {
-    return NextResponse.json({ error: 'Only approved listings can go live' }, { status: 422 });
+  if (!isGarageSalePubliclyVisible(sale)) {
+    return NextResponse.json({ error: getGarageSaleLiveControlsUnavailableMessage(sale) }, { status: 422 });
   }
 
   let body: unknown;
@@ -67,10 +68,10 @@ export async function GET(_req: Request, { params }: Params) {
 
   const sale = await prisma.garageSale.findUnique({
     where: { id },
-    select: { id: true, isLive: true, liveStartedAt: true, status: true },
+    select: { id: true, isLive: true, liveStartedAt: true, status: true, paymentStatus: true, isArchived: true, isSpam: true },
   });
   if (!sale) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  if (sale.status !== 'APPROVED') return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (!isGarageSalePubliclyVisible(sale)) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   return NextResponse.json({ id: sale.id, isLive: sale.isLive, liveStartedAt: sale.liveStartedAt });
 }

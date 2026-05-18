@@ -7,6 +7,11 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { MapPin, Calendar, Phone, Tag, Eye, Heart, ExternalLink } from 'lucide-react';
 import { expireGarageSales } from '@/lib/garage-sales';
+import {
+  getGarageSaleLiveControlsUnavailableMessage,
+  getGarageSaleVisibilityBlockReason,
+  isGarageSalePubliclyVisible,
+} from '@/lib/garage-sale-visibility';
 import GarageSaleLivePanel from '@/components/GarageSaleLivePanel';
 import GarageSaleBuyerLiveView from '@/components/GarageSaleBuyerLiveView';
 import GarageSaleShareButton from '@/components/GarageSaleShareButton';
@@ -65,10 +70,18 @@ export default async function GarageSaleDetailPage({ params }: Params) {
   const session = await getServerSession(authOptions);
   const isOwner = session?.user?.id === sale.sellerId;
   const isAdmin = session?.user?.role === 'ADMIN';
+  const listingIsPubliclyVisible = isGarageSalePubliclyVisible(sale);
 
-  if (sale.status !== 'APPROVED' && !isOwner && !isAdmin) notFound();
+  if (!listingIsPubliclyVisible && !isOwner && !isAdmin) notFound();
 
-  const listingIsPubliclyVisible = sale.status === 'APPROVED';
+  const visibilityBlockReason = getGarageSaleVisibilityBlockReason(sale);
+  const blockedLiveControlsMessage = getGarageSaleLiveControlsUnavailableMessage(sale);
+  const hiddenStatusLabel = visibilityBlockReason === 'PAYMENT_PENDING' ? 'AWAITING PAYMENT' : sale.status;
+  const hiddenStatusBadgeClass = visibilityBlockReason === 'PAYMENT_PENDING'
+    ? 'bg-yellow-100 text-yellow-700'
+    : sale.status === 'PENDING'
+      ? 'bg-yellow-100 text-yellow-700'
+      : 'bg-red-100 text-red-700';
   const openNow = listingIsPubliclyVisible && isOpenNow(sale.startDate, sale.endDate);
   const saleTypeLabel = SALE_TYPE_LABELS[sale.saleType] ?? sale.saleType;
   const priceRange = sale.priceRangeMin != null && sale.priceRangeMax != null
@@ -80,7 +93,7 @@ export default async function GarageSaleDetailPage({ params }: Params) {
   const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${sale.address}, ${sale.city}, ${sale.state} ${sale.zipCode}`)}`;
 
   // Increment view count (fire-and-forget, log errors)
-  if (sale.status === 'APPROVED' && !isOwner) {
+  if (listingIsPubliclyVisible && !isOwner) {
     prisma.garageSale.update({ where: { id }, data: { viewCount: { increment: 1 } } }).catch((err) => {
       console.error('[garage-sales] view count increment failed', err);
     });
@@ -126,8 +139,8 @@ export default async function GarageSaleDetailPage({ params }: Params) {
           </span>
         ) : null}
         {(isOwner || isAdmin) && !listingIsPubliclyVisible && (
-          <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-bold ${sale.status === 'PENDING' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>
-            {sale.status}
+          <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-bold ${hiddenStatusBadgeClass}`}>
+            {hiddenStatusLabel}
           </span>
         )}
         <span className="inline-flex items-center rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">
@@ -138,11 +151,13 @@ export default async function GarageSaleDetailPage({ params }: Params) {
         <div className="card border-yellow-300 bg-yellow-50 p-4 text-sm text-yellow-900">
           <p className="font-semibold">
             {sale.paymentStatus === 'PENDING'
-              ? 'Your payment is processing. This listing is hidden until payment clears.'
+              ? 'Your payment is still pending. This listing is hidden and live controls are unavailable until payment is confirmed.'
               : sale.status === 'PENDING'
                 ? 'Your listing is pending review.'
                 : sale.status === 'REJECTED'
                   ? 'Your listing was rejected. Update details and try again.'
+                  : sale.paymentStatus !== 'PAID'
+                    ? 'This listing is not visible because payment is not complete.'
                   : 'This listing is currently hidden.'}
           </p>
           <Link href="/seller/garage-sales" className="mt-2 inline-block font-semibold underline">
@@ -305,7 +320,7 @@ export default async function GarageSaleDetailPage({ params }: Params) {
           )}
           {isOwner && !listingIsPubliclyVisible && (
             <div className="card p-4 text-sm text-slate-600">
-              Live controls will appear once your listing is approved and visible.
+              {blockedLiveControlsMessage}
             </div>
           )}
 

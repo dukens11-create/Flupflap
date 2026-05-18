@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db';
 import { z } from 'zod';
 import { calculateGarageSaleDurationDays } from '@/lib/garage-sale-pricing';
 import { expireGarageSales } from '@/lib/garage-sales';
+import { isGarageSalePubliclyVisible } from '@/lib/garage-sale-visibility';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,13 +61,14 @@ export async function GET(_req: Request, { params }: Params) {
   const session = await getServerSession(authOptions);
   const isOwner = session?.user?.id === sale.sellerId;
   const isAdmin = session?.user?.role === 'ADMIN';
+  const listingIsPubliclyVisible = isGarageSalePubliclyVisible(sale);
 
-  if (sale.status !== 'APPROVED' && !isOwner && !isAdmin) {
+  if (!listingIsPubliclyVisible && !isOwner && !isAdmin) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
   // Increment view count (fire-and-forget, log errors)
-  if (sale.status === 'APPROVED' && !isOwner) {
+  if (listingIsPubliclyVisible && !isOwner) {
     prisma.garageSale.update({
       where: { id },
       data: { viewCount: { increment: 1 } },

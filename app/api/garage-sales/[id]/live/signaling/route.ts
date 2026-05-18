@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { Prisma } from '@prisma/client';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
+import { isGarageSalePubliclyVisible } from '@/lib/garage-sale-visibility';
 
 export const dynamic = 'force-dynamic';
 
@@ -76,9 +77,9 @@ export async function GET(req: Request, { params }: Params) {
 
   const sale = await prisma.garageSale.findUnique({
     where: { id },
-    select: { id: true, status: true, isLive: true, sellerId: true, liveStartedAt: true },
+    select: { id: true, status: true, paymentStatus: true, isArchived: true, isSpam: true, isLive: true, sellerId: true, liveStartedAt: true },
   });
-  if (!sale || sale.status !== 'APPROVED') {
+  if (!sale || !isGarageSalePubliclyVisible(sale)) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
@@ -163,9 +164,9 @@ export async function POST(req: Request, { params }: Params) {
 
   const sale = await prisma.garageSale.findUnique({
     where: { id },
-    select: { id: true, status: true, isLive: true, sellerId: true },
+    select: { id: true, status: true, paymentStatus: true, isArchived: true, isSpam: true, isLive: true, sellerId: true },
   });
-  if (!sale || sale.status !== 'APPROVED') {
+  if (!sale || !isGarageSalePubliclyVisible(sale)) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
   if (!sale.isLive) {
