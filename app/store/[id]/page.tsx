@@ -159,8 +159,7 @@ export default async function SellerStorePage({ params }: Props) {
     notFound();
   }
 
-  if (!seller) notFound();
-  if (products.length === 0) notFound();
+  if (!seller || products.length === 0) notFound();
 
   const isVerified = seller.verificationSubmission?.status === 'APPROVED';
   const sellerPublicName = seller.shopName?.trim() || 'FlupFlap Seller';

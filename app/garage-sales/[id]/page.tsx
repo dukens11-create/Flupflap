@@ -16,6 +16,7 @@ import { createPageMetadata } from '@/lib/seo';
 export const dynamic = 'force-dynamic';
 
 type Params = { params: Promise<{ id: string }> };
+const META_DESCRIPTION_MAX_LENGTH = 160;
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { id } = await params;
@@ -47,8 +48,8 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const lifecycle = deriveGarageSaleLifecycle(sale);
   const isPubliclyIndexable = lifecycle.publiclyVisible && !sale.isSpam;
   const description = sale.description?.trim()
-    ? sale.description.slice(0, 160)
-    : `View sale details for ${sale.title} in ${sale.city}, ${sale.state}.`.slice(0, 160);
+    ? sale.description.slice(0, META_DESCRIPTION_MAX_LENGTH)
+    : `View sale details for ${sale.title} in ${sale.city}, ${sale.state}.`.slice(0, META_DESCRIPTION_MAX_LENGTH);
 
   return createPageMetadata({
     title: `${sale.title} – ${sale.city}, ${sale.state} | FlupFlap`,
