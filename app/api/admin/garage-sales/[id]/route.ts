@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { z } from 'zod';
 import { stripe } from '@/lib/stripe';
+import { deriveGarageSaleLifecycle } from '@/lib/garage-sale-lifecycle';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,12 +46,21 @@ export async function PATCH(req: Request, { params }: Params) {
   if (notes !== undefined) updates.adminNotes = notes;
 
   switch (action) {
-    case 'approve':
-      if (sale.paymentStatus !== 'PAID') {
-        return NextResponse.json({ error: 'Payment is not complete yet. Only paid listings can be approved.' }, { status: 422 });
+    case 'approve': {
+      const lifecycleIfApproved = deriveGarageSaleLifecycle({
+        status: 'APPROVED',
+        paymentStatus: sale.paymentStatus,
+        isArchived: sale.isArchived,
+        startDate: sale.startDate,
+        endDate: sale.endDate,
+        isLive: sale.isLive,
+      });
+      if (!lifecycleIfApproved.publiclyVisible) {
+        return NextResponse.json({ error: lifecycleIfApproved.ownerMessage }, { status: 422 });
       }
       updates.status = 'APPROVED';
       break;
+    }
     case 'reject':
       updates.status = 'REJECTED';
       break;

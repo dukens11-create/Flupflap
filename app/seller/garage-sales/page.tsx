@@ -47,6 +47,13 @@ const STATUS_LABEL: Record<string, string> = {
   EXPIRED: 'EXPIRED',
 };
 
+const PAYMENT_LABEL: Record<string, string> = {
+  PAID: 'Paid',
+  PENDING: 'Awaiting confirmation',
+  FAILED: 'Failed',
+  REFUNDED: 'Refunded',
+};
+
 async function reconcileSuccessfulCheckout({
   sellerId,
   saleId,
@@ -203,7 +210,7 @@ export default async function SellerGarageSalesPage({
                         {STATUS_LABEL[lifecycle.state] ?? lifecycle.state}
                       </span>
                     </div>
-                    <p className="text-[11px] font-semibold text-slate-500">Payment: {sale.paymentStatus}</p>
+                    <p className="text-[11px] font-semibold text-slate-500">Payment: {PAYMENT_LABEL[sale.paymentStatus] ?? sale.paymentStatus}</p>
                     <div className="flex gap-2">
                       <Link href={`/garage-sales/${sale.id}`} className="btn-outline text-xs">Open</Link>
                       <Link href={`/garage-sales/${sale.id}/edit`} className="btn-outline text-xs">Manage</Link>
