@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db';
+import { logInfo, logWarn } from '@/lib/logger';
 import {
   DEFAULT_GARAGE_SALE_PRICING_SETTINGS,
   type GarageSalePricingSettings,
@@ -28,4 +29,61 @@ export async function expireGarageSales(now = new Date()) {
   });
 
   return expired.count;
+}
+
+const GARAGE_SALE_ID_PATTERN = /c[a-z0-9]{24,}/;
+
+export function buildPublicGarageSaleWhere(now = new Date()) {
+  return {
+    status: 'APPROVED' as const,
+    isSpam: false,
+    paymentStatus: 'PAID' as const,
+    endDate: { gte: now },
+  };
+}
+
+export function extractGarageSaleId(routeParam: string) {
+  const trimmed = routeParam.trim();
+  if (!trimmed) return null;
+
+  if (GARAGE_SALE_ID_PATTERN.test(trimmed)) {
+    return trimmed.match(GARAGE_SALE_ID_PATTERN)?.[0] ?? trimmed;
+  }
+
+  return null;
+}
+
+export async function resolveGarageSaleByRouteParam(routeParam: string, tag: string) {
+  const extractedId = extractGarageSaleId(routeParam);
+
+  if (!extractedId) {
+    logWarn('Garage sale route param is invalid', {
+      tag,
+      routeParam,
+    });
+    return null;
+  }
+
+  const sale = await prisma.garageSale.findUnique({
+    where: { id: extractedId },
+  });
+
+  if (!sale) {
+    logWarn('Garage sale route param did not resolve to a listing', {
+      tag,
+      routeParam,
+      extractedId,
+    });
+    return null;
+  }
+
+  if (routeParam !== sale.id) {
+    logInfo('Redirecting garage sale route param to canonical path', {
+      tag,
+      routeParam,
+      canonicalId: sale.id,
+    });
+  }
+
+  return sale;
 }

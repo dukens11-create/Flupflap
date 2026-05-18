@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { prisma, isDatabaseConfigured } from '@/lib/db';
 import GarageSaleCard from '@/components/GarageSaleCard';
 import GarageSaleBrowseClient from './GarageSaleBrowseClient';
-import { expireGarageSales } from '@/lib/garage-sales';
+import { buildPublicGarageSaleWhere, expireGarageSales } from '@/lib/garage-sales';
 import { createPageMetadata } from '@/lib/seo';
 
 export const dynamic = 'force-dynamic';
@@ -169,11 +169,7 @@ export default async function GarageSalesPage({
 }
 
 function buildWhere(sp: SearchParams, now: Date) {
-  const where: Record<string, unknown> = {
-    status: 'APPROVED',
-    isSpam: false,
-    paymentStatus: 'PAID',
-  };
+  const where: Record<string, unknown> = buildPublicGarageSaleWhere(now);
 
   if (sp.q) {
     where.OR = [

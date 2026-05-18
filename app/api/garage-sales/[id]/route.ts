@@ -4,8 +4,9 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { z } from 'zod';
 import { calculateGarageSaleDurationDays } from '@/lib/garage-sale-pricing';
-import { expireGarageSales } from '@/lib/garage-sales';
+import { expireGarageSales, resolveGarageSaleByRouteParam } from '@/lib/garage-sales';
 import { deriveGarageSaleLifecycle } from '@/lib/garage-sale-lifecycle';
+import { logInfo, logWarn } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,9 +37,13 @@ type Params = { params: Promise<{ id: string }> };
 export async function GET(_req: Request, { params }: Params) {
   await expireGarageSales();
   const { id } = await params;
+  const resolvedSale = await resolveGarageSaleByRouteParam(id, 'api/garage-sales/[id]');
+  if (!resolvedSale) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
 
   const sale = await prisma.garageSale.findUnique({
-    where: { id },
+    where: { id: resolvedSale.id },
     include: {
       seller: {
         select: {
@@ -64,13 +69,28 @@ export async function GET(_req: Request, { params }: Params) {
   const lifecycle = deriveGarageSaleLifecycle(sale);
 
   if (!lifecycle.publiclyVisible && !isOwner && !isAdmin) {
+    logWarn('Garage sale API fetch rejected for non-public listing', {
+      tag: 'api/garage-sales/[id]',
+      saleId: sale.id,
+      routeParam: id,
+      status: sale.status,
+      paymentStatus: sale.paymentStatus,
+    });
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
+
+  logInfo('Garage sale API fetched', {
+    tag: 'api/garage-sales/[id]',
+    saleId: sale.id,
+    routeParam: id,
+    isOwner,
+    lifecycle: lifecycle.state,
+  });
 
   // Increment view count (fire-and-forget, log errors)
   if (lifecycle.publiclyVisible && !isOwner) {
     prisma.garageSale.update({
-      where: { id },
+      where: { id: sale.id },
       data: { viewCount: { increment: 1 } },
     }).catch((err) => {
       console.error('[garage-sales/id GET] view count increment failed', err);
@@ -84,12 +104,16 @@ export async function GET(_req: Request, { params }: Params) {
 export async function PATCH(req: Request, { params }: Params) {
   await expireGarageSales();
   const { id } = await params;
+  const resolvedSale = await resolveGarageSaleByRouteParam(id, 'api/garage-sales/[id]#patch');
+  if (!resolvedSale) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const sale = await prisma.garageSale.findUnique({ where: { id } });
+  const sale = await prisma.garageSale.findUnique({ where: { id: resolvedSale.id } });
   if (!sale) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   if (sale.sellerId !== session.user.id && session.user.role !== 'ADMIN') {
@@ -150,25 +174,29 @@ export async function PATCH(req: Request, { params }: Params) {
     updates.status = 'PENDING';
   }
 
-  const updated = await prisma.garageSale.update({ where: { id }, data: updates });
+  const updated = await prisma.garageSale.update({ where: { id: sale.id }, data: updates });
   return NextResponse.json(updated);
 }
 
 /** DELETE /api/garage-sales/[id] — delete (owner or admin) */
 export async function DELETE(_req: Request, { params }: Params) {
   const { id } = await params;
+  const resolvedSale = await resolveGarageSaleByRouteParam(id, 'api/garage-sales/[id]#delete');
+  if (!resolvedSale) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const sale = await prisma.garageSale.findUnique({ where: { id } });
+  const sale = await prisma.garageSale.findUnique({ where: { id: resolvedSale.id } });
   if (!sale) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   if (sale.sellerId !== session.user.id && session.user.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  await prisma.garageSale.delete({ where: { id } });
+  await prisma.garageSale.delete({ where: { id: sale.id } });
   return NextResponse.json({ success: true });
 }

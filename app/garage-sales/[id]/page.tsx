@@ -1,12 +1,12 @@
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { MapPin, Calendar, Phone, Tag, Eye, Heart, ExternalLink } from 'lucide-react';
-import { expireGarageSales } from '@/lib/garage-sales';
+import { expireGarageSales, resolveGarageSaleByRouteParam } from '@/lib/garage-sales';
 import {
   getGarageSaleLiveControlsBlockMessage,
   getGarageSaleOwnerHiddenStatusMessage,
@@ -18,12 +18,18 @@ import {
 import GarageSaleLivePanel from '@/components/GarageSaleLivePanel';
 import GarageSaleBuyerLiveView from '@/components/GarageSaleBuyerLiveView';
 import GarageSaleShareButton from '@/components/GarageSaleShareButton';
+import GarageSalePaymentStatusBanner from '@/components/GarageSalePaymentStatusBanner';
 import { deriveGarageSaleLifecycle } from '@/lib/garage-sale-lifecycle';
 import { createPageMetadata } from '@/lib/seo';
+import { syncGarageSaleCheckoutSessionForSeller } from '@/lib/garage-sale-payment-sync';
+import { logInfo, logWarn } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
-type Params = { params: Promise<{ id: string }> };
+type Params = {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ payment?: string; session_id?: string; reposted?: string }>;
+};
 const META_DESCRIPTION_MAX_LENGTH = 160;
 
 function truncateMetaDescription(input: string): string {
@@ -36,25 +42,28 @@ function truncateMetaDescription(input: string): string {
   return `${truncated.slice(0, safeCutoff).trimEnd()}…`;
 }
 
-export async function generateMetadata({ params }: Params): Promise<Metadata> {
+export async function generateMetadata({ params }: Pick<Params, 'params'>): Promise<Metadata> {
   const { id } = await params;
-  const sale = await prisma.garageSale.findUnique({
-    where: { id },
-    select: {
-      id: true,
-      title: true,
-      city: true,
-      state: true,
-      description: true,
-      status: true,
-      paymentStatus: true,
-      isArchived: true,
-      startDate: true,
-      endDate: true,
-      isLive: true,
-      isSpam: true,
-    },
-  });
+  const resolvedSale = await resolveGarageSaleByRouteParam(id, 'garage-sales/[id]/metadata');
+  const sale = resolvedSale
+    ? await prisma.garageSale.findUnique({
+      where: { id: resolvedSale.id },
+      select: {
+        id: true,
+        title: true,
+        city: true,
+        state: true,
+        description: true,
+        status: true,
+        paymentStatus: true,
+        isArchived: true,
+        startDate: true,
+        endDate: true,
+        isLive: true,
+        isSpam: true,
+      },
+    })
+    : null;
   if (!sale) {
     return createPageMetadata({
       title: 'Garage Sale Not Found',
@@ -93,12 +102,29 @@ function formatTime(date: Date) {
   return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
-export default async function GarageSaleDetailPage({ params }: Params) {
+function buildPaymentCallbackUrl(
+  saleId: string,
+  searchParams: { payment?: string; session_id?: string; reposted?: string },
+) {
+  const query = new URLSearchParams();
+  if (searchParams.payment) query.set('payment', searchParams.payment);
+  if (searchParams.session_id) query.set('session_id', searchParams.session_id);
+  if (searchParams.reposted) query.set('reposted', searchParams.reposted);
+  return `/garage-sales/${saleId}${query.size ? `?${query.toString()}` : ''}`;
+}
+
+export default async function GarageSaleDetailPage({ params, searchParams }: Params) {
   const { id } = await params;
+  const sp = await searchParams;
   await expireGarageSales();
+  const resolvedSale = await resolveGarageSaleByRouteParam(id, 'garage-sales/[id]/page');
+  if (!resolvedSale) notFound();
+  if (id !== resolvedSale.id) {
+    redirect(buildPaymentCallbackUrl(resolvedSale.id, sp));
+  }
 
   const sale = await prisma.garageSale.findUnique({
-    where: { id },
+    where: { id: resolvedSale.id },
     include: {
       seller: {
         select: { id: true, name: true, shopName: true, profileImageUrl: true, phoneVerified: true, phone: true },
@@ -116,6 +142,28 @@ export default async function GarageSaleDetailPage({ params }: Params) {
   const session = await getServerSession(authOptions);
   const isOwner = session?.user?.id === sale.sellerId;
   const isAdmin = session?.user?.role === 'ADMIN';
+
+  if (sp.payment === 'success' && sp.session_id && isOwner) {
+    const syncResult = await syncGarageSaleCheckoutSessionForSeller({
+      checkoutSessionId: sp.session_id,
+      saleId: sale.id,
+      sellerId: sale.sellerId,
+    });
+    if (!syncResult.synced && syncResult.reason !== 'already_paid' && syncResult.reason !== 'payment_not_paid') {
+      logWarn('Garage sale payment confirmation still pending on return route', {
+        tag: 'garage-sales/[id]/page',
+        saleId: sale.id,
+        reason: syncResult.reason ?? 'unknown',
+      });
+    }
+    if (syncResult.synced || syncResult.reason === 'already_paid') {
+      const query = new URLSearchParams();
+      query.set('payment', 'success');
+      if (sp.reposted) query.set('reposted', sp.reposted);
+      redirect(`/garage-sales/${sale.id}?${query.toString()}`);
+    }
+  }
+
   const lifecycle = deriveGarageSaleLifecycle(sale);
   const listingIsPubliclyVisible = isGarageSalePubliclyVisible(sale);
   const openNow = isGarageSalePubliclyOpenNow(sale);
@@ -128,7 +176,7 @@ export default async function GarageSaleDetailPage({ params }: Params) {
     if (visibilityBlockReason === 'PAYMENT_PENDING') return 'PAYMENT PENDING';
     if (visibilityBlockReason === 'PAYMENT_FAILED') return 'PAYMENT FAILED';
     if (visibilityBlockReason === 'PAYMENT_REFUNDED') return 'REFUNDED';
-    if (visibilityBlockReason === 'PENDING_REVIEW') return 'PENDING REVIEW';
+    if (visibilityBlockReason === 'PENDING_REVIEW') return 'UNDER REVIEW';
     if (visibilityBlockReason === 'REJECTED') return 'REJECTED';
     if (visibilityBlockReason === 'UPCOMING') return 'UPCOMING';
     if (visibilityBlockReason === 'EXPIRED') return 'EXPIRED';
@@ -142,7 +190,27 @@ export default async function GarageSaleDetailPage({ params }: Params) {
       ? 'bg-red-100 text-red-700'
       : 'bg-slate-200 text-slate-700';
 
-  if (!listingIsPubliclyVisible && !isOwner && !isAdmin) notFound();
+  if (!listingIsPubliclyVisible && !isOwner && !isAdmin) {
+    if (sp.payment === 'success') {
+      const callbackUrl = encodeURIComponent(buildPaymentCallbackUrl(sale.id, sp));
+      redirect(`/login?callbackUrl=${callbackUrl}`);
+    }
+    logWarn('Garage sale public route returned not found for non-visible listing', {
+      tag: 'garage-sales/[id]/page',
+      saleId: sale.id,
+      routeParam: id,
+      status: sale.status,
+      paymentStatus: sale.paymentStatus,
+    });
+    notFound();
+  }
+  logInfo('Garage sale public page fetched', {
+    tag: 'garage-sales/[id]/page',
+    saleId: sale.id,
+    routeParam: id,
+    isOwner,
+    listingIsPubliclyVisible,
+  });
   const saleTypeLabel = SALE_TYPE_LABELS[sale.saleType] ?? sale.saleType;
   const priceRange = sale.priceRangeMin != null && sale.priceRangeMax != null
     ? `$${sale.priceRangeMin}–$${sale.priceRangeMax}`
@@ -154,7 +222,7 @@ export default async function GarageSaleDetailPage({ params }: Params) {
 
   // Increment view count (fire-and-forget, log errors)
   if (listingIsPubliclyVisible && !isOwner) {
-    prisma.garageSale.update({ where: { id }, data: { viewCount: { increment: 1 } } }).catch((err) => {
+    prisma.garageSale.update({ where: { id: sale.id }, data: { viewCount: { increment: 1 } } }).catch((err) => {
       console.error('[garage-sales] view count increment failed', err);
     });
   }
@@ -166,6 +234,17 @@ export default async function GarageSaleDetailPage({ params }: Params) {
         ← Back to Garage Sales
       </Link>
 
+      {isOwner && sp.payment === 'success' && (
+        <GarageSalePaymentStatusBanner
+          saleId={sale.id}
+          initialPaymentStatus={sale.paymentStatus}
+          initialListingStatus={sale.status}
+          isPubliclyVisible={listingIsPubliclyVisible}
+          isReposted={sp.reposted === '1'}
+          hasSessionId={Boolean(sp.session_id)}
+        />
+      )}
+
       {/* Status badges */}
       <div className="flex flex-wrap items-center gap-2">
         {sale.isFeatured && (
@@ -174,13 +253,13 @@ export default async function GarageSaleDetailPage({ params }: Params) {
           </span>
         )}
         {sale.isLive && (
-          <span className="inline-flex items-center rounded-full bg-red-500 px-3 py-1 text-xs font-bold text-white animate-pulse">
-            🔴 LIVE NOW
+          <span className="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">
+            LIVE
           </span>
         )}
         {openNow ? (
           <span className="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">
-            🟢 Open Now
+            ACTIVE
           </span>
         ) : listingIsPubliclyVisible && sale.endDate < new Date() ? (
           <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
@@ -188,7 +267,7 @@ export default async function GarageSaleDetailPage({ params }: Params) {
           </span>
         ) : listingIsPubliclyVisible ? (
           <span className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
-            Upcoming
+            Garage Sale
           </span>
         ) : (isOwner || isAdmin) ? (
           <span
@@ -203,7 +282,7 @@ export default async function GarageSaleDetailPage({ params }: Params) {
             {hiddenStatusLabel}
           </span>
         )}
-        <span className="inline-flex items-center rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">
+        <span className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
           {saleTypeLabel}
         </span>
       </div>
@@ -387,8 +466,8 @@ export default async function GarageSaleDetailPage({ params }: Params) {
           {(isOwner || isAdmin) && (
             <div className="card p-4 space-y-2">
               <h2 className="text-xs font-bold uppercase tracking-wide text-slate-500">Actions</h2>
-              <Link href={`/garage-sales/${sale.id}/edit`} className="btn-outline w-full text-center block">
-                Edit Listing
+              <Link href={`/garage-sales/manage/${sale.id}`} className="btn-outline w-full text-center block">
+                Manage Listing
               </Link>
               {isAdmin && (
                 <Link href={`/admin/garage-sales`} className="btn-outline w-full text-center block text-xs">
@@ -416,6 +495,12 @@ export default async function GarageSaleDetailPage({ params }: Params) {
                     <li key={payment.id} className="rounded-lg border border-slate-200 p-2">
                       <p className="font-semibold text-slate-800">{payment.status} · ${(payment.amountCents / 100).toFixed(2)}</p>
                       <p className="text-slate-500">{new Date(payment.createdAt).toLocaleString()}</p>
+                      {payment.stripeCheckoutId && (
+                        <p className="break-all text-slate-500">Session: {payment.stripeCheckoutId}</p>
+                      )}
+                      {payment.stripePaymentId && (
+                        <p className="break-all text-slate-500">Transaction: {payment.stripePaymentId}</p>
+                      )}
                       {payment.stripeReceiptUrl && (
                         <a href={payment.stripeReceiptUrl} target="_blank" rel="noopener noreferrer" className="text-[var(--ff-primary-navy)] hover:underline">
                           View receipt
