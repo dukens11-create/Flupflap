@@ -334,7 +334,7 @@ export async function POST(req: Request) {
 
     // Handle seller subscription enrollment
     if (cs.metadata?.type === 'seller_subscription') {
-      const sellerId = cs.metadata?.sellerId;
+      const sellerId: string | undefined = cs.metadata?.sellerId;
       if (!sellerId) return new NextResponse('Missing sellerId', { status: 400 });
 
       // Retrieve the Stripe subscription to get period details

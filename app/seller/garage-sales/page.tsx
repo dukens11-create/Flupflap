@@ -67,22 +67,25 @@ export default async function SellerGarageSalesPage({
 }) {
   const { sellerId } = await requireSeller();
   const sp = await searchParams;
-  if (sp.paid === '1' && sp.saleId && sp.session_id) {
+  const saleId = typeof sp.saleId === 'string' ? sp.saleId : undefined;
+  const sessionId = typeof sp.session_id === 'string' ? sp.session_id : undefined;
+
+  if (sp.paid === '1' && saleId && sessionId) {
     const syncResult = await syncGarageSaleCheckoutSessionForSeller({
-      checkoutSessionId: sp.session_id,
-      saleId: sp.saleId,
+      checkoutSessionId: sessionId,
+      saleId,
       sellerId,
     });
     if (!syncResult.synced && shouldWarnOnSyncFailure(syncResult.reason)) {
       logWarn('Seller garage sale payment sync did not finalize', {
         tag: 'seller/garage-sales',
         action: 'syncGarageSaleCheckoutSessionForSeller',
-        saleId: sp.saleId,
+        saleId,
         reason: syncResult.reason ?? 'unknown',
       });
     }
     if (syncResult.synced || syncResult.reason === 'already_paid') {
-      redirect(`/seller/garage-sales?paid=1&saleId=${encodeURIComponent(sp.saleId)}`);
+      redirect(`/seller/garage-sales?paid=1&saleId=${encodeURIComponent(saleId)}`);
     }
   }
   await expireGarageSales();
@@ -105,7 +108,7 @@ export default async function SellerGarageSalesPage({
     },
   });
 
-  const focusedSale = sp.saleId ? sales.find((sale) => sale.id === sp.saleId) : null;
+  const focusedSale = saleId ? sales.find((sale) => sale.id === saleId) : null;
   const focusedSaleLifecycle = focusedSale ? deriveGarageSaleLifecycle(focusedSale) : null;
 
   return (
