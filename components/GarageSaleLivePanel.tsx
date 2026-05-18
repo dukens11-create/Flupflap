@@ -225,7 +225,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
 
     if (navigator.permissions?.query) {
       try {
-        const permissionStatus = await navigator.permissions.query({ name: 'camera' as PermissionName });
+        const permissionStatus = await navigator.permissions.query({ name: 'camera' });
         if (permissionStatus.state === 'denied') {
           logMobileCameraIssue('permission denied', { source: 'permissions.query' });
           setCameraStatus('denied');
@@ -255,8 +255,12 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
 
       try {
         await videoTrack.applyConstraints({ facingMode: { ideal: nextFacingMode } });
-      } catch {
-        // Ignore unsupported camera facingMode constraints on mobile browsers.
+      } catch (constraintError) {
+        logMobileCameraIssue('stream initialization failure', {
+          reason: 'facingMode constraint unsupported',
+          facingMode: nextFacingMode,
+          error: constraintError instanceof Error ? constraintError.message : 'unknown',
+        });
       }
 
       stream.getAudioTracks().forEach((t) => { t.enabled = micOnRef.current; });
@@ -334,8 +338,8 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     setError(null);
     try {
       if (!streamRef.current) {
-        await startCamera();
-        if (!streamRef.current) {
+        const cameraStarted = await startCamera();
+        if (!cameraStarted || !streamRef.current) {
           throw new Error(PREVIEW_REQUIRED_MESSAGE);
         }
       }
