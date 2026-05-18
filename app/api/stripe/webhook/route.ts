@@ -69,6 +69,14 @@ async function resolveGarageSaleCheckoutContext(checkoutId: string) {
   return { saleId: sale.id, sellerId: sale.sellerId };
 }
 
+async function findLatestGarageSalePayment(saleId: string) {
+  return prisma.garageSalePayment.findFirst({
+    where: { saleId },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true },
+  });
+}
+
 async function finalizeGarageSaleCheckout(cs: Stripe.Checkout.Session) {
   const checkoutContext = await resolveGarageSaleCheckoutContext(cs.id);
   const saleId: string | undefined = cs.metadata?.saleId ?? checkoutContext?.saleId;
@@ -142,33 +150,31 @@ async function finalizeGarageSaleFromPaymentIntent(intent: Stripe.PaymentIntent)
     return new NextResponse('ok', { status: 200 });
   }
 
-  try {
-    const sessions = await stripe.checkout.sessions.list({
-      payment_intent: intent.id,
-      limit: 1,
-    });
-    const checkoutSession = sessions.data[0];
-    if (checkoutSession && checkoutSession.metadata?.type === 'garage_sale_listing') {
-      return finalizeGarageSaleCheckout(checkoutSession);
-    }
-    if (!checkoutSession) {
-      logWarn('No checkout session found for successful garage sale payment intent', {
-        tag: 'stripe/webhook',
-        paymentIntentId: intent.id,
-      });
-    }
-  } catch (error) {
-    logWarn('Unable to list checkout sessions by payment intent for garage sale', {
-      tag: 'stripe/webhook',
-      paymentIntentId: intent.id,
-      message: error instanceof Error ? error.message : String(error),
-    });
-    // Fall through to metadata-based reconciliation.
-  }
-
   const saleId = intent.metadata?.saleId;
   const sellerId = intent.metadata?.sellerId;
   if (!saleId || !sellerId) {
+    try {
+      const sessions = await stripe.checkout.sessions.list({
+        payment_intent: intent.id,
+        limit: 1,
+      });
+      const checkoutSession = sessions.data[0];
+      if (checkoutSession && checkoutSession.metadata?.type === 'garage_sale_listing') {
+        return finalizeGarageSaleCheckout(checkoutSession);
+      }
+      if (!checkoutSession) {
+        logWarn('No checkout session found for successful garage sale payment intent', {
+          tag: 'stripe/webhook',
+          paymentIntentId: intent.id,
+        });
+      }
+    } catch (error) {
+      logWarn('Unable to list checkout sessions by payment intent for garage sale', {
+        tag: 'stripe/webhook',
+        paymentIntentId: intent.id,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
     return new NextResponse('ok', { status: 200 });
   }
 
@@ -205,11 +211,7 @@ async function finalizeGarageSaleFromPaymentIntent(intent: Stripe.PaymentIntent)
       amountReceived: amountPaidCents,
     });
   }
-  const existingPayment = await prisma.garageSalePayment.findFirst({
-    where: { saleId },
-    orderBy: { createdAt: 'desc' },
-    select: { id: true },
-  });
+  const existingPayment = await findLatestGarageSalePayment(saleId);
 
   const now = new Date();
   await prisma.$transaction([
