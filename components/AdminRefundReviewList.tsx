@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { dollars } from '@/lib/money';
 import { REFUND_STATUS_LABELS, refundStatusBadge } from '@/lib/refunds';
@@ -22,11 +22,6 @@ export default function AdminRefundReviewList({
   const [amounts, setAmounts] = useState<Record<string, string>>({});
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
   const [error, setError] = useState('');
-
-  const sortedRefundRequests = useMemo(
-    () => [...refundRequests].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
-    [refundRequests],
-  );
 
   async function runAction(refundRequestId: string, action: RefundAction) {
     if (pendingActionId) return;
@@ -86,7 +81,7 @@ export default function AdminRefundReviewList({
     }
   }
 
-  if (sortedRefundRequests.length === 0) {
+  if (refundRequests.length === 0) {
     return (
       <div className="card p-6 text-sm text-slate-500">
         {initialLoadError ? 'Unable to load refunds right now.' : 'No refund requests yet.'}
@@ -99,7 +94,7 @@ export default function AdminRefundReviewList({
       {initialLoadError && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
           Refund data may be incomplete right now.
-          <button type="button" className="ml-3 underline" onClick={() => window.location.reload()}>
+          <button type="button" className="ml-3 underline" aria-label="Retry loading refunds" onClick={() => window.location.reload()}>
             Retry
           </button>
         </div>
@@ -107,7 +102,7 @@ export default function AdminRefundReviewList({
       {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           {error}
-          <button type="button" className="ml-3 underline" onClick={() => window.location.reload()}>
+          <button type="button" className="ml-3 underline" aria-label="Retry loading refunds" onClick={() => window.location.reload()}>
             Retry
           </button>
         </div>
@@ -130,7 +125,7 @@ export default function AdminRefundReviewList({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {sortedRefundRequests.map((request) => (
+            {refundRequests.map((request) => (
               <RefundRow
                 key={request.id}
                 request={request}
@@ -147,7 +142,7 @@ export default function AdminRefundReviewList({
       </div>
 
       <div className="space-y-3 md:hidden">
-        {sortedRefundRequests.map((request) => (
+        {refundRequests.map((request) => (
           <div key={request.id} className="card p-4 space-y-3">
             <div className="flex items-start justify-between gap-3">
               <div>
