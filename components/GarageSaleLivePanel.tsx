@@ -22,6 +22,8 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   const hasRemoteAnswerRef = useRef(false);
   const autoRequestedRef = useRef(false);
   const liveRef = useRef(initialIsLive);
+  const micOnRef = useRef(true);
+  const preferredFacingModeRef = useRef<'user' | 'environment'>('user');
 
   const [isLive, setIsLive] = useState(initialIsLive);
   const [camOn, setCamOn] = useState(false);
@@ -151,6 +153,14 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     liveRef.current = isLive;
   }, [isLive]);
 
+  useEffect(() => {
+    micOnRef.current = micOn;
+  }, [micOn]);
+
+  useEffect(() => {
+    preferredFacingModeRef.current = preferredFacingMode;
+  }, [preferredFacingMode]);
+
   const ensurePreviewPlayback = useCallback(async () => {
     const video = videoRef.current;
     if (!video) return false;
@@ -171,7 +181,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     }
   }, []);
 
-  const startCamera = useCallback(async (nextFacingMode = preferredFacingMode) => {
+  const startCamera = useCallback(async (nextFacingMode = preferredFacingModeRef.current) => {
     if (!navigator.mediaDevices?.getUserMedia) {
       setCameraStatus('unsupported');
       setError('Your browser does not support live camera preview.');
@@ -199,7 +209,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         }
       }
 
-      stream.getAudioTracks().forEach((t) => { t.enabled = micOn; });
+      stream.getAudioTracks().forEach((t) => { t.enabled = micOnRef.current; });
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -219,7 +229,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       );
       return false;
     }
-  }, [ensurePreviewPlayback, micOn, preferredFacingMode]);
+  }, [ensurePreviewPlayback]);
 
   const stopCamera = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -361,7 +371,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [camOn]);
 
   useEffect(() => {
     window.addEventListener('pagehide', endLiveOnPageLeave);

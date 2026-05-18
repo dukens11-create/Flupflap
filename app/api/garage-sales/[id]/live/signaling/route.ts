@@ -50,27 +50,18 @@ async function getActiveViewerCount(saleId: string, liveStartedAt: Date | null) 
     ),
   );
 
-  const heartbeats = await prisma.garageSaleLiveSignal.findMany({
-    where: {
-      saleId,
-      sender: 'BUYER',
-      kind: 'VIEWER_HEARTBEAT',
-      createdAt: { gte: activeSince },
-    },
-    orderBy: { createdAt: 'desc' },
-    take: 2000,
-    select: { payload: true },
-  });
+  const rows = await prisma.$queryRaw<Array<{ viewerCount: bigint | number }>>(Prisma.sql`
+    SELECT COUNT(DISTINCT payload->>'viewerId') AS "viewerCount"
+    FROM "GarageSaleLiveSignal"
+    WHERE "saleId" = ${saleId}
+      AND sender = 'BUYER'
+      AND kind = 'VIEWER_HEARTBEAT'
+      AND "createdAt" >= ${activeSince}
+      AND COALESCE(payload->>'viewerId', '') <> ''
+  `);
 
-  const viewers = new Set<string>();
-  for (const heartbeat of heartbeats) {
-    const payload = heartbeat.payload as { viewerId?: unknown } | null;
-    if (typeof payload?.viewerId === 'string' && payload.viewerId.trim()) {
-      viewers.add(payload.viewerId);
-    }
-  }
-
-  return viewers.size;
+  const viewerCount = rows[0]?.viewerCount ?? 0;
+  return typeof viewerCount === 'bigint' ? Number(viewerCount) : viewerCount;
 }
 
 /** GET /api/garage-sales/[id]/live/signaling?role=BUYER|SELLER&since=ISO_DATE */
