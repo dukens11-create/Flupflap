@@ -10,6 +10,8 @@ type Params = { params: Promise<{ id: string }> };
 
 const SIGNAL_ROLES = ['SELLER', 'BUYER'] as const;
 const SIGNAL_KINDS = ['OFFER', 'ANSWER', 'ICE', 'VIEWER_HEARTBEAT'] as const;
+// Buyer heartbeats are sent every 15 seconds, so a 35-second window keeps the
+// count responsive while tolerating a missed poll or brief network delay.
 const ACTIVE_VIEWER_WINDOW_MS = 35_000;
 
 type SignalRole = (typeof SIGNAL_ROLES)[number];
@@ -56,7 +58,7 @@ async function getActiveViewerCount(saleId: string, liveStartedAt: Date | null) 
       createdAt: { gte: activeSince },
     },
     orderBy: { createdAt: 'desc' },
-    take: 500,
+    take: 2000,
     select: { payload: true },
   });
 

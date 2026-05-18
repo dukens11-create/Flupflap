@@ -132,7 +132,9 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
       return stored;
     }
 
-    const nextId = `viewer-${Math.random().toString(36).slice(2, 10)}`;
+    const nextId = typeof window !== 'undefined' && window.crypto?.randomUUID
+      ? window.crypto.randomUUID()
+      : `viewer-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
     if (typeof window !== 'undefined') {
       window.sessionStorage.setItem(storageKey, nextId);
     }

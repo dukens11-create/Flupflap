@@ -339,8 +339,8 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   }, [startCamera]);
 
   useEffect(() => {
-    const isPhone = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    if (!isPhone && !navigator.mediaDevices?.enumerateDevices) return;
+    const hasTouchUi = window.matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
+    if (!hasTouchUi && !navigator.mediaDevices?.enumerateDevices) return;
 
     let cancelled = false;
     const detectCameras = async () => {
@@ -348,11 +348,11 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         const devices = await navigator.mediaDevices.enumerateDevices();
         if (!cancelled) {
           const videoInputs = devices.filter((device) => device.kind === 'videoinput').length;
-          setCanSwitchCamera(isPhone || videoInputs > 1);
+          setCanSwitchCamera(hasTouchUi || videoInputs > 1);
         }
       } catch {
         if (!cancelled) {
-          setCanSwitchCamera(isPhone);
+          setCanSwitchCamera(hasTouchUi);
         }
       }
     };
