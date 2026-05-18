@@ -466,7 +466,7 @@ export default async function GarageSaleDetailPage({ params, searchParams }: Par
           {(isOwner || isAdmin) && (
             <div className="card p-4 space-y-2">
               <h2 className="text-xs font-bold uppercase tracking-wide text-slate-500">Actions</h2>
-              <Link href={`/garage-sales/manage/${sale.id}`} className="btn-outline w-full text-center block">
+              <Link href={`/garage-sales/${sale.id}`} className="btn-outline w-full text-center block">
                 Manage Listing
               </Link>
               {isAdmin && (

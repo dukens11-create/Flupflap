@@ -177,7 +177,7 @@ export default async function SellerGarageSalesPage({
                     <p className="text-[11px] font-semibold text-slate-500">Payment: {PAYMENT_LABEL[sale.paymentStatus] ?? sale.paymentStatus}</p>
                     <div className="flex flex-wrap gap-2">
                       <Link href={`/garage-sales/${sale.id}`} className="btn-outline text-xs">Open</Link>
-                      <Link href={`/garage-sales/manage/${sale.id}`} className="btn-outline text-xs">Manage</Link>
+                      <Link href={`/garage-sales/${sale.id}`} className="btn-outline text-xs">Manage</Link>
                     </div>
                   </div>
                 </div>
