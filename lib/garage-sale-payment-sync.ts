@@ -8,6 +8,10 @@ export function isGarageSaleCheckoutSession(cs: Stripe.Checkout.Session): boolea
   return cs.metadata?.type === GARAGE_SALE_METADATA_TYPE;
 }
 
+function extractStripeResourceId(value: string | { id: string } | null | undefined): string | null {
+  return typeof value === 'string' ? value : value?.id ?? null;
+}
+
 async function getReceiptUrl(paymentIntentId: string | null): Promise<string | null> {
   if (!paymentIntentId) return null;
   try {
@@ -41,8 +45,7 @@ export async function finalizeGarageSaleCheckoutSession(cs: Stripe.Checkout.Sess
     return { processed: false, saleId, sellerId: sale.sellerId, reason: 'already_paid' };
   }
 
-  const sellerId = sale.sellerId;
-  const paymentIntentId = cs.payment_intent ? String(cs.payment_intent) : null;
+  const paymentIntentId = extractStripeResourceId(cs.payment_intent);
   const receiptUrl = await getReceiptUrl(paymentIntentId);
   const paidAmountCents = typeof cs.amount_total === 'number' ? cs.amount_total : sale.totalPaidCents;
   const now = new Date();
@@ -70,7 +73,7 @@ export async function finalizeGarageSaleCheckoutSession(cs: Stripe.Checkout.Sess
       },
       create: {
         saleId,
-        sellerId,
+        sellerId: sale.sellerId,
         amountCents: paidAmountCents,
         status: 'PAID',
         stripeCheckoutId: cs.id,
@@ -80,7 +83,7 @@ export async function finalizeGarageSaleCheckoutSession(cs: Stripe.Checkout.Sess
     }),
   ]);
 
-  return { processed: true, saleId, sellerId };
+  return { processed: true, saleId, sellerId: sale.sellerId };
 }
 
 export async function failGarageSaleCheckoutSession(cs: Stripe.Checkout.Session): Promise<void> {

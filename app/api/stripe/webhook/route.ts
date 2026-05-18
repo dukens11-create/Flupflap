@@ -34,6 +34,10 @@ function generatePickupCode(): string {
   return String(crypto.randomInt(100000, 1000000));
 }
 
+function extractStripeResourceId(value: string | { id: string } | null | undefined): string | null {
+  return typeof value === 'string' ? value : value?.id ?? null;
+}
+
 export async function POST(req: Request) {
   const body = await req.text();
   const sig = (await headers()).get('stripe-signature') ?? '';
@@ -338,10 +342,7 @@ export async function POST(req: Request) {
       if (!sellerId) return new NextResponse('Missing sellerId', { status: 400 });
 
       // Retrieve the Stripe subscription to get period details
-      const subscriptionId: string | null =
-        typeof cs.subscription === 'string'
-          ? cs.subscription
-          : cs.subscription?.id ?? null;
+      const subscriptionId = extractStripeResourceId(cs.subscription);
       let periodEnd: Date | null = null;
       if (subscriptionId) {
         try {
@@ -549,9 +550,7 @@ export async function POST(req: Request) {
         sellerPayoutCents: totalCents - platformFeeCents,
         status: 'PAID',
         stripeCheckoutId: cs.id,
-        stripePaymentIntentId: typeof cs.payment_intent === 'string'
-          ? cs.payment_intent
-          : cs.payment_intent?.id ?? null,
+        stripePaymentIntentId: extractStripeResourceId(cs.payment_intent),
         isPickup: isPickupOrder,
         pickupCode: isPickupOrder ? generatePickupCode() : null,
         pickupCity: isPickupOrder ? (firstPickupProduct?.pickupCity ?? null) : null,
