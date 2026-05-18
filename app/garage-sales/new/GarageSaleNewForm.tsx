@@ -188,7 +188,7 @@ export default function GarageSaleNewForm() {
         window.location.href = data.checkoutUrl;
         return;
       }
-      router.push(`/garage-sales/${data.id}?created=1&paid=1`);
+      router.push(`/seller/garage-sales?created=1&paid=1&saleId=${data.id}`);
     } catch {
       setError('Network error. Please try again.');
       setSubmitting(false);

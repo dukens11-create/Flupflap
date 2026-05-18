@@ -60,6 +60,7 @@ const sellerNav: RoleNavItem[] = [
       { label: 'Archived', href: '/seller/listings/archived' },
     ],
   },
+  { label: 'Garage Sales', href: '/seller/garage-sales', matchPrefixes: ['/seller/garage-sales'] },
   { label: 'Sales', href: '/seller/sales' },
   { label: 'Orders to Ship', href: '/seller/orders-to-ship' },
   { label: 'Payouts', href: '/seller/payouts' },

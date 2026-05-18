@@ -126,6 +126,22 @@ export default async function GarageSaleDetailPage({ params }: Params) {
           {saleTypeLabel}
         </span>
       </div>
+      {isOwner && sale.status !== 'APPROVED' && (
+        <div className="card border-yellow-300 bg-yellow-50 p-4 text-sm text-yellow-900">
+          <p className="font-semibold">
+            {sale.paymentStatus === 'PENDING'
+              ? 'Your payment is processing. This listing is hidden until payment clears.'
+              : sale.status === 'PENDING'
+                ? 'Your listing is pending review.'
+                : sale.status === 'REJECTED'
+                  ? 'Your listing was rejected. Update details and try again.'
+                  : 'This listing is currently hidden.'}
+          </p>
+          <Link href="/seller/garage-sales" className="mt-2 inline-block font-semibold underline">
+            Open My Garage Sales
+          </Link>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Main content */}
