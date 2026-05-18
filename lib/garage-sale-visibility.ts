@@ -19,6 +19,8 @@ export function isGarageSalePubliclyVisible(sale: GarageSaleVisibilityInput) {
 }
 
 export function getGarageSaleVisibilityBlockReason(sale: GarageSaleVisibilityInput): GarageSaleVisibilityBlockReason {
+  // Priority is intentional: archived/spam are hard stops, then payment gates,
+  // then moderation/hidden status gates.
   if (sale.isArchived) return 'ARCHIVED';
   if (sale.isSpam) return 'SPAM';
   if (sale.paymentStatus === 'PENDING') return 'PAYMENT_PENDING';

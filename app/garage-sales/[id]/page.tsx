@@ -154,8 +154,10 @@ export default async function GarageSaleDetailPage({ params }: Params) {
                 ? 'Your listing is pending review.'
                 : sale.status === 'REJECTED'
                   ? 'Your listing was rejected. Update details and try again.'
-                  : sale.paymentStatus !== 'PAID'
-                    ? 'This listing is not visible because payment is not complete.'
+                  : sale.paymentStatus === 'FAILED'
+                    ? 'Payment failed for this listing. Repost and pay again to publish it.'
+                    : sale.paymentStatus === 'REFUNDED'
+                      ? 'Payment was refunded. This listing is no longer visible.'
                   : 'This listing is currently hidden.'}
           </p>
           <Link href="/seller/garage-sales" className="mt-2 inline-block font-semibold underline">

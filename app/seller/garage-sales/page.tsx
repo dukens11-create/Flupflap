@@ -39,9 +39,6 @@ function sellerStatusMessage(status: string, paymentStatus: string) {
   if (paymentStatus === 'REFUNDED') {
     return 'Payment was refunded. This listing is no longer visible.';
   }
-  if (status === 'APPROVED' && paymentStatus !== 'PAID') {
-    return 'Your listing is approved, but it remains hidden because payment is not completed.';
-  }
   if (status === 'PENDING') {
     return 'Your listing is pending review.';
   }
