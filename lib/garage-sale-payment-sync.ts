@@ -162,6 +162,8 @@ export async function finalizeGarageSaleCheckoutSession(cs: Stripe.Checkout.Sess
     : existingPayment?.amountCents ?? sale.totalPaidCents;
 
   if (sale.paymentStatus === 'PAID' && !shouldActivateGarageSaleListing(sale)) {
+    // Reconcile the payment row even when the sale is already marked paid so
+    // checkout-session retries can repair stale history or receipt metadata.
     await confirmGarageSalePayment({
       saleId,
       sellerId: sale.sellerId,

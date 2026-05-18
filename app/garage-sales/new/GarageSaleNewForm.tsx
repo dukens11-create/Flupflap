@@ -322,7 +322,7 @@ export default function GarageSaleNewForm() {
             <input
               name="startDate"
               type="datetime-local"
-              className="input min-h-11 text-base sm:text-sm"
+              className="input min-h-12 text-base sm:text-sm"
               required
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
@@ -333,7 +333,7 @@ export default function GarageSaleNewForm() {
             <input
               name="endDate"
               type="datetime-local"
-              className="input min-h-11 text-base sm:text-sm"
+              className="input min-h-12 text-base sm:text-sm"
               required
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}

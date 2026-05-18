@@ -45,7 +45,7 @@ export default function GarageSalePaymentStatusBanner({
     const poll = async () => {
       attempts += 1;
       try {
-        const res = await fetch(`/api/garage-sales/${saleId}`, { cache: 'no-store' });
+        const res = await fetch(`/api/garage-sales/${saleId}`, { cache: 'no-cache' });
         if (!res.ok) {
           if (attempts >= MAX_POLL_ATTEMPTS && isMounted) {
             stopPolling();
