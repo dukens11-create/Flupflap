@@ -161,7 +161,7 @@ export async function finalizeGarageSaleCheckoutSession(cs: Stripe.Checkout.Sess
     ? cs.amount_total
     : existingPayment?.amountCents ?? sale.totalPaidCents;
 
-  if (sale.paymentStatus === 'PAID' && sale.activatedAt && sale.status !== 'HIDDEN') {
+  if (sale.paymentStatus === 'PAID' && !shouldActivateGarageSaleListing(sale)) {
     await confirmGarageSalePayment({
       saleId,
       sellerId: sale.sellerId,
