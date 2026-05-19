@@ -7,6 +7,7 @@ import { expireGarageSales } from '@/lib/garage-sales';
 import { syncGarageSaleCheckoutSessionForSeller } from '@/lib/garage-sale-payment-sync';
 import { logWarn } from '@/lib/logger';
 import { deriveGarageSaleLifecycle } from '@/lib/garage-sale-lifecycle';
+import SellerGarageSaleCancelPaymentButton from '@/components/SellerGarageSaleCancelPaymentButton';
 
 export const metadata: Metadata = {
   title: 'My Garage Sales',
@@ -32,6 +33,7 @@ type SellerGarageSalesSearchParams = Promise<{
   paid?: string;
   created?: string;
   payment?: string;
+  cancelled?: string;
   saleId?: string;
   session_id?: string;
 }>;
@@ -56,9 +58,27 @@ const PAYMENT_LABEL: Record<string, string> = {
   REFUNDED: 'Refunded',
 };
 const PAID_QUERY_FLAG = '1';
+const PENDING_CANCEL_PAYMENT_STATUSES = new Set([
+  'pending',
+  'processing',
+  'confirming',
+  'requires_payment_method',
+  'requires_action',
+  'unpaid',
+]);
 
 function shouldWarnOnSyncFailure(reason?: string) {
   return reason !== 'already_paid' && reason !== 'payment_not_paid';
+}
+
+function isCancelledPaymentSale(sale: { paymentStatus: string; isArchived: boolean }) {
+  return sale.paymentStatus === 'FAILED' && sale.isArchived;
+}
+
+function canCancelPendingPayment(sale: { paymentStatus: string; status: string; isArchived: boolean }) {
+  const pendingLike = PENDING_CANCEL_PAYMENT_STATUSES.has(sale.paymentStatus.toLowerCase());
+  const listingHiddenOrNotActive = sale.status !== 'APPROVED' || sale.isArchived;
+  return pendingLike && listingHiddenOrNotActive && sale.paymentStatus !== 'REFUNDED' && !isCancelledPaymentSale(sale);
 }
 
 export default async function SellerGarageSalesPage({
@@ -138,6 +158,11 @@ export default async function SellerGarageSalesPage({
           Garage sale created successfully. Use the actions below to open or edit it.
         </div>
       )}
+      {sp.cancelled === '1' && (
+        <div className="card border-green-200 bg-green-50 p-4 text-sm text-green-900">
+          Pending payment cancelled.
+        </div>
+      )}
       {sp.paid === PAID_QUERY_FLAG && (
         <div className={`card p-4 text-sm ${focusedSaleLifecycle?.state === 'PAYMENT_PENDING' ? 'border-yellow-200 bg-yellow-50 text-yellow-900' : 'border-green-200 bg-green-50 text-green-900'}`}>
           {focusedSaleLifecycle?.state === 'PAYMENT_PENDING'
@@ -155,6 +180,11 @@ export default async function SellerGarageSalesPage({
         <div className="space-y-3">
           {sales.map((sale) => {
             const lifecycle = deriveGarageSaleLifecycle(sale);
+            const showCancelPayment = canCancelPendingPayment(sale);
+            const showRepost = lifecycle.state === 'EXPIRED' && sale.paymentStatus === 'PAID';
+            const paymentLabel = isCancelledPaymentSale(sale)
+              ? 'Cancelled'
+              : (PAYMENT_LABEL[sale.paymentStatus] ?? sale.paymentStatus);
             return (
               <div key={sale.id} className="card p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -174,10 +204,18 @@ export default async function SellerGarageSalesPage({
                         {STATUS_LABEL[lifecycle.state] ?? lifecycle.state}
                       </span>
                     </div>
-                    <p className="text-[11px] font-semibold text-slate-500">Payment: {PAYMENT_LABEL[sale.paymentStatus] ?? sale.paymentStatus}</p>
+                    <p className="text-[11px] font-semibold text-slate-500">Payment: {paymentLabel}</p>
                     <div className="flex flex-wrap gap-2">
                       <Link href={`/garage-sales/${sale.id}`} className="btn-outline text-xs">Open</Link>
                       <Link href={`/garage-sales/${sale.id}`} className="btn-outline text-xs">View details</Link>
+                      {showCancelPayment && <SellerGarageSaleCancelPaymentButton saleId={sale.id} />}
+                      {showRepost && (
+                        <form action={`/api/garage-sales/${sale.id}/repost`} method="POST">
+                          <button type="submit" className="btn-brand text-xs">
+                            Repost
+                          </button>
+                        </form>
+                      )}
                     </div>
                   </div>
                 </div>
