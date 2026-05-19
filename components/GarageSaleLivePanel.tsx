@@ -169,7 +169,11 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     let stream = streamRef.current;
     const hasUsableLiveTrack = stream?.getTracks().some((track) => track.readyState !== 'ended' && track.enabled) ?? false;
     if (!stream || !hasUsableLiveTrack) {
-      const cameraStarted = await startCameraRef.current?.(preferredFacingModeRef.current);
+      const startCamera = startCameraRef.current;
+      if (!startCamera) {
+        throw new Error(PREVIEW_REQUIRED_MESSAGE);
+      }
+      const cameraStarted = await startCamera(preferredFacingModeRef.current);
       if (!cameraStarted || !streamRef.current) {
         throw new Error(PREVIEW_REQUIRED_MESSAGE);
       }
@@ -194,21 +198,25 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       void postSignal('ICE', { candidate: event.candidate.toJSON() });
     };
 
+    const requestRestart = (reason: 'failed' | 'disconnected', delayMs: number) => {
+      restartPeerConnectionRef.current?.(reason, delayMs);
+    };
+
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === 'failed') {
-        restartPeerConnectionRef.current?.('failed', PEER_CONNECTION_RESTART_DELAY_MS);
+        requestRestart('failed', PEER_CONNECTION_RESTART_DELAY_MS);
       }
       if (pc.connectionState === 'disconnected') {
-        restartPeerConnectionRef.current?.('disconnected', DISCONNECTED_RESTART_DELAY_MS);
+        requestRestart('disconnected', DISCONNECTED_RESTART_DELAY_MS);
       }
     };
 
     pc.oniceconnectionstatechange = () => {
       if (pc.iceConnectionState === 'failed') {
-        restartPeerConnectionRef.current?.('failed', PEER_CONNECTION_RESTART_DELAY_MS);
+        requestRestart('failed', PEER_CONNECTION_RESTART_DELAY_MS);
       }
       if (pc.iceConnectionState === 'disconnected') {
-        restartPeerConnectionRef.current?.('disconnected', DISCONNECTED_RESTART_DELAY_MS);
+        requestRestart('disconnected', DISCONNECTED_RESTART_DELAY_MS);
       }
     };
 
