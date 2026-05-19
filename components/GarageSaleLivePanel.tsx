@@ -20,6 +20,7 @@ const MOBILE_CAMERA_LOG_PREFIX = '[GarageSaleLivePanel][mobile-camera]';
 const MEDIA_READY_TIMEOUT_MS = 1500;
 // Retry once shortly after the first play() rejection for iOS/Safari startup timing quirks.
 const PLAYBACK_RETRY_DELAY_MS = 120;
+const PEER_CONNECTION_RESTART_DELAY_MS = 700;
 
 type CameraStatus = 'idle' | 'connecting' | 'ready' | 'awaitingInteraction' | 'blocked' | 'denied' | 'unsupported';
 
@@ -129,7 +130,10 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
 
           try {
             await peerRef.current.setRemoteDescription({ type, sdp: payload.sdp });
-          } catch {
+          } catch (error) {
+            if (process.env.NODE_ENV !== 'production') {
+              console.debug('[GarageSaleLivePanel] Ignored stale/invalid answer SDP', error);
+            }
             continue;
           }
           hasRemoteAnswerRef.current = true;
@@ -140,8 +144,11 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
           if (!payload?.candidate || !peerRef.current) continue;
           try {
             await peerRef.current.addIceCandidate(new RTCIceCandidate(payload.candidate));
-          } catch {
-            // Ignore stale/out-of-order buyer candidates while restarting.
+          } catch (error) {
+            // Ignore stale/out-of-order buyer candidates from pre-restart peer instances.
+            if (process.env.NODE_ENV !== 'production') {
+              console.debug('[GarageSaleLivePanel] Ignored stale buyer ICE candidate', error);
+            }
           }
         }
       }
@@ -224,7 +231,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         .finally(() => {
           restartInProgressRef.current = false;
         });
-    }, 700);
+    }, PEER_CONNECTION_RESTART_DELAY_MS);
   }, [createAndSendOffer]);
 
   useEffect(() => {

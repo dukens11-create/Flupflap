@@ -6,6 +6,7 @@ import { GARAGE_SALE_LIVE_RTC_CONFIG } from '@/lib/garage-sale-live-rtc';
 const DEFAULT_GUEST_NAME = 'Guest';
 const MEDIA_READY_TIMEOUT_MS = 1200;
 const PLAYBACK_RETRY_DELAY_MS = 250;
+const MAX_PENDING_ICE_CANDIDATES = 80;
 interface ChatMessage {
   id: string;
   userId: string | null;
@@ -103,8 +104,11 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
   const addIceCandidateSafely = useCallback(async (pc: RTCPeerConnection, candidate: RTCIceCandidateInit) => {
     try {
       await pc.addIceCandidate(new RTCIceCandidate(candidate));
-    } catch {
+    } catch (error) {
       // Ignore stale or out-of-order candidates during reconnect windows.
+      if (process.env.NODE_ENV !== 'production') {
+        console.debug('[GarageSaleBuyerLiveView] Ignored remote ICE candidate during reconnect', error);
+      }
     }
   }, []);
 
@@ -112,8 +116,8 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     const pc = peerRef.current;
     if (!pc || !pc.remoteDescription) {
       pendingIceCandidatesRef.current.push(candidate);
-      if (pendingIceCandidatesRef.current.length > 80) {
-        pendingIceCandidatesRef.current = pendingIceCandidatesRef.current.slice(-80);
+      if (pendingIceCandidatesRef.current.length > MAX_PENDING_ICE_CANDIDATES) {
+        pendingIceCandidatesRef.current = pendingIceCandidatesRef.current.slice(-MAX_PENDING_ICE_CANDIDATES);
       }
       return;
     }
