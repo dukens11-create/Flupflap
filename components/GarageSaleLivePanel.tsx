@@ -51,6 +51,11 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   const micPermissionDeniedRef = useRef(false);
   const preferredFacingModeRef = useRef<'user' | 'environment'>('user');
 
+  const reconnectTimeoutRef = useRef<number | null>(null);
+  // Always points at the latest createAndSendOffer so connection-state handlers
+  // can re-offer without holding a stale closure.
+  const createAndSendOfferRef = useRef<(() => Promise<void>) | null>(null);
+
   const [isLive, setIsLive] = useState(initialIsLive);
   const [camOn, setCamOn] = useState(false);
   const [previewReady, setPreviewReady] = useState(false);
@@ -79,6 +84,10 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   }, []);
 
   const closePeerConnection = useCallback(() => {
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
     hasRemoteAnswerRef.current = false;
     peerRef.current?.close();
     peerRef.current = null;
@@ -171,8 +180,32 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     };
 
     pc.onconnectionstatechange = () => {
+      if (pc.connectionState === 'connected') {
+        setError(null);
+        if (reconnectTimeoutRef.current) {
+          clearTimeout(reconnectTimeoutRef.current);
+          reconnectTimeoutRef.current = null;
+        }
+      }
+
+      if (pc.connectionState === 'disconnected') {
+        // Give ICE 5 seconds to self-recover before re-offering
+        if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = window.setTimeout(() => {
+          reconnectTimeoutRef.current = null;
+          if (!liveRef.current || peerRef.current !== pc) return;
+          void createAndSendOfferRef.current?.();
+        }, 5000);
+      }
+
       if (pc.connectionState === 'failed') {
-        setError('WebRTC connection failed. Try restarting the live session.');
+        setError('Connection lost. Attempting to reconnect…');
+        if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = window.setTimeout(() => {
+          reconnectTimeoutRef.current = null;
+          if (!liveRef.current || peerRef.current !== pc) return;
+          void createAndSendOfferRef.current?.();
+        }, 2000);
       }
     };
 
@@ -183,8 +216,12 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     startSignalPolling();
   }, [closePeerConnection, postSignal, startSignalPolling]);
 
+  // Keep the ref current so connection-state handlers can always call the latest version.
   useEffect(() => {
-    liveRef.current = isLive;
+    createAndSendOfferRef.current = createAndSendOffer;
+  }, [createAndSendOffer]);
+
+  useEffect(() => {
   }, [isLive]);
 
   useEffect(() => {
@@ -572,6 +609,10 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   // Clean up stream and connection on unmount
   useEffect(() => {
     return () => {
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
       endLiveOnPageLeave();
       stopSignalPolling();
       closePeerConnection();
