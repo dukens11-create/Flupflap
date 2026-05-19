@@ -29,7 +29,7 @@ export default function SellerGarageSaleCancelPaymentButton({ saleId }: Props) {
         setError(payload.error ?? 'Unable to cancel pending payment.');
         return;
       }
-      router.push(`/seller/garage-sales?cancelled=1&saleId=${encodeURIComponent(saleId)}`);
+      router.push('/seller/garage-sales?cancelled=1');
     } catch {
       setError('Unable to cancel pending payment.');
     } finally {

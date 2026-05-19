@@ -25,6 +25,19 @@ function stripeFailureResponse(prefix: string, err: unknown) {
   }, { status: 502 });
 }
 
+function selectPaymentIntentId(input: {
+  salePaymentStatus: 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED';
+  saleStripePaymentId: string | null;
+  latestPaidStripePaymentId: string | null;
+  latestPendingStripePaymentId: string | null;
+}) {
+  if (input.saleStripePaymentId) return input.saleStripePaymentId;
+  if (input.salePaymentStatus === 'PAID') {
+    return input.latestPaidStripePaymentId ?? input.latestPendingStripePaymentId ?? null;
+  }
+  return input.latestPendingStripePaymentId ?? input.latestPaidStripePaymentId ?? null;
+}
+
 export async function POST(_req: Request, { params }: Params) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
@@ -84,11 +97,12 @@ export async function POST(_req: Request, { params }: Params) {
     select: { stripePaymentId: true },
   });
 
-  const paymentIntentId = sale.stripePaymentId
-    ?? (sale.paymentStatus === 'PAID'
-      ? (latestPaidPaymentWithIntent?.stripePaymentId ?? latestPendingPaymentWithIntent?.stripePaymentId)
-      : (latestPendingPaymentWithIntent?.stripePaymentId ?? latestPaidPaymentWithIntent?.stripePaymentId))
-    ?? null;
+  const paymentIntentId = selectPaymentIntentId({
+    salePaymentStatus: sale.paymentStatus,
+    saleStripePaymentId: sale.stripePaymentId,
+    latestPaidStripePaymentId: latestPaidPaymentWithIntent?.stripePaymentId ?? null,
+    latestPendingStripePaymentId: latestPendingPaymentWithIntent?.stripePaymentId ?? null,
+  });
   let paymentIntent: Stripe.PaymentIntent | null = null;
   if (paymentIntentId) {
     try {
@@ -121,7 +135,11 @@ export async function POST(_req: Request, { params }: Params) {
     try {
       await prisma.$transaction([
         prisma.garageSalePayment.updateMany({
-          where: { saleId: sale.id, status: 'PAID' },
+          where: {
+            saleId: sale.id,
+            stripePaymentId: paymentIntentId,
+            status: { in: ['PAID', 'PENDING'] },
+          },
           data: { status: 'REFUNDED' },
         }),
         prisma.garageSale.update({
@@ -150,7 +168,7 @@ export async function POST(_req: Request, { params }: Params) {
     });
   }
 
-  if (paymentIntent?.status && paymentIntent.status !== 'canceled' && !CANCELABLE_INTENT_STATUSES.has(paymentIntent.status)) {
+  if (paymentIntent && paymentIntent.status !== 'canceled' && !CANCELABLE_INTENT_STATUSES.has(paymentIntent.status)) {
     return NextResponse.json({
       error: `Unable to cancel payment intent while Stripe reports status "${paymentIntent.status}".`,
     }, { status: 409 });
