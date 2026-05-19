@@ -22,7 +22,7 @@ const RTC_LOG_PREFIX = '[GarageSaleLivePanel][rtc]';
 const MEDIA_READY_TIMEOUT_MS = 1500;
 // Retry once shortly after the first play() rejection for iOS/Safari startup timing quirks.
 const PLAYBACK_RETRY_DELAY_MS = 120;
-const OFFER_ANSWER_TIMEOUT_MS = 10_000;
+const REMOTE_ANSWER_TIMEOUT_MS = 10_000;
 
 type CameraStatus = 'idle' | 'connecting' | 'ready' | 'awaitingInteraction' | 'blocked' | 'denied' | 'unsupported';
 
@@ -357,7 +357,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       setError('Viewer connection is taking longer than expected. Restarting stream connection…');
       logRtcEvent('reconnect attempt', { reason: 'offer answer timeout' });
       void createAndSendOfferRef.current?.();
-    }, OFFER_ANSWER_TIMEOUT_MS);
+    }, REMOTE_ANSWER_TIMEOUT_MS);
 
     startSignalPolling();
   }, [clearOfferAnswerTimeout, closePeerConnection, logRtcEvent, postSignal, startSignalPolling]);

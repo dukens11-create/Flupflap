@@ -6,12 +6,16 @@ import { RTC_CONFIG } from '@/lib/rtc-config';
 const DEFAULT_GUEST_NAME = 'Guest';
 const MEDIA_READY_TIMEOUT_MS = 1200;
 const PLAYBACK_RETRY_DELAY_MS = 250;
-const CONNECTION_STALL_TIMEOUT_MS = 10_000;
+const MEDIA_STARTUP_TIMEOUT_MS = 10_000;
 const RECONNECT_DELAY_MS = 2_500;
 const MAX_AUTOMATIC_RECONNECT_ATTEMPTS = 3;
 const BUYER_LOG_PREFIX = '[GarageSaleBuyerLiveView]';
 
 type ConnectionStatus = 'connecting' | 'reconnecting' | 'connected' | 'unavailable';
+
+function getReconnectStatus(attempts: number): ConnectionStatus {
+  return attempts >= MAX_AUTOMATIC_RECONNECT_ATTEMPTS ? 'unavailable' : 'reconnecting';
+}
 
 interface ChatMessage {
   id: string;
@@ -280,9 +284,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
 
     reconnectAttemptsRef.current += 1;
     const attempts = reconnectAttemptsRef.current;
-    const nextStatus: ConnectionStatus = attempts >= MAX_AUTOMATIC_RECONNECT_ATTEMPTS
-      ? 'unavailable'
-      : 'reconnecting';
+    const nextStatus = getReconnectStatus(attempts);
 
     setReconnectAttempts(attempts);
     setConnectionStatus(nextStatus);
@@ -310,6 +312,22 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
       performReconnect();
     }, delayMs);
   }, [clearConnectionTimeout, clearReconnectTimeout, closePeerConnection, isLive, logStreamEvent]);
+
+  const markConnectionReady = useCallback((pc: RTCPeerConnection) => {
+    if (peerRef.current !== pc) return;
+
+    clearConnectionTimeout();
+    clearReconnectTimeout();
+    reconnectAttemptsRef.current = 0;
+    setReconnectAttempts(0);
+    setConnectionStatus('connected');
+    setStreamConnected(remoteTrackSeenRef.current);
+    setStreamError(null);
+
+    if (remoteTrackSeenRef.current) {
+      void playRemoteStream();
+    }
+  }, [clearConnectionTimeout, clearReconnectTimeout, playRemoteStream]);
 
   const handleSellerOffer = useCallback(async (signalId: string, payload: { type?: string; sdp?: string }) => {
     const type = payload.type === 'offer' ? payload.type : null;
@@ -344,15 +362,8 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
           if (peerRef.current !== pc) return;
           if (track.kind !== 'video') return;
           remoteTrackSeenRef.current = true;
-          clearConnectionTimeout();
-          clearReconnectTimeout();
-          reconnectAttemptsRef.current = 0;
-          setReconnectAttempts(0);
-          setConnectionStatus('connected');
-          setStreamConnected(true);
-          setStreamError(null);
           logStreamEvent('remote stream received', { trackId: track.id, kind: track.kind });
-          void playRemoteStream();
+          markConnectionReady(pc);
         };
 
         track.onended = () => {
@@ -378,17 +389,8 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
       }
 
       if (pc.connectionState === 'connected') {
-        clearConnectionTimeout();
-        clearReconnectTimeout();
-        reconnectAttemptsRef.current = 0;
-        setReconnectAttempts(0);
-        setConnectionStatus('connected');
-        setStreamConnected(remoteTrackSeenRef.current);
-        setStreamError(null);
         logStreamEvent('peer connected');
-        if (remoteTrackSeenRef.current) {
-          void playRemoteStream();
-        }
+        markConnectionReady(pc);
       }
 
       if (pc.connectionState === 'disconnected') {
@@ -434,7 +436,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
       connectionTimeoutRef.current = null;
       if (peerRef.current !== pc || !isLive) return;
       scheduleReconnect(remoteTrackSeenRef.current ? 'media startup stalled' : 'offer startup stalled', 0);
-    }, CONNECTION_STALL_TIMEOUT_MS);
+    }, MEDIA_STARTUP_TIMEOUT_MS);
 
     // Attach srcObject early so the video element is ready when tracks arrive
     if (videoRef.current) {
@@ -572,7 +574,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
   const handleManualRetry = useCallback(() => {
     reconnectAttemptsRef.current = 0;
     setReconnectAttempts(0);
-    setConnectionStatus('reconnecting');
+    setConnectionStatus(getReconnectStatus(1));
     setStreamError('Retrying seller stream…');
     signalCursorRef.current = null;
     closePeerConnection();
