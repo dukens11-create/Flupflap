@@ -43,7 +43,6 @@ export default function GarageSaleBrowseClient({
   const [view, setView] = useState<'list' | 'map'>('list');
   const [showFilters, setShowFilters] = useState(false);
   const [geoStatus, setGeoStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
-  const [, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [actionError, setActionError] = useState('');
   const mapRef = useRef<HTMLDivElement>(null);
   // mapboxMapRef is used to track if the map has been initialized
@@ -68,13 +67,6 @@ export default function GarageSaleBrowseClient({
     const nextLng = urlParams.get('lng') ?? '';
     setLat(nextLat);
     setLng(nextLng);
-    if (nextLat && nextLng) {
-      const parsedLat = Number.parseFloat(nextLat);
-      const parsedLng = Number.parseFloat(nextLng);
-      if (Number.isFinite(parsedLat) && Number.isFinite(parsedLng)) {
-        setUserCoords({ lat: parsedLat, lng: parsedLng });
-      }
-    }
   }, [urlParams]);
 
   function buildSearchUrl(overrides: Record<string, string> = {}) {
@@ -105,6 +97,9 @@ export default function GarageSaleBrowseClient({
     try {
       const res = await fetch(`/api/geo/zip?zip=${encodeURIComponent(zip.trim())}&country=us`);
       if (!res.ok) {
+        if (res.status === 404) {
+          throw new Error('zip_not_found');
+        }
         throw new Error('zip_lookup_failed');
       }
       const data = (await res.json()) as { lat?: number; lng?: number };
@@ -115,17 +110,18 @@ export default function GarageSaleBrowseClient({
       const nextLng = String(data.lng);
       setLat(nextLat);
       setLng(nextLng);
-      setUserCoords({ lat: data.lat as number, lng: data.lng as number });
       navigateWithOverrides({ lat: nextLat, lng: nextLng });
-    } catch {
-      setActionError('Could not resolve ZIP to coordinates. Showing city/ZIP results without distance filtering.');
+    } catch (error) {
+      const message = error instanceof Error && error.message === 'zip_not_found'
+        ? 'ZIP code not found. Results will be shown without distance filtering.'
+        : 'Unable to look up ZIP coordinates right now. Results will be shown without distance filtering.';
+      setActionError(message);
       navigateWithOverrides({ lat: '', lng: '' });
     }
   }
 
   function handleReset() {
     setQ(''); setCity(''); setZip(''); setSaleType(''); setCategory(''); setDate(''); setSort('newest'); setRadius('50'); setLive(''); setLat(''); setLng('');
-    setUserCoords(null);
     setActionError('');
     router.push('/garage-sales');
   }
@@ -142,7 +138,6 @@ export default function GarageSaleBrowseClient({
         setGeoStatus('done');
         setActionError('');
         const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        setUserCoords(coords);
         setLat(String(coords.lat));
         setLng(String(coords.lng));
         const params = new URLSearchParams(urlParams.toString());
@@ -159,7 +154,7 @@ export default function GarageSaleBrowseClient({
         setGeoStatus('error');
         setActionError('Enter city or ZIP, or allow location access.');
       },
-      { timeout: 10000, maximumAge: 120000 },
+      { timeout: 10000, maximumAge: 120000 /* 120000 ms (2 minutes) */ },
     );
   }
 
