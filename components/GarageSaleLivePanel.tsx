@@ -98,12 +98,31 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     peerRef.current = null;
   }, []);
 
-  const postSignal = useCallback(async (kind: 'OFFER' | 'ICE', payload: Record<string, unknown>) => {
-    await fetch(`/api/garage-sales/${saleId}/live/signaling`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ role: 'SELLER', kind, payload }),
-    });
+  const postSignal = useCallback(async (
+    kind: 'OFFER' | 'ICE',
+    payload: Record<string, unknown>,
+    options?: { critical?: boolean },
+  ) => {
+    try {
+      const res = await fetch(`/api/garage-sales/${saleId}/live/signaling`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: 'SELLER', kind, payload }),
+      });
+      if (res.ok) return true;
+
+      console.warn('[GarageSaleLivePanel] Failed to post seller signal', { kind, status: res.status });
+      if (options?.critical) {
+        throw new Error(`Failed to post ${kind} signal`);
+      }
+      return false;
+    } catch (error) {
+      console.warn('[GarageSaleLivePanel] Network error posting seller signal', { kind });
+      if (options?.critical) {
+        throw error;
+      }
+      return false;
+    }
   }, [saleId]);
 
   const pollSignals = useCallback(async () => {
@@ -113,7 +132,10 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       const params = new URLSearchParams({ role: 'SELLER' });
       if (signalCursorRef.current) params.set('since', signalCursorRef.current);
       const res = await fetch(`/api/garage-sales/${saleId}/live/signaling?${params.toString()}`);
-      if (!res.ok) return;
+      if (!res.ok) {
+        console.warn('[GarageSaleLivePanel] Failed to poll seller signals', { status: res.status });
+        return;
+      }
 
       const data = await res.json() as {
         isLive: boolean;
@@ -173,7 +195,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         }
       }
     } catch {
-      // Polling retries automatically
+      console.warn('[GarageSaleLivePanel] Network error while polling seller signals');
     }
   }, [isLive, saleId, stopSignalPolling]);
 
@@ -253,7 +275,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
 
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
-    await postSignal('OFFER', { type: offer.type, sdp: offer.sdp });
+    await postSignal('OFFER', { type: offer.type, sdp: offer.sdp }, { critical: true });
 
     startSignalPolling();
   }, [closePeerConnection, postSignal, startSignalPolling]);

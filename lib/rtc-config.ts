@@ -32,10 +32,14 @@ const missingTurnEnvVars = [
   ...(!turnCredential ? ['NEXT_PUBLIC_TURN_CREDENTIAL'] : []),
 ];
 
-if (process.env.NODE_ENV !== 'production' && missingTurnEnvVars.length > 0) {
+if (missingTurnEnvVars.length > 0) {
   console.warn(
     `[RTC] Metered TURN is not fully configured; using STUN fallback only. Missing: ${missingTurnEnvVars.join(', ')}`,
   );
+}
+
+if (process.env.NODE_ENV === 'production' && missingTurnEnvVars.length === 0) {
+  console.info('[RTC] Metered TURN relay configuration detected.');
 }
 
 function buildIceServers(): RTCIceServer[] {
