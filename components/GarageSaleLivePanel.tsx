@@ -14,12 +14,15 @@ const CAMERA_READY_MESSAGE = 'Camera ready';
 const CAMERA_CONNECTING_MESSAGE = 'Connecting camera...';
 const CAMERA_PREVIEW_PLACEHOLDER = 'Camera preview will appear here.';
 const CAMERA_STATUS_UNKNOWN_MESSAGE = 'Camera status unknown.';
-const INSECURE_CAMERA_CONTEXT_MESSAGE = 'Camera requires HTTPS in this browser.';
+const CAMERA_PERMISSION_HELP_MESSAGE = 'Allow camera access in your browser settings, then tap Retry Camera Permission. On Android Chrome, open Site settings → Camera → Allow.';
+const INSECURE_CAMERA_CONTEXT_MESSAGE = 'Live camera requires HTTPS (or localhost in development). Reopen this page securely, then retry.';
 const MOBILE_CAMERA_LOG_PREFIX = '[GarageSaleLivePanel][mobile-camera]';
+const RTC_LOG_PREFIX = '[GarageSaleLivePanel][rtc]';
 // Give mobile browsers time to emit initial stream metadata before attempting playback.
 const MEDIA_READY_TIMEOUT_MS = 1500;
 // Retry once shortly after the first play() rejection for iOS/Safari startup timing quirks.
 const PLAYBACK_RETRY_DELAY_MS = 120;
+const OFFER_ANSWER_TIMEOUT_MS = 10_000;
 
 type CameraStatus = 'idle' | 'connecting' | 'ready' | 'awaitingInteraction' | 'blocked' | 'denied' | 'unsupported';
 
@@ -56,9 +59,20 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   // Always points at the latest startSignalPolling so reconnect error paths can
   // restart polling without a stale closure.
   const startSignalPollingRef = useRef<(() => void) | null>(null);
+  const startCameraRef = useRef<((nextFacingMode?: 'user' | 'environment') => Promise<boolean>) | null>(null);
   // ICE candidates received before the remote answer is applied are buffered here
   // and drained once setRemoteDescription(answer) completes.
   const pendingIceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
+  const offerAnswerTimeoutRef = useRef<number | null>(null);
+  const peerStateLogRef = useRef<{
+    connectionState: RTCPeerConnectionState | null;
+    iceConnectionState: RTCIceConnectionState | null;
+    signalingState: RTCSignalingState | null;
+  }>({
+    connectionState: null,
+    iceConnectionState: null,
+    signalingState: null,
+  });
 
   const [isLive, setIsLive] = useState(initialIsLive);
   const [camOn, setCamOn] = useState(false);
@@ -80,6 +94,21 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     console.warn(`${MOBILE_CAMERA_LOG_PREFIX} ${issue}`);
   }, []);
 
+  const logRtcEvent = useCallback((event: string, details?: Record<string, unknown>) => {
+    if (details) {
+      console.info(`${RTC_LOG_PREFIX} ${event}`, details);
+      return;
+    }
+    console.info(`${RTC_LOG_PREFIX} ${event}`);
+  }, []);
+
+  const clearOfferAnswerTimeout = useCallback(() => {
+    if (offerAnswerTimeoutRef.current) {
+      window.clearTimeout(offerAnswerTimeoutRef.current);
+      offerAnswerTimeoutRef.current = null;
+    }
+  }, []);
+
   const stopSignalPolling = useCallback(() => {
     if (signalPollRef.current) {
       clearInterval(signalPollRef.current);
@@ -92,11 +121,23 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
     }
+    clearOfferAnswerTimeout();
     hasRemoteAnswerRef.current = false;
     pendingIceCandidatesRef.current = [];
-    peerRef.current?.close();
+    peerStateLogRef.current = {
+      connectionState: null,
+      iceConnectionState: null,
+      signalingState: null,
+    };
+    if (peerRef.current) {
+      peerRef.current.onicecandidate = null;
+      peerRef.current.onconnectionstatechange = null;
+      peerRef.current.oniceconnectionstatechange = null;
+      peerRef.current.onsignalingstatechange = null;
+      peerRef.current.close();
+    }
     peerRef.current = null;
-  }, []);
+  }, [clearOfferAnswerTimeout]);
 
   const postSignal = useCallback(async (kind: 'OFFER' | 'ICE', payload: Record<string, unknown>) => {
     await fetch(`/api/garage-sales/${saleId}/live/signaling`, {
@@ -141,6 +182,9 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
 
           await peerRef.current.setRemoteDescription({ type, sdp: payload.sdp });
           hasRemoteAnswerRef.current = true;
+          clearOfferAnswerTimeout();
+          setError(null);
+          logRtcEvent('remote answer received');
 
           // Drain ICE candidates that arrived before the answer was applied.
           for (const candidate of pendingIceCandidatesRef.current) {
@@ -184,9 +228,20 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   }, [pollSignals, stopSignalPolling]);
 
   const createAndSendOffer = useCallback(async () => {
-    const stream = streamRef.current;
-    if (!stream) {
-      throw new Error(PREVIEW_REQUIRED_MESSAGE);
+    let stream = streamRef.current;
+    if (
+      !stream
+      || !stream.getVideoTracks().some((track) => track.readyState === 'live')
+    ) {
+      const cameraStarted = await startCameraRef.current?.(preferredFacingModeRef.current);
+      stream = streamRef.current;
+      if (
+        !cameraStarted
+        || !stream
+        || !stream.getVideoTracks().some((track) => track.readyState === 'live')
+      ) {
+        throw new Error('Camera preview is not ready. Retry your camera preview before going live.');
+      }
     }
     if (typeof RTCPeerConnection === 'undefined') {
       throw new Error('Live streaming is not supported in this browser.');
@@ -197,9 +252,18 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
 
     const pc = new RTCPeerConnection(RTC_CONFIG);
     peerRef.current = pc;
+    peerStateLogRef.current = {
+      connectionState: null,
+      iceConnectionState: null,
+      signalingState: null,
+    };
 
     stream.getTracks().forEach((track) => {
       pc.addTrack(track, stream);
+    });
+    logRtcEvent('stream started', {
+      videoTracks: stream.getVideoTracks().length,
+      audioTracks: stream.getAudioTracks().length,
     });
 
     pc.onicecandidate = (event) => {
@@ -208,12 +272,19 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     };
 
     pc.onconnectionstatechange = () => {
+      if (peerStateLogRef.current.connectionState !== pc.connectionState) {
+        peerStateLogRef.current.connectionState = pc.connectionState;
+        logRtcEvent('connectionState', { state: pc.connectionState });
+      }
+
       if (pc.connectionState === 'connected') {
         setError(null);
+        clearOfferAnswerTimeout();
         if (reconnectTimeoutRef.current) {
           clearTimeout(reconnectTimeoutRef.current);
           reconnectTimeoutRef.current = null;
         }
+        logRtcEvent('peer connected');
       }
 
       if (pc.connectionState === 'disconnected') {
@@ -222,6 +293,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         reconnectTimeoutRef.current = window.setTimeout(() => {
           reconnectTimeoutRef.current = null;
           if (!liveRef.current || peerRef.current !== pc) return;
+          logRtcEvent('reconnect attempt', { reason: 'connectionState disconnected' });
           void (async () => {
             try {
               await createAndSendOfferRef.current?.();
@@ -235,10 +307,12 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
 
       if (pc.connectionState === 'failed') {
         setError('Connection lost. Attempting to reconnect…');
+        clearOfferAnswerTimeout();
         if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
         reconnectTimeoutRef.current = window.setTimeout(() => {
           reconnectTimeoutRef.current = null;
           if (!liveRef.current || peerRef.current !== pc) return;
+          logRtcEvent('reconnect attempt', { reason: 'connectionState failed' });
           void (async () => {
             try {
               await createAndSendOfferRef.current?.();
@@ -251,12 +325,42 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       }
     };
 
+    pc.oniceconnectionstatechange = () => {
+      if (peerStateLogRef.current.iceConnectionState !== pc.iceConnectionState) {
+        peerStateLogRef.current.iceConnectionState = pc.iceConnectionState;
+        logRtcEvent('iceConnectionState', { state: pc.iceConnectionState });
+      }
+      if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+        logRtcEvent('ICE connected', { state: pc.iceConnectionState });
+      }
+      if (pc.iceConnectionState === 'failed') {
+        setError('Connection lost. Attempting to reconnect…');
+      }
+    };
+
+    pc.onsignalingstatechange = () => {
+      if (peerStateLogRef.current.signalingState !== pc.signalingState) {
+        peerStateLogRef.current.signalingState = pc.signalingState;
+        logRtcEvent('signalingState', { state: pc.signalingState });
+      }
+    };
+
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
     await postSignal('OFFER', { type: offer.type, sdp: offer.sdp });
+    logRtcEvent('offer posted');
+
+    clearOfferAnswerTimeout();
+    offerAnswerTimeoutRef.current = window.setTimeout(() => {
+      offerAnswerTimeoutRef.current = null;
+      if (!liveRef.current || peerRef.current !== pc || hasRemoteAnswerRef.current) return;
+      setError('Viewer connection is taking longer than expected. Restarting stream connection…');
+      logRtcEvent('reconnect attempt', { reason: 'offer answer timeout' });
+      void createAndSendOfferRef.current?.();
+    }, OFFER_ANSWER_TIMEOUT_MS);
 
     startSignalPolling();
-  }, [closePeerConnection, postSignal, startSignalPolling]);
+  }, [clearOfferAnswerTimeout, closePeerConnection, logRtcEvent, postSignal, startSignalPolling]);
 
   // Keep the ref current so connection-state handlers can always call the latest version.
   useEffect(() => {
@@ -362,7 +466,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         if (permissionStatus.state === 'denied') {
           logMobileCameraIssue('permission denied', { source: 'permissions.query' });
           setCameraStatus('denied');
-          setError(null);
+          setError(CAMERA_PERMISSION_HELP_MESSAGE);
           return false;
         }
         if (permissionStatus.state === 'prompt') {
@@ -399,6 +503,19 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         });
       }
 
+      try {
+        await videoTrack.applyConstraints({
+          width: { ideal: 640 },
+          height: { ideal: 360 },
+          frameRate: { ideal: 24, max: 30 },
+        });
+      } catch (constraintError) {
+        logMobileCameraIssue('camera constraint fallback', {
+          reason: 'mobile capture constraints not applied',
+          error: constraintError instanceof Error ? constraintError.message : 'unknown',
+        });
+      }
+
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -420,11 +537,11 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       if (name === 'SecurityError') {
         logMobileCameraIssue('insecure context', { error: name });
         setCameraStatus('blocked');
-        setError(null);
+        setError(INSECURE_CAMERA_CONTEXT_MESSAGE);
       } else if (name === 'NotAllowedError') {
         logMobileCameraIssue('permission denied', { error: name });
         setCameraStatus('denied');
-        setError(null);
+        setError(CAMERA_PERMISSION_HELP_MESSAGE);
       } else if (name === 'NotFoundError') {
         logMobileCameraIssue('media device unavailable', { error: name });
         setCameraStatus('idle');
@@ -443,6 +560,10 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       return false;
     }
   }, [cameraStatus, ensurePreviewPlayback, logMobileCameraIssue]);
+
+  useEffect(() => {
+    startCameraRef.current = startCamera;
+  }, [startCamera]);
 
   const stopCamera = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -478,14 +599,24 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         try {
           // First attempt: exact environment constraint.
           newVideoStream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: { exact: 'environment' } },
+            video: {
+              facingMode: { exact: 'environment' },
+              width: { ideal: 640 },
+              height: { ideal: 360 },
+              frameRate: { ideal: 24, max: 30 },
+            },
             audio: false,
           });
         } catch {
           // Fallback: non-exact environment constraint.
           try {
             newVideoStream = await navigator.mediaDevices.getUserMedia({
-              video: { facingMode: 'environment' },
+              video: {
+                facingMode: 'environment',
+                width: { ideal: 640 },
+                height: { ideal: 360 },
+                frameRate: { ideal: 24, max: 30 },
+              },
               audio: false,
             });
           } catch (err) {
@@ -498,7 +629,12 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         }
       } else {
         newVideoStream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user' },
+          video: {
+            facingMode: 'user',
+            width: { ideal: 640 },
+            height: { ideal: 360 },
+            frameRate: { ideal: 24, max: 30 },
+          },
           audio: false,
         });
       }
@@ -594,17 +730,30 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         }
       }
 
-      const res = await fetch(`/api/garage-sales/${saleId}/live`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'start' }),
-      });
+        const res = await fetch(`/api/garage-sales/${saleId}/live`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'start' }),
+        });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error((data as { error?: string }).error ?? 'Failed to start live');
       }
       setIsLive(true);
-      await createAndSendOffer();
+      try {
+        await createAndSendOffer();
+      } catch (offerError) {
+        setIsLive(false);
+        setViewerCount(0);
+        stopSignalPolling();
+        closePeerConnection();
+        await fetch(`/api/garage-sales/${saleId}/live`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'end' }),
+        }).catch(() => undefined);
+        throw offerError;
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start live session');
     } finally {
@@ -731,7 +880,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       case 'blocked':
         return CAMERA_BLOCKED_MESSAGE;
       case 'denied':
-        return CAMERA_BLOCKED_MESSAGE;
+        return CAMERA_PERMISSION_HELP_MESSAGE;
       case 'unsupported':
         return 'Camera preview is not supported in this browser.';
       case 'ready':
