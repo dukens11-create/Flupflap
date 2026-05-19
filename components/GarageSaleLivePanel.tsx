@@ -167,8 +167,8 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
 
   const createAndSendOffer = useCallback(async () => {
     let stream = streamRef.current;
-    const hasLiveTrack = stream?.getTracks().some((track) => track.readyState === 'live') ?? false;
-    if (!stream || !hasLiveTrack) {
+    const hasUsableLiveTrack = stream?.getTracks().some((track) => track.readyState === 'live' && track.enabled) ?? false;
+    if (!stream || !hasUsableLiveTrack) {
       const cameraStarted = await startCameraRef.current?.(preferredFacingModeRef.current);
       if (!cameraStarted || !streamRef.current) {
         throw new Error(PREVIEW_REQUIRED_MESSAGE);

@@ -118,7 +118,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     if (!pc || !pc.remoteDescription) {
       pendingIceCandidatesRef.current.push(candidate);
       if (pendingIceCandidatesRef.current.length > MAX_PENDING_ICE_CANDIDATES) {
-        pendingIceCandidatesRef.current.pop();
+        pendingIceCandidatesRef.current.shift();
       }
       return;
     }
