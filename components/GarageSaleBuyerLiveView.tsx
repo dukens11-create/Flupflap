@@ -101,16 +101,52 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
 
   const playRemoteStream = useCallback(async () => {
     const video = videoRef.current;
-    if (!video) return;
+    if (!video) return false;
 
+    // Apply mobile-friendly attributes before attempting play
+    video.muted = true;
+    video.defaultMuted = true;
+    video.autoplay = true;
     video.playsInline = true;
+    video.preload = 'auto';
     video.setAttribute('playsinline', 'true');
+    video.setAttribute('webkit-playsinline', 'true');
 
+    // If metadata isn't loaded yet, wait briefly for a readiness event
+    if (video.readyState < HTMLMediaElement.HAVE_METADATA) {
+      await new Promise<void>((resolve) => {
+        let timeoutId: ReturnType<typeof setTimeout> | null = null;
+        const onReady = () => {
+          if (timeoutId !== null) clearTimeout(timeoutId);
+          video.removeEventListener('loadedmetadata', onReady);
+          video.removeEventListener('loadeddata', onReady);
+          video.removeEventListener('canplay', onReady);
+          resolve();
+        };
+        video.addEventListener('loadedmetadata', onReady);
+        video.addEventListener('loadeddata', onReady);
+        video.addEventListener('canplay', onReady);
+        // Resolve after 2 s regardless so we don't block indefinitely
+        timeoutId = setTimeout(onReady, 2000);
+      });
+    }
+
+    // First attempt
     try {
       await video.play();
       setPlaybackBlocked(false);
+      return true;
     } catch {
-      setPlaybackBlocked(true);
+      // Retry once after a short delay
+      await new Promise((r) => setTimeout(r, 500));
+      try {
+        await video.play();
+        setPlaybackBlocked(false);
+        return true;
+      } catch {
+        setPlaybackBlocked(true);
+        return false;
+      }
     }
   }, []);
 
@@ -186,11 +222,23 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     activeOfferSignalRef.current = signalId;
 
     pc.ontrack = (event) => {
-      for (const track of event.streams[0]?.getTracks() ?? [event.track]) {
-        remoteStream.addTrack(track);
+      // Avoid adding duplicate tracks
+      const existingIds = new Set(remoteStream.getTracks().map((t) => t.id));
+      const tracks = event.streams[0]?.getTracks() ?? [event.track];
+      for (const track of tracks) {
+        if (!existingIds.has(track.id)) {
+          remoteStream.addTrack(track);
+        }
       }
-      setStreamConnected(remoteStream.getTracks().length > 0);
-      void playRemoteStream();
+      // Attach srcObject promptly so the video element has media ASAP
+      if (videoRef.current && videoRef.current.srcObject !== remoteStream) {
+        videoRef.current.srcObject = remoteStream;
+      }
+      if (remoteStream.getTracks().length > 0) {
+        setStreamError(null);
+        setStreamConnected(true);
+        void playRemoteStream();
+      }
     };
 
     pc.onicecandidate = (event) => {
@@ -199,8 +247,12 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     };
 
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
-        setStreamError('Live stream connection was interrupted. Wait for the seller to restart broadcasting.');
+      if (pc.connectionState === 'connected') {
+        setStreamError(null);
+        void playRemoteStream();
+      } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+        setStreamConnected(false);
+        setStreamError('Trying to reconnect... Keep this page open.');
       }
     };
 
@@ -209,10 +261,10 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     await pc.setLocalDescription(answer);
     await postSignal('ANSWER', { type: answer.type, sdp: answer.sdp });
 
+    // Attach srcObject early so the video element is ready when tracks arrive
     if (videoRef.current) {
       videoRef.current.srcObject = remoteStream;
     }
-    void playRemoteStream();
   }, [closePeerConnection, playRemoteStream, postSignal]);
 
   const pollSignals = useCallback(async () => {
@@ -364,6 +416,8 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
           ref={videoRef}
           autoPlay
           playsInline
+          muted
+          preload="auto"
           controls
           className={`h-full w-full object-cover ${streamConnected ? '' : 'hidden'}`}
         />
@@ -372,7 +426,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
             <Radio size={40} className="animate-pulse text-red-400" />
             <p className="text-sm font-semibold">Connecting to seller stream…</p>
             <p className="text-xs text-slate-300 px-4 text-center">
-              If playback does not start, keep this page open for a moment.
+              Live video may take a few seconds on mobile networks.
             </p>
           </div>
         )}
@@ -383,7 +437,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
               onClick={() => void playRemoteStream()}
               className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-900 shadow-lg transition hover:bg-slate-100"
             >
-              Tap to watch live
+              Tap to start live
             </button>
           </div>
         )}
