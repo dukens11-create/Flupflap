@@ -1,15 +1,14 @@
 'use client';
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { Video, VideoOff, Mic, MicOff, Radio, AlertTriangle, Eye, RefreshCcw } from 'lucide-react';
+import { getGarageSaleRtcConfig } from '@/lib/garage-sale-rtc-config';
 
 interface Props {
   saleId: string;
   initialIsLive: boolean;
 }
 
-const RTC_CONFIG: RTCConfiguration = {
-  iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }],
-};
+const RTC_CONFIG = getGarageSaleRtcConfig();
 const PREVIEW_REQUIRED_MESSAGE = 'Preview your camera before starting your live garage sale.';
 const CAMERA_BLOCKED_MESSAGE = 'Camera access blocked';
 const CAMERA_READY_MESSAGE = 'Camera ready';
@@ -22,6 +21,7 @@ const MOBILE_CAMERA_LOG_PREFIX = '[GarageSaleLivePanel][mobile-camera]';
 const MEDIA_READY_TIMEOUT_MS = 1500;
 // Retry once shortly after the first play() rejection for iOS/Safari startup timing quirks.
 const PLAYBACK_RETRY_DELAY_MS = 120;
+const RECONNECT_RETRY_DELAY_MS = 3000;
 
 type CameraStatus = 'idle' | 'connecting' | 'ready' | 'awaitingInteraction' | 'blocked' | 'denied' | 'unsupported';
 
@@ -46,6 +46,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   const signalPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const signalCursorRef = useRef<string | null>(null);
   const hasRemoteAnswerRef = useRef(false);
+  const bufferedRemoteIceRef = useRef<RTCIceCandidateInit[]>([]);
   const liveRef = useRef(initialIsLive);
   const micOnRef = useRef(true);
   const micPermissionDeniedRef = useRef(false);
@@ -55,6 +56,8 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   // Always points at the latest createAndSendOffer so connection-state handlers
   // can re-offer without holding a stale closure.
   const createAndSendOfferRef = useRef<(() => Promise<void>) | null>(null);
+
+  const attemptReconnectRef = useRef<(() => Promise<void>) | null>(null);
 
   const [isLive, setIsLive] = useState(initialIsLive);
   const [camOn, setCamOn] = useState(false);
@@ -101,6 +104,15 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     });
   }, [saleId]);
 
+  const scheduleReconnect = useCallback((delayMs: number) => {
+    if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+    reconnectTimeoutRef.current = window.setTimeout(() => {
+      reconnectTimeoutRef.current = null;
+      if (!liveRef.current) return;
+      void attemptReconnectRef.current?.();
+    }, delayMs);
+  }, []);
+
   const pollSignals = useCallback(async () => {
     if (!peerRef.current || !isLive) return;
 
@@ -134,14 +146,39 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
           const type = payload?.type === 'answer' ? payload.type : null;
           if (!type || !payload.sdp || !peerRef.current) continue;
 
-          await peerRef.current.setRemoteDescription({ type, sdp: payload.sdp });
-          hasRemoteAnswerRef.current = true;
+          const activePeer: RTCPeerConnection = peerRef.current;
+          try {
+            await activePeer.setRemoteDescription({ type, sdp: payload.sdp });
+            hasRemoteAnswerRef.current = true;
+          } catch {
+            // Ignore stale/invalid answers and continue polling for a fresh one.
+            continue;
+          }
+
+          const bufferedCandidates = bufferedRemoteIceRef.current;
+          bufferedRemoteIceRef.current = [];
+          for (const candidate of bufferedCandidates) {
+            if (peerRef.current !== activePeer) break;
+            try {
+              await activePeer.addIceCandidate(new RTCIceCandidate(candidate));
+            } catch {
+              // Ignore stale candidates from previous negotiation attempts.
+            }
+          }
         }
 
         if (signal.kind === 'ICE') {
           const payload = signal.payload as { candidate?: RTCIceCandidateInit } | null;
           if (!payload?.candidate || !peerRef.current) continue;
-          await peerRef.current.addIceCandidate(new RTCIceCandidate(payload.candidate));
+          if (!hasRemoteAnswerRef.current) {
+            bufferedRemoteIceRef.current.push(payload.candidate);
+            continue;
+          }
+          try {
+            await peerRef.current.addIceCandidate(new RTCIceCandidate(payload.candidate));
+          } catch {
+            // Ignore stale candidates from previous negotiation attempts.
+          }
         }
       }
     } catch {
@@ -166,6 +203,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
 
     signalCursorRef.current = null;
     closePeerConnection();
+    bufferedRemoteIceRef.current = [];
 
     const pc = new RTCPeerConnection(RTC_CONFIG);
     peerRef.current = pc;
@@ -190,22 +228,14 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
 
       if (pc.connectionState === 'disconnected') {
         // Give ICE 5 seconds to self-recover before re-offering
-        if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
-        reconnectTimeoutRef.current = window.setTimeout(() => {
-          reconnectTimeoutRef.current = null;
-          if (!liveRef.current || peerRef.current !== pc) return;
-          void createAndSendOfferRef.current?.();
-        }, 5000);
+        if (!liveRef.current || peerRef.current !== pc) return;
+        scheduleReconnect(5000);
       }
 
       if (pc.connectionState === 'failed') {
         setError('Connection lost. Attempting to reconnect…');
-        if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
-        reconnectTimeoutRef.current = window.setTimeout(() => {
-          reconnectTimeoutRef.current = null;
-          if (!liveRef.current || peerRef.current !== pc) return;
-          void createAndSendOfferRef.current?.();
-        }, 2000);
+        if (!liveRef.current || peerRef.current !== pc) return;
+        scheduleReconnect(2000);
       }
     };
 
@@ -214,7 +244,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     await postSignal('OFFER', { type: offer.type, sdp: offer.sdp });
 
     startSignalPolling();
-  }, [closePeerConnection, postSignal, startSignalPolling]);
+  }, [closePeerConnection, postSignal, scheduleReconnect, startSignalPolling]);
 
   // Keep the ref current so connection-state handlers can always call the latest version.
   useEffect(() => {
@@ -222,7 +252,28 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   }, [createAndSendOffer]);
 
   useEffect(() => {
+    liveRef.current = isLive;
   }, [isLive]);
+
+  const attemptReconnect = useCallback(async () => {
+    if (!liveRef.current) return;
+
+    const createOffer = createAndSendOfferRef.current;
+    if (!createOffer) return;
+
+    try {
+      await createOffer();
+    } catch {
+      if (!liveRef.current) return;
+      setError('Connection lost. Retrying live stream…');
+      startSignalPolling();
+      scheduleReconnect(RECONNECT_RETRY_DELAY_MS);
+    }
+  }, [scheduleReconnect, startSignalPolling]);
+
+  useEffect(() => {
+    attemptReconnectRef.current = attemptReconnect;
+  }, [attemptReconnect]);
 
   useEffect(() => {
     micOnRef.current = micOn;
