@@ -43,6 +43,14 @@ async function requireSellerOwner(saleSellerId: string) {
   return { ok: true as const };
 }
 
+async function requireAuthenticatedUser() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return { ok: false as const, response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
+  }
+  return { ok: true as const };
+}
+
 async function getActiveViewerCount(saleId: string, liveStartedAt: Date | null) {
   const activeSince = new Date(
     Math.max(
@@ -98,6 +106,9 @@ export async function GET(req: Request, { params }: Params) {
   if (roleParam === 'SELLER') {
     const ownerCheck = await requireSellerOwner(sale.sellerId);
     if (!ownerCheck.ok) return ownerCheck.response;
+  } else {
+    const authCheck = await requireAuthenticatedUser();
+    if (!authCheck.ok) return authCheck.response;
   }
 
   if (!sale.isLive) {
@@ -199,6 +210,9 @@ export async function POST(req: Request, { params }: Params) {
   if (role === 'SELLER') {
     const ownerCheck = await requireSellerOwner(sale.sellerId);
     if (!ownerCheck.ok) return ownerCheck.response;
+  } else {
+    const authCheck = await requireAuthenticatedUser();
+    if (!authCheck.ok) return authCheck.response;
   }
 
   const signal = await prisma.garageSaleLiveSignal.create({
