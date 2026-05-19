@@ -293,7 +293,10 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     setHasRemoteMedia(false);
 
     pc.ontrack = (event) => {
-      for (const track of event.streams[0]?.getTracks() ?? [event.track]) {
+      const streamTracks = event.streams[0]?.getTracks() ?? [];
+      const tracks = streamTracks.length > 0 ? streamTracks : [event.track];
+
+      for (const track of tracks) {
         const alreadyAdded = remoteStream.getTracks().some((existing) => existing.id === track.id);
         if (!alreadyAdded) {
           remoteStream.addTrack(track);
