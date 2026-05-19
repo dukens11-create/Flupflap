@@ -314,11 +314,16 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
             continue;
           }
           const payload = signal.payload as { type?: string; sdp?: string } | null;
-          if (!payload) { signalCursorRef.current = signal.createdAt; continue; }
+          if (!payload) {
+            signalCursorRef.current = signal.createdAt;
+            continue;
+          }
           setStreamError(null);
           try {
             await handleSellerOffer(signal.id, payload);
             // Advance cursor only after the offer was successfully processed.
+            // Unlike ICE, an OFFER must be retried on error, so the cursor is
+            // intentionally NOT advanced in the catch branch.
             signalCursorRef.current = signal.createdAt;
           } catch {
             // Leave cursor unchanged so the offer is retried on the next poll.
@@ -333,6 +338,8 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
               // Ignore stale candidates from a previous peer connection
             }
           }
+          // ICE candidates are always consumed — failures are non-fatal and the
+          // candidate should not be replayed on the next poll.
           signalCursorRef.current = signal.createdAt;
         } else {
           signalCursorRef.current = signal.createdAt;
