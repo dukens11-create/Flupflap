@@ -204,7 +204,7 @@ export default async function GarageSaleDetailPage({ params, searchParams }: Par
     });
     notFound();
   }
-  if (sale.isLive && !session?.user && !isOwner && !isAdmin) {
+  if (sale.isLive && !session?.user?.id) {
     redirect(`/login?callbackUrl=${encodeURIComponent(`/garage-sales/${sale.id}`)}`);
   }
   logInfo('Garage sale public page fetched', {

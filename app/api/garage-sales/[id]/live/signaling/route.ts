@@ -32,23 +32,28 @@ function parseSince(value: string | null) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-async function requireSellerOwner(saleSellerId: string) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
+function checkSellerOwner(saleSellerId: string, userId: string | null) {
+  if (!userId) {
     return { ok: false as const, response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
   }
-  if (session.user.id !== saleSellerId) {
+  if (userId !== saleSellerId) {
     return { ok: false as const, response: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
   }
   return { ok: true as const };
 }
 
-async function requireAuthenticatedUser() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
+function requireAuthenticatedUser(userId: string | null) {
+  if (!userId) {
     return { ok: false as const, response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
   }
   return { ok: true as const };
+}
+
+function requireRoleAccess(role: SignalRole, saleSellerId: string, userId: string | null) {
+  if (role === 'SELLER') {
+    return checkSellerOwner(saleSellerId, userId);
+  }
+  return requireAuthenticatedUser(userId);
 }
 
 async function getActiveViewerCount(saleId: string, liveStartedAt: Date | null) {
@@ -102,14 +107,11 @@ export async function GET(req: Request, { params }: Params) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
   if (!isGarageSalePubliclyVisible(sale)) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  const session = await getServerSession(authOptions);
+  const userId = session?.user?.id ?? null;
 
-  if (roleParam === 'SELLER') {
-    const ownerCheck = await requireSellerOwner(sale.sellerId);
-    if (!ownerCheck.ok) return ownerCheck.response;
-  } else {
-    const authCheck = await requireAuthenticatedUser();
-    if (!authCheck.ok) return authCheck.response;
-  }
+  const accessCheck = requireRoleAccess(roleParam, sale.sellerId, userId);
+  if (!accessCheck.ok) return accessCheck.response;
 
   if (!sale.isLive) {
     return NextResponse.json({ isLive: false, liveStartedAt: sale.liveStartedAt, viewerCount: 0, signals: [] });
@@ -206,14 +208,11 @@ export async function POST(req: Request, { params }: Params) {
   if (!sale.isLive) {
     return NextResponse.json({ error: 'Live session is not active' }, { status: 422 });
   }
+  const session = await getServerSession(authOptions);
+  const userId = session?.user?.id ?? null;
 
-  if (role === 'SELLER') {
-    const ownerCheck = await requireSellerOwner(sale.sellerId);
-    if (!ownerCheck.ok) return ownerCheck.response;
-  } else {
-    const authCheck = await requireAuthenticatedUser();
-    if (!authCheck.ok) return authCheck.response;
-  }
+  const accessCheck = requireRoleAccess(role, sale.sellerId, userId);
+  if (!accessCheck.ok) return accessCheck.response;
 
   const signal = await prisma.garageSaleLiveSignal.create({
     data: {
