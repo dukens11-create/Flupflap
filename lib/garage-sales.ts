@@ -42,7 +42,7 @@ export function buildPublicGarageSaleWhere(now = new Date()) {
     isSpam: false,
     isArchived: false,
     paymentStatus: 'PAID' as const,
-    status: { notIn: ['REJECTED', 'HIDDEN', 'EXPIRED'] as const },
+    status: 'APPROVED' as const,
     OR: [
       { isLive: true },
       { endDate: { gte: now } },
