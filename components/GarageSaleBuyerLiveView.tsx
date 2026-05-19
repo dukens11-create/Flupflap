@@ -1,14 +1,11 @@
 'use client';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { MessageCircle, Send, Radio, Eye } from 'lucide-react';
+import { GARAGE_SALE_LIVE_RTC_CONFIG } from '@/lib/garage-sale-live-rtc';
 
 const DEFAULT_GUEST_NAME = 'Guest';
 const MEDIA_READY_TIMEOUT_MS = 1200;
 const PLAYBACK_RETRY_DELAY_MS = 250;
-const RTC_CONFIG: RTCConfiguration = {
-  iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }],
-};
-
 interface ChatMessage {
   id: string;
   userId: string | null;
@@ -45,6 +42,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
   const signalPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const signalCursorRef = useRef<string | null>(null);
   const activeOfferSignalRef = useRef<string | null>(null);
+  const pendingIceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const viewerHeartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const viewerIdRef = useRef<string | null>(null);
 
@@ -94,12 +92,42 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     peerRef.current = null;
     remoteStreamRef.current = null;
     activeOfferSignalRef.current = null;
+    pendingIceCandidatesRef.current = [];
     setStreamConnected(false);
     setPlaybackBlocked(false);
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
   }, []);
+
+  const addIceCandidateSafely = useCallback(async (pc: RTCPeerConnection, candidate: RTCIceCandidateInit) => {
+    try {
+      await pc.addIceCandidate(new RTCIceCandidate(candidate));
+    } catch {
+      // Ignore stale or out-of-order candidates during reconnect windows.
+    }
+  }, []);
+
+  const queueOrApplyRemoteIceCandidate = useCallback(async (candidate: RTCIceCandidateInit) => {
+    const pc = peerRef.current;
+    if (!pc || !pc.remoteDescription) {
+      pendingIceCandidatesRef.current.push(candidate);
+      if (pendingIceCandidatesRef.current.length > 80) {
+        pendingIceCandidatesRef.current = pendingIceCandidatesRef.current.slice(-80);
+      }
+      return;
+    }
+
+    await addIceCandidateSafely(pc, candidate);
+  }, [addIceCandidateSafely]);
+
+  const flushPendingIceCandidates = useCallback(async (pc: RTCPeerConnection) => {
+    const queued = [...pendingIceCandidatesRef.current];
+    pendingIceCandidatesRef.current = [];
+    for (const candidate of queued) {
+      await addIceCandidateSafely(pc, candidate);
+    }
+  }, [addIceCandidateSafely]);
 
   const playRemoteStream = useCallback(async () => {
     const video = videoRef.current;
@@ -226,7 +254,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     const remoteStream = new MediaStream();
     remoteStreamRef.current = remoteStream;
 
-    const pc = new RTCPeerConnection(RTC_CONFIG);
+    const pc = new RTCPeerConnection(GARAGE_SALE_LIVE_RTC_CONFIG);
     peerRef.current = pc;
     activeOfferSignalRef.current = signalId;
 
@@ -247,6 +275,12 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
 
       setStreamConnected(hasUsableMedia);
       setStreamError(null);
+
+      for (const track of remoteStream.getTracks()) {
+        track.onunmute = () => {
+          void playRemoteStream();
+        };
+      }
 
       void playRemoteStream();
     };
@@ -270,15 +304,22 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     };
 
     await pc.setRemoteDescription({ type, sdp: payload.sdp });
+    await flushPendingIceCandidates(pc);
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
     await postSignal('ANSWER', { type: answer.type, sdp: answer.sdp });
 
     if (videoRef.current) {
       videoRef.current.srcObject = remoteStream;
+      videoRef.current.onloadedmetadata = () => {
+        void playRemoteStream();
+      };
+      videoRef.current.oncanplay = () => {
+        void playRemoteStream();
+      };
     }
     void playRemoteStream();
-  }, [closePeerConnection, playRemoteStream, postSignal]);
+  }, [closePeerConnection, flushPendingIceCandidates, playRemoteStream, postSignal]);
 
   const pollSignals = useCallback(async () => {
     if (!isLive) return;
@@ -314,16 +355,16 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
           await handleSellerOffer(signal.id, payload);
         }
 
-        if (signal.kind === 'ICE' && peerRef.current) {
+        if (signal.kind === 'ICE') {
           const payload = signal.payload as { candidate?: RTCIceCandidateInit } | null;
           if (!payload?.candidate) continue;
-          await peerRef.current.addIceCandidate(new RTCIceCandidate(payload.candidate));
+          await queueOrApplyRemoteIceCandidate(payload.candidate);
         }
       }
     } catch {
       // polling retries
     }
-  }, [handleSellerOffer, isLive, saleId]);
+  }, [handleSellerOffer, isLive, queueOrApplyRemoteIceCandidate, saleId]);
 
   useEffect(() => {
     if (!isLive) {

@@ -111,6 +111,10 @@ Set these in **Environment → Environment Variables** in the Render dashboard:
 | `STRIPE_WEBHOOK_SECRET` | Secret from your Stripe webhook endpoint |
 | `SHIPPO_API_TOKEN` | Shippo API token for shipping rates + label purchase |
 | `NEXT_PUBLIC_MAPBOX_TOKEN` | Public Mapbox token used for map experiences (checkout address autocomplete and garage sale map view) |
+| `NEXT_PUBLIC_GARAGE_SALE_LIVE_STUN_URLS` | Optional comma-separated STUN URLs for garage-sale live WebRTC (defaults are used if unset) |
+| `NEXT_PUBLIC_GARAGE_SALE_LIVE_TURN_URLS` | Comma-separated TURN relay URLs for garage-sale live WebRTC (recommended for mobile NAT/carrier networks) |
+| `NEXT_PUBLIC_GARAGE_SALE_LIVE_TURN_USERNAME` | TURN username used with `NEXT_PUBLIC_GARAGE_SALE_LIVE_TURN_URLS` |
+| `NEXT_PUBLIC_GARAGE_SALE_LIVE_TURN_CREDENTIAL` | TURN credential/password used with `NEXT_PUBLIC_GARAGE_SALE_LIVE_TURN_URLS` |
 | `PLATFORM_FEE_PERCENT` | Legacy bootstrap env var (the app normalizes commission snapshots to `7`) |
 
 URL precedence for app redirects/absolute links: `NEXT_PUBLIC_SITE_URL` → `NEXT_PUBLIC_APP_URL` → `NEXTAUTH_URL`.

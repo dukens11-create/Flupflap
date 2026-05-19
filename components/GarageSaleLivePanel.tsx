@@ -1,15 +1,13 @@
 'use client';
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { Video, VideoOff, Mic, MicOff, Radio, AlertTriangle, Eye, RefreshCcw } from 'lucide-react';
+import { GARAGE_SALE_LIVE_RTC_CONFIG } from '@/lib/garage-sale-live-rtc';
 
 interface Props {
   saleId: string;
   initialIsLive: boolean;
 }
 
-const RTC_CONFIG: RTCConfiguration = {
-  iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }],
-};
 const PREVIEW_REQUIRED_MESSAGE = 'Preview your camera before starting your live garage sale.';
 const CAMERA_BLOCKED_MESSAGE = 'Camera access blocked';
 const CAMERA_READY_MESSAGE = 'Camera ready';
@@ -46,6 +44,10 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   const signalPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const signalCursorRef = useRef<string | null>(null);
   const hasRemoteAnswerRef = useRef(false);
+  const restartOfferTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const restartInProgressRef = useRef(false);
+  const restartPeerConnectionRef = useRef<((reason: string) => void) | null>(null);
+  const startCameraRef = useRef<((nextFacingMode?: 'user' | 'environment') => Promise<boolean>) | null>(null);
   const liveRef = useRef(initialIsLive);
   const micOnRef = useRef(true);
   const micPermissionDeniedRef = useRef(false);
@@ -125,14 +127,22 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
           const type = payload?.type === 'answer' ? payload.type : null;
           if (!type || !payload.sdp || !peerRef.current) continue;
 
-          await peerRef.current.setRemoteDescription({ type, sdp: payload.sdp });
+          try {
+            await peerRef.current.setRemoteDescription({ type, sdp: payload.sdp });
+          } catch {
+            continue;
+          }
           hasRemoteAnswerRef.current = true;
         }
 
         if (signal.kind === 'ICE') {
           const payload = signal.payload as { candidate?: RTCIceCandidateInit } | null;
           if (!payload?.candidate || !peerRef.current) continue;
-          await peerRef.current.addIceCandidate(new RTCIceCandidate(payload.candidate));
+          try {
+            await peerRef.current.addIceCandidate(new RTCIceCandidate(payload.candidate));
+          } catch {
+            // Ignore stale/out-of-order buyer candidates while restarting.
+          }
         }
       }
     } catch {
@@ -147,9 +157,14 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   }, [pollSignals, stopSignalPolling]);
 
   const createAndSendOffer = useCallback(async () => {
-    const stream = streamRef.current;
-    if (!stream) {
-      throw new Error(PREVIEW_REQUIRED_MESSAGE);
+    let stream = streamRef.current;
+    const hasLiveTrack = stream?.getTracks().some((track) => track.readyState === 'live') ?? false;
+    if (!stream || !hasLiveTrack) {
+      const cameraStarted = await startCameraRef.current?.(preferredFacingModeRef.current);
+      if (!cameraStarted || !streamRef.current) {
+        throw new Error(PREVIEW_REQUIRED_MESSAGE);
+      }
+      stream = streamRef.current;
     }
     if (typeof RTCPeerConnection === 'undefined') {
       throw new Error('Live streaming is not supported in this browser.');
@@ -158,7 +173,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     signalCursorRef.current = null;
     closePeerConnection();
 
-    const pc = new RTCPeerConnection(RTC_CONFIG);
+    const pc = new RTCPeerConnection(GARAGE_SALE_LIVE_RTC_CONFIG);
     peerRef.current = pc;
 
     stream.getTracks().forEach((track) => {
@@ -171,8 +186,14 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     };
 
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'failed') {
-        setError('WebRTC connection failed. Try restarting the live session.');
+      if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+        restartPeerConnectionRef.current?.(`connectionState:${pc.connectionState}`);
+      }
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
+        restartPeerConnectionRef.current?.(`iceConnectionState:${pc.iceConnectionState}`);
       }
     };
 
@@ -183,8 +204,36 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     startSignalPolling();
   }, [closePeerConnection, postSignal, startSignalPolling]);
 
+  const schedulePeerConnectionRestart = useCallback((reason: string) => {
+    if (!liveRef.current) return;
+    if (restartInProgressRef.current || restartOfferTimerRef.current) return;
+
+    setError(`Live connection interrupted (${reason}). Reconnecting…`);
+    restartOfferTimerRef.current = setTimeout(() => {
+      restartOfferTimerRef.current = null;
+      if (!liveRef.current || restartInProgressRef.current) return;
+
+      restartInProgressRef.current = true;
+      void createAndSendOffer()
+        .then(() => {
+          setError(null);
+        })
+        .catch(() => {
+          setError('Unable to reconnect live stream. Keep this page open while retrying…');
+        })
+        .finally(() => {
+          restartInProgressRef.current = false;
+        });
+    }, 700);
+  }, [createAndSendOffer]);
+
   useEffect(() => {
     liveRef.current = isLive;
+    if (!isLive && restartOfferTimerRef.current) {
+      clearTimeout(restartOfferTimerRef.current);
+      restartOfferTimerRef.current = null;
+      restartInProgressRef.current = false;
+    }
   }, [isLive]);
 
   useEffect(() => {
@@ -355,6 +404,14 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       return false;
     }
   }, [cameraStatus, ensurePreviewPlayback, logMobileCameraIssue]);
+
+  useEffect(() => {
+    startCameraRef.current = startCamera;
+  }, [startCamera]);
+
+  useEffect(() => {
+    restartPeerConnectionRef.current = schedulePeerConnectionRestart;
+  }, [schedulePeerConnectionRestart]);
 
   const stopCamera = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -542,6 +599,10 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       stopSignalPolling();
       closePeerConnection();
       stopCamera();
+      if (restartOfferTimerRef.current) {
+        clearTimeout(restartOfferTimerRef.current);
+        restartOfferTimerRef.current = null;
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to end live session');
     } finally {
@@ -576,6 +637,10 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       stopSignalPolling();
       closePeerConnection();
       streamRef.current?.getTracks().forEach((t) => t.stop());
+      if (restartOfferTimerRef.current) {
+        clearTimeout(restartOfferTimerRef.current);
+        restartOfferTimerRef.current = null;
+      }
     };
   }, [closePeerConnection, endLiveOnPageLeave, stopSignalPolling]);
 

@@ -129,9 +129,27 @@ export async function GET(req: Request, { params }: Params) {
     select: { id: true, sender: true, kind: true, payload: true, createdAt: true },
   });
 
+  let normalizedSignals = signals;
+  if (roleParam === 'BUYER' && !signals.some((signal) => signal.kind === 'OFFER')) {
+    const latestOffer = await prisma.garageSaleLiveSignal.findFirst({
+      where: {
+        saleId: id,
+        sender: 'SELLER',
+        kind: 'OFFER',
+        ...(sale.liveStartedAt ? { createdAt: { gte: sale.liveStartedAt } } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, sender: true, kind: true, payload: true, createdAt: true },
+    });
+
+    if (latestOffer) {
+      normalizedSignals = [latestOffer, ...signals.filter((signal) => signal.id !== latestOffer.id)];
+    }
+  }
+
   const viewerCount = await getActiveViewerCount(id, sale.liveStartedAt);
 
-  return NextResponse.json({ isLive: true, liveStartedAt: sale.liveStartedAt, viewerCount, signals });
+  return NextResponse.json({ isLive: true, liveStartedAt: sale.liveStartedAt, viewerCount, signals: normalizedSignals });
 }
 
 /** POST /api/garage-sales/[id]/live/signaling */
