@@ -139,8 +139,6 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     if (!video) return false;
 
     // Apply mobile-friendly attributes before attempting play
-    video.muted = false;
-    video.defaultMuted = false;
     video.autoplay = true;
     video.playsInline = true;
     video.setAttribute('autoplay', 'true');
@@ -148,7 +146,9 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     video.setAttribute('webkit-playsinline', 'true');
     video.preload = 'auto';
 
-    const tryPlay = async () => {
+    const tryPlay = async (muted: boolean) => {
+      video.muted = muted;
+      video.defaultMuted = muted;
       await video.play();
       setPlaybackBlocked(false);
       return true;
@@ -181,11 +181,13 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     }
 
     try {
-      return await tryPlay();
+      return await tryPlay(false);
     } catch {
       try {
+        // Mobile Safari often requires muted autoplay; use muted fallback to
+        // prioritize rendering and let users unmute via controls.
         await new Promise((resolve) => window.setTimeout(resolve, PLAYBACK_RETRY_DELAY_MS));
-        return await tryPlay();
+        return await tryPlay(true);
       } catch {
         setPlaybackBlocked(true);
         return false;
@@ -538,7 +540,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
       </div>
     );
   }
-  const canRenderRemoteVideo = streamConnected || hasRemoteMedia;
+  const showRemoteVideo = streamConnected || hasRemoteMedia;
 
   return (
     <div className="card space-y-4 p-4">
@@ -559,9 +561,9 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
           playsInline
           preload="auto"
           controls
-          className={`h-full w-full object-cover ${canRenderRemoteVideo ? '' : 'hidden'}`}
+          className={`h-full w-full object-cover ${showRemoteVideo ? '' : 'hidden'}`}
         />
-        {!canRenderRemoteVideo && (
+        {!showRemoteVideo && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white">
             <Radio size={40} className="animate-pulse text-red-400" />
             <p className="text-sm font-semibold">Connecting to seller stream…</p>
@@ -570,7 +572,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
             </p>
           </div>
         )}
-        {canRenderRemoteVideo && playbackBlocked && (
+        {showRemoteVideo && playbackBlocked && (
           <div className="absolute inset-0 flex items-center justify-center bg-slate-950/50 p-4">
             <button
               type="button"
@@ -581,7 +583,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
             </button>
           </div>
         )}
-        {canRenderRemoteVideo && recoveringConnection && (
+        {showRemoteVideo && recoveringConnection && (
           <div className="pointer-events-none absolute inset-0 flex items-start justify-center p-4">
             <span className="rounded-full bg-black/75 px-3 py-1.5 text-xs font-medium text-white shadow">
               Reconnecting to live stream…
