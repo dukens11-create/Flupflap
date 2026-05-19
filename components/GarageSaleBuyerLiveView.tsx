@@ -6,8 +6,8 @@ import { RTC_CONFIG } from '@/lib/rtc-config';
 const DEFAULT_GUEST_NAME = 'Guest';
 const MEDIA_READY_TIMEOUT_MS = 1200;
 const PLAYBACK_RETRY_DELAY_MS = 250;
-const MEDIA_STARTUP_TIMEOUT_MS = 10_000;
-const RECONNECT_DELAY_MS = 2_500;
+const MEDIA_STARTUP_TIMEOUT_MS = 10000;
+const RECONNECT_DELAY_MS = 2500;
 const MAX_AUTOMATIC_RECONNECT_ATTEMPTS = 3;
 const BUYER_LOG_PREFIX = '[GarageSaleBuyerLiveView]';
 
@@ -98,6 +98,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
   const connectionTimeoutRef = useRef<number | null>(null);
   const pollSignalsRef = useRef<(() => Promise<void>) | null>(null);
   const reconnectAttemptsRef = useRef(0);
+  const forceLatestOfferRef = useRef(false);
   const peerStateLogRef = useRef<{
     connectionState: RTCPeerConnectionState | null;
     iceConnectionState: RTCIceConnectionState | null;
@@ -335,7 +336,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
 
     const performReconnect = () => {
       closePeerConnection();
-      signalCursorRef.current = null;
+      forceLatestOfferRef.current = true;
       void pollSignalsRef.current?.();
     };
 
@@ -377,6 +378,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     closePeerConnection();
     setConnectionStatus(reconnectAttemptsRef.current > 0 ? 'reconnecting' : 'connecting');
     setStreamConnected(false);
+    forceLatestOfferRef.current = false;
 
     const remoteStream = new MediaStream();
     remoteStreamRef.current = remoteStream;
@@ -496,6 +498,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     try {
       const params = new URLSearchParams({ role: 'BUYER' });
       if (signalCursorRef.current) params.set('since', signalCursorRef.current);
+      if (forceLatestOfferRef.current) params.set('forceLatestOffer', '1');
       const res = await fetch(`/api/garage-sales/${saleId}/live/signaling?${params.toString()}`);
       if (!res.ok) return;
 
@@ -528,6 +531,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
           setStreamError(null);
           try {
             await handleSellerOffer(signal.id, payload);
+            forceLatestOfferRef.current = false;
             // Advance cursor only after the offer was successfully processed.
             // Unlike ICE, an OFFER must be retried on error, so the cursor is
             // intentionally NOT advanced in the catch branch.
@@ -613,7 +617,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     setReconnectAttempts(1);
     setConnectionStatus(getReconnectStatus(1));
     setStreamError('Retrying seller stream…');
-    signalCursorRef.current = null;
+    forceLatestOfferRef.current = true;
     closePeerConnection();
     void pollSignalsRef.current?.();
   }, [closePeerConnection]);

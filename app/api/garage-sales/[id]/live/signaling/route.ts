@@ -105,6 +105,7 @@ export async function GET(req: Request, { params }: Params) {
   }
 
   const sinceDate = parseSince(url.searchParams.get('since'));
+  const forceLatestOffer = roleParam === 'BUYER' && url.searchParams.get('forceLatestOffer') === '1';
   const counterpart = roleParam === 'SELLER' ? 'BUYER' : 'SELLER';
 
   const createdAtFilter: Prisma.DateTimeFilter | undefined = (() => {
@@ -134,7 +135,7 @@ export async function GET(req: Request, { params }: Params) {
 
   signals = signals.reverse();
 
-  if (roleParam === 'BUYER' && !signals.some((signal) => signal.kind === 'OFFER')) {
+  if (roleParam === 'BUYER' && (forceLatestOffer || !signals.some((signal) => signal.kind === 'OFFER'))) {
     const latestOffer = await prisma.garageSaleLiveSignal.findFirst({
       where: {
         saleId: id,

@@ -22,7 +22,7 @@ const RTC_LOG_PREFIX = '[GarageSaleLivePanel][rtc]';
 const MEDIA_READY_TIMEOUT_MS = 1500;
 // Retry once shortly after the first play() rejection for iOS/Safari startup timing quirks.
 const PLAYBACK_RETRY_DELAY_MS = 120;
-const REMOTE_ANSWER_TIMEOUT_MS = 10_000;
+const REMOTE_ANSWER_TIMEOUT_MS = 10000;
 const MOBILE_VIDEO_CONSTRAINTS: MediaTrackConstraints = {
   width: { ideal: 640 },
   height: { ideal: 360 },
@@ -238,7 +238,11 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       !stream
       || !stream.getVideoTracks().some((track) => track.readyState === 'live')
     ) {
-      const cameraStarted = await startCameraRef.current?.(preferredFacingModeRef.current);
+      const startCameraHandler = startCameraRef.current;
+      if (!startCameraHandler) {
+        throw new Error('Camera preview is not ready. Retry your camera preview before going live.');
+      }
+      const cameraStarted = await startCameraHandler(preferredFacingModeRef.current);
       stream = streamRef.current;
       if (
         !cameraStarted
