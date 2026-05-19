@@ -1,15 +1,13 @@
 'use client';
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { Video, VideoOff, Mic, MicOff, Radio, AlertTriangle, Eye, RefreshCcw } from 'lucide-react';
+import { RTC_CONFIG } from '@/lib/rtc-config';
 
 interface Props {
   saleId: string;
   initialIsLive: boolean;
 }
 
-const RTC_CONFIG: RTCConfiguration = {
-  iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }],
-};
 const PREVIEW_REQUIRED_MESSAGE = 'Preview your camera before starting your live garage sale.';
 const CAMERA_BLOCKED_MESSAGE = 'Camera access blocked';
 const CAMERA_READY_MESSAGE = 'Camera ready';
@@ -55,6 +53,12 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   // Always points at the latest createAndSendOffer so connection-state handlers
   // can re-offer without holding a stale closure.
   const createAndSendOfferRef = useRef<(() => Promise<void>) | null>(null);
+  // Always points at the latest startSignalPolling so reconnect error paths can
+  // restart polling without a stale closure.
+  const startSignalPollingRef = useRef<(() => void) | null>(null);
+  // ICE candidates received before the remote answer is applied are buffered here
+  // and drained once setRemoteDescription(answer) completes.
+  const pendingIceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
 
   const [isLive, setIsLive] = useState(initialIsLive);
   const [camOn, setCamOn] = useState(false);
@@ -89,6 +93,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       reconnectTimeoutRef.current = null;
     }
     hasRemoteAnswerRef.current = false;
+    pendingIceCandidatesRef.current = [];
     peerRef.current?.close();
     peerRef.current = null;
   }, []);
@@ -136,12 +141,35 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
 
           await peerRef.current.setRemoteDescription({ type, sdp: payload.sdp });
           hasRemoteAnswerRef.current = true;
+
+          // Drain ICE candidates that arrived before the answer was applied.
+          for (const candidate of pendingIceCandidatesRef.current) {
+            if (!peerRef.current) break;
+            try {
+              await peerRef.current.addIceCandidate(new RTCIceCandidate(candidate));
+            } catch {
+              // Stale or incompatible candidate — ignore
+            }
+          }
+          pendingIceCandidatesRef.current = [];
         }
 
         if (signal.kind === 'ICE') {
           const payload = signal.payload as { candidate?: RTCIceCandidateInit } | null;
-          if (!payload?.candidate || !peerRef.current) continue;
-          await peerRef.current.addIceCandidate(new RTCIceCandidate(payload.candidate));
+          if (!payload?.candidate) continue;
+          if (!hasRemoteAnswerRef.current) {
+            // Buffer the candidate until setRemoteDescription(answer) completes.
+            // Adding a candidate before the remote description is set throws and
+            // the candidate would be permanently dropped.
+            pendingIceCandidatesRef.current.push(payload.candidate);
+            continue;
+          }
+          if (!peerRef.current) continue;
+          try {
+            await peerRef.current.addIceCandidate(new RTCIceCandidate(payload.candidate));
+          } catch {
+            // Ignore stale candidates from a previous peer connection
+          }
         }
       }
     } catch {
@@ -194,7 +222,14 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         reconnectTimeoutRef.current = window.setTimeout(() => {
           reconnectTimeoutRef.current = null;
           if (!liveRef.current || peerRef.current !== pc) return;
-          void createAndSendOfferRef.current?.();
+          void (async () => {
+            try {
+              await createAndSendOfferRef.current?.();
+            } catch {
+              // If re-offer fails, restart polling so buyer signals are not lost
+              startSignalPollingRef.current?.();
+            }
+          })();
         }, 5000);
       }
 
@@ -204,7 +239,14 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         reconnectTimeoutRef.current = window.setTimeout(() => {
           reconnectTimeoutRef.current = null;
           if (!liveRef.current || peerRef.current !== pc) return;
-          void createAndSendOfferRef.current?.();
+          void (async () => {
+            try {
+              await createAndSendOfferRef.current?.();
+            } catch {
+              // If re-offer fails, restart polling so buyer signals are not lost
+              startSignalPollingRef.current?.();
+            }
+          })();
         }, 2000);
       }
     };
@@ -221,7 +263,16 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     createAndSendOfferRef.current = createAndSendOffer;
   }, [createAndSendOffer]);
 
+  // Keep the ref current so reconnect error paths can restart polling without a stale closure.
   useEffect(() => {
+    startSignalPollingRef.current = startSignalPolling;
+  }, [startSignalPolling]);
+
+  // Sync liveRef so connection-state handlers have an up-to-date value without
+  // capturing stale closure state.  This prevents zombie re-offer attempts after
+  // the seller ends the live session.
+  useEffect(() => {
+    liveRef.current = isLive;
   }, [isLive]);
 
   useEffect(() => {

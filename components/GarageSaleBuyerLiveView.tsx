@@ -1,13 +1,11 @@
 'use client';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { MessageCircle, Send, Radio, Eye } from 'lucide-react';
+import { RTC_CONFIG } from '@/lib/rtc-config';
 
 const DEFAULT_GUEST_NAME = 'Guest';
 const MEDIA_READY_TIMEOUT_MS = 1200;
 const PLAYBACK_RETRY_DELAY_MS = 250;
-const RTC_CONFIG: RTCConfiguration = {
-  iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }],
-};
 
 interface ChatMessage {
   id: string;
@@ -243,13 +241,11 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
         videoRef.current.srcObject = remoteStream;
       }
 
-      const hasUsableMedia =
-        remoteStream.getVideoTracks().length > 0 || remoteStream.getAudioTracks().length > 0;
-
-      setStreamConnected(hasUsableMedia);
-      setStreamError(null);
-
-      void playRemoteStream();
+      // Do NOT mark the stream as connected here — ontrack fires as soon as the
+      // remote description is set, before ICE has negotiated a media path.
+      // Showing the video element at this point produces a black screen on mobile
+      // because no frames are flowing yet.  streamConnected is set to true only
+      // when onconnectionstatechange reports 'connected'.
     };
 
     pc.onicecandidate = (event) => {
@@ -311,24 +307,35 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
       setViewerCount(data.viewerCount ?? 0);
 
       for (const signal of data.signals) {
-        signalCursorRef.current = signal.createdAt;
-
         if (signal.kind === 'OFFER') {
-          if (activeOfferSignalRef.current === signal.id) continue;
-          const payload = signal.payload as { type?: string; sdp?: string } | null;
-          if (!payload) continue;
-          setStreamError(null);
-          await handleSellerOffer(signal.id, payload);
-        }
-
-        if (signal.kind === 'ICE' && peerRef.current) {
-          const payload = signal.payload as { candidate?: RTCIceCandidateInit } | null;
-          if (!payload?.candidate) continue;
-          try {
-            await peerRef.current.addIceCandidate(new RTCIceCandidate(payload.candidate));
-          } catch {
-            // Ignore stale candidates from a previous peer connection
+          // Skip already-processed offers without losing the cursor position.
+          if (activeOfferSignalRef.current === signal.id) {
+            signalCursorRef.current = signal.createdAt;
+            continue;
           }
+          const payload = signal.payload as { type?: string; sdp?: string } | null;
+          if (!payload) { signalCursorRef.current = signal.createdAt; continue; }
+          setStreamError(null);
+          try {
+            await handleSellerOffer(signal.id, payload);
+            // Advance cursor only after the offer was successfully processed.
+            signalCursorRef.current = signal.createdAt;
+          } catch {
+            // Leave cursor unchanged so the offer is retried on the next poll.
+            break;
+          }
+        } else if (signal.kind === 'ICE' && peerRef.current) {
+          const payload = signal.payload as { candidate?: RTCIceCandidateInit } | null;
+          if (payload?.candidate) {
+            try {
+              await peerRef.current.addIceCandidate(new RTCIceCandidate(payload.candidate));
+            } catch {
+              // Ignore stale candidates from a previous peer connection
+            }
+          }
+          signalCursorRef.current = signal.createdAt;
+        } else {
+          signalCursorRef.current = signal.createdAt;
         }
       }
     } catch {
