@@ -105,6 +105,7 @@ export async function GET(req: Request, { params }: Params) {
   }
 
   const sinceDate = parseSince(url.searchParams.get('since'));
+  const forceLatestOffer = roleParam === 'BUYER' && url.searchParams.get('forceLatestOffer') === '1';
   const counterpart = roleParam === 'SELLER' ? 'BUYER' : 'SELLER';
 
   const createdAtFilter: Prisma.DateTimeFilter | undefined = (() => {
@@ -117,16 +118,41 @@ export async function GET(req: Request, { params }: Params) {
     return undefined;
   })();
 
-  const signals = await prisma.garageSaleLiveSignal.findMany({
+  const signalWhere: Prisma.GarageSaleLiveSignalWhereInput = {
+    saleId: id,
+    sender: counterpart,
+    ...(createdAtFilter ? { createdAt: createdAtFilter } : {}),
+  };
+
+  let signals = await prisma.garageSaleLiveSignal.findMany({
     where: {
-      saleId: id,
-      sender: counterpart,
-      ...(createdAtFilter ? { createdAt: createdAtFilter } : {}),
+      ...signalWhere,
     },
-    orderBy: { createdAt: 'asc' },
+    orderBy: { createdAt: 'desc' },
     take: 100,
     select: { id: true, sender: true, kind: true, payload: true, createdAt: true },
   });
+
+  signals = signals.reverse();
+
+  if (roleParam === 'BUYER' && (forceLatestOffer || !signals.some((signal) => signal.kind === 'OFFER'))) {
+    const latestOffer = await prisma.garageSaleLiveSignal.findFirst({
+      where: {
+        saleId: id,
+        sender: counterpart,
+        kind: 'OFFER',
+        ...(sale.liveStartedAt ? { createdAt: { gte: sale.liveStartedAt } } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, sender: true, kind: true, payload: true, createdAt: true },
+    });
+
+    if (latestOffer && !signals.some((signal) => signal.id === latestOffer.id)) {
+      signals = [latestOffer, ...signals].sort((left, right) => (
+        left.createdAt.getTime() - right.createdAt.getTime()
+      ));
+    }
+  }
 
   const viewerCount = await getActiveViewerCount(id, sale.liveStartedAt);
 
