@@ -21,6 +21,7 @@ const MEDIA_READY_TIMEOUT_MS = 1500;
 // Retry once shortly after the first play() rejection for iOS/Safari startup timing quirks.
 const PLAYBACK_RETRY_DELAY_MS = 120;
 const PEER_CONNECTION_RESTART_DELAY_MS = 700;
+const DISCONNECTED_RESTART_DELAY_MS = 4000;
 
 type CameraStatus = 'idle' | 'connecting' | 'ready' | 'awaitingInteraction' | 'blocked' | 'denied' | 'unsupported';
 
@@ -47,8 +48,9 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   const hasRemoteAnswerRef = useRef(false);
   const restartOfferTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const restartInProgressRef = useRef(false);
-  const restartPeerConnectionRef = useRef<((reason: string) => void) | null>(null);
+  const restartPeerConnectionRef = useRef<((reason: 'failed' | 'disconnected', delayMs?: number) => void) | null>(null);
   const startCameraRef = useRef<((nextFacingMode?: 'user' | 'environment') => Promise<boolean>) | null>(null);
+  const rtcConfigRef = useRef<RTCConfiguration>(GARAGE_SALE_LIVE_RTC_CONFIG);
   const liveRef = useRef(initialIsLive);
   const micOnRef = useRef(true);
   const micPermissionDeniedRef = useRef(false);
@@ -180,7 +182,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     signalCursorRef.current = null;
     closePeerConnection();
 
-    const pc = new RTCPeerConnection(GARAGE_SALE_LIVE_RTC_CONFIG);
+    const pc = new RTCPeerConnection(rtcConfigRef.current);
     peerRef.current = pc;
 
     stream.getTracks().forEach((track) => {
@@ -193,14 +195,20 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     };
 
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
-        restartPeerConnectionRef.current?.(`connectionState:${pc.connectionState}`);
+      if (pc.connectionState === 'failed') {
+        restartPeerConnectionRef.current?.('failed', PEER_CONNECTION_RESTART_DELAY_MS);
+      }
+      if (pc.connectionState === 'disconnected') {
+        restartPeerConnectionRef.current?.('disconnected', DISCONNECTED_RESTART_DELAY_MS);
       }
     };
 
     pc.oniceconnectionstatechange = () => {
-      if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
-        restartPeerConnectionRef.current?.(`iceConnectionState:${pc.iceConnectionState}`);
+      if (pc.iceConnectionState === 'failed') {
+        restartPeerConnectionRef.current?.('failed', PEER_CONNECTION_RESTART_DELAY_MS);
+      }
+      if (pc.iceConnectionState === 'disconnected') {
+        restartPeerConnectionRef.current?.('disconnected', DISCONNECTED_RESTART_DELAY_MS);
       }
     };
 
@@ -211,11 +219,13 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     startSignalPolling();
   }, [closePeerConnection, postSignal, startSignalPolling]);
 
-  const schedulePeerConnectionRestart = useCallback((reason: string) => {
+  const schedulePeerConnectionRestart = useCallback((reason: 'failed' | 'disconnected', delayMs = PEER_CONNECTION_RESTART_DELAY_MS) => {
     if (!liveRef.current) return;
     if (restartInProgressRef.current || restartOfferTimerRef.current) return;
 
-    setError(`Live connection interrupted (${reason}). Reconnecting…`);
+    setError(reason === 'disconnected'
+      ? 'Live connection dropped. Attempting to recover…'
+      : 'Live connection failed. Reconnecting…');
     restartOfferTimerRef.current = setTimeout(() => {
       restartOfferTimerRef.current = null;
       if (!liveRef.current || restartInProgressRef.current) return;
@@ -231,7 +241,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         .finally(() => {
           restartInProgressRef.current = false;
         });
-    }, PEER_CONNECTION_RESTART_DELAY_MS);
+    }, delayMs);
   }, [createAndSendOffer]);
 
   useEffect(() => {
@@ -415,6 +425,27 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   useEffect(() => {
     startCameraRef.current = startCamera;
   }, [startCamera]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchRtcConfig = async () => {
+      try {
+        const res = await fetch('/api/garage-sales/live/rtc-config', { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json() as RTCConfiguration;
+        if (!cancelled && Array.isArray(data.iceServers) && data.iceServers.length > 0) {
+          rtcConfigRef.current = data;
+        }
+      } catch {
+        // Fallback to default STUN config.
+      }
+    };
+
+    void fetchRtcConfig();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     restartPeerConnectionRef.current = schedulePeerConnectionRestart;

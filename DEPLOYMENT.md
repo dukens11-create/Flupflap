@@ -77,9 +77,9 @@ In the **Environment** tab, add:
 | `NEXT_PUBLIC_SITE_URL` | Primary public site URL used for redirects/absolute links, e.g. `https://www.flupflap.com` |
 | `NEXT_PUBLIC_API_URL` | Optional API base for external/mobile integrations; set only when API host differs from the site URL |
 | `NEXT_PUBLIC_GARAGE_SALE_LIVE_STUN_URLS` | Optional comma-separated STUN URLs for garage-sale live WebRTC (defaults are used if unset) |
-| `NEXT_PUBLIC_GARAGE_SALE_LIVE_TURN_URLS` | Comma-separated TURN relay URLs for garage-sale live WebRTC (recommended for mobile NAT/carrier networks) |
-| `NEXT_PUBLIC_GARAGE_SALE_LIVE_TURN_USERNAME` | TURN username used by garage-sale live WebRTC |
-| `NEXT_PUBLIC_GARAGE_SALE_LIVE_TURN_CREDENTIAL` | TURN credential/password used by garage-sale live WebRTC |
+| `GARAGE_SALE_LIVE_TURN_URLS` | Comma-separated TURN relay URLs for garage-sale live WebRTC (recommended for mobile NAT/carrier networks) |
+| `GARAGE_SALE_LIVE_TURN_USERNAME` | TURN username used by garage-sale live WebRTC |
+| `GARAGE_SALE_LIVE_TURN_CREDENTIAL` | TURN credential/password used by garage-sale live WebRTC |
 | `STRIPE_SECRET_KEY` | From your Stripe dashboard → Developers → API keys |
 | `STRIPE_PUBLISHABLE_KEY` | From your Stripe dashboard → Developers → API keys |
 | `STRIPE_WEBHOOK_SECRET` | From Stripe → Webhooks → your endpoint → Signing secret |

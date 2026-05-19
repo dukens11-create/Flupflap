@@ -44,6 +44,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
   const signalCursorRef = useRef<string | null>(null);
   const activeOfferSignalRef = useRef<string | null>(null);
   const pendingIceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
+  const rtcConfigRef = useRef<RTCConfiguration>(GARAGE_SALE_LIVE_RTC_CONFIG);
   const viewerHeartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const viewerIdRef = useRef<string | null>(null);
 
@@ -117,7 +118,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     if (!pc || !pc.remoteDescription) {
       pendingIceCandidatesRef.current.push(candidate);
       if (pendingIceCandidatesRef.current.length > MAX_PENDING_ICE_CANDIDATES) {
-        pendingIceCandidatesRef.current = pendingIceCandidatesRef.current.slice(-MAX_PENDING_ICE_CANDIDATES);
+        pendingIceCandidatesRef.current.pop();
       }
       return;
     }
@@ -258,7 +259,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     const remoteStream = new MediaStream();
     remoteStreamRef.current = remoteStream;
 
-    const pc = new RTCPeerConnection(GARAGE_SALE_LIVE_RTC_CONFIG);
+    const pc = new RTCPeerConnection(rtcConfigRef.current);
     peerRef.current = pc;
     activeOfferSignalRef.current = signalId;
 
@@ -357,6 +358,27 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
       // polling retries
     }
   }, [handleSellerOffer, isLive, queueOrApplyRemoteIceCandidate, saleId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchRtcConfig = async () => {
+      try {
+        const res = await fetch('/api/garage-sales/live/rtc-config', { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json() as RTCConfiguration;
+        if (!cancelled && Array.isArray(data.iceServers) && data.iceServers.length > 0) {
+          rtcConfigRef.current = data;
+        }
+      } catch {
+        // Fallback to default STUN config.
+      }
+    };
+
+    void fetchRtcConfig();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!isLive) {

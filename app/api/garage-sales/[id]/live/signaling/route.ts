@@ -143,7 +143,10 @@ export async function GET(req: Request, { params }: Params) {
     });
 
     if (latestOffer) {
-      normalizedSignals = [latestOffer, ...signals.filter((signal) => signal.id !== latestOffer.id)];
+      const alreadyIncluded = signals.some((signal) => signal.id === latestOffer.id);
+      normalizedSignals = alreadyIncluded
+        ? signals
+        : [latestOffer, ...signals];
     }
   }
 
