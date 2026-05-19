@@ -280,12 +280,6 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
       setStreamConnected(hasUsableMedia);
       setStreamError(null);
 
-      for (const track of remoteStream.getTracks()) {
-        track.onunmute = () => {
-          void playRemoteStream();
-        };
-      }
-
       void playRemoteStream();
     };
 
@@ -315,12 +309,6 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
 
     if (videoRef.current) {
       videoRef.current.srcObject = remoteStream;
-      videoRef.current.onloadedmetadata = () => {
-        void playRemoteStream();
-      };
-      videoRef.current.oncanplay = () => {
-        void playRemoteStream();
-      };
     }
     void playRemoteStream();
   }, [closePeerConnection, flushPendingIceCandidates, playRemoteStream, postSignal]);
