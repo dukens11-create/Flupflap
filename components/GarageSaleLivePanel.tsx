@@ -167,7 +167,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
 
   const createAndSendOffer = useCallback(async () => {
     let stream = streamRef.current;
-    const hasUsableLiveTrack = stream?.getTracks().some((track) => track.readyState === 'live' && track.enabled) ?? false;
+    const hasUsableLiveTrack = stream?.getTracks().some((track) => track.readyState !== 'ended' && track.enabled) ?? false;
     if (!stream || !hasUsableLiveTrack) {
       const cameraStarted = await startCameraRef.current?.(preferredFacingModeRef.current);
       if (!cameraStarted || !streamRef.current) {
@@ -236,7 +236,8 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
           setError(null);
         })
         .catch(() => {
-          setError('Unable to reconnect live stream. Keep this page open while retrying…');
+          setError('Unable to reconnect live stream. Retrying…');
+          schedulePeerConnectionRestart(reason, 2500);
         })
         .finally(() => {
           restartInProgressRef.current = false;
