@@ -487,6 +487,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     closePeerConnection,
     isLive,
     logStreamEvent,
+    markConnectionReady,
     playRemoteStream,
     postSignal,
     scheduleReconnect,
