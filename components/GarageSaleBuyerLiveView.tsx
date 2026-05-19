@@ -17,6 +17,43 @@ function getReconnectStatus(attempts: number): ConnectionStatus {
   return attempts >= MAX_AUTOMATIC_RECONNECT_ATTEMPTS ? 'unavailable' : 'reconnecting';
 }
 
+function getConnectionStatusUi(status: ConnectionStatus, attempts: number) {
+  switch (status) {
+    case 'connected':
+      return {
+        badgeClassName: 'bg-emerald-50 text-emerald-700',
+        dotClassName: 'bg-emerald-500',
+        label: 'Connected',
+        headline: 'Connected to seller stream',
+        copy: 'Live video is playing.',
+      };
+    case 'reconnecting':
+      return {
+        badgeClassName: 'bg-slate-100 text-slate-700',
+        dotClassName: 'animate-pulse bg-slate-500',
+        label: `Reconnecting${attempts > 0 ? ` (${attempts})` : ''}`,
+        headline: 'Reconnecting to seller stream…',
+        copy: 'Live video may take a few seconds on mobile networks.',
+      };
+    case 'unavailable':
+      return {
+        badgeClassName: 'bg-amber-50 text-amber-700',
+        dotClassName: 'bg-amber-500',
+        label: 'Video unavailable',
+        headline: 'Live video is temporarily unavailable',
+        copy: 'Live chat is still available below while the video reconnects.',
+      };
+    default:
+      return {
+        badgeClassName: 'bg-slate-100 text-slate-700',
+        dotClassName: 'animate-pulse bg-slate-500',
+        label: 'Connecting',
+        headline: 'Connecting to seller stream…',
+        copy: 'Live video may take a few seconds on mobile networks.',
+      };
+  }
+}
+
 interface ChatMessage {
   id: string;
   userId: string | null;
@@ -572,8 +609,8 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
   }, [clearConnectionTimeout, clearReconnectTimeout, closePeerConnection, stopSignalPolling]);
 
   const handleManualRetry = useCallback(() => {
-    reconnectAttemptsRef.current = 0;
-    setReconnectAttempts(0);
+    reconnectAttemptsRef.current = 1;
+    setReconnectAttempts(1);
     setConnectionStatus(getReconnectStatus(1));
     setStreamError('Retrying seller stream…');
     signalCursorRef.current = null;
@@ -627,26 +664,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     );
   }
 
-  const connectionStatusBadgeClassName = connectionStatus === 'connected'
-    ? 'bg-emerald-50 text-emerald-700'
-    : connectionStatus === 'unavailable'
-      ? 'bg-amber-50 text-amber-700'
-      : 'bg-slate-100 text-slate-700';
-  const connectionStatusLabel = connectionStatus === 'connected'
-    ? 'Connected'
-    : connectionStatus === 'reconnecting'
-      ? `Reconnecting${reconnectAttempts > 0 ? ` (${reconnectAttempts})` : ''}`
-      : connectionStatus === 'unavailable'
-        ? 'Video unavailable'
-        : 'Connecting';
-  const streamStatusHeadline = connectionStatus === 'unavailable'
-    ? 'Live video is temporarily unavailable'
-    : connectionStatus === 'reconnecting'
-      ? 'Reconnecting to seller stream…'
-      : 'Connecting to seller stream…';
-  const streamStatusCopy = connectionStatus === 'unavailable'
-    ? 'Live chat is still available below while the video reconnects.'
-    : 'Live video may take a few seconds on mobile networks.';
+  const connectionStatusUi = getConnectionStatusUi(connectionStatus, reconnectAttempts);
 
   return (
     <div className="card space-y-4 p-4">
@@ -658,15 +676,9 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
         <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
           <Eye size={12} /> {viewerCount} watching
         </span>
-        <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${connectionStatusBadgeClassName}`}>
-          <span className={`h-2 w-2 rounded-full ${
-            connectionStatus === 'connected'
-              ? 'bg-emerald-500'
-              : connectionStatus === 'unavailable'
-                ? 'bg-amber-500'
-                : 'animate-pulse bg-slate-500'
-          }`} />
-          {connectionStatusLabel}
+        <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${connectionStatusUi.badgeClassName}`}>
+          <span className={`h-2 w-2 rounded-full ${connectionStatusUi.dotClassName}`} />
+          {connectionStatusUi.label}
         </span>
       </div>
 
@@ -683,9 +695,9 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
         {!streamConnected && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white">
             <Radio size={40} className="animate-pulse text-red-400" />
-            <p className="text-sm font-semibold">{streamStatusHeadline}</p>
+            <p className="text-sm font-semibold">{connectionStatusUi.headline}</p>
             <p className="text-xs text-slate-300 px-4 text-center">
-              {streamStatusCopy}
+              {connectionStatusUi.copy}
             </p>
             <button
               type="button"

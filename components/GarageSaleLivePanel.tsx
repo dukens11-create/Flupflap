@@ -23,6 +23,11 @@ const MEDIA_READY_TIMEOUT_MS = 1500;
 // Retry once shortly after the first play() rejection for iOS/Safari startup timing quirks.
 const PLAYBACK_RETRY_DELAY_MS = 120;
 const REMOTE_ANSWER_TIMEOUT_MS = 10_000;
+const MOBILE_VIDEO_CONSTRAINTS: MediaTrackConstraints = {
+  width: { ideal: 640 },
+  height: { ideal: 360 },
+  frameRate: { ideal: 24, max: 30 },
+};
 
 type CameraStatus = 'idle' | 'connecting' | 'ready' | 'awaitingInteraction' | 'blocked' | 'denied' | 'unsupported';
 
@@ -505,9 +510,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
 
       try {
         await videoTrack.applyConstraints({
-          width: { ideal: 640 },
-          height: { ideal: 360 },
-          frameRate: { ideal: 24, max: 30 },
+          ...MOBILE_VIDEO_CONSTRAINTS,
         });
       } catch (constraintError) {
         logMobileCameraIssue('camera constraint fallback', {
@@ -599,12 +602,10 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         try {
           // First attempt: exact environment constraint.
           newVideoStream = await navigator.mediaDevices.getUserMedia({
-            video: {
-              facingMode: { exact: 'environment' },
-              width: { ideal: 640 },
-              height: { ideal: 360 },
-              frameRate: { ideal: 24, max: 30 },
-            },
+              video: {
+                ...MOBILE_VIDEO_CONSTRAINTS,
+                facingMode: { exact: 'environment' },
+              },
             audio: false,
           });
         } catch {
@@ -612,10 +613,8 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
           try {
             newVideoStream = await navigator.mediaDevices.getUserMedia({
               video: {
+                ...MOBILE_VIDEO_CONSTRAINTS,
                 facingMode: 'environment',
-                width: { ideal: 640 },
-                height: { ideal: 360 },
-                frameRate: { ideal: 24, max: 30 },
               },
               audio: false,
             });
@@ -630,10 +629,8 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       } else {
         newVideoStream = await navigator.mediaDevices.getUserMedia({
           video: {
+            ...MOBILE_VIDEO_CONSTRAINTS,
             facingMode: 'user',
-            width: { ideal: 640 },
-            height: { ideal: 360 },
-            frameRate: { ideal: 24, max: 30 },
           },
           audio: false,
         });
