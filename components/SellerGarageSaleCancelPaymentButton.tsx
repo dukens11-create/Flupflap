@@ -30,7 +30,6 @@ export default function SellerGarageSaleCancelPaymentButton({ saleId }: Props) {
         return;
       }
       router.push(`/seller/garage-sales?cancelled=1&saleId=${encodeURIComponent(saleId)}`);
-      router.refresh();
     } catch {
       setError('Unable to cancel pending payment.');
     } finally {
@@ -46,7 +45,7 @@ export default function SellerGarageSaleCancelPaymentButton({ saleId }: Props) {
         onClick={handleCancelPayment}
         disabled={isSubmitting}
       >
-        {isSubmitting ? 'Cancelling…' : 'Cancel Payment'}
+        {isSubmitting ? 'Cancelling...' : 'Cancel Payment'}
       </button>
       {error && (
         <p className="w-full text-xs text-red-700">

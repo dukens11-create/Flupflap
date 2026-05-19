@@ -59,12 +59,12 @@ const PAYMENT_LABEL: Record<string, string> = {
 };
 const PAID_QUERY_FLAG = '1';
 const PENDING_CANCEL_PAYMENT_STATUSES = new Set([
-  'pending',
-  'processing',
-  'confirming',
-  'requires_payment_method',
-  'requires_action',
-  'unpaid',
+  'PENDING',
+  'PROCESSING',
+  'CONFIRMING',
+  'REQUIRES_PAYMENT_METHOD',
+  'REQUIRES_ACTION',
+  'UNPAID',
 ]);
 
 function shouldWarnOnSyncFailure(reason?: string) {
@@ -76,9 +76,11 @@ function isCancelledPaymentSale(sale: { paymentStatus: string; isArchived: boole
 }
 
 function canCancelPendingPayment(sale: { paymentStatus: string; status: string; isArchived: boolean }) {
-  const pendingLike = PENDING_CANCEL_PAYMENT_STATUSES.has(sale.paymentStatus.toLowerCase());
-  const listingHiddenOrNotActive = sale.status !== 'APPROVED' || sale.isArchived;
-  return pendingLike && listingHiddenOrNotActive && sale.paymentStatus !== 'REFUNDED' && !isCancelledPaymentSale(sale);
+  const isPendingLike = PENDING_CANCEL_PAYMENT_STATUSES.has(sale.paymentStatus);
+  const isHiddenOrNotActive = sale.status !== 'APPROVED' || sale.isArchived;
+  const isRefunded = sale.paymentStatus === 'REFUNDED';
+  const isAlreadyCancelled = isCancelledPaymentSale(sale);
+  return isPendingLike && isHiddenOrNotActive && !isRefunded && !isAlreadyCancelled;
 }
 
 export default async function SellerGarageSalesPage({
@@ -184,7 +186,7 @@ export default async function SellerGarageSalesPage({
             const showRepost = lifecycle.state === 'EXPIRED' && sale.paymentStatus === 'PAID';
             const paymentLabel = isCancelledPaymentSale(sale)
               ? 'Cancelled'
-              : (PAYMENT_LABEL[sale.paymentStatus] ?? sale.paymentStatus);
+              : (PAYMENT_LABEL[sale.paymentStatus] ?? 'Unknown');
             return (
               <div key={sale.id} className="card p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">

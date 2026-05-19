@@ -73,13 +73,22 @@ export async function POST(_req: Request, { params }: Params) {
     });
   }
 
-  const latestPaymentWithIntent = await prisma.garageSalePayment.findFirst({
-    where: { saleId: sale.id, stripePaymentId: { not: null } },
+  const latestPaidPaymentWithIntent = await prisma.garageSalePayment.findFirst({
+    where: { saleId: sale.id, status: 'PAID', stripePaymentId: { not: null } },
+    orderBy: { createdAt: 'desc' },
+    select: { stripePaymentId: true },
+  });
+  const latestPendingPaymentWithIntent = await prisma.garageSalePayment.findFirst({
+    where: { saleId: sale.id, status: 'PENDING', stripePaymentId: { not: null } },
     orderBy: { createdAt: 'desc' },
     select: { stripePaymentId: true },
   });
 
-  const paymentIntentId = sale.stripePaymentId ?? latestPaymentWithIntent?.stripePaymentId ?? null;
+  const paymentIntentId = sale.stripePaymentId
+    ?? (sale.paymentStatus === 'PAID'
+      ? (latestPaidPaymentWithIntent?.stripePaymentId ?? latestPendingPaymentWithIntent?.stripePaymentId)
+      : (latestPendingPaymentWithIntent?.stripePaymentId ?? latestPaidPaymentWithIntent?.stripePaymentId))
+    ?? null;
   let paymentIntent: Stripe.PaymentIntent | null = null;
   if (paymentIntentId) {
     try {
@@ -109,23 +118,29 @@ export async function POST(_req: Request, { params }: Params) {
       return stripeFailureResponse('Unable to create Stripe refund.', err);
     }
 
-    await prisma.$transaction([
-      prisma.garageSalePayment.updateMany({
-        where: { saleId: sale.id, status: 'PAID' },
-        data: { status: 'REFUNDED' },
-      }),
-      prisma.garageSale.update({
-        where: { id: sale.id },
-        data: {
-          paymentStatus: 'REFUNDED',
-          status: 'HIDDEN',
-          isArchived: true,
-          archivedAt: new Date(),
-          isFeatured: false,
-          isLive: false,
-        },
-      }),
-    ]);
+    try {
+      await prisma.$transaction([
+        prisma.garageSalePayment.updateMany({
+          where: { saleId: sale.id, status: 'PAID' },
+          data: { status: 'REFUNDED' },
+        }),
+        prisma.garageSale.update({
+          where: { id: sale.id },
+          data: {
+            paymentStatus: 'REFUNDED',
+            status: 'HIDDEN',
+            isArchived: true,
+            archivedAt: new Date(),
+            isFeatured: false,
+            isLive: false,
+          },
+        }),
+      ]);
+    } catch {
+      return NextResponse.json({
+        error: 'Refund completed in Stripe, but listing state could not be updated. Please contact support.',
+      }, { status: 500 });
+    }
 
     return NextResponse.json({
       ok: true,
@@ -141,31 +156,39 @@ export async function POST(_req: Request, { params }: Params) {
     }, { status: 409 });
   }
 
-  if (paymentIntentId && paymentIntent && paymentIntent.status !== 'canceled') {
+  if (paymentIntent && paymentIntent.status !== 'canceled') {
     try {
-      await stripe.paymentIntents.cancel(paymentIntentId);
+      await stripe.paymentIntents.cancel(paymentIntent.id);
     } catch (err) {
       return stripeFailureResponse('Unable to cancel pending payment in Stripe.', err);
     }
   }
 
-  await prisma.$transaction([
-    prisma.garageSalePayment.updateMany({
-      where: { saleId: sale.id, status: 'PENDING' },
-      data: { status: 'FAILED' },
-    }),
-    prisma.garageSale.update({
-      where: { id: sale.id },
-      data: {
-        paymentStatus: 'FAILED',
-        status: 'HIDDEN',
-        isArchived: true,
-        archivedAt: new Date(),
-        isFeatured: false,
-        isLive: false,
-      },
-    }),
-  ]);
+  try {
+    await prisma.$transaction([
+      prisma.garageSalePayment.updateMany({
+        where: { saleId: sale.id, status: 'PENDING' },
+        data: { status: 'FAILED' },
+      }),
+      prisma.garageSale.update({
+        where: { id: sale.id },
+        data: {
+          paymentStatus: 'FAILED',
+          status: 'HIDDEN',
+          isArchived: true,
+          archivedAt: new Date(),
+          isFeatured: false,
+          isLive: false,
+        },
+      }),
+    ]);
+  } catch {
+    return NextResponse.json({
+      error: paymentIntent
+        ? 'Pending payment was cancelled in Stripe, but listing state could not be updated. Please contact support.'
+        : 'Pending payment could not be cancelled.',
+    }, { status: 500 });
+  }
 
   return NextResponse.json({
     ok: true,
