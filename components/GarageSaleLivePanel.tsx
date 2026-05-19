@@ -217,7 +217,9 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   }, [closePeerConnection, postSignal, startSignalPolling]);
 
   // Keep the ref current so connection-state handlers can always call the latest version.
-  createAndSendOfferRef.current = createAndSendOffer;
+  useEffect(() => {
+    createAndSendOfferRef.current = createAndSendOffer;
+  }, [createAndSendOffer]);
 
   useEffect(() => {
   }, [isLive]);
