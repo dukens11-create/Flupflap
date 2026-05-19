@@ -118,9 +118,9 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     if (!pc || !pc.remoteDescription) {
       if (pendingIceCandidatesRef.current.length >= MAX_PENDING_ICE_CANDIDATES) {
         if (process.env.NODE_ENV !== 'production') {
-          console.warn('[GarageSaleBuyerLiveView] Pending ICE candidate queue limit reached; dropping oldest candidate');
+          console.warn('[GarageSaleBuyerLiveView] Pending ICE candidate queue limit reached; dropping newest candidate');
         }
-        pendingIceCandidatesRef.current.shift();
+        return;
       }
       pendingIceCandidatesRef.current.push(candidate);
       return;

@@ -22,6 +22,7 @@ const MEDIA_READY_TIMEOUT_MS = 1500;
 const PLAYBACK_RETRY_DELAY_MS = 120;
 const PEER_CONNECTION_RESTART_DELAY_MS = 700;
 const DISCONNECTED_RESTART_DELAY_MS = 4000;
+const RESTART_RETRY_DELAY_MS = 2500;
 
 type CameraStatus = 'idle' | 'connecting' | 'ready' | 'awaitingInteraction' | 'blocked' | 'denied' | 'unsupported';
 
@@ -234,7 +235,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     setError(reason === 'disconnected'
       ? 'Live connection dropped. Attempting to recover…'
       : 'Live connection failed. Reconnecting…');
-    restartOfferTimerRef.current = setTimeout(() => {
+    const timerId = setTimeout(() => {
       restartOfferTimerRef.current = null;
       if (!liveRef.current || restartInProgressRef.current) return;
 
@@ -245,12 +246,13 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         })
         .catch(() => {
           setError('Unable to reconnect live stream. Retrying…');
-          schedulePeerConnectionRestart(reason, 2500);
+          schedulePeerConnectionRestart(reason, RESTART_RETRY_DELAY_MS);
         })
         .finally(() => {
           restartInProgressRef.current = false;
         });
     }, delayMs);
+    restartOfferTimerRef.current = timerId;
   }, [createAndSendOffer]);
 
   useEffect(() => {
