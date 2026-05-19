@@ -85,6 +85,9 @@ In the **Environment** tab, add:
 | `CLOUDINARY_API_SECRET` | From your Cloudinary dashboard — Settings → API Keys |
 | `CLOUDINARY_PRODUCT_MEDIA_FOLDER` | Optional Cloudinary folder for seller product images (defaults to `flupflap/products`) |
 | `CLOUDINARY_PRODUCT_VIDEO_FOLDER` | Optional Cloudinary folder for seller product videos (defaults to `flupflap/videos`) |
+| `NEXT_PUBLIC_TURN_URL` | Metered TURN URLs as a comma-separated list (see Metered credential instructions) |
+| `NEXT_PUBLIC_TURN_USERNAME` | Metered TURN username for your generated credential |
+| `NEXT_PUBLIC_TURN_CREDENTIAL` | Metered TURN credential/password for the same Metered credential |
 | `TWILIO_ACCOUNT_SID` | From your Twilio Console — Account SID |
 | `TWILIO_AUTH_TOKEN` | From your Twilio Console — Auth Token |
 | `TWILIO_FROM_NUMBER` | Your Twilio phone number (e.g. `+15005550006`) |
@@ -101,6 +104,37 @@ Click **Create Web Service**. Render will:
 5. Start the server with `next start`
 
 A successful deploy shows the app live at your Render URL.
+
+---
+
+## Metered TURN relay for live garage sales
+
+Live garage sale video uses a static Metered TURN configuration from browser
+environment variables:
+
+- `NEXT_PUBLIC_TURN_URL`
+- `NEXT_PUBLIC_TURN_USERNAME`
+- `NEXT_PUBLIC_TURN_CREDENTIAL`
+
+Set `NEXT_PUBLIC_TURN_URL` to the full comma-separated Metered URL list, for
+example:
+
+```bash
+NEXT_PUBLIC_TURN_URL="turn:global.relay.metered.ca:80,turn:global.relay.metered.ca:80?transport=tcp,turn:global.relay.metered.ca:443,turns:global.relay.metered.ca:443?transport=tcp"
+NEXT_PUBLIC_TURN_USERNAME="your-metered-username"
+NEXT_PUBLIC_TURN_CREDENTIAL="your-metered-credential"
+```
+
+If these variables are omitted, the app falls back to
+`stun:stun.l.google.com:19302` for development/LAN testing, but production
+cross-network calls should be verified with Metered enabled.
+
+Manual verification:
+
+1. Start a live garage sale from one device/network and join from another.
+2. Open `chrome://webrtc-internals` during the call.
+3. Confirm the selected candidate pair includes a `relay` candidate when TURN
+   is required.
 
 ---
 

@@ -6,43 +6,52 @@
  * symmetric NAT — which is the norm on mobile networks.  Without TURN,
  * WebRTC connections will silently fail for most mobile callers.
  *
- * Set all three environment variables to enable TURN:
- *   NEXT_PUBLIC_TURN_URL        e.g. "turn:turn.example.com:3478?transport=tcp"
- *                               (also accepts a comma-separated list of URLs)
- *   NEXT_PUBLIC_TURN_USERNAME   static or time-limited TURN username
- *   NEXT_PUBLIC_TURN_CREDENTIAL static or time-limited TURN password
+ * Metered TURN configuration uses these browser-exposed environment variables:
+ *   NEXT_PUBLIC_TURN_URL        comma-separated TURN/TURNS URLs from Metered
+ *   NEXT_PUBLIC_TURN_USERNAME   Metered TURN username
+ *   NEXT_PUBLIC_TURN_CREDENTIAL Metered TURN credential
  *
- * Recommended providers: Twilio Network Traversal Service, Metered.ca,
- * Cloudflare Calls, or a self-hosted coturn instance.
- *
- * For maximum security generate short-lived TURN credentials server-side and
- * pass them as component props — this file covers the common static-credential
- * case that is sufficient for most deployments.
+ * When Metered is not configured, the app falls back to Google's public STUN
+ * server so local/LAN testing still works in development.
  */
+const STUN_FALLBACK_URL = 'stun:stun.l.google.com:19302';
+
+function parseTurnUrls(value: string | undefined): string[] {
+  return (value ?? '')
+    .split(',')
+    .map((url) => url.trim())
+    .filter(Boolean);
+}
+
+const turnUrls = parseTurnUrls(process.env.NEXT_PUBLIC_TURN_URL);
+const turnUsername = process.env.NEXT_PUBLIC_TURN_USERNAME?.trim();
+const turnCredential = process.env.NEXT_PUBLIC_TURN_CREDENTIAL?.trim();
+const missingTurnEnvVars = [
+  ...(turnUrls.length === 0 ? ['NEXT_PUBLIC_TURN_URL'] : []),
+  ...(!turnUsername ? ['NEXT_PUBLIC_TURN_USERNAME'] : []),
+  ...(!turnCredential ? ['NEXT_PUBLIC_TURN_CREDENTIAL'] : []),
+];
+
+if (process.env.NODE_ENV !== 'production' && missingTurnEnvVars.length > 0) {
+  console.warn(
+    `[RTC] Metered TURN is not fully configured; using STUN fallback only. Missing: ${missingTurnEnvVars.join(', ')}`,
+  );
+}
+
 function buildIceServers(): RTCIceServer[] {
   const servers: RTCIceServer[] = [
-    { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+    { urls: [STUN_FALLBACK_URL] },
   ];
 
-  const turnUrl = process.env.NEXT_PUBLIC_TURN_URL;
-  const turnUsername = process.env.NEXT_PUBLIC_TURN_USERNAME;
-  const turnCredential = process.env.NEXT_PUBLIC_TURN_CREDENTIAL;
-
-  if (turnUrl && turnUsername && turnCredential) {
-    // Accept a comma-separated list of TURN URLs (e.g. UDP + TCP variants).
-    const urls = turnUrl.split(',').map((u) => u.trim()).filter(Boolean);
-    servers.push({ urls, username: turnUsername, credential: turnCredential });
+  if (turnUrls.length > 0 && turnUsername && turnCredential) {
+    servers.push({ urls: turnUrls, username: turnUsername, credential: turnCredential });
   }
 
   return servers;
 }
-
-const turnUrl = process.env.NEXT_PUBLIC_TURN_URL;
-const turnUsername = process.env.NEXT_PUBLIC_TURN_USERNAME;
-const turnCredential = process.env.NEXT_PUBLIC_TURN_CREDENTIAL;
-
-export const HAS_TURN_CONFIG = Boolean(turnUrl && turnUsername && turnCredential);
+export const HAS_TURN_CONFIG = turnUrls.length > 0 && Boolean(turnUsername && turnCredential);
 
 export const RTC_CONFIG: RTCConfiguration = {
   iceServers: buildIceServers(),
+  iceCandidatePoolSize: 10,
 };
