@@ -263,7 +263,13 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
         void playRemoteStream();
       }
 
-      if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+      if (pc.connectionState === 'disconnected') {
+        // Show reconnect message but keep the video visible so ICE can self-recover
+        setStreamError('Live stream connection was interrupted. Trying to reconnect…');
+      }
+
+      if (pc.connectionState === 'failed') {
+        // Connection is unrecoverable; hide stream and wait for a new offer from the seller
         setStreamConnected(false);
         setStreamError('Live stream connection was interrupted. Trying to reconnect…');
       }
@@ -317,7 +323,11 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
         if (signal.kind === 'ICE' && peerRef.current) {
           const payload = signal.payload as { candidate?: RTCIceCandidateInit } | null;
           if (!payload?.candidate) continue;
-          await peerRef.current.addIceCandidate(new RTCIceCandidate(payload.candidate));
+          try {
+            await peerRef.current.addIceCandidate(new RTCIceCandidate(payload.candidate));
+          } catch {
+            // Ignore stale candidates from a previous peer connection
+          }
         }
       }
     } catch {
