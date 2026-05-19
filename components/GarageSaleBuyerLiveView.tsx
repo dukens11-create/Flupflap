@@ -3,6 +3,8 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { MessageCircle, Send, Radio, Eye } from 'lucide-react';
 
 const DEFAULT_GUEST_NAME = 'Guest';
+const MEDIA_READY_TIMEOUT_MS = 1200;
+const PLAYBACK_RETRY_DELAY_MS = 250;
 const RTC_CONFIG: RTCConfiguration = {
   iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }],
 };
@@ -108,41 +110,49 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     video.defaultMuted = true;
     video.autoplay = true;
     video.playsInline = true;
-    video.preload = 'auto';
+    video.setAttribute('autoplay', 'true');
     video.setAttribute('playsinline', 'true');
     video.setAttribute('webkit-playsinline', 'true');
+    video.preload = 'auto';
 
-    // If metadata isn't loaded yet, wait briefly for a readiness event
-    if (video.readyState < HTMLMediaElement.HAVE_METADATA) {
-      await new Promise<void>((resolve) => {
-        let timeoutId: ReturnType<typeof setTimeout> | null = null;
-        const onReady = () => {
-          if (timeoutId !== null) clearTimeout(timeoutId);
-          video.removeEventListener('loadedmetadata', onReady);
-          video.removeEventListener('loadeddata', onReady);
-          video.removeEventListener('canplay', onReady);
-          resolve();
-        };
-        video.addEventListener('loadedmetadata', onReady);
-        video.addEventListener('loadeddata', onReady);
-        video.addEventListener('canplay', onReady);
-        // Resolve after 2 s regardless so we don't block indefinitely
-        timeoutId = setTimeout(onReady, 2000);
-      });
-    }
-
-    // First attempt
-    try {
+    const tryPlay = async () => {
       await video.play();
       setPlaybackBlocked(false);
       return true;
+    };
+
+    if (video.readyState < HTMLMediaElement.HAVE_METADATA) {
+      await new Promise<void>((resolve) => {
+        let settled = false;
+
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          video.removeEventListener('loadedmetadata', finish);
+          video.removeEventListener('loadeddata', finish);
+          video.removeEventListener('canplay', finish);
+          resolve();
+        };
+
+        const timeout = window.setTimeout(finish, MEDIA_READY_TIMEOUT_MS);
+
+        const wrappedFinish = () => {
+          window.clearTimeout(timeout);
+          finish();
+        };
+
+        video.addEventListener('loadedmetadata', wrappedFinish, { once: true });
+        video.addEventListener('loadeddata', wrappedFinish, { once: true });
+        video.addEventListener('canplay', wrappedFinish, { once: true });
+      });
+    }
+
+    try {
+      return await tryPlay();
     } catch {
-      // Retry once after a short delay
-      await new Promise((r) => setTimeout(r, 500));
       try {
-        await video.play();
-        setPlaybackBlocked(false);
-        return true;
+        await new Promise((resolve) => window.setTimeout(resolve, PLAYBACK_RETRY_DELAY_MS));
+        return await tryPlay();
       } catch {
         setPlaybackBlocked(true);
         return false;
@@ -222,23 +232,24 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     activeOfferSignalRef.current = signalId;
 
     pc.ontrack = (event) => {
-      // Avoid adding duplicate tracks
-      const existingIds = new Set(remoteStream.getTracks().map((t) => t.id));
-      const tracks = event.streams[0]?.getTracks() ?? [event.track];
-      for (const track of tracks) {
-        if (!existingIds.has(track.id)) {
+      for (const track of event.streams[0]?.getTracks() ?? [event.track]) {
+        const alreadyAdded = remoteStream.getTracks().some((existing) => existing.id === track.id);
+        if (!alreadyAdded) {
           remoteStream.addTrack(track);
         }
       }
-      // Attach srcObject promptly so the video element has media ASAP
+
       if (videoRef.current && videoRef.current.srcObject !== remoteStream) {
         videoRef.current.srcObject = remoteStream;
       }
-      if (remoteStream.getTracks().length > 0) {
-        setStreamError(null);
-        setStreamConnected(true);
-        void playRemoteStream();
-      }
+
+      const hasUsableMedia =
+        remoteStream.getVideoTracks().length > 0 || remoteStream.getAudioTracks().length > 0;
+
+      setStreamConnected(hasUsableMedia);
+      setStreamError(null);
+
+      void playRemoteStream();
     };
 
     pc.onicecandidate = (event) => {
@@ -248,11 +259,14 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
 
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === 'connected') {
+        setStreamConnected(true);
         setStreamError(null);
         void playRemoteStream();
-      } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+      }
+
+      if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
         setStreamConnected(false);
-        setStreamError('Trying to reconnect... Keep this page open.');
+        setStreamError('Live stream connection was interrupted. Trying to reconnect…');
       }
     };
 
@@ -415,8 +429,8 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
         <video
           ref={videoRef}
           autoPlay
-          playsInline
           muted
+          playsInline
           preload="auto"
           controls
           className={`h-full w-full object-cover ${streamConnected ? '' : 'hidden'}`}

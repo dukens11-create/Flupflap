@@ -41,6 +41,7 @@ export type RoleNavItem = {
 
 const buyerNav: RoleNavItem[] = [
   { label: 'Browse', href: '/' },
+  { label: 'Garage Sales', href: '/garage-sales' },
   { label: 'Orders', href: '/orders' },
   { label: 'Account', href: '/account' },
 ];
