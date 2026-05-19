@@ -3,6 +3,8 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { MessageCircle, Send, Radio, Eye } from 'lucide-react';
 
 const DEFAULT_GUEST_NAME = 'Guest';
+const MEDIA_READY_TIMEOUT_MS = 1200;
+const PLAYBACK_RETRY_DELAY_MS = 250;
 const RTC_CONFIG: RTCConfiguration = {
   iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }],
 };
@@ -101,16 +103,59 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
 
   const playRemoteStream = useCallback(async () => {
     const video = videoRef.current;
-    if (!video) return;
+    if (!video) return false;
 
+    video.muted = true;
+    video.defaultMuted = true;
+    video.autoplay = true;
     video.playsInline = true;
+    video.setAttribute('autoplay', 'true');
     video.setAttribute('playsinline', 'true');
+    video.setAttribute('webkit-playsinline', 'true');
+    video.preload = 'auto';
 
-    try {
+    const tryPlay = async () => {
       await video.play();
       setPlaybackBlocked(false);
+      return true;
+    };
+
+    if (video.readyState < HTMLMediaElement.HAVE_METADATA) {
+      await new Promise<void>((resolve) => {
+        let settled = false;
+
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          video.removeEventListener('loadedmetadata', finish);
+          video.removeEventListener('loadeddata', finish);
+          video.removeEventListener('canplay', finish);
+          resolve();
+        };
+
+        const timeout = window.setTimeout(finish, MEDIA_READY_TIMEOUT_MS);
+
+        const wrappedFinish = () => {
+          window.clearTimeout(timeout);
+          finish();
+        };
+
+        video.addEventListener('loadedmetadata', wrappedFinish, { once: true });
+        video.addEventListener('loadeddata', wrappedFinish, { once: true });
+        video.addEventListener('canplay', wrappedFinish, { once: true });
+      });
+    }
+
+    try {
+      return await tryPlay();
     } catch {
-      setPlaybackBlocked(true);
+      try {
+        await new Promise((resolve) => window.setTimeout(resolve, PLAYBACK_RETRY_DELAY_MS));
+        return await tryPlay();
+      } catch {
+        setPlaybackBlocked(true);
+        return false;
+      }
     }
   }, []);
 
@@ -187,9 +232,22 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
 
     pc.ontrack = (event) => {
       for (const track of event.streams[0]?.getTracks() ?? [event.track]) {
-        remoteStream.addTrack(track);
+        const alreadyAdded = remoteStream.getTracks().some((existing) => existing.id === track.id);
+        if (!alreadyAdded) {
+          remoteStream.addTrack(track);
+        }
       }
-      setStreamConnected(remoteStream.getTracks().length > 0);
+
+      if (videoRef.current && videoRef.current.srcObject !== remoteStream) {
+        videoRef.current.srcObject = remoteStream;
+      }
+
+      const hasUsableMedia =
+        remoteStream.getVideoTracks().length > 0 || remoteStream.getAudioTracks().length > 0;
+
+      setStreamConnected(hasUsableMedia);
+      setStreamError(null);
+
       void playRemoteStream();
     };
 
@@ -199,8 +257,15 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     };
 
     pc.onconnectionstatechange = () => {
+      if (pc.connectionState === 'connected') {
+        setStreamConnected(true);
+        setStreamError(null);
+        void playRemoteStream();
+      }
+
       if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
-        setStreamError('Live stream connection was interrupted. Wait for the seller to restart broadcasting.');
+        setStreamConnected(false);
+        setStreamError('Live stream connection was interrupted. Trying to reconnect…');
       }
     };
 
@@ -363,8 +428,10 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
         <video
           ref={videoRef}
           autoPlay
+          muted
           playsInline
           controls
+          preload="auto"
           className={`h-full w-full object-cover ${streamConnected ? '' : 'hidden'}`}
         />
         {!streamConnected && (
@@ -372,7 +439,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
             <Radio size={40} className="animate-pulse text-red-400" />
             <p className="text-sm font-semibold">Connecting to seller stream…</p>
             <p className="text-xs text-slate-300 px-4 text-center">
-              If playback does not start, keep this page open for a moment.
+              Live video may take a few seconds on mobile networks.
             </p>
           </div>
         )}
@@ -383,7 +450,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
               onClick={() => void playRemoteStream()}
               className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-900 shadow-lg transition hover:bg-slate-100"
             >
-              Tap to watch live
+              Tap to start live
             </button>
           </div>
         )}
