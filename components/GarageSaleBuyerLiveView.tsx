@@ -105,6 +105,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     const video = videoRef.current;
     if (!video) return false;
 
+    // Apply mobile-friendly attributes before attempting play
     video.muted = true;
     video.defaultMuted = true;
     video.autoplay = true;
@@ -274,10 +275,10 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     await pc.setLocalDescription(answer);
     await postSignal('ANSWER', { type: answer.type, sdp: answer.sdp });
 
+    // Attach srcObject early so the video element is ready when tracks arrive
     if (videoRef.current) {
       videoRef.current.srcObject = remoteStream;
     }
-    void playRemoteStream();
   }, [closePeerConnection, playRemoteStream, postSignal]);
 
   const pollSignals = useCallback(async () => {
@@ -430,8 +431,8 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
           autoPlay
           muted
           playsInline
-          controls
           preload="auto"
+          controls
           className={`h-full w-full object-cover ${streamConnected ? '' : 'hidden'}`}
         />
         {!streamConnected && (
