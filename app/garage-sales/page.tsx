@@ -13,6 +13,8 @@ interface SearchParams {
   city?: string;
   zip?: string;
   state?: string;
+  lat?: string;
+  lng?: string;
   saleType?: string;
   category?: string;
   date?: string;
@@ -105,25 +107,55 @@ export default async function GarageSalesPage({
   let total = 0;
   let dbError = false;
   let viewerCountMap = new Map<string, number>();
+  const lat = Number.parseFloat(sp.lat ?? '');
+  const lng = Number.parseFloat(sp.lng ?? '');
+  const radius = Number.parseFloat(sp.radius ?? '50');
+  const hasCoords = Number.isFinite(lat) && Number.isFinite(lng);
+  const hasRadius = Number.isFinite(radius) && radius > 0;
+  const useRadiusFilter = hasCoords && hasRadius && radius < 99999;
 
   if (isDatabaseConfigured()) {
     try {
       await expireGarageSales();
       const where = buildWhere(sp, now);
       const orderBy = buildOrderBy(sp.sort ?? 'newest');
-      [sales, total] = await Promise.all([
-        prisma.garageSale.findMany({
+      const include = {
+        seller: { select: { id: true, name: true, shopName: true, profileImageUrl: true, phoneVerified: true } },
+        _count: { select: { favorites: true } },
+      };
+
+      if (useRadiusFilter) {
+        const allSales = await prisma.garageSale.findMany({
           where,
-          include: {
-            seller: { select: { id: true, name: true, shopName: true, profileImageUrl: true, phoneVerified: true } },
-            _count: { select: { favorites: true } },
-          },
+          include,
           orderBy,
-          skip: (page - 1) * perPage,
-          take: perPage,
-        }),
-        prisma.garageSale.count({ where }),
-      ]);
+        });
+        let filteredSales = allSales.filter((sale) => {
+          if (sale.latitude == null || sale.longitude == null) return false;
+          const distance = haversineDistanceMiles(lat, lng, sale.latitude, sale.longitude);
+          return distance <= radius;
+        });
+        if ((sp.sort ?? 'newest') === 'closest') {
+          filteredSales = filteredSales.sort((a, b) => {
+            const da = haversineDistanceMiles(lat, lng, a.latitude!, a.longitude!);
+            const db = haversineDistanceMiles(lat, lng, b.latitude!, b.longitude!);
+            return da - db;
+          });
+        }
+        total = filteredSales.length;
+        sales = filteredSales.slice((page - 1) * perPage, page * perPage);
+      } else {
+        [sales, total] = await Promise.all([
+          prisma.garageSale.findMany({
+            where,
+            include,
+            orderBy,
+            skip: (page - 1) * perPage,
+            take: perPage,
+          }),
+          prisma.garageSale.count({ where }),
+        ]);
+      }
 
       // Batch-fetch viewer counts for live sales (single query, avoids N+1)
       const liveSaleIds = sales.filter(s => s.isLive).map(s => s.id);
@@ -244,4 +276,18 @@ function buildOrderBy(sort: string) {
   if (sort === 'featured') return [{ isFeatured: 'desc' as const }, { createdAt: 'desc' as const }];
   if (sort === 'start_date') return [{ isFeatured: 'desc' as const }, { startDate: 'asc' as const }];
   return [{ isFeatured: 'desc' as const }, { createdAt: 'desc' as const }];
+}
+
+function haversineDistanceMiles(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 3958.8;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function toRad(deg: number) {
+  return (deg * Math.PI) / 180;
 }

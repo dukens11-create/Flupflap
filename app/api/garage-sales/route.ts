@@ -158,7 +158,7 @@ export async function GET(req: Request) {
     take: perPage,
   });
 
-  if (!isNaN(lat) && !isNaN(lng) && radius < 250) {
+  if (!isNaN(lat) && !isNaN(lng) && radius < 99999) {
     sales = sales.filter((s) => {
       if (s.latitude == null || s.longitude == null) return false;
       const dist = haversineDistanceMiles(lat, lng, s.latitude, s.longitude);

@@ -1,9 +1,9 @@
 'use client';
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import GarageSaleCard, { type GarageSaleSummary } from '@/components/GarageSaleCard';
-import { MapPin, List, Search, Filter, SlidersHorizontal, X, ChevronLeft, ChevronRight, Navigation } from 'lucide-react';
+import { MapPin, List, Search, SlidersHorizontal, X, ChevronLeft, ChevronRight, Navigation } from 'lucide-react';
 
 interface SelectOption { label: string; value: string }
 
@@ -38,11 +38,12 @@ export default function GarageSaleBrowseClient({
 }: Props) {
   const router = useRouter();
   const urlParams = useSearchParams();
+  const [isNavigating, startNavigation] = useTransition();
 
   const [view, setView] = useState<'list' | 'map'>('list');
   const [showFilters, setShowFilters] = useState(false);
   const [geoStatus, setGeoStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
-  const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [actionError, setActionError] = useState('');
   const mapRef = useRef<HTMLDivElement>(null);
   // mapboxMapRef is used to track if the map has been initialized
   // to prevent re-initialization on re-renders
@@ -58,10 +59,19 @@ export default function GarageSaleBrowseClient({
   const [sort, setSort] = useState(searchParams.sort ?? 'newest');
   const [radius, setRadius] = useState(searchParams.radius ?? '50');
   const [live, setLive] = useState(searchParams.live ?? '');
+  const [lat, setLat] = useState(searchParams.lat ?? '');
+  const [lng, setLng] = useState(searchParams.lng ?? '');
+
+  useEffect(() => {
+    const nextLat = urlParams.get('lat') ?? '';
+    const nextLng = urlParams.get('lng') ?? '';
+    setLat(nextLat);
+    setLng(nextLng);
+  }, [urlParams]);
 
   function buildSearchUrl(overrides: Record<string, string> = {}) {
     const params = new URLSearchParams();
-    const current = { q, city, zip, saleType, category, date, sort, radius, live };
+    const current = { q, city, zip, saleType, category, date, sort, radius, live, lat, lng };
     const merged = { ...current, ...overrides, page: '1' };
     Object.entries(merged).forEach(([k, v]) => {
       if (v) params.set(k, v);
@@ -69,37 +79,82 @@ export default function GarageSaleBrowseClient({
     return `/garage-sales?${params.toString()}`;
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  function navigateWithOverrides(overrides: Record<string, string> = {}) {
+    setActionError('');
+    const target = buildSearchUrl(overrides);
+    startNavigation(() => {
+      router.push(target);
+    });
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    router.push(buildSearchUrl());
+    if (lat || lng || !zip.trim()) {
+      navigateWithOverrides();
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/geo/zip?zip=${encodeURIComponent(zip.trim())}&country=us`);
+      if (!res.ok) {
+        if (res.status === 404) {
+          throw new Error('zip_not_found');
+        }
+        throw new Error('zip_lookup_failed');
+      }
+      const data = (await res.json()) as { lat?: number; lng?: number };
+      if (!Number.isFinite(data.lat) || !Number.isFinite(data.lng)) {
+        throw new Error('zip_lookup_invalid');
+      }
+      const nextLat = String(data.lat);
+      const nextLng = String(data.lng);
+      setLat(nextLat);
+      setLng(nextLng);
+      navigateWithOverrides({ lat: nextLat, lng: nextLng });
+    } catch (error) {
+      const message = error instanceof Error && error.message === 'zip_not_found'
+        ? 'ZIP code not found. Results will be shown without distance filtering.'
+        : 'Unable to look up ZIP coordinates right now. Results will be shown without distance filtering.';
+      setActionError(message);
+      navigateWithOverrides({ lat: '', lng: '' });
+    }
   }
 
   function handleReset() {
-    setQ(''); setCity(''); setZip(''); setSaleType(''); setCategory(''); setDate(''); setSort('newest'); setRadius('50'); setLive('');
+    setQ(''); setCity(''); setZip(''); setSaleType(''); setCategory(''); setDate(''); setSort('newest'); setRadius('50'); setLive(''); setLat(''); setLng('');
+    setActionError('');
     router.push('/garage-sales');
   }
 
   function handleGeolocate() {
     if (!navigator.geolocation) {
       setGeoStatus('error');
+      setActionError('Enter city or ZIP, or allow location access.');
       return;
     }
     setGeoStatus('loading');
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setGeoStatus('done');
+        setActionError('');
         const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        setUserCoords(coords);
+        setLat(String(coords.lat));
+        setLng(String(coords.lng));
         const params = new URLSearchParams(urlParams.toString());
         params.set('lat', String(coords.lat));
         params.set('lng', String(coords.lng));
         params.set('sort', 'closest');
         params.set('page', '1');
         setSort('closest');
-        router.push(`/garage-sales?${params.toString()}`);
+        startNavigation(() => {
+          router.push(`/garage-sales?${params.toString()}`);
+        });
       },
-      () => setGeoStatus('error'),
-      { timeout: 10000 },
+      () => {
+        setGeoStatus('error');
+        setActionError('Enter city or ZIP, or allow location access.');
+      },
+      { timeout: 10000, maximumAge: 120000 /* 120000 ms (2 minutes) */ },
     );
   }
 
@@ -196,7 +251,7 @@ export default function GarageSaleBrowseClient({
               onClick={() => {
                 const newDate = date === d.value ? '' : d.value;
                 setDate(newDate);
-                router.push(buildSearchUrl({ date: newDate }));
+                navigateWithOverrides({ date: newDate });
               }}
               className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${date === d.value ? 'border-[var(--ff-primary-navy)] bg-[var(--ff-primary-navy)] text-white' : 'border-slate-300 text-slate-600 hover:bg-slate-50'}`}
             >
@@ -215,7 +270,7 @@ export default function GarageSaleBrowseClient({
                 setRadius('99999');
                 overrides.radius = '99999';
               }
-              router.push(buildSearchUrl(overrides));
+              navigateWithOverrides(overrides);
             }}
             className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${live === 'true' ? 'border-red-500 bg-red-500 text-white' : 'border-slate-300 text-slate-600 hover:bg-slate-50'}`}
           >
@@ -282,7 +337,15 @@ export default function GarageSaleBrowseClient({
             </div>
             <div>
               <label className="label">Radius</label>
-              <select value={radius} onChange={(e) => setRadius(e.target.value)} className="input">
+              <select
+                value={radius}
+                onChange={(e) => {
+                  const nextRadius = e.target.value;
+                  setRadius(nextRadius);
+                  navigateWithOverrides({ radius: nextRadius });
+                }}
+                className="input"
+              >
                 {radiusOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
@@ -297,14 +360,18 @@ export default function GarageSaleBrowseClient({
       </form>
 
       {/* Results count */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <p className="text-sm text-slate-500">
           {initialTotal === 0 ? 'No results' : `${initialTotal} garage sale${initialTotal === 1 ? '' : 's'} found`}
         </p>
-        {geoStatus === 'error' && (
-          <p className="text-xs text-red-600">Could not determine your location.</p>
-        )}
+        {isNavigating && <p className="text-xs text-slate-500">Updating results…</p>}
       </div>
+      {(geoStatus === 'error' || (!lat && !lng && !city && !zip)) && (
+        <p className="text-xs text-amber-700">Enter city or ZIP, or allow location access.</p>
+      )}
+      {actionError && (
+        <p className="text-xs text-red-600">{actionError}</p>
+      )}
 
       {/* Map view */}
       {view === 'map' && (
@@ -327,13 +394,16 @@ export default function GarageSaleBrowseClient({
               <span className="text-5xl">🔍</span>
               <p className="mt-4 text-lg font-bold text-slate-700">No garage sales found nearby.</p>
               <p className="mt-1 text-sm text-slate-500">Expand your search radius?</p>
-              <div className="mt-4 flex flex-wrap justify-center gap-2">
+              <div className="relative z-10 mt-4 flex flex-wrap justify-center gap-2">
                 {radiusOptions.map((r) => (
                   <button
                     key={r.value}
                     type="button"
-                    onClick={() => router.push(buildSearchUrl({ radius: r.value }))}
-                    className={`rounded-full border px-4 py-1.5 text-sm font-semibold transition-colors ${radius === r.value ? 'border-[var(--ff-primary-navy)] bg-[var(--ff-primary-navy)] text-white' : 'border-slate-300 text-slate-600 hover:bg-slate-50'}`}
+                    onClick={() => {
+                      setRadius(r.value);
+                      navigateWithOverrides({ radius: r.value });
+                    }}
+                    className={`pointer-events-auto rounded-full border px-4 py-1.5 text-sm font-semibold transition-colors ${radius === r.value ? 'border-[var(--ff-primary-navy)] bg-[var(--ff-primary-navy)] text-white' : 'border-slate-300 text-slate-600 hover:bg-slate-50'}`}
                   >
                     {r.label}
                   </button>
