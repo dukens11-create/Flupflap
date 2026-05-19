@@ -104,6 +104,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     });
   }, [saleId]);
 
+  // Intentionally stable: this callback resolves the latest reconnect logic from refs at runtime.
   const scheduleReconnect = useCallback((delayMs: number) => {
     if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
     reconnectTimeoutRef.current = window.setTimeout(() => {
@@ -150,19 +151,22 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
           try {
             await activePeer.setRemoteDescription({ type, sdp: payload.sdp });
             hasRemoteAnswerRef.current = true;
-          } catch {
+          } catch (err) {
             // Ignore stale/invalid answers and continue polling for a fresh one.
-            continue;
+            console.debug('[GarageSaleLivePanel][webrtc] Ignored stale/invalid answer', err);
           }
 
-          const bufferedCandidates = bufferedRemoteIceRef.current;
-          bufferedRemoteIceRef.current = [];
-          for (const candidate of bufferedCandidates) {
-            if (peerRef.current !== activePeer) break;
-            try {
-              await activePeer.addIceCandidate(new RTCIceCandidate(candidate));
-            } catch {
-              // Ignore stale candidates from previous negotiation attempts.
+          if (hasRemoteAnswerRef.current) {
+            const bufferedCandidates = bufferedRemoteIceRef.current;
+            bufferedRemoteIceRef.current = [];
+            for (const candidate of bufferedCandidates) {
+              if (peerRef.current !== activePeer) break;
+              try {
+                await activePeer.addIceCandidate(new RTCIceCandidate(candidate));
+              } catch (err) {
+                // Ignore stale candidates from previous negotiation attempts.
+                console.debug('[GarageSaleLivePanel][webrtc] Ignored buffered stale ICE candidate', err);
+              }
             }
           }
         }
@@ -176,8 +180,9 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
           }
           try {
             await peerRef.current.addIceCandidate(new RTCIceCandidate(payload.candidate));
-          } catch {
+          } catch (err) {
             // Ignore stale candidates from previous negotiation attempts.
+            console.debug('[GarageSaleLivePanel][webrtc] Ignored stale ICE candidate', err);
           }
         }
       }

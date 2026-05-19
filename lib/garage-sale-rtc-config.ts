@@ -1,6 +1,6 @@
 const DEFAULT_STUN_URLS = ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'];
 
-function parseTurnUrls(raw: string | undefined) {
+function parseTurnUrlList(raw: string | undefined) {
   if (!raw) return [];
   return raw
     .split(',')
@@ -9,7 +9,7 @@ function parseTurnUrls(raw: string | undefined) {
 }
 
 export function getGarageSaleRtcConfig(): RTCConfiguration {
-  const turnUrls = parseTurnUrls(
+  const turnUrls = parseTurnUrlList(
     process.env.NEXT_PUBLIC_GARAGE_SALE_TURN_URLS
     ?? process.env.NEXT_PUBLIC_GARAGE_SALE_TURN_URL
     ?? process.env.NEXT_PUBLIC_TURN_URL,
@@ -21,7 +21,7 @@ export function getGarageSaleRtcConfig(): RTCConfiguration {
 
   if (turnUrls.length > 0 && turnUsername && turnCredential) {
     iceServers.push({
-      urls: turnUrls.length === 1 ? turnUrls[0] : turnUrls,
+      urls: turnUrls,
       username: turnUsername,
       credential: turnCredential,
     });

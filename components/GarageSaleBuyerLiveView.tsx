@@ -242,8 +242,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
         videoRef.current.srcObject = remoteStream;
       }
 
-      const hasUsableMedia = remoteStream.getTracks().length > 0;
-      if (hasUsableMedia) {
+      if (remoteStream.getTracks().length > 0) {
         void playRemoteStream();
       }
     };
@@ -307,44 +306,39 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
       setViewerCount(data.viewerCount ?? 0);
 
       for (const signal of data.signals) {
-        if (signal.kind === 'OFFER') {
-          if (activeOfferSignalRef.current === signal.id) {
-            signalCursorRef.current = signal.createdAt;
-            continue;
-          }
-          const payload = signal.payload as { type?: string; sdp?: string } | null;
-          if (!payload) {
-            signalCursorRef.current = signal.createdAt;
-            continue;
-          }
+        let shouldAdvanceCursor = true;
 
-          try {
-            await handleSellerOffer(signal.id, payload);
-            setStreamError(null);
-            signalCursorRef.current = signal.createdAt;
-          } catch {
-            setStreamConnected(false);
-            setStreamError('Live stream connection was interrupted. Trying to reconnect…');
-            break;
+        if (signal.kind === 'OFFER') {
+          if (activeOfferSignalRef.current !== signal.id) {
+            const payload = signal.payload as { type?: string; sdp?: string } | null;
+            if (payload) {
+              try {
+                await handleSellerOffer(signal.id, payload);
+                setStreamError(null);
+              } catch {
+                shouldAdvanceCursor = false;
+                setStreamConnected(false);
+                setStreamError('Live stream connection was interrupted. Trying to reconnect…');
+              }
+            }
           }
         }
 
         if (signal.kind === 'ICE' && peerRef.current) {
           const payload = signal.payload as { candidate?: RTCIceCandidateInit } | null;
-          if (!payload?.candidate) {
-            signalCursorRef.current = signal.createdAt;
-            continue;
+          if (payload?.candidate) {
+            try {
+              await peerRef.current.addIceCandidate(new RTCIceCandidate(payload.candidate));
+            } catch {
+              // Ignore stale candidates from a previous peer connection
+            }
           }
-          try {
-            await peerRef.current.addIceCandidate(new RTCIceCandidate(payload.candidate));
-          } catch {
-            // Ignore stale candidates from a previous peer connection
-          }
+        }
+
+        if (shouldAdvanceCursor) {
           signalCursorRef.current = signal.createdAt;
-        } else if (signal.kind === 'ICE') {
-          signalCursorRef.current = signal.createdAt;
-        } else if (signal.kind !== 'OFFER') {
-          signalCursorRef.current = signal.createdAt;
+        } else {
+          break;
         }
       }
     } catch {
