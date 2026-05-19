@@ -1,7 +1,7 @@
 'use client';
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { Video, VideoOff, Mic, MicOff, Radio, AlertTriangle, Eye, RefreshCcw } from 'lucide-react';
-import { RTC_CONFIG } from '@/lib/rtc-config';
+import { RTC_CONFIG, HAS_TURN_CONFIG } from '@/lib/rtc-config';
 
 interface Props {
   saleId: string;
@@ -107,7 +107,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   }, [saleId]);
 
   const pollSignals = useCallback(async () => {
-    if (!peerRef.current || !isLive) return;
+    if (!isLive) return;
 
     try {
       const params = new URLSearchParams({ role: 'SELLER' });
@@ -832,6 +832,11 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       {cameraMessage && (
         <p className={cx('rounded-lg px-3 py-2 text-xs font-medium', getCameraMessageStyles(cameraStatus, Boolean(error)))}>
           {cameraMessage}
+        </p>
+      )}
+      {isLive && !HAS_TURN_CONFIG && (
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+          TURN relay is not configured. Some mobile viewers may fail to connect.
         </p>
       )}
       {(cameraStatus === 'denied' || cameraStatus === 'blocked') && !camOn && (

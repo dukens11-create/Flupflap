@@ -37,6 +37,12 @@ function buildIceServers(): RTCIceServer[] {
   return servers;
 }
 
+const turnUrl = process.env.NEXT_PUBLIC_TURN_URL;
+const turnUsername = process.env.NEXT_PUBLIC_TURN_USERNAME;
+const turnCredential = process.env.NEXT_PUBLIC_TURN_CREDENTIAL;
+
+export const HAS_TURN_CONFIG = Boolean(turnUrl && turnUsername && turnCredential);
+
 export const RTC_CONFIG: RTCConfiguration = {
   iceServers: buildIceServers(),
 };

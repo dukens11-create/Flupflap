@@ -1,11 +1,12 @@
 'use client';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { MessageCircle, Send, Radio, Eye } from 'lucide-react';
-import { RTC_CONFIG } from '@/lib/rtc-config';
+import { RTC_CONFIG, HAS_TURN_CONFIG } from '@/lib/rtc-config';
 
 const DEFAULT_GUEST_NAME = 'Guest';
 const MEDIA_READY_TIMEOUT_MS = 1200;
 const PLAYBACK_RETRY_DELAY_MS = 250;
+const CONNECTION_RECOVERY_TIMEOUT_MS = 8000;
 
 interface ChatMessage {
   id: string;
@@ -31,6 +32,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
   const [streamError, setStreamError] = useState<string | null>(null);
   const [streamConnected, setStreamConnected] = useState(false);
   const [playbackBlocked, setPlaybackBlocked] = useState(false);
+  const [recoveringConnection, setRecoveringConnection] = useState(false);
   const [viewerCount, setViewerCount] = useState(0);
 
   const lastSeenRef = useRef<string | null>(null);
@@ -45,6 +47,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
   const activeOfferSignalRef = useRef<string | null>(null);
   const viewerHeartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const viewerIdRef = useRef<string | null>(null);
+  const connectionRecoveryTimeoutRef = useRef<number | null>(null);
 
   const fetchMessages = useCallback(async () => {
     try {
@@ -88,16 +91,40 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
   }, []);
 
   const closePeerConnection = useCallback(() => {
+    if (connectionRecoveryTimeoutRef.current != null) {
+      window.clearTimeout(connectionRecoveryTimeoutRef.current);
+      connectionRecoveryTimeoutRef.current = null;
+    }
     peerRef.current?.close();
     peerRef.current = null;
     remoteStreamRef.current = null;
     activeOfferSignalRef.current = null;
     setStreamConnected(false);
     setPlaybackBlocked(false);
+    setRecoveringConnection(false);
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
   }, []);
+
+  const clearConnectionRecoveryTimeout = useCallback(() => {
+    if (connectionRecoveryTimeoutRef.current != null) {
+      window.clearTimeout(connectionRecoveryTimeoutRef.current);
+      connectionRecoveryTimeoutRef.current = null;
+    }
+  }, []);
+
+  const scheduleConnectionRecoveryTimeout = useCallback((pc: RTCPeerConnection) => {
+    clearConnectionRecoveryTimeout();
+    connectionRecoveryTimeoutRef.current = window.setTimeout(() => {
+      connectionRecoveryTimeoutRef.current = null;
+      if (peerRef.current !== pc) return;
+      if (pc.connectionState === 'connected') return;
+      setStreamConnected(false);
+      setRecoveringConnection(false);
+      setStreamError('Live stream is reconnecting. Waiting for the seller to refresh the connection…');
+    }, CONNECTION_RECOVERY_TIMEOUT_MS);
+  }, [clearConnectionRecoveryTimeout]);
 
   const playRemoteStream = useCallback(async () => {
     const video = videoRef.current;
@@ -255,20 +282,43 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
 
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === 'connected') {
+        clearConnectionRecoveryTimeout();
+        setRecoveringConnection(false);
         setStreamConnected(true);
         setStreamError(null);
         void playRemoteStream();
       }
 
       if (pc.connectionState === 'disconnected') {
+        setRecoveringConnection(true);
+        scheduleConnectionRecoveryTimeout(pc);
         // Show reconnect message but keep the video visible so ICE can self-recover
         setStreamError('Live stream connection was interrupted. Trying to reconnect…');
       }
 
       if (pc.connectionState === 'failed') {
-        // Connection is unrecoverable; hide stream and wait for a new offer from the seller
-        setStreamConnected(false);
+        setRecoveringConnection(true);
+        scheduleConnectionRecoveryTimeout(pc);
         setStreamError('Live stream connection was interrupted. Trying to reconnect…');
+      }
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+        clearConnectionRecoveryTimeout();
+        setRecoveringConnection(false);
+        return;
+      }
+
+      if (pc.iceConnectionState === 'disconnected') {
+        setRecoveringConnection(true);
+        scheduleConnectionRecoveryTimeout(pc);
+        return;
+      }
+
+      if (pc.iceConnectionState === 'failed') {
+        setRecoveringConnection(true);
+        scheduleConnectionRecoveryTimeout(pc);
       }
     };
 
@@ -281,7 +331,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     if (videoRef.current) {
       videoRef.current.srcObject = remoteStream;
     }
-  }, [closePeerConnection, playRemoteStream, postSignal]);
+  }, [clearConnectionRecoveryTimeout, closePeerConnection, playRemoteStream, postSignal, scheduleConnectionRecoveryTimeout]);
 
   const pollSignals = useCallback(async () => {
     if (!isLive) return;
@@ -318,6 +368,8 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
             signalCursorRef.current = signal.createdAt;
             continue;
           }
+          clearConnectionRecoveryTimeout();
+          setRecoveringConnection(false);
           setStreamError(null);
           try {
             await handleSellerOffer(signal.id, payload);
@@ -348,7 +400,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     } catch {
       // polling retries
     }
-  }, [handleSellerOffer, isLive, saleId]);
+  }, [clearConnectionRecoveryTimeout, handleSellerOffer, isLive, saleId]);
 
   useEffect(() => {
     if (!isLive) {
@@ -479,10 +531,22 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
             </button>
           </div>
         )}
+        {streamConnected && recoveringConnection && (
+          <div className="pointer-events-none absolute inset-0 flex items-start justify-center p-4">
+            <span className="rounded-full bg-black/75 px-3 py-1.5 text-xs font-medium text-white shadow">
+              Reconnecting to live stream…
+            </span>
+          </div>
+        )}
       </div>
 
       {streamError && (
         <p className="rounded-lg bg-red-50 px-3 py-1.5 text-xs text-red-700">{streamError}</p>
+      )}
+      {!HAS_TURN_CONFIG && (
+        <p className="rounded-lg bg-amber-50 px-3 py-1.5 text-xs text-amber-800">
+          TURN relay is not configured. Some mobile viewers may fail to connect.
+        </p>
       )}
 
       <div className="space-y-2">
