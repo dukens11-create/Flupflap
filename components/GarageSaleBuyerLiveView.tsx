@@ -7,6 +7,7 @@ const DEFAULT_GUEST_NAME = 'Guest';
 const MEDIA_READY_TIMEOUT_MS = 1200;
 const PLAYBACK_RETRY_DELAY_MS = 250;
 const CONNECTION_RECOVERY_TIMEOUT_MS = 8000;
+const STREAM_RECONNECTING_MESSAGE = 'Live stream connection was interrupted. Trying to reconnect…';
 
 interface ChatMessage {
   id: string;
@@ -119,7 +120,8 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     connectionRecoveryTimeoutRef.current = window.setTimeout(() => {
       connectionRecoveryTimeoutRef.current = null;
       if (peerRef.current !== pc) return;
-      if (pc.connectionState === 'connected') return;
+      const currentPeer = peerRef.current;
+      if (currentPeer?.connectionState === 'connected') return;
       setStreamConnected(false);
       setRecoveringConnection(false);
       setStreamError('Live stream is reconnecting. Waiting for the seller to refresh the connection…');
@@ -293,13 +295,13 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
         setRecoveringConnection(true);
         scheduleConnectionRecoveryTimeout(pc);
         // Show reconnect message but keep the video visible so ICE can self-recover
-        setStreamError('Live stream connection was interrupted. Trying to reconnect…');
+        setStreamError(STREAM_RECONNECTING_MESSAGE);
       }
 
       if (pc.connectionState === 'failed') {
         setRecoveringConnection(true);
         scheduleConnectionRecoveryTimeout(pc);
-        setStreamError('Live stream connection was interrupted. Trying to reconnect…');
+        setStreamError(STREAM_RECONNECTING_MESSAGE);
       }
     };
 
