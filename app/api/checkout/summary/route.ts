@@ -10,6 +10,7 @@ import {
   type ShippingRateInfoInput,
   type VerifiedShippingRateInfo,
 } from '@/lib/checkout-shipping-verification';
+import { validateOfferCheckoutAccess } from '@/lib/offer-checkout';
 
 function isCalculatedShippingProduct(product: { shippingMode?: string | null; shippingCents: number }) {
   return product.shippingMode === 'CALCULATED' || (!product.shippingMode && product.shippingCents === 0);
@@ -30,8 +31,9 @@ export async function POST(req: Request) {
       items: { productId: string; quantity: number }[];
       pickupItemIds?: string[];
       shippingRateInfo?: ShippingRateInfoInput;
+      offerId?: string;
     };
-    const { items, pickupItemIds = [], shippingRateInfo } = body;
+    const { items, pickupItemIds = [], shippingRateInfo, offerId } = body;
 
     if (!items?.length) {
       return NextResponse.json({ error: 'Cart is empty.' }, { status: 400 });
@@ -68,6 +70,44 @@ export async function POST(req: Request) {
 
     if (!products.length) {
       return NextResponse.json({ error: 'No valid products in cart.' }, { status: 400 });
+    }
+
+    let offerPriceOverrides: Map<string, number> | undefined;
+    if (offerId) {
+      if (items.length !== 1 || items[0]?.quantity !== 1) {
+        return NextResponse.json({ error: 'Accepted-offer checkout supports a single listing quantity of 1.' }, { status: 400 });
+      }
+      const offer = await prisma.offer.findUnique({
+        where: { id: offerId },
+        select: {
+          buyerId: true,
+          productId: true,
+          amountCents: true,
+          status: true,
+          respondedAt: true,
+          expiresAt: true,
+          convertedOrderId: true,
+        },
+      });
+      const validatedOffer = validateOfferCheckoutAccess({
+        offer: offer
+          ? {
+              buyerId: offer.buyerId,
+              status: offer.status,
+              respondedAt: offer.respondedAt,
+              expiresAt: offer.expiresAt,
+              convertedOrderId: offer.convertedOrderId,
+            }
+          : null,
+        buyerId: userId,
+      });
+      if (!validatedOffer.ok) {
+        return NextResponse.json({ error: validatedOffer.message }, { status: 400 });
+      }
+      if (!offer || offer.productId !== items[0].productId) {
+        return NextResponse.json({ error: 'Offer does not match checkout item.' }, { status: 400 });
+      }
+      offerPriceOverrides = new Map([[offer.productId, offer.amountCents]]);
     }
 
     for (const product of products) {
@@ -135,6 +175,7 @@ export async function POST(req: Request) {
       pickupItemIds,
       settings.defaultSellerCommissionBps,
       liveRatesByProductId.size > 0 ? liveRatesByProductId : undefined,
+      offerPriceOverrides,
     );
     const commissionItemsById = new Map(commissionItems.map((item) => [item.productId, item]));
     const lineItems = products.map((product) => {

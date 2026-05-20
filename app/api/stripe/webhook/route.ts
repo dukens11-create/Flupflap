@@ -455,6 +455,16 @@ export async function POST(req: Request) {
 
   if (event.type === 'checkout.session.expired') {
     const cs = event.data.object as Stripe.Checkout.Session;
+    await prisma.offer.updateMany({
+      where: {
+        checkoutSessionId: cs.id,
+        convertedOrderId: null,
+      },
+      data: {
+        checkoutSessionId: null,
+        checkoutSessionExpiresAt: null,
+      },
+    });
     if (isGarageSaleCheckoutSession(cs)) {
       logWarn('Garage sale checkout failed', {
         tag: 'stripe/webhook',
@@ -609,6 +619,7 @@ export async function POST(req: Request) {
     }
 
     const metadataBuyerId = cs.metadata?.buyerId;
+    const metadataOfferId = cs.metadata?.offerId;
     const rawItems: string = cs.metadata?.items ?? '[]';
     const metadataItems: { productId: string; quantity: number }[] = JSON.parse(rawItems);
     const rawPickupIds: string = cs.metadata?.pickupItemIds ?? '[]';
@@ -791,6 +802,23 @@ export async function POST(req: Request) {
         },
       },
     });
+
+    if (metadataOfferId) {
+      await prisma.offer.updateMany({
+        where: {
+          id: metadataOfferId,
+          buyerId,
+          status: 'ACCEPTED',
+          convertedOrderId: null,
+        },
+        data: {
+          convertedOrderId: order.id,
+          convertedAt: new Date(),
+          checkoutSessionId: cs.id,
+          checkoutSessionExpiresAt: null,
+        },
+      });
+    }
 
     const buyerNotifications: CreateNotificationInput[] = [
       {

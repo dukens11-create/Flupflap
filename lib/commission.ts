@@ -170,12 +170,15 @@ export function buildCheckoutCommissionItems<
   defaultSellerCommissionBps: number,
   /** Optional override map: productId → shippingCents. Used when live rates replace product.shippingCents. */
   shippingOverrides?: Map<string, number>,
+  /** Optional override map: productId → unit price in cents. Used for accepted-offer checkout. */
+  priceOverrides?: Map<string, number>,
 ) {
   const pickupSet = new Set(pickupItemIds);
 
   const commissionItems = products.map((product) => {
     const quantity = items.find((item) => item.productId === product.id)?.quantity ?? 1;
-    const lineSubtotalCents = product.priceCents * quantity;
+    const priceCents = priceOverrides?.get(product.id) ?? product.priceCents;
+    const lineSubtotalCents = priceCents * quantity;
     // Product.shippingCents is stored as the per-unit shipping amount.
     let shippingCents = pickupSet.has(product.id) ? 0 : product.shippingCents;
     // Apply live-rate override when present (sets shipping to 0 on the item;
@@ -195,7 +198,7 @@ export function buildCheckoutCommissionItems<
       sellerStripeAccountId: product.seller.stripeAccountId,
       sellerStripeOnboardingComplete: product.seller.stripeOnboardingComplete,
       quantity,
-      priceCents: product.priceCents,
+      priceCents,
       shippingCents,
       lineSubtotalCents,
       commissionRateBps: resolved.commissionRateBps,

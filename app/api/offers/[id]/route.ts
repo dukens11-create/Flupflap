@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db';
 import { NotificationType } from '@prisma/client';
 import { z } from 'zod';
 import { createNotification } from '@/lib/notifications';
+import { computeOfferCheckoutExpiry } from '@/lib/offer-checkout';
 
 const respondSchema = z.object({
   action: z.enum(['accept', 'reject']),
@@ -45,12 +46,18 @@ export async function PATCH(
   }
 
   const nextStatus = parsed.action === 'accept' ? 'ACCEPTED' : 'REJECTED';
+  const respondedAt = new Date();
 
   await prisma.offer.update({
     where: { id: offer.id },
     data: {
       status: nextStatus,
-      respondedAt: new Date(),
+      respondedAt,
+      expiresAt: parsed.action === 'accept' ? computeOfferCheckoutExpiry(respondedAt) : null,
+      checkoutSessionId: null,
+      checkoutSessionExpiresAt: null,
+      convertedOrderId: null,
+      convertedAt: null,
     },
   });
 

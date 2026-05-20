@@ -13,6 +13,10 @@ import {
   type ShippingRateInfoInput,
   type VerifiedShippingRateInfo,
 } from '@/lib/checkout-shipping-verification';
+import {
+  buildOfferCheckoutIdempotencyKey,
+  validateOfferCheckoutAccess,
+} from '@/lib/offer-checkout';
 
 const SHIPPING_LINE_ITEM_NAME = 'Shipping';
 
@@ -44,8 +48,9 @@ export async function POST(req: Request) {
       items: { productId: string; quantity: number }[];
       pickupItemIds?: string[];
       shippingRateInfo?: ShippingRateInfoInput;
+      offerId?: string;
     };
-    const { items, pickupItemIds = [], shippingRateInfo } = body;
+    const { items, pickupItemIds = [], shippingRateInfo, offerId } = body;
     if (!items?.length) return NextResponse.json({ error: 'Cart is empty.' }, { status: 400 });
 
     const [settings, products] = await Promise.all([
@@ -86,6 +91,81 @@ export async function POST(req: Request) {
     ]);
 
     if (!products.length) return NextResponse.json({ error: 'No valid products in cart.' }, { status: 400 });
+
+    let offerPriceOverrides: Map<string, number> | undefined;
+    let acceptedOffer: {
+      id: string;
+      idempotencyNonce: string;
+    } | null = null;
+    if (offerId) {
+      if (items.length !== 1 || items[0]?.quantity !== 1) {
+        return NextResponse.json({ error: 'Accepted-offer checkout supports a single listing quantity of 1.' }, { status: 400 });
+      }
+
+      const offer = await prisma.offer.findUnique({
+        where: { id: offerId },
+        select: {
+          id: true,
+          buyerId: true,
+          productId: true,
+          sellerId: true,
+          amountCents: true,
+          status: true,
+          respondedAt: true,
+          expiresAt: true,
+          convertedOrderId: true,
+          checkoutSessionId: true,
+          checkoutSessionExpiresAt: true,
+        },
+      });
+      const validatedOffer = validateOfferCheckoutAccess({
+        offer: offer
+          ? {
+              buyerId: offer.buyerId,
+              status: offer.status,
+              respondedAt: offer.respondedAt,
+              expiresAt: offer.expiresAt,
+              convertedOrderId: offer.convertedOrderId,
+            }
+          : null,
+        buyerId,
+      });
+      if (!validatedOffer.ok) {
+        return NextResponse.json({ error: validatedOffer.message }, { status: 400 });
+      }
+
+      if (!offer || offer.productId !== items[0].productId) {
+        return NextResponse.json({ error: 'Offer does not match checkout item.' }, { status: 400 });
+      }
+
+      const matchedProduct = products.find((product) => product.id === offer.productId);
+      if (!matchedProduct || matchedProduct.inventory <= 0) {
+        return NextResponse.json(
+          { error: 'This accepted offer can no longer be checked out because the listing is unavailable.' },
+          { status: 400 },
+        );
+      }
+
+      if (offer.checkoutSessionId) {
+        try {
+          const existingSession = await stripe.checkout.sessions.retrieve(offer.checkoutSessionId);
+          if (existingSession.payment_status === 'paid' || existingSession.status === 'complete') {
+            return NextResponse.json({ error: 'This accepted offer has already been paid.' }, { status: 400 });
+          }
+          if (existingSession.status === 'open' && existingSession.url) {
+            return NextResponse.json({ url: existingSession.url, warningCode: null });
+          }
+        } catch {
+          // If Stripe session lookup fails (stale/deleted), proceed to create a fresh checkout session.
+        }
+      }
+
+      offerPriceOverrides = new Map([[offer.productId, offer.amountCents]]);
+      acceptedOffer = {
+        id: offer.id,
+        idempotencyNonce: offer.checkoutSessionExpiresAt?.toISOString() ?? 'initial',
+      };
+    }
 
     // Validate requested quantities do not exceed available inventory
     for (const product of products) {
@@ -147,6 +227,7 @@ export async function POST(req: Request) {
       pickupItemIds,
       settings.defaultSellerCommissionBps,
       liveRatesByProductId.size > 0 ? liveRatesByProductId : undefined,
+      offerPriceOverrides,
     );
     const commissionItemsById = new Map(commissionItems.map((item) => [item.productId, item]));
 
@@ -318,6 +399,14 @@ export async function POST(req: Request) {
     }
 
     const requiresShippingAddressCollection = !allPickup && !checkoutCustomerId;
+    const offerCheckoutIdempotencyKey = acceptedOffer
+      ? buildOfferCheckoutIdempotencyKey({
+          offerId: acceptedOffer.id,
+          pickupItemIds,
+          selectedRateIds: (validatedShippingRateInfo?.shipmentGroups ?? []).map((group) => group.rateId),
+          nonce: acceptedOffer.idempotencyNonce,
+        })
+      : null;
     const createCheckoutSession = async (enableAutomaticTax: boolean) => stripe.checkout.sessions.create({
       mode: 'payment',
       payment_method_types: ['card'],
@@ -343,8 +432,9 @@ export async function POST(req: Request) {
         items: JSON.stringify(items),
         pickupItemIds: JSON.stringify(pickupItemIds),
         isPickup: allPickup ? 'true' : 'false',
+        ...(acceptedOffer ? { offerId: acceptedOffer.id } : {}),
       },
-    });
+    }, offerCheckoutIdempotencyKey ? { idempotencyKey: offerCheckoutIdempotencyKey } : undefined);
 
     const stripeSession = await (async () => {
       try {
@@ -391,6 +481,18 @@ export async function POST(req: Request) {
         shippingRateInfo: validatedShippingRateInfo ?? undefined,
       },
     });
+
+    if (acceptedOffer) {
+      await prisma.offer.update({
+        where: { id: acceptedOffer.id },
+        data: {
+          checkoutSessionId: stripeSession.id,
+          checkoutSessionExpiresAt: stripeSession.expires_at
+            ? new Date(stripeSession.expires_at * 1000)
+            : null,
+        },
+      });
+    }
 
     return NextResponse.json({
       url: stripeSession.url,
