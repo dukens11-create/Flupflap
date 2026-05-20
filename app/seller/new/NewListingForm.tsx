@@ -51,7 +51,6 @@ function AiBadge() {
 
 export default function NewListingForm() {
   const router = useRouter();
-  const minScheduleDate = new Date().toISOString().slice(0, 16);
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitting, setSubmitting] = useState(false);
   const [shippingMode, setShippingMode] = useState<'CALCULATED' | 'FREE' | 'FLAT'>('CALCULATED');
@@ -174,7 +173,7 @@ export default function NewListingForm() {
     const formData = new FormData(form);
     const nativeSubmitEvent = event.nativeEvent as SubmitEvent;
     const submitter = nativeSubmitEvent.submitter as HTMLButtonElement | null;
-    const submitAction = (submitter?.value as 'SAVE_DRAFT' | 'SCHEDULE' | 'PUBLISH_NOW' | undefined) ?? 'PUBLISH_NOW';
+    const submitAction = (submitter?.value as 'SAVE_DRAFT' | 'PUBLISH_NOW' | undefined) ?? 'PUBLISH_NOW';
     formData.set('submitAction', submitAction);
 
     const nextErrors: FormErrors = {};
@@ -197,7 +196,6 @@ export default function NewListingForm() {
     const resolvedImages = images.length > 0 ? images : (fallbackImage ? [fallbackImage] : []);
 
     const isDraft = submitAction === 'SAVE_DRAFT';
-    const isScheduled = submitAction === 'SCHEDULE';
     if (!isDraft) {
       if (!title) nextErrors.title = 'Please enter a product title.';
       if (!categoryId || categoryStale) nextErrors.category = INVALID_CATEGORY_MESSAGE;
@@ -236,13 +234,6 @@ export default function NewListingForm() {
     } else if (!isDraft && !mediaState.canSubmit) {
       nextErrors.images = mediaState.message || 'Please wait for media uploads to finish before submitting.';
     }
-    if (isScheduled) {
-      const scheduledFor = String(formData.get('scheduledFor') ?? '').trim();
-      if (!scheduledFor) {
-        nextErrors.submit = 'Choose a future date/time to schedule this listing.';
-      }
-    }
-
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
       return;
@@ -321,10 +312,6 @@ export default function NewListingForm() {
           onChange={(e) => { setTitleValue(e.target.value); clearAiBadge('title'); }}
         />
         {errors.title && <p className="mt-1 text-xs text-red-600">{errors.title}</p>}
-      </div>
-      <div>
-        <label className="label" htmlFor="scheduledFor">Schedule publish time (optional)</label>
-        <input id="scheduledFor" name="scheduledFor" type="datetime-local" className="input" min={minScheduleDate} />
       </div>
       <div>
         <label className="label">
@@ -637,15 +624,13 @@ export default function NewListingForm() {
         </p>
       )}
 
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <button type="submit" name="submitAction" value="SAVE_DRAFT" className="btn-outline" disabled={submitting || mediaState.isUploading || mediaState.isEnhancing}>Save Draft</button>
-        <button type="submit" name="submitAction" value="SCHEDULE" className="btn-outline" disabled={submitting || mediaState.isUploading || mediaState.isEnhancing}>Schedule</button>
         <button type="submit" name="submitAction" value="PUBLISH_NOW" className="btn-primary" disabled={submitting || mediaState.isUploading || mediaState.isEnhancing}>Publish Now</button>
       </div>
       <p className="text-xs text-slate-500 text-center">
-        Draft listings stay private until published. Scheduled listings auto-publish at the selected time.
+        Draft listings stay private until published.
       </p>
     </form>
   );
 }
-

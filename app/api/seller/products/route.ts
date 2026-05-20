@@ -22,6 +22,7 @@ import {
   SHIPPING_PACKAGE_DETAILS_REQUIRED_MESSAGE,
 } from '@/lib/product-package';
 import { buildProductSearchableText } from '@/lib/smart-search';
+import { getSchedulingDisabledError } from '@/lib/listing-scheduling';
 
 import { SHIPPING_MODES, type ShippingMode } from '@/lib/product-constants';
 const schema = z.object({
@@ -228,8 +229,9 @@ export async function POST(req: Request) {
     const submitAction = resolveSubmitAction(String(form.get('submitAction') ?? ''));
     const isDraftAction = submitAction === 'SAVE_DRAFT';
     const isPublishNowAction = submitAction === 'PUBLISH_NOW';
-    if (submitAction === 'SCHEDULE') {
-      return jsonError('Scheduling functionality is currently disabled. Please save as draft or publish now.', 400);
+    const schedulingDisabledError = getSchedulingDisabledError(submitAction);
+    if (schedulingDisabledError) {
+      return jsonError(schedulingDisabledError, 400);
     }
     const incomingBody = toLogSafeObject(form.entries());
     console.info('[seller/products POST] incoming request body', incomingBody);

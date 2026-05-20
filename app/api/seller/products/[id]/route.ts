@@ -24,6 +24,7 @@ import {
 } from '@/lib/product-package';
 import { getSiteUrl } from '@/lib/seo';
 import { toSellerLifecycleStatus } from '@/lib/listing-status';
+import { getSchedulingDisabledError } from '@/lib/listing-scheduling';
 
 const optionalInputString = z.preprocess((value) => {
   if (value === undefined || value === null) return undefined;
@@ -459,10 +460,11 @@ export async function POST(
 
     const form = await req.formData();
     const submitAction = parseWorkflowAction(form.get('submitAction'));
-    if (submitAction === 'SCHEDULE') {
+    const schedulingDisabledError = getSchedulingDisabledError(submitAction);
+    if (schedulingDisabledError) {
       return respondWithError(
         id,
-        'Scheduling functionality is currently disabled. Please save as draft or publish now.',
+        schedulingDisabledError,
         acceptsJson,
         400,
       );
@@ -718,19 +720,18 @@ export async function PATCH(
         });
         return NextResponse.json(updated);
       }
-      return NextResponse.json(
-        { error: 'Scheduling functionality is currently disabled. Please save as draft or publish now.' },
-        { status: 400 },
-      );
+      const workflowSchedulingDisabledError = getSchedulingDisabledError(workflowAction);
+      if (workflowSchedulingDisabledError) {
+        return NextResponse.json({ error: workflowSchedulingDisabledError }, { status: 400 });
+      }
+      return NextResponse.json({ error: 'Invalid workflow action.' }, { status: 400 });
     }
 
     const submitAction = parseWorkflowAction(body.submitAction);
     const data = updateSchema.parse(body);
-    if (submitAction === 'SCHEDULE') {
-      return NextResponse.json(
-        { error: 'Scheduling functionality is currently disabled. Please save as draft or publish now.' },
-        { status: 400 },
-      );
+    const patchSchedulingDisabledError = getSchedulingDisabledError(submitAction);
+    if (patchSchedulingDisabledError) {
+      return NextResponse.json({ error: patchSchedulingDisabledError }, { status: 400 });
     }
 
     // Diagnostic logging for debugging failed saves
