@@ -4,12 +4,13 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { stripe, appUrl } from '@/lib/stripe';
 import { SELLER_SUBSCRIPTION_PRICE_CENTS, isSubscriptionActive } from '@/lib/subscription';
+import { sessionHasRole } from '@/lib/user-roles';
 
 /** GET /api/seller/subscription — return current subscription status for the signed-in seller */
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== 'SELLER') {
+    if (!session?.user || !sessionHasRole(session.user, 'SELLER')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -38,7 +39,7 @@ export async function GET() {
 export async function POST() {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== 'SELLER') {
+    if (!session?.user || !sessionHasRole(session.user, 'SELLER')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

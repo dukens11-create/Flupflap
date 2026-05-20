@@ -2,6 +2,18 @@ import { getToken } from 'next-auth/jwt';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
+/**
+ * Check whether a JWT token carries the given role.
+ * Prefers the `roles` array (multi-role); falls back to the legacy `role` field
+ * for tokens issued before the multi-role feature was deployed.
+ */
+function tokenHasRole(token: { role?: unknown; roles?: unknown } | null, role: string): boolean {
+  if (!token) return false;
+  const roles = Array.isArray(token.roles) && token.roles.length > 0 ? token.roles : null;
+  if (roles) return roles.includes(role);
+  return token.role === role;
+}
+
 export async function proxy(req: NextRequest) {
   const token = await getToken({ req });
   const { pathname } = req.nextUrl;
@@ -25,11 +37,11 @@ export async function proxy(req: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Logged in but wrong role → redirect to home
-  if (needsSeller && token?.role !== 'SELLER') {
+  // Logged in but missing required role → redirect to home
+  if (needsSeller && !tokenHasRole(token, 'SELLER')) {
     return NextResponse.redirect(new URL('/', req.url));
   }
-  if (needsAdmin && token?.role !== 'ADMIN') {
+  if (needsAdmin && !tokenHasRole(token, 'ADMIN')) {
     return NextResponse.redirect(new URL('/', req.url));
   }
 

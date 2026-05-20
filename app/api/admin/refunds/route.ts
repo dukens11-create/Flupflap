@@ -6,6 +6,7 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { isSchemaNotInitializedError } from '@/lib/db-errors';
 import { ADMIN_REFUNDS_LOAD_ERROR, ADMIN_REFUNDS_SCHEMA_INIT_ERROR } from '@/lib/admin-refunds-errors';
+import { sessionHasRole } from '@/lib/user-roles';
 
 const REFUND_MODEL_NAME = 'refundRequest';
 const REFUND_TABLE_NAME = 'RefundRequest';
@@ -112,7 +113,7 @@ export async function GET() {
   const adminUserId = session?.user?.id ?? null;
   console.info('[api/admin/refunds] Session user', { adminUserId, role: session?.user?.role ?? null });
 
-  if (!session?.user || session.user.role !== 'ADMIN') {
+  if (!session?.user || !sessionHasRole(session.user, 'ADMIN')) {
     return NextResponse.json({ refunds: [], error: 'Admin access required.' }, { status: session?.user ? 403 : 401 });
   }
 

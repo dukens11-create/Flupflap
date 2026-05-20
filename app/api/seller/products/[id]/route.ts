@@ -24,6 +24,7 @@ import {
 } from '@/lib/product-package';
 import { getSiteUrl } from '@/lib/seo';
 import { toSellerLifecycleStatus } from '@/lib/listing-status';
+import { sessionHasRole } from '@/lib/user-roles';
 
 const optionalInputString = z.preprocess((value) => {
   if (value === undefined || value === null) return undefined;
@@ -419,7 +420,7 @@ export async function POST(
   const acceptsJson = (req.headers.get('Accept') ?? '').includes('application/json');
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== 'SELLER') {
+    if (!session?.user || !sessionHasRole(session.user, 'SELLER')) {
       if (acceptsJson) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
       return NextResponse.redirect(new URL('/login', getSiteUrl()), 303);
     }
@@ -653,7 +654,7 @@ export async function PATCH(
 ) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== 'SELLER') {
+    if (!session?.user || !sessionHasRole(session.user, 'SELLER')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     const sellerId = session.user.id;
@@ -902,7 +903,7 @@ export async function DELETE(
 ) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== 'SELLER') {
+    if (!session?.user || !sessionHasRole(session.user, 'SELLER')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     const sellerId = session.user.id;

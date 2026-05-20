@@ -13,11 +13,12 @@ import {
   createStripeIdentitySession,
 } from '@/lib/kyc/providers';
 import { classifyStripeError } from '@/lib/stripe';
+import { sessionHasRole } from '@/lib/user-roles';
 
 export async function POST() {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== 'SELLER' || !session.user.id) {
+    if (!session?.user || !sessionHasRole(session.user, 'SELLER') || !session.user.id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

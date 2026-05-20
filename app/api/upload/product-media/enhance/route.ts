@@ -3,10 +3,11 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { isCloudinaryConfigured, logCloudinaryConfigStatus } from '@/lib/cloudinary';
 import { buildCloudinaryImageVariants } from '@/lib/cloudinary-media';
+import { sessionHasRole } from '@/lib/user-roles';
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
-  if (!session?.user || !['SELLER', 'ADMIN'].includes(session.user.role)) {
+  if (!session?.user || !(sessionHasRole(session.user, 'SELLER') || sessionHasRole(session.user, 'ADMIN'))) {
     return NextResponse.json({ success: false, message: 'Forbidden.' }, { status: 403 });
   }
 

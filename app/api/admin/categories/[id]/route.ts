@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { normalizeCategoryAliases } from '@/lib/category-aliases';
 import { z } from 'zod';
+import { sessionHasRole } from '@/lib/user-roles';
 
 const updateSchema = z.object({
   name: z.string().min(1).max(100).optional(),
@@ -16,7 +17,7 @@ const updateSchema = z.object({
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
-  if (!session?.user || session.user.role !== 'ADMIN') return null;
+  if (!session?.user || !sessionHasRole(session.user, 'ADMIN')) return null;
   return session;
 }
 

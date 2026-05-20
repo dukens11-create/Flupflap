@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db';
 import { z } from 'zod';
 import { stripe } from '@/lib/stripe';
 import { deriveGarageSaleLifecycle } from '@/lib/garage-sale-lifecycle';
+import { sessionHasRole } from '@/lib/user-roles';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,7 +20,7 @@ type Params = { params: Promise<{ id: string }> };
 /** PATCH /api/admin/garage-sales/[id] — admin moderation actions */
 export async function PATCH(req: Request, { params }: Params) {
   const session = await getServerSession(authOptions);
-  if (!session?.user || session.user.role !== 'ADMIN') {
+  if (!session?.user || !sessionHasRole(session.user, 'ADMIN')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -125,7 +126,7 @@ export async function PATCH(req: Request, { params }: Params) {
 /** DELETE /api/admin/garage-sales/[id] — admin delete */
 export async function DELETE(_req: Request, { params }: Params) {
   const session = await getServerSession(authOptions);
-  if (!session?.user || session.user.role !== 'ADMIN') {
+  if (!session?.user || !sessionHasRole(session.user, 'ADMIN')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

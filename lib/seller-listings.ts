@@ -9,6 +9,7 @@ import {
   getEffectivePackageDetails,
   hasStoredPackageDetails,
 } from '@/lib/product-package';
+import { sessionHasRole } from '@/lib/user-roles';
 
 function calcConversionRate(orders: number, views: number): string | null {
   if (views <= 0) return null;
@@ -22,7 +23,7 @@ export function isSellerRestricted(sellerStatus?: string | null) {
 export async function getSellerListingsPageData() {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect('/login');
-  if (session.user.role !== 'SELLER') redirect('/');
+  if (!sessionHasRole(session.user, 'SELLER')) redirect('/');
   const sellerId = session.user.id;
   if (!sellerId) redirect('/login');
 

@@ -6,6 +6,7 @@ import { appUrl, stripe } from '@/lib/stripe';
 import { calculateGarageSalePricing, MILLISECONDS_PER_DAY } from '@/lib/garage-sale-pricing';
 import { getGarageSalePricingSettings } from '@/lib/garage-sales';
 import { logInfo } from '@/lib/logger';
+import { sessionHasRole } from '@/lib/user-roles';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -23,7 +24,7 @@ export async function POST(req: Request, { params }: Params) {
   }
 
   const isOwner = source.sellerId === session.user.id;
-  const isAdmin = session.user.role === 'ADMIN';
+  const isAdmin = sessionHasRole(session.user, 'ADMIN');
   if (!isOwner && !isAdmin) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }

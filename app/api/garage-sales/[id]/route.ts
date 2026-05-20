@@ -7,6 +7,7 @@ import { calculateGarageSaleDurationDays } from '@/lib/garage-sale-pricing';
 import { expireGarageSales, resolveGarageSaleByRouteParam } from '@/lib/garage-sales';
 import { deriveGarageSaleLifecycle } from '@/lib/garage-sale-lifecycle';
 import { logInfo, logWarn } from '@/lib/logger';
+import { sessionHasRole } from '@/lib/user-roles';
 
 export const dynamic = 'force-dynamic';
 
@@ -116,7 +117,7 @@ export async function PATCH(req: Request, { params }: Params) {
   const sale = await prisma.garageSale.findUnique({ where: { id: resolvedSale.id } });
   if (!sale) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  if (sale.sellerId !== session.user.id && session.user.role !== 'ADMIN') {
+  if (sale.sellerId !== session.user.id && !sessionHasRole(session.user, 'ADMIN')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -170,7 +171,7 @@ export async function PATCH(req: Request, { params }: Params) {
   updates.durationDays = durationDays;
 
   // Re-pend if editing an approved listing
-  if (sale.status === 'APPROVED' && session.user.role !== 'ADMIN') {
+  if (sale.status === 'APPROVED' && !sessionHasRole(session.user, 'ADMIN')) {
     updates.status = 'PENDING';
   }
 
@@ -193,7 +194,7 @@ export async function DELETE(_req: Request, { params }: Params) {
   const sale = await prisma.garageSale.findUnique({ where: { id: resolvedSale.id } });
   if (!sale) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  if (sale.sellerId !== session.user.id && session.user.role !== 'ADMIN') {
+  if (sale.sellerId !== session.user.id && !sessionHasRole(session.user, 'ADMIN')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

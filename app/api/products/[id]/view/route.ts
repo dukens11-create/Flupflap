@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
+import { sessionHasRole } from '@/lib/user-roles';
 
 export async function POST(
   _req: Request,
@@ -29,7 +30,7 @@ export async function POST(
     if (session?.user) {
       if (
         session.user.id === product.sellerId ||
-        session.user.role === 'ADMIN'
+        sessionHasRole(session.user, 'ADMIN')
       ) {
         return NextResponse.json({ ok: false, skipped: true });
       }

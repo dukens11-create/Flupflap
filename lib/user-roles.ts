@@ -25,3 +25,16 @@ export function addUserRole(roles: Role[] | null | undefined, legacyRole: Role, 
 export function hasUserRole(roles: Role[] | null | undefined, legacyRole: Role, expectedRole: Role): boolean {
   return normalizeUserRoles(roles, legacyRole).includes(expectedRole);
 }
+
+/**
+ * Session-aware role check. Prefers the `roles` array when present (multi-role),
+ * and falls back to the legacy `role` field for backward-compatible tokens/sessions.
+ *
+ * Use this instead of `session.user.role === 'SELLER'` in API route handlers.
+ */
+export function sessionHasRole(
+  user: { role: Role; roles?: Role[] | null },
+  expectedRole: Role,
+): boolean {
+  return hasUserRole(user.roles, user.role, expectedRole);
+}

@@ -8,12 +8,14 @@ import type { Role } from '@prisma/client';
 import { getSiteUrl } from './seo';
 import { verifyFirebasePhoneIdToken } from './firebase/server';
 import { normalizePhone } from './phone';
+import { normalizeUserRoles, hasUserRole } from './user-roles';
 
 type AuthSessionUser = {
   id: string;
   name: string | null;
   email: string;
   role: Role;
+  roles: Role[];
   stripeAccountId: string | null;
   stripeOnboardingComplete: boolean;
 };
@@ -64,6 +66,7 @@ export const authOptions: NextAuthOptions = {
             email: true,
             password: true,
             role: true,
+            roles: true,
             stripeAccountId: true,
             stripeOnboardingComplete: true,
             deletedAt: true,
@@ -77,8 +80,11 @@ export const authOptions: NextAuthOptions = {
         const ok = await safeComparePassword(credentials.password, user.password, 'authorize');
         if (!ok) return null;
 
+        // Normalize roles early so the OTP gate applies to any SELLER-role user.
+        const normalizedRoles = normalizeUserRoles(user.roles, user.role);
+
         // Sellers must supply a Firebase phone-auth token that matches their phone.
-        if (user.role === 'SELLER') {
+        if (normalizedRoles.includes('SELLER')) {
           if (!credentials.firebaseIdToken) return null;
           try {
             const firebasePhone = await verifyFirebasePhoneIdToken(credentials.firebaseIdToken);
@@ -120,6 +126,7 @@ export const authOptions: NextAuthOptions = {
           name: user.name,
           email: user.email,
           role: user.role,
+          roles: normalizedRoles,
           stripeAccountId: user.stripeAccountId,
           stripeOnboardingComplete: user.stripeOnboardingComplete,
         };
@@ -150,6 +157,7 @@ export const authOptions: NextAuthOptions = {
         stripImageFields(user);
         token.id = user.id;
         token.role = user.role;
+        token.roles = user.roles;
         token.stripeAccountId = user.stripeAccountId;
         token.stripeOnboardingComplete = user.stripeOnboardingComplete;
       }
@@ -191,6 +199,11 @@ export const authOptions: NextAuthOptions = {
         stripImageFields(session.user);
         session.user.id = tokenUserId;
         session.user.role = token.role as Role;
+        // Derive roles from the JWT array; fall back to [role] for legacy tokens
+        // that pre-date the multi-role feature.
+        session.user.roles = Array.isArray(token.roles) && token.roles.length > 0
+          ? token.roles as Role[]
+          : normalizeUserRoles(null, token.role as Role);
         session.user.stripeAccountId = typeof token.stripeAccountId === 'string' ? token.stripeAccountId : null;
         session.user.stripeOnboardingComplete = Boolean(token.stripeOnboardingComplete);
       }
@@ -202,6 +215,8 @@ export const authOptions: NextAuthOptions = {
 export async function requireRole(email:string|undefined|null, roles:string[]) {
   if (!email) return null;
   const user = await prisma.user.findUnique({ where: { email } });
-  if (!user || !roles.includes(user.role)) return null;
+  if (!user) return null;
+  // Check both the multi-role array and the legacy single-role field.
+  if (!roles.some(r => hasUserRole(user.roles, user.role, r as Role))) return null;
   return user;
 }

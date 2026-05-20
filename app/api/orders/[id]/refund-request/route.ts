@@ -6,6 +6,7 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { createNotifications } from '@/lib/notifications';
 import { isOrderRefundEligible, normalizeRefundAmountCents } from '@/lib/refunds';
+import { sessionHasRole } from '@/lib/user-roles';
 
 const createRefundSchema = z.object({
   reason: z.string().trim().min(3).max(120),
@@ -63,9 +64,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   }
 
   const sellerIds = Array.from(new Set(order.items.map((item) => item.product.sellerId)));
-  const canAccess = session.user.role === 'ADMIN'
+  const canAccess = sessionHasRole(session.user, 'ADMIN')
     || session.user.id === order.buyerId
-    || (session.user.role === 'SELLER' && sellerIds.includes(session.user.id));
+    || (sessionHasRole(session.user, 'SELLER') && sellerIds.includes(session.user.id));
 
   if (!canAccess) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
