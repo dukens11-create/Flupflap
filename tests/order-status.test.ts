@@ -23,7 +23,7 @@ test('normalizeOrderStatus: CANCELLED normalizes to REFUNDED', () => {
 });
 
 test('normalizeOrderStatus: active statuses pass through unchanged', () => {
-  const actives = ['PENDING', 'PAID', 'SHIPPED', 'DELIVERED', 'REFUND_REQUESTED', 'PARTIALLY_REFUNDED', 'REFUNDED', 'PICKED_UP'];
+  const actives = Object.keys(ORDER_STATUS_TRANSITIONS);
   for (const s of actives) {
     assert.equal(normalizeOrderStatus(s), s, `Expected ${s} to pass through unchanged`);
   }
