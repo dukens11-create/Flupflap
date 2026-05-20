@@ -27,6 +27,7 @@ function makeRequest(ip = '1.2.3.4'): Request {
 // We test the synchronous `applyRateLimit` and the helpers directly because
 // they contain the shared in-memory logic that the async path falls back to.
 import { applyRateLimit, getClientIp, applyRateLimitAsync } from '@/lib/security';
+import { REDIS_CLIENT_KEY as REDIS_CLIENT_GLOBAL_KEY } from '@/lib/redis';
 
 // ── getClientIp ───────────────────────────────────────────────────────────────
 
@@ -215,10 +216,9 @@ test('applyRateLimitAsync: uses Redis counter when client is available', async (
   };
 
   // Temporarily inject the mock into globalThis under the key used by lib/redis.ts.
-  const REDIS_KEY = '__flupflap_redis_client__';
   const g = globalThis as Record<string, unknown>;
-  const prev = g[REDIS_KEY];
-  g[REDIS_KEY] = mockRedis;
+  const prev = g[REDIS_CLIENT_GLOBAL_KEY];
+  g[REDIS_CLIENT_GLOBAL_KEY] = mockRedis;
 
   try {
     const key = `test:redis:counter:${Date.now()}`;
@@ -237,17 +237,16 @@ test('applyRateLimitAsync: uses Redis counter when client is available', async (
     assert.ok(limited.retryAfterSeconds >= 1);
   } finally {
     // Restore previous Redis state.
-    g[REDIS_KEY] = prev;
+    g[REDIS_CLIENT_GLOBAL_KEY] = prev;
   }
 });
 
 test('applyRateLimitAsync: falls back to in-memory when Redis throws', async () => {
-  const REDIS_KEY = '__flupflap_redis_client__';
   const g = globalThis as Record<string, unknown>;
-  const prev = g[REDIS_KEY];
+  const prev = g[REDIS_CLIENT_GLOBAL_KEY];
 
   // Inject a Redis client that always throws.
-  g[REDIS_KEY] = {
+  g[REDIS_CLIENT_GLOBAL_KEY] = {
     async incr(): Promise<number> { throw new Error('Redis connection refused'); },
     async expire(): Promise<number> { return 0; },
     async ttl(): Promise<number> { return -1; },
@@ -262,7 +261,7 @@ test('applyRateLimitAsync: falls back to in-memory when Redis throws', async () 
     const result = await applyRateLimitAsync({ request: req, key, windowMs: 5000, max: 5 });
     assert.equal(result.limited, false);
   } finally {
-    g[REDIS_KEY] = prev;
+    g[REDIS_CLIENT_GLOBAL_KEY] = prev;
   }
 });
 

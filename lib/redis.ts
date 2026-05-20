@@ -11,12 +11,12 @@
  * when REDIS_URL is unavailable at build time.
  */
 
-import type { Redis as RedisClient } from 'ioredis';
+import Redis from 'ioredis';
 
-const REDIS_CLIENT_KEY = '__flupflap_redis_client__';
+export const REDIS_CLIENT_KEY = '__flupflap_redis_client__';
 
 type GlobalWithRedis = typeof globalThis & {
-  [REDIS_CLIENT_KEY]?: RedisClient | null;
+  [REDIS_CLIENT_KEY]?: Redis | null;
 };
 
 /**
@@ -24,7 +24,7 @@ type GlobalWithRedis = typeof globalThis & {
  * configured. Errors during connection are caught so the app never crashes on
  * startup; the caller must handle the null case.
  */
-export function getRedisClient(): RedisClient | null {
+export function getRedisClient(): Redis | null {
   const g = globalThis as GlobalWithRedis;
 
   // Already resolved (connected or deliberately null).
@@ -39,11 +39,6 @@ export function getRedisClient(): RedisClient | null {
   }
 
   try {
-    // Dynamic require so that the module can be imported in environments where
-    // ioredis is present without a top-level require that would break if the
-    // package were missing.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { default: Redis } = require('ioredis') as { default: typeof RedisClient };
     const client = new Redis(url, {
       // Fail fast during connection so the in-memory fallback kicks in quickly.
       connectTimeout: 2000,
