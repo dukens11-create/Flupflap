@@ -5,34 +5,14 @@ import { prisma } from '@/lib/db';
 import { dollars } from '@/lib/money';
 import { buildTrackingUrl } from '@/lib/shipping';
 import type { Metadata } from 'next';
+import { ORDER_STATUS_LABELS, ORDER_STATUS_BADGE_CLASSES } from '@/lib/order-status';
 
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = { title: 'My Orders' };
 
-const STATUS_LABELS: Record<string, string> = {
-  PENDING: 'Pending',
-  PAID: 'Paid',
-  SHIPPED: 'Shipped',
-  DELIVERED: 'Delivered',
-  REFUND_REQUESTED: 'Refund Requested',
-  PARTIALLY_REFUNDED: 'Partially Refunded',
-  CANCELLED: 'Cancelled',
-  REFUNDED: 'Refunded',
-};
-
 function statusBadge(status: string) {
-  const map: Record<string, string> = {
-    PENDING: 'badge-yellow',
-    PAID: 'badge-blue',
-    SHIPPED: 'badge-green',
-    DELIVERED: 'badge-green',
-    REFUND_REQUESTED: 'badge-yellow',
-    PARTIALLY_REFUNDED: 'badge-blue',
-    CANCELLED: 'badge-red',
-    REFUNDED: 'badge-slate',
-  };
-  return map[status] ?? 'badge-slate';
+  return ORDER_STATUS_BADGE_CLASSES[status] ?? 'badge-slate';
 }
 
 export default async function OrdersPage() {
@@ -69,7 +49,7 @@ export default async function OrdersPage() {
                     <a href={`/orders/${order.id}`} className="text-xs font-mono text-slate-400 hover:text-blue-600">Order #{order.id.slice(-8).toUpperCase()}</a>
                     <p className="text-xs text-slate-400">{new Date(order.createdAt).toLocaleDateString()}</p>
                   </div>
-                  <span className={statusBadge(order.status)}>{STATUS_LABELS[order.status] ?? order.status}</span>
+                  <span className={statusBadge(order.status)}>{ORDER_STATUS_LABELS[order.status] ?? order.status}</span>
                 </div>
                 <div className="space-y-2 mb-3">
                   {order.items.map(item => (

@@ -33,6 +33,7 @@ import {
   hasStoredPackageDetails,
 } from '@/lib/product-package';
 import { toSellerLifecycleStatus } from '@/lib/listing-status';
+import { normalizeOrderStatus, ORDER_STATUS_BADGE_CLASSES } from '@/lib/order-status';
 import { getRoleNavigation } from '@/lib/role-experience';
 import { isSchemaNotInitializedError } from '@/lib/db-errors';
 
@@ -90,8 +91,7 @@ function calcConversionRate(orders: number, views: number): string | null {
 }
 
 function orderStatusBadge(status: string) {
-  const greenStatuses = ['PAID', 'SHIPPED', 'DELIVERED', 'READY_FOR_PICKUP', 'PICKED_UP'];
-  return greenStatuses.includes(status) ? 'badge-green' : 'badge-yellow';
+  return ORDER_STATUS_BADGE_CLASSES[status] ?? 'badge-yellow';
 }
 
 function sellerVerificationStatusLabel(status?: string | null) {
@@ -1173,8 +1173,8 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                       existingTrackingUrl={o.trackingUrl ?? buildTrackingUrl(orderCarrier, o.trackingNumber)}
                     />
                   )}
-                  {/* Pickup verification for pickup orders */}
-                  {o.isPickup && ['PAID', 'READY_FOR_PICKUP'].includes(o.status) && !isRestricted && (
+                  {/* Pickup verification for pickup orders — also handles legacy READY_FOR_PICKUP records (normalized to PAID) */}
+                  {o.isPickup && normalizeOrderStatus(o.status) === 'PAID' && !isRestricted && (
                     <div className="mt-3">
                       <p className="text-xs text-slate-500 mb-2">📦 Pickup order — verify the buyer&apos;s code at handoff:</p>
                       <PickupVerifyForm orderId={o.id} />

@@ -7,6 +7,7 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import UserAvatar from '@/components/UserAvatar';
 import AdminRemoveProfileImageButton from '@/components/AdminRemoveProfileImageButton';
+import { ORDER_STATUS_BADGE_CLASSES } from '@/lib/order-status';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,17 +27,7 @@ const REASON_LABELS: Record<string, string> = {
 };
 
 function orderStatusBadge(status: string) {
-  const map: Record<string, string> = {
-    PENDING: 'badge-yellow',
-    PAID: 'badge-blue',
-    SHIPPED: 'badge-green',
-    DELIVERED: 'badge-green',
-    CANCELLED: 'badge-red',
-    REFUNDED: 'badge-slate',
-    READY_FOR_PICKUP: 'badge-blue',
-    PICKED_UP: 'badge-green',
-  };
-  return map[status] ?? 'badge-slate';
+  return ORDER_STATUS_BADGE_CLASSES[status] ?? 'badge-slate';
 }
 
 function productStatusBadge(status: string) {
