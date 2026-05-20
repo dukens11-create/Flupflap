@@ -8,31 +8,13 @@ import { checkoutErrorResponse } from '@/lib/checkout-errors';
 import { isSellerVerificationApproved } from '@/lib/seller-verification';
 import { getMissingPackageProductTitles } from '@/lib/product-package';
 import { logError } from '@/lib/logger';
+import {
+  verifySelectedShippingRates,
+  type ShippingRateInfoInput,
+  type VerifiedShippingRateInfo,
+} from '@/lib/checkout-shipping-verification';
 
 const SHIPPING_LINE_ITEM_NAME = 'Shipping';
-
-type ShipmentGroup = {
-  sellerId: string;
-  shipmentId: string;
-  rateId: string;
-  rateCents: number;
-  carrier: string;
-  service: string;
-};
-
-type ShippingRateInfo = {
-  shipmentGroups: ShipmentGroup[];
-  totalRateCents: number;
-  buyerAddress?: {
-    name?: string;
-    street1: string;
-    street2?: string;
-    city: string;
-    state: string;
-    zip: string;
-    country?: string;
-  };
-};
 
 /**
  * Treat explicit CALCULATED mode or legacy zero-shipping products (without mode)
@@ -40,11 +22,6 @@ type ShippingRateInfo = {
  */
 function isCalculatedShippingProduct(product: { shippingMode?: string | null; shippingCents: number }) {
   return product.shippingMode === 'CALCULATED' || (!product.shippingMode && product.shippingCents === 0);
-}
-
-/** Returns true only when the buyer address includes required street/city/state/zip fields. */
-function hasCompleteAddress(address?: ShippingRateInfo['buyerAddress']) {
-  return !!(address?.street1 && address?.city && address?.state && address?.zip);
 }
 
 function extractStripeErrorField(err: unknown, key: 'code' | 'type') {
@@ -66,8 +43,7 @@ export async function POST(req: Request) {
     const body = await req.json() as {
       items: { productId: string; quantity: number }[];
       pickupItemIds?: string[];
-      shippingRateInfo?: ShippingRateInfo;
-      buyerAddress?: ShippingRateInfo['buyerAddress'];
+      shippingRateInfo?: ShippingRateInfoInput;
     };
     const { items, pickupItemIds = [], shippingRateInfo } = body;
     if (!items?.length) return NextResponse.json({ error: 'Cart is empty.' }, { status: 400 });
@@ -95,6 +71,14 @@ export async function POST(req: Request) {
               },
             },
             sellerPlan: { select: { code: true, commissionRateBps: true } },
+            shipFromName: true,
+            shipFromStreet: true,
+            shipFromCity: true,
+            shipFromState: true,
+            shipFromZip: true,
+            shipFromCountry: true,
+            shipFromPhone: true,
+            shopName: true,
           },
         },
       },
@@ -122,53 +106,25 @@ export async function POST(req: Request) {
     const missingPackageTitles = getMissingPackageProductTitles(calculatedShippingProducts);
     if (missingPackageTitles.length > 0) {
       return NextResponse.json(
-        { error: `Shipping unavailable. The seller must add shipping package details for: ${missingPackageTitles.join(', ')}.` },
+        { error: `Some items cannot be shipped because seller package details are missing for: ${missingPackageTitles.join(', ')}. Please remove those items or contact the seller.` },
         { status: 400 },
       );
     }
-    const calculatedSellerIds = new Set(calculatedShippingProducts.map(product => product.sellerId));
-    const selectedShipmentGroups = shippingRateInfo?.shipmentGroups ?? [];
-
-    let validatedShippingRateInfo: ShippingRateInfo | undefined;
+    let validatedShippingRateInfo: VerifiedShippingRateInfo | undefined;
     if (requiresLiveShippingSelection) {
-      if (!selectedShipmentGroups.length) {
-        return NextResponse.json(
-          { error: 'Please calculate and select a shipping option before proceeding to checkout.' },
-          { status: 400 },
-        );
+      try {
+        validatedShippingRateInfo = await verifySelectedShippingRates({
+          items,
+          pickupItemIds,
+          products,
+          shippingRateInfo,
+        });
+      } catch (verificationErr) {
+        const errorMessage = verificationErr instanceof Error
+          ? verificationErr.message
+          : 'Shipping rates changed. Please refresh shipping quotes and try again.';
+        return NextResponse.json({ error: errorMessage }, { status: 400 });
       }
-      if (!hasCompleteAddress(shippingRateInfo?.buyerAddress)) {
-        return NextResponse.json(
-          { error: 'Please provide a complete shipping address before checkout.' },
-          { status: 400 },
-        );
-      }
-
-      const selectedBySeller = new Map(selectedShipmentGroups.map((group) => [group.sellerId, group]));
-      for (const sellerId of calculatedSellerIds) {
-        const selectedRate = selectedBySeller.get(sellerId);
-        if (!selectedRate || !selectedRate.shipmentId || !selectedRate.rateId || selectedRate.rateCents <= 0) {
-          return NextResponse.json(
-            { error: 'Please select a valid shipping method for every seller before checkout.' },
-            { status: 400 },
-          );
-        }
-      }
-
-      const selectedCalculatedGroups = selectedShipmentGroups.filter(group => calculatedSellerIds.has(group.sellerId));
-      const totalRateCents = selectedCalculatedGroups.reduce((sum, group) => sum + group.rateCents, 0);
-      if (totalRateCents <= 0) {
-        return NextResponse.json(
-          { error: 'Shipping rate unavailable. Please check address or package details.' },
-          { status: 400 },
-        );
-      }
-
-      validatedShippingRateInfo = {
-        shipmentGroups: selectedCalculatedGroups,
-        totalRateCents,
-        buyerAddress: shippingRateInfo?.buyerAddress,
-      };
     }
 
     // When live shipping rates are provided, override shippingCents per item to 0.
@@ -242,24 +198,26 @@ export async function POST(req: Request) {
       0,
     );
     if (requiresLiveShippingSelection) {
-      const hasShippingLine = lineItems.some(item => (
-        item.price_data.product_data.name === SHIPPING_LINE_ITEM_NAME
-        && item.price_data.unit_amount === shippingAmount
-      ));
       const expectedSubtotalCents = productSubtotalCents + shippingAmount;
-      if (!hasShippingLine) {
-        console.error('[checkout/cart] shipping validation failed: missing shipping line');
-        return NextResponse.json(
-          { error: 'Unable to process checkout. Please refresh and try again.' },
-          { status: 400 },
-        );
-      }
-      if (shippingAmount <= 0) {
+      if (shippingAmount < 0) {
         console.error('[checkout/cart] shipping validation failed: invalid shipping amount', { shippingAmount });
         return NextResponse.json(
           { error: 'Unable to process checkout. Please refresh and try again.' },
           { status: 400 },
         );
+      }
+      if (shippingAmount > 0) {
+        const hasShippingLine = lineItems.some(item => (
+          item.price_data.product_data.name === SHIPPING_LINE_ITEM_NAME
+          && item.price_data.unit_amount === shippingAmount
+        ));
+        if (!hasShippingLine) {
+          console.error('[checkout/cart] shipping validation failed: missing shipping line');
+          return NextResponse.json(
+            { error: 'Unable to process checkout. Please refresh and try again.' },
+            { status: 400 },
+          );
+        }
       }
       if (checkoutSubtotalCents !== expectedSubtotalCents) {
         console.error('[checkout/cart] shipping validation failed', {

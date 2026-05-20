@@ -4,36 +4,15 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { buildCheckoutCommissionItems, getMarketplaceSettings } from '@/lib/commission';
 import { classifyStripeError, stripe } from '@/lib/stripe';
-
-type ShipmentGroup = {
-  sellerId: string;
-  shipmentId: string;
-  rateId: string;
-  rateCents: number;
-  carrier: string;
-  service: string;
-};
-
-type ShippingRateInfo = {
-  shipmentGroups: ShipmentGroup[];
-  totalRateCents: number;
-  buyerAddress?: {
-    name?: string;
-    street1: string;
-    street2?: string;
-    city: string;
-    state: string;
-    zip: string;
-    country: string;
-  };
-};
+import { getMissingPackageProductTitles } from '@/lib/product-package';
+import {
+  verifySelectedShippingRates,
+  type ShippingRateInfoInput,
+  type VerifiedShippingRateInfo,
+} from '@/lib/checkout-shipping-verification';
 
 function isCalculatedShippingProduct(product: { shippingMode?: string | null; shippingCents: number }) {
   return product.shippingMode === 'CALCULATED' || (!product.shippingMode && product.shippingCents === 0);
-}
-
-function hasCompleteAddress(address?: ShippingRateInfo['buyerAddress']) {
-  return !!(address?.street1 && address?.city && address?.state && address?.zip && address?.country);
 }
 
 export async function POST(req: Request) {
@@ -50,7 +29,7 @@ export async function POST(req: Request) {
     const body = await req.json() as {
       items: { productId: string; quantity: number }[];
       pickupItemIds?: string[];
-      shippingRateInfo?: ShippingRateInfo;
+      shippingRateInfo?: ShippingRateInfoInput;
     };
     const { items, pickupItemIds = [], shippingRateInfo } = body;
 
@@ -73,6 +52,14 @@ export async function POST(req: Request) {
               stripeAccountId: true,
               stripeOnboardingComplete: true,
               sellerPlan: { select: { code: true, commissionRateBps: true } },
+              shipFromName: true,
+              shipFromStreet: true,
+              shipFromCity: true,
+              shipFromState: true,
+              shipFromZip: true,
+              shipFromCountry: true,
+              shipFromPhone: true,
+              shopName: true,
             },
           },
         },
@@ -97,36 +84,42 @@ export async function POST(req: Request) {
     const calculatedShippingProducts = products.filter(
       (product) => !pickupSet.has(product.id) && isCalculatedShippingProduct(product),
     );
-    const calculatedSellerIds = new Set(calculatedShippingProducts.map(product => product.sellerId));
-    const selectedShipmentGroups = shippingRateInfo?.shipmentGroups ?? [];
-    const selectedBySeller = new Map(selectedShipmentGroups.map((group) => [group.sellerId, group]));
-
-    if (calculatedSellerIds.size > 0 && !hasCompleteAddress(shippingRateInfo?.buyerAddress)) {
-      return NextResponse.json({ error: 'Please provide a complete shipping address.' }, { status: 400 });
+    const missingPackageTitles = getMissingPackageProductTitles(calculatedShippingProducts);
+    if (missingPackageTitles.length > 0) {
+      return NextResponse.json(
+        { error: `Some items cannot be shipped because seller package details are missing for: ${missingPackageTitles.join(', ')}. Please remove those items or contact the seller.` },
+        { status: 400 },
+      );
     }
 
-    for (const sellerId of calculatedSellerIds) {
-      const selectedRate = selectedBySeller.get(sellerId);
-      if (!selectedRate || !selectedRate.shipmentId || !selectedRate.rateId || selectedRate.rateCents <= 0) {
-        return NextResponse.json(
-          { error: 'Please select a valid shipping method for every seller before checkout.' },
-          { status: 400 },
-        );
+    let verifiedShippingRateInfo: VerifiedShippingRateInfo | undefined;
+    if (calculatedShippingProducts.length > 0) {
+      try {
+        verifiedShippingRateInfo = await verifySelectedShippingRates({
+          items,
+          pickupItemIds,
+          products,
+          shippingRateInfo,
+        });
+      } catch (verificationErr) {
+        const errorMessage = verificationErr instanceof Error
+          ? verificationErr.message
+          : 'Shipping rates changed. Please refresh shipping quotes and try again.';
+        return NextResponse.json({ error: errorMessage }, { status: 400 });
       }
     }
 
-    const selectedCalculatedGroups = selectedShipmentGroups.filter(group => calculatedSellerIds.has(group.sellerId));
-    const shippingAmount = selectedCalculatedGroups.reduce((sum, group) => sum + group.rateCents, 0);
-    if (calculatedSellerIds.size > 0 && shippingAmount <= 0) {
+    const shippingAmount = verifiedShippingRateInfo?.totalRateCents ?? 0;
+    if (calculatedShippingProducts.length > 0 && shippingAmount < 0) {
       return NextResponse.json(
-        { error: 'Shipping not selected' },
+        { error: 'Shipping rate unavailable. Please refresh shipping quotes.' },
         { status: 400 },
       );
     }
 
     const liveRatesByProductId = new Map<string, number>();
-    if (selectedCalculatedGroups.length) {
-      const selectedSellerIds = new Set(selectedCalculatedGroups.map(group => group.sellerId));
+    if (verifiedShippingRateInfo?.shipmentGroups?.length) {
+      const selectedSellerIds = new Set(verifiedShippingRateInfo.shipmentGroups.map(group => group.sellerId));
       for (const product of products) {
         if (pickupSet.has(product.id)) continue;
         if (!isCalculatedShippingProduct(product)) continue;
@@ -177,12 +170,12 @@ export async function POST(req: Request) {
         customer_details: {
           address_source: 'shipping',
           address: {
-            line1: shippingRateInfo?.buyerAddress?.street1,
-            line2: shippingRateInfo?.buyerAddress?.street2,
-            city: shippingRateInfo?.buyerAddress?.city,
-            state: shippingRateInfo?.buyerAddress?.state,
-            postal_code: shippingRateInfo?.buyerAddress?.zip,
-            country: shippingRateInfo?.buyerAddress?.country || 'US',
+            line1: verifiedShippingRateInfo?.buyerAddress?.street1,
+            line2: verifiedShippingRateInfo?.buyerAddress?.street2,
+            city: verifiedShippingRateInfo?.buyerAddress?.city,
+            state: verifiedShippingRateInfo?.buyerAddress?.state,
+            postal_code: verifiedShippingRateInfo?.buyerAddress?.zip,
+            country: verifiedShippingRateInfo?.buyerAddress?.country || 'US',
           },
         },
       });
