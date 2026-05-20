@@ -16,6 +16,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { z } from 'zod';
+import { applyRateLimitAsync } from '@/lib/security';
 
 const VALID_REASONS = [
   'fake_counterfeit',
@@ -40,6 +41,20 @@ export async function POST(
     const session = await getServerSession(authOptions);
     if (!session?.user) {
       return NextResponse.json({ error: 'You must be signed in to report a listing.' }, { status: 401 });
+    }
+
+    const limit = await applyRateLimitAsync({
+      request: req,
+      key: 'products:report',
+      windowMs: 60 * 1000,
+      max: 10,
+      userId: session.user.id,
+    });
+    if (limit.limited) {
+      return NextResponse.json(
+        { error: 'Too many report submissions. Please wait before trying again.' },
+        { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } },
+      );
     }
 
     const { id: productId } = await params;

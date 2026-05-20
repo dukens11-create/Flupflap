@@ -12,6 +12,7 @@ import {
   MESSAGE_MAX_LENGTH,
   normalizeMessageBody,
 } from '@/lib/messages';
+import { applyRateLimitAsync } from '@/lib/security';
 
 const startSchema = z.object({
   productId: z.string().min(1),
@@ -43,6 +44,20 @@ export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const limit = await applyRateLimitAsync({
+    request: req,
+    key: 'messages:start',
+    windowMs: 60 * 1000,
+    max: 20,
+    userId: session.user.id,
+  });
+  if (limit.limited) {
+    return NextResponse.json(
+      { error: 'Too many message requests. Please wait before trying again.' },
+      { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } },
+    );
   }
 
   let parsed: z.infer<typeof startSchema>;

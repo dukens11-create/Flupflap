@@ -1,10 +1,14 @@
 import { createHash } from 'crypto';
+import { getRedisClient } from '@/lib/redis';
+import { logWarn } from '@/lib/logger';
 
 type RateLimitOptions = {
   request: Request;
   key: string;
   windowMs: number;
   max: number;
+  /** Optional authenticated user ID; used as identity key when set. */
+  userId?: string | null;
 };
 
 type RateLimitResult = {
@@ -53,9 +57,14 @@ export function applyRateLimit({
   windowMs,
   max,
 }: RateLimitOptions): RateLimitResult {
+  const bucketKey = `${key}:${getClientIp(request)}`;
+  return applyRateLimitByKey(bucketKey, windowMs, max);
+}
+
+/** Internal helper — apply the in-memory rate limit for a fully-formed bucket key. */
+function applyRateLimitByKey(bucketKey: string, windowMs: number, max: number): RateLimitResult {
   const now = Date.now();
   const store = getRateLimitStore();
-  const bucketKey = `${key}:${getClientIp(request)}`;
   const existing = store.get(bucketKey);
   const resetAt = now + windowMs;
 
@@ -97,4 +106,74 @@ export function sanitizeTextInput(input: string, maxLength = 200): string {
 
 export function hashForLogging(value: string): string {
   return createHash('sha256').update(value).digest('hex').slice(0, 12);
+}
+
+// ─── Shared / Redis-backed rate limiting ─────────────────────────────────────
+
+/**
+ * Async rate limiter that uses Redis as the shared backing store when
+ * REDIS_URL is configured, falling back to the in-memory implementation when
+ * Redis is unavailable.
+ *
+ * **Identity key resolution** (most-specific wins):
+ *  1. Authenticated user ID  → `rl:{key}:u:{userId}`
+ *  2. Client IP fallback     → `rl:{key}:ip:{ip}`
+ *
+ * **Graceful degradation**
+ *  - If Redis throws, a `[WARN]` is emitted and the in-memory store is used
+ *    for the remainder of that request so per-instance throttling still applies.
+ *  - When running without REDIS_URL the in-memory store is used silently
+ *    (suitable for single-instance or development deployments).
+ */
+export async function applyRateLimitAsync({
+  request,
+  key,
+  windowMs,
+  max,
+  userId,
+}: RateLimitOptions): Promise<RateLimitResult> {
+  const ip = getClientIp(request);
+  const identity = userId ? `u:${userId}` : `ip:${ip}`;
+  const redisKey = `rl:${key}:${identity}`;
+  const windowSeconds = Math.ceil(windowMs / 1000);
+
+  const redis = getRedisClient();
+  if (redis) {
+    try {
+      // Fixed-window counter: INCR + EXPIRE (set only on first hit).
+      const count = await redis.incr(redisKey);
+      if (count === 1) {
+        await redis.expire(redisKey, windowSeconds);
+      }
+      const ttl = await redis.ttl(redisKey);
+      const retryAfterSeconds = Math.max(1, ttl > 0 ? ttl : windowSeconds);
+      const remaining = Math.max(0, max - count);
+      const limited = count > max;
+
+      if (limited) {
+        logWarn('Rate limit exceeded (Redis)', {
+          tag: 'rate-limit',
+          key,
+          identity: hashForLogging(identity),
+          count,
+          max,
+        });
+      }
+
+      return { limited, retryAfterSeconds, remaining };
+    } catch (redisErr) {
+      logWarn('Redis rate-limit unavailable — falling back to in-memory', {
+        tag: 'rate-limit',
+        key,
+        errMessage: redisErr instanceof Error ? redisErr.message : String(redisErr),
+      });
+      // Fall through to in-memory.
+    }
+  }
+
+  // In-memory fallback (preserves per-instance throttling).
+  // Use the pre-computed identity as the bucket key so user-keyed limits
+  // are correctly isolated even when Redis is unavailable.
+  const memKey = `${key}:${identity}`;
+  return applyRateLimitByKey(memKey, windowMs, max);
 }

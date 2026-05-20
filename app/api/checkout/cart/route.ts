@@ -17,6 +17,7 @@ import {
   buildOfferCheckoutIdempotencyKey,
   validateOfferCheckoutAccess,
 } from '@/lib/offer-checkout';
+import { applyRateLimitAsync } from '@/lib/security';
 
 const SHIPPING_LINE_ITEM_NAME = 'Shipping';
 
@@ -42,6 +43,20 @@ export async function POST(req: Request) {
     const buyerId = session.user.id;
     if (!buyerId) {
       return NextResponse.json({ error: 'Session expired. Please sign in again to checkout.' }, { status: 401 });
+    }
+
+    const limit = await applyRateLimitAsync({
+      request: req,
+      key: 'checkout:cart',
+      windowMs: 60 * 1000,
+      max: 10,
+      userId: buyerId,
+    });
+    if (limit.limited) {
+      return NextResponse.json(
+        { error: 'Too many checkout attempts. Please wait before trying again.' },
+        { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } },
+      );
     }
 
     const body = await req.json() as {
