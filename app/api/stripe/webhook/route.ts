@@ -16,6 +16,7 @@ import { isSellerVerificationApproved } from '@/lib/seller-verification';
 import { createNotification, createNotifications, type CreateNotificationInput } from '@/lib/notifications';
 import { purchaseShipmentRate, buildTrackingUrl } from '@/lib/shipping';
 import { buildShippingPurchaseIdempotencyKey } from '@/lib/shipping-purchase';
+import { isShipmentShipped } from '@/lib/order-shipment';
 import { sendEmail } from '@/lib/email';
 import { logError, logInfo, logWarn } from '@/lib/logger';
 import {
@@ -1022,9 +1023,65 @@ export async function POST(req: Request) {
         }
       }
 
-      // Persist the first successfully purchased label to the order
+      // Create per-seller OrderShipment records for all successfully purchased labels.
+      // This ensures multi-seller orders store independent tracking state per seller.
+      for (const { sellerId: labelSellerId, result, group } of purchasedLabels) {
+        const idKey = buildShippingPurchaseIdempotencyKey({
+          orderId: order.id,
+          shipmentId: result.shipmentId ?? group.shipmentId,
+          rateId: group.rateId,
+        });
+        const trackingUrl = result.trackingUrl ?? buildTrackingUrl(result.carrier, result.trackingNumber);
+        await prisma.orderShipment.upsert({
+          where: { orderId_sellerId: { orderId: order.id, sellerId: labelSellerId } },
+          create: {
+            orderId: order.id,
+            sellerId: labelSellerId,
+            shipmentId: result.shipmentId ?? group.shipmentId,
+            shipmentStatus: result.shipmentStatus ?? 'LABEL_PURCHASED',
+            trackingNumber: result.trackingNumber ?? null,
+            carrier: result.carrier ?? null,
+            shippingService: result.service ?? group.service ?? null,
+            labelUrl: result.labelUrl ?? null,
+            trackingUrl: trackingUrl ?? null,
+            labelPurchaseIdempotencyKey: idKey,
+            labelProviderTransactionId: result.providerTransactionId ?? null,
+            labelPurchasedAt: new Date(),
+            labelPurchaseLastError: null,
+          },
+          update: {
+            shipmentId: result.shipmentId ?? group.shipmentId,
+            shipmentStatus: result.shipmentStatus ?? 'LABEL_PURCHASED',
+            trackingNumber: result.trackingNumber ?? null,
+            carrier: result.carrier ?? null,
+            shippingService: result.service ?? group.service ?? null,
+            labelUrl: result.labelUrl ?? null,
+            trackingUrl: trackingUrl ?? null,
+            labelPurchaseIdempotencyKey: idKey,
+            labelProviderTransactionId: result.providerTransactionId ?? null,
+            labelPurchasedAt: new Date(),
+            labelPurchaseLastError: null,
+          },
+        });
+      }
+
+      // Persist the first successfully purchased label to the order for
+      // backward-compatible single-field consumers (mobile, legacy reads).
+      // Only transition the order to SHIPPED when ALL shipment groups have a
+      // purchased label so multi-seller orders reflect the true shipping state.
       if (purchasedLabels.length > 0) {
         const primary = purchasedLabels[0];
+        const allShipmentGroupsPurchased = purchasedLabels.length === shippingRateInfo.shipmentGroups.length;
+        // Also verify via OrderShipment records in case some groups were skipped.
+        const shippedShipments = await prisma.orderShipment.findMany({
+          where: { orderId: order.id },
+          select: { sellerId: true, shipmentStatus: true, labelUrl: true, trackingNumber: true },
+        });
+        const allOrderShipmentsShipped =
+          shippedShipments.length === shippingRateInfo.shipmentGroups.length &&
+          shippedShipments.every((s) => isShipmentShipped(s));
+        const orderShouldBeShipped = allShipmentGroupsPurchased && allOrderShipmentsShipped;
+
         await prisma.order.update({
           where: { id: order.id },
           data: {
@@ -1045,7 +1102,7 @@ export async function POST(req: Request) {
             labelProviderTransactionId: primary.result.providerTransactionId ?? undefined,
             labelPurchasedAt: new Date(),
             labelPurchaseLastError: null,
-            status: 'SHIPPED',
+            ...(orderShouldBeShipped ? { status: 'SHIPPED' } : {}),
           },
         });
       }

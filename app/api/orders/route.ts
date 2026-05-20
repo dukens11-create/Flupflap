@@ -9,7 +9,21 @@ export async function GET() {
 
   const orders = await prisma.order.findMany({
     where: { buyerId: session.user.id },
-    include: { items: { include: { product: { select: { title: true, imageUrl: true } } } } },
+    include: {
+      items: { include: { product: { select: { title: true, imageUrl: true } } } },
+      shipments: {
+        select: {
+          id: true,
+          sellerId: true,
+          seller: { select: { name: true, shopName: true } },
+          shipmentStatus: true,
+          trackingNumber: true,
+          carrier: true,
+          labelUrl: true,
+          trackingUrl: true,
+        },
+      },
+    },
     orderBy: { createdAt: 'desc' },
   });
 
