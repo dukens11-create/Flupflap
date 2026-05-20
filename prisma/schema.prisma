@@ -453,6 +453,14 @@ model RefundRequest {
   adminNotes           String?
   sellerResponse       String?
   stripeRefundId       String?
+  stripeRefundStatus   String?
+  stripeRefundAmount   Int?
+  stripeRefundCurrency String?
+  stripeFailureReason  String?
+  stripeErrorCode      String?
+  stripeErrorMessage   String?
+  stripeRefundCreatedAt DateTime?
+  stripeRefundUpdatedAt DateTime?
   createdAt            DateTime            @default(now())
   updatedAt            DateTime            @updatedAt
   resolvedAt           DateTime?
