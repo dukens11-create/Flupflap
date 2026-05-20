@@ -701,9 +701,26 @@ export async function POST(req: Request) {
 
     // Extract live shipping rate info stored during checkout
     const shippingRateInfo = snapshot?.shippingRateInfo as {
-      shipmentGroups?: { sellerId: string; shipmentId: string; rateId: string; rateCents: number; carrier: string; service: string }[];
+      shipmentGroups?: {
+        sellerId: string;
+        shipmentId: string;
+        rateId: string;
+        rateCents: number;
+        carrier: string;
+        service: string;
+        package?: { weightOz: number; lengthIn: number; widthIn: number; heightIn: number };
+        itemSnapshot?: {
+          productId: string;
+          quantity: number;
+          weightOz: number;
+          lengthIn: number;
+          widthIn: number;
+          heightIn: number;
+        }[];
+      }[];
       totalRateCents?: number;
       buyerAddress?: { name?: string; street1: string; street2?: string; city: string; state: string; zip: string; country?: string };
+      verification?: { verifiedAt: string; source: string };
     } | null ?? null;
 
     const liveShippingCents = shippingRateInfo?.totalRateCents ?? 0;
@@ -746,6 +763,9 @@ export async function POST(req: Request) {
         pickupState: isPickupOrder ? (firstPickupProduct?.pickupState ?? null) : null,
         selectedShipmentId: firstSelectedShippingRate?.shipmentId ?? null,
         selectedRateId: firstSelectedShippingRate?.rateId ?? null,
+        carrier: firstSelectedShippingRate?.carrier ?? null,
+        shippingCarrier: firstSelectedShippingRate?.carrier ?? null,
+        shippingService: firstSelectedShippingRate?.service ?? null,
         shippingName: shipping?.name ?? liveAddress?.name ?? null,
         shippingLine1: shipping?.address?.line1 ?? liveAddress?.street1 ?? null,
         shippingLine2: shipping?.address?.line2 ?? liveAddress?.street2 ?? null,

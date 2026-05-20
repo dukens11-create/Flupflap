@@ -864,7 +864,8 @@ model CheckoutSessionSnapshot {
   pickupItemIds    Json
   commissionItems  Json
   directToSellerId String?
-  /// Selected live shipping rate info: { totalRateCents, carrier, service, shipmentGroups: [{sellerId, shipmentId, rateId, rateCents}], buyerAddress }
+  /// Verified live shipping rate info:
+  /// { totalRateCents, shipmentGroups: [{sellerId, shipmentId, rateId, rateCents, carrier, service, package, itemSnapshot}], buyerAddress, verification }
   shippingRateInfo Json?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
