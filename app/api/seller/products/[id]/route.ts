@@ -705,6 +705,10 @@ export async function PATCH(
         const updated = await setSellerListingToDraft(id);
         return NextResponse.json(updated);
       }
+      if (workflowAction === 'SCHEDULE') {
+        const workflowSchedulingDisabledError = getSchedulingDisabledError(workflowAction);
+        return NextResponse.json({ error: workflowSchedulingDisabledError }, { status: 400 });
+      }
       const publishValidationError = validateProductReadyForPublish(existing);
       if (publishValidationError) {
         return NextResponse.json({ error: publishValidationError }, { status: 400 });
@@ -720,11 +724,7 @@ export async function PATCH(
         });
         return NextResponse.json(updated);
       }
-      const workflowSchedulingDisabledError = getSchedulingDisabledError(workflowAction);
-      if (workflowSchedulingDisabledError) {
-        return NextResponse.json({ error: workflowSchedulingDisabledError }, { status: 400 });
-      }
-      return NextResponse.json({ error: 'Unable to update listing workflow.' }, { status: 400 });
+      return NextResponse.json({ error: 'Invalid workflow action.' }, { status: 400 });
     }
 
     const submitAction = parseWorkflowAction(body.submitAction);
