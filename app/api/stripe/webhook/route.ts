@@ -599,6 +599,14 @@ export async function POST(req: Request) {
 
       return new NextResponse('ok', { status: 200 });
     }
+    // Guard: only create a marketplace order when Stripe has confirmed payment.
+    // For async payment methods (bank debit etc.) `checkout.session.completed`
+    // fires with payment_status='unpaid'; the follow-up
+    // `checkout.session.async_payment_succeeded` event will have status='paid'.
+    if (cs.payment_status !== 'paid') {
+      return new NextResponse('ok', { status: 200 });
+    }
+
     const metadataBuyerId = cs.metadata?.buyerId;
     const rawItems: string = cs.metadata?.items ?? '[]';
     const metadataItems: { productId: string; quantity: number }[] = JSON.parse(rawItems);
@@ -615,7 +623,11 @@ export async function POST(req: Request) {
     const buyerId = snapshot?.buyerId ?? metadataBuyerId;
     const items = (snapshot?.items as { productId: string; quantity: number }[] | null) ?? metadataItems;
     const pickupItemIds = (snapshot?.pickupItemIds as string[] | null) ?? metadataPickupItemIds;
-    const isPickupOrder = pickupItemIds.length > 0;
+    // An order is only treated as a pure-pickup order when every item in the
+    // cart was designated for pickup.  Mixed carts (some pickup, some shipped)
+    // are handled as shipping orders so that labels can still be purchased for
+    // the non-pickup items; the pickup products simply have shippingCents = 0.
+    const isPickupOrder = items.length > 0 && pickupItemIds.length === items.length;
 
     if (!buyerId || !items.length) {
       return new NextResponse('Missing metadata', { status: 400 });
