@@ -49,6 +49,7 @@ function AiBadge() {
   );
 }
 
+
 export default function NewListingForm() {
   const router = useRouter();
   const [errors, setErrors] = useState<FormErrors>({});
