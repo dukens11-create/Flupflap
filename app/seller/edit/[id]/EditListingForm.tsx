@@ -88,7 +88,6 @@ export default function EditListingForm({
   defaultPickupPostalCode,
 }: EditListingFormProps) {
   const router = useRouter();
-  const minScheduleDate = new Date().toISOString().slice(0, 16);
   const [submitError, setSubmitError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -120,10 +119,9 @@ export default function EditListingForm({
     const formData = new FormData(form);
     const nativeSubmitEvent = e.nativeEvent as SubmitEvent;
     const submitter = nativeSubmitEvent.submitter as HTMLButtonElement | null;
-    const submitAction = (submitter?.value as 'SAVE_DRAFT' | 'SCHEDULE' | 'PUBLISH_NOW' | undefined) ?? 'PUBLISH_NOW';
+    const submitAction = (submitter?.value as 'SAVE_DRAFT' | 'PUBLISH_NOW' | undefined) ?? 'PUBLISH_NOW';
     formData.set('submitAction', submitAction);
     const isDraft = submitAction === 'SAVE_DRAFT';
-    const isScheduled = submitAction === 'SCHEDULE';
 
     // Client-side validation
     const condition = String(formData.get('condition') ?? '').trim();
@@ -180,14 +178,6 @@ export default function EditListingForm({
       setSubmitError(mediaState.message || 'Please wait for media uploads to finish before submitting.');
       return;
     }
-    if (isScheduled) {
-      const scheduledFor = String(formData.get('scheduledFor') ?? '').trim();
-      if (!scheduledFor) {
-        setSubmitError('Choose a future date/time to schedule this listing.');
-        return;
-      }
-    }
-
     setSubmitError('');
     setSubmitting(true);
 
@@ -314,10 +304,6 @@ export default function EditListingForm({
           required
           minLength={3}
         />
-      </div>
-      <div>
-        <label className="label" htmlFor="scheduledFor">Schedule publish time (optional)</label>
-        <input id="scheduledFor" name="scheduledFor" type="datetime-local" className="input" min={minScheduleDate} />
       </div>
       <div>
         <label className="label">Description</label>
@@ -550,7 +536,7 @@ export default function EditListingForm({
           Selected category: {selectedCategory.categoryPath}
         </p>
       )}
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         <a href="/seller" className="btn-outline flex-1 text-center">
           Cancel
         </a>
@@ -561,15 +547,6 @@ export default function EditListingForm({
           disabled={submitting || deleting}
         >
           Save Draft
-        </button>
-        <button
-          className="btn-outline"
-          type="submit"
-          name="submitAction"
-          value="SCHEDULE"
-          disabled={submitting || deleting}
-        >
-          Schedule
         </button>
         <button
           className="btn-primary"
@@ -598,7 +575,7 @@ export default function EditListingForm({
         </div>
       )}
       <p className="text-xs text-slate-500 text-center">
-        Draft listings stay private until published. Scheduled listings auto-publish at the selected time.
+        Draft listings stay private until published.
       </p>
     </form>
   );

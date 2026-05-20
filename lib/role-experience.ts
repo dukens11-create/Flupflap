@@ -55,7 +55,6 @@ const sellerNav: RoleNavItem[] = [
     children: [
       { label: 'List Item', href: '/seller/listings/new' },
       { label: 'Drafts', href: '/seller/listings/drafts' },
-      { label: 'Scheduled', href: '/seller/listings/scheduled' },
       { label: 'Active', href: '/seller/listings/active' },
       { label: 'Sold', href: '/seller/listings/sold' },
       { label: 'Archived', href: '/seller/listings/archived' },

@@ -71,7 +71,7 @@ See [`DEPLOYMENT.md`](./DEPLOYMENT.md) for a full step-by-step deployment guide.
 
 1. Push this repo to GitHub.
 2. In [Render](https://render.com), click **New → Blueprint** and connect your repo.
-3. Render will detect `render.yaml` and create the **Web Service** and scheduled publisher **Cron Job** automatically.
+3. Render will detect `render.yaml` and create the **Web Service** automatically.
 4. Set the required environment variables in the Render dashboard (see below).
 
 ### Manual setup in Render
@@ -115,13 +115,9 @@ Set these in **Environment → Environment Variables** in the Render dashboard:
 
 URL precedence for app redirects/absolute links: `NEXT_PUBLIC_SITE_URL` → `NEXT_PUBLIC_APP_URL` → `NEXTAUTH_URL`.
 
-### Scheduled listing publishing job
+### Legacy scheduled-listing publisher job
 
-Listings in `SCHEDULED` state are auto-published by the Render cron service (`flupflap-scheduled-listing-publisher`) every 5 minutes by running:
-
-```bash
-npx tsx scripts/publish-scheduled-listings.ts
-```
+New listing scheduling is currently disabled. The Render cron service (`flupflap-scheduled-listing-publisher`) remains only as a backward-compatibility safety net for any legacy rows already stored with `SCHEDULED` status.
 
 ### Why the build succeeds but deployment fails
 
