@@ -162,7 +162,14 @@ test('P1-6 failure: missing buyer address for calculated shipping is rejected', 
 // ---------------------------------------------------------------------------
 
 test('P1-6 failure: incomplete buyer address (missing zip) is rejected', async () => {
-  const incompleteAddress = { name: 'Jane', street1: '500 Elm St', city: 'Dallas', state: 'TX' } as ShippingRateInfoInput['buyerAddress'];
+  const incompleteAddress = {
+    name: 'Jane',
+    street1: '500 Elm St',
+    city: 'Dallas',
+    state: 'TX',
+    zip: '',   // intentionally blank to simulate missing zip
+    country: 'US',
+  };
   const badAddressInfo: ShippingRateInfoInput = {
     shipmentGroups: [{ sellerId: 'seller_1', rateId: 'rate_usps_1', rateCents: 850 }],
     totalRateCents: 850,

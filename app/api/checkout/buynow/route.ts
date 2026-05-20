@@ -15,6 +15,12 @@ import {
 } from '@/lib/checkout-shipping-verification';
 
 const SHIPPING_LINE_ITEM_NAME = 'Shipping';
+const DEFAULT_BUYER_NAME = 'Buyer';
+
+type StripeLineItem = {
+  price_data: { currency: string; product_data: { name: string; images: string[] }; unit_amount: number };
+  quantity: number;
+};
 
 function isCalculatedShippingProduct(product: { shippingMode?: string | null; shippingCents: number }) {
   return product.shippingMode === 'CALCULATED' || (!product.shippingMode && product.shippingCents === 0);
@@ -172,7 +178,7 @@ export async function POST(req: Request) {
 
     // Build line items: product cost + separate shipping line item for calculated shipping
     const shippingAmount = validatedShippingRateInfo?.totalRateCents ?? 0;
-    const lineItems = [
+    const lineItems: StripeLineItem[] = [
       {
         price_data: {
           currency: 'usd',
@@ -181,10 +187,7 @@ export async function POST(req: Request) {
         },
         quantity: 1,
       },
-    ] as {
-      price_data: { currency: string; product_data: { name: string; images: string[] }; unit_amount: number };
-      quantity: number;
-    }[];
+    ];
     if (shippingAmount > 0) {
       lineItems.push({
         price_data: {
@@ -203,7 +206,7 @@ export async function POST(req: Request) {
     if (hasLiveShippingAddress && validatedShippingRateInfo?.buyerAddress) {
       try {
         const address = validatedShippingRateInfo.buyerAddress;
-        const shippingName = address.name?.trim() || 'Buyer';
+        const shippingName = address.name?.trim() || DEFAULT_BUYER_NAME;
         const customer = await stripe.customers.create({
           name: shippingName,
           email: session.user.email || undefined,
@@ -229,7 +232,7 @@ export async function POST(req: Request) {
         });
         checkoutCustomerId = customer.id;
       } catch (err) {
-        console.warn('[checkout/buynow] unable to create Stripe customer from live shipping address', err);
+        logError('[checkout/buynow] unable to create Stripe customer from live shipping address', err, { tag: 'checkout/buynow', action: 'createStripeCustomer' });
       }
     }
 
