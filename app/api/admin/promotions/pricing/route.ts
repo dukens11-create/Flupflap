@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { DEFAULT_PROMOTION_PLANS, ensurePromotionPlans } from '@/lib/promotions';
 import { getMarketplaceSettings } from '@/lib/commission';
+import { sessionHasRole } from '@/lib/user-roles';
 
 const MIN_FREE_PROMOTION_DURATION_DAYS = 1;
 const MIN_PROMOTION_CREDITS = 1;
@@ -34,7 +35,7 @@ function respondError(req: Request, message: string, status: number, redirectPat
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== 'ADMIN') {
+    if (!session?.user || !sessionHasRole(session.user, 'ADMIN')) {
       return respondError(req, 'Forbidden', 403);
     }
 

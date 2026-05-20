@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth-options';
 import { rejectAdminRefund } from '@/lib/admin-refunds';
+import { sessionHasRole } from '@/lib/user-roles';
 
 const rejectRefundSchema = z.object({
   adminNote: z.string().trim().max(2000).optional(),
@@ -13,7 +14,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  if (session.user.role !== 'ADMIN') {
+  if (!sessionHasRole(session.user, 'ADMIN')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

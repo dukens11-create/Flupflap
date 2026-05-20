@@ -3,11 +3,12 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { appUrl, classifyStripeError } from '@/lib/stripe';
 import { createStripeConnectLinkForSeller } from '@/lib/stripe-connect';
+import { sessionHasRole } from '@/lib/user-roles';
 
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== 'SELLER') {
+    if (!session?.user || !sessionHasRole(session.user, 'SELLER')) {
       return NextResponse.redirect(new URL('/login', appUrl));
     }
     const link = await createStripeConnectLinkForSeller(session.user.id);

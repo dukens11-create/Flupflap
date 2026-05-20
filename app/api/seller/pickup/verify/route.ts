@@ -19,6 +19,7 @@ import { NotificationType } from '@prisma/client';
 import { createNotifications } from '@/lib/notifications';
 import { z } from 'zod';
 import crypto from 'crypto';
+import { sessionHasRole } from '@/lib/user-roles';
 
 /** Constant-time string comparison to prevent timing side-channels. */
 function safeEqual(a: string, b: string): boolean {
@@ -43,7 +44,7 @@ export async function POST(req: Request) {
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    if (session.user.role !== 'SELLER') {
+    if (!sessionHasRole(session.user, 'SELLER')) {
       return NextResponse.json({ error: 'Seller account required.' }, { status: 403 });
     }
     const sellerId = session.user.id;

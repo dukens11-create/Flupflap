@@ -6,6 +6,7 @@ import {
   getSignedSellerVerificationDocumentUrl,
   type SellerVerificationDocumentKind,
 } from '@/lib/seller-verification';
+import { sessionHasRole } from '@/lib/user-roles';
 
 function isDocumentKind(value: string): value is SellerVerificationDocumentKind {
   return value === 'front' || value === 'back' || value === 'selfie';
@@ -16,7 +17,7 @@ export async function GET(
   { params }: { params: Promise<{ kind: string }> },
 ) {
   const session = await getServerSession(authOptions);
-  if (!session?.user || !['SELLER', 'ADMIN'].includes(session.user.role)) {
+  if (!session?.user || !(sessionHasRole(session.user, 'SELLER') || sessionHasRole(session.user, 'ADMIN'))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -25,16 +26,16 @@ export async function GET(
     return NextResponse.json({ error: 'Document not found.' }, { status: 404 });
   }
 
-  const sellerIdParam = session.user.role === 'ADMIN'
+  const sellerIdParam = sessionHasRole(session.user, 'ADMIN')
     ? new URL(req.url).searchParams.get('sellerId')
     : session.user.id;
 
-  if (session.user.role === 'ADMIN' && !sellerIdParam) {
+  if (sessionHasRole(session.user, 'ADMIN') && !sellerIdParam) {
     return NextResponse.json({ error: 'Seller ID is required.' }, { status: 400 });
   }
   const sellerId = sellerIdParam as string;
 
-  if (session.user.role === 'ADMIN') {
+  if (sessionHasRole(session.user, 'ADMIN')) {
     const seller = await prisma.user.findUnique({
       where: { id: sellerId },
       select: { id: true, role: true },
@@ -80,7 +81,7 @@ export async function GET(
     return NextResponse.json({ error: 'Document not found.' }, { status: 404 });
   }
 
-  if (session.user.role === 'ADMIN') {
+  if (sessionHasRole(session.user, 'ADMIN')) {
     await prisma.adminAccessLog.create({
       data: {
         adminId: session.user.id,

@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { parseSalesPromotionForm } from '@/lib/seller-promotion-form';
 import { getPromotionDetailHref, isPromotionRouteKind, toDbPromotionKind } from '@/lib/seller-promotions';
+import { sessionHasRole } from '@/lib/user-roles';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,7 +24,7 @@ function respondError(req: Request, kind: string, id: string, message: string, s
 
 export async function POST(req: Request, { params }: { params: Promise<{ kind: string; id: string }> }) {
   const session = await getServerSession(authOptions);
-  if (!session?.user || session.user.role !== 'SELLER' || !session.user.id) {
+  if (!session?.user || !sessionHasRole(session.user, 'SELLER') || !session.user.id) {
     return respondError(req, 'discounts', 'unknown', 'Forbidden', 403);
   }
 

@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
+import { sessionHasRole } from '@/lib/user-roles';
 
 const sellerRefundSchema = z.object({
   action: z.enum(['accept', 'dispute']),
@@ -14,7 +15,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  if (session.user.role !== 'SELLER') {
+  if (!sessionHasRole(session.user, 'SELLER')) {
     return NextResponse.json({ error: 'Seller account required.' }, { status: 403 });
   }
 

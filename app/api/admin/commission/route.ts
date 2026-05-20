@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { getMarketplaceSettings } from '@/lib/commission';
 import { logError } from '@/lib/logger';
+import { sessionHasRole } from '@/lib/user-roles';
 
 const COMMISSION_SUCCESS_QUERY = 'commission=fixed';
 
@@ -13,7 +14,7 @@ function isJsonRequest(req: Request) {
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== 'ADMIN') {
+    if (!session?.user || !sessionHasRole(session.user, 'ADMIN')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

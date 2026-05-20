@@ -7,6 +7,7 @@ import { prisma } from '@/lib/db';
 import { verifyFirebasePhoneIdToken } from '@/lib/firebase/server';
 import { normalizePhone } from '@/lib/phone';
 import { sanitizeTextInput } from '@/lib/security';
+import { sessionHasRole } from '@/lib/user-roles';
 
 const schema = z.object({
   phone: z.string().max(20),
@@ -17,7 +18,7 @@ export async function POST(req: Request) {
   let sellerId: string | null = null;
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== 'SELLER' || !session.user.id) {
+    if (!session?.user || !sessionHasRole(session.user, 'SELLER') || !session.user.id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     sellerId = session.user.id;

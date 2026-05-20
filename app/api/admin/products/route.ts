@@ -5,12 +5,13 @@ import { prisma } from '@/lib/db';
 import { cents } from '@/lib/money';
 import { z } from 'zod';
 import { buildProductSearchableText } from '@/lib/smart-search';
+import { sessionHasRole } from '@/lib/user-roles';
 
 const schema = z.object({ title: z.string().min(3), description: z.string().min(10), price: z.string(), condition: z.string(), category: z.string(), imageUrl: z.string().url(), sellerEmail: z.string().email(), shipping: z.string().optional(), inventory: z.string().optional() });
 
 export async function GET() {
   const session = await getServerSession(authOptions);
-  if (!session?.user || session.user.role !== 'ADMIN') {
+  if (!session?.user || !sessionHasRole(session.user, 'ADMIN')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
   const products = await prisma.product.findMany({
@@ -23,7 +24,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
-  if (!session?.user || session.user.role !== 'ADMIN') {
+  if (!session?.user || !sessionHasRole(session.user, 'ADMIN')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
   const form = await req.formData();

@@ -6,6 +6,7 @@ import {
   hasStoredPackageDetails,
   SHIPPING_PACKAGE_DETAILS_REQUIRED_MESSAGE,
 } from '@/lib/product-package';
+import { sessionHasRole } from '@/lib/user-roles';
 
 function isJsonRequest(req: Request) {
   return (req.headers.get('accept') ?? '').includes('application/json');
@@ -40,7 +41,7 @@ function respondError(req: Request, message: string, status: number, redirectTo 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== 'ADMIN') {
+    if (!session?.user || !sessionHasRole(session.user, 'ADMIN')) {
       return respondError(req, 'Forbidden', 403);
     }
 
@@ -82,7 +83,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== 'ADMIN') {
+    if (!session?.user || !sessionHasRole(session.user, 'ADMIN')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -113,7 +114,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== 'ADMIN') {
+    if (!session?.user || !sessionHasRole(session.user, 'ADMIN')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

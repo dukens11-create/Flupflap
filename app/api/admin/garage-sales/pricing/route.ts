@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { getMarketplaceSettings } from '@/lib/commission';
+import { sessionHasRole } from '@/lib/user-roles';
 
 function toCents(value: FormDataEntryValue | null) {
   const amount = Number(value);
@@ -18,7 +19,7 @@ function redirectWithMessage(path: string, key: 'success' | 'error', message: st
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
-  if (!session?.user || session.user.role !== 'ADMIN') {
+  if (!session?.user || !sessionHasRole(session.user, 'ADMIN')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

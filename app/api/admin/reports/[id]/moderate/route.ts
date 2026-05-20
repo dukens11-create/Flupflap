@@ -21,6 +21,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { z } from 'zod';
+import { sessionHasRole } from '@/lib/user-roles';
 
 // Map product report reasons to the SellerModerationLog reason categories
 const REPORT_TO_SELLER_REASON: Record<string, string> = {
@@ -53,7 +54,7 @@ export async function POST(
 ) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== 'ADMIN') {
+    if (!session?.user || !sessionHasRole(session.user, 'ADMIN')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

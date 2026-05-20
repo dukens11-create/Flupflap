@@ -6,11 +6,12 @@ import { stripe, appUrl } from '@/lib/stripe';
 import { expirePromotions, getPromotionLabel, getPromotionPlan } from '@/lib/promotions';
 import { isFreePromotionEligible } from '@/lib/free-promotion';
 import { getMarketplaceSettings } from '@/lib/commission';
+import { sessionHasRole } from '@/lib/user-roles';
 
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== 'SELLER') {
+    if (!session?.user || !sessionHasRole(session.user, 'SELLER')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     const sellerId = session.user.id;

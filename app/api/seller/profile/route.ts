@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { z } from 'zod';
 import { apiError } from '@/lib/api-response';
+import { sessionHasRole } from '@/lib/user-roles';
 
 const schema = z.object({
   shopName: z.string().trim().min(2).max(80),
@@ -109,7 +110,7 @@ export async function PATCH(req: Request) {
     if (!session?.user) {
       return apiError('Unauthorized', 401);
     }
-    if (session.user.role !== 'SELLER') {
+    if (!sessionHasRole(session.user, 'SELLER')) {
       return apiError('Forbidden', 403);
     }
     const sellerId = session.user.id;
@@ -173,7 +174,7 @@ export async function GET(_req: Request) {
     if (!session?.user) {
       return apiError('Unauthorized', 401);
     }
-    if (session.user.role !== 'SELLER') {
+    if (!sessionHasRole(session.user, 'SELLER')) {
       return apiError('Forbidden', 403);
     }
     const sellerId = session.user.id;

@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth-options';
 import { approveAdminRefund, rejectAdminRefund, resolveAdminRefund } from '@/lib/admin-refunds';
+import { sessionHasRole } from '@/lib/user-roles';
 
 const adminRefundSchema = z.object({
   action: z.enum(['approve', 'deny', 'resolve']),
@@ -15,7 +16,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  if (session.user.role !== 'ADMIN') {
+  if (!sessionHasRole(session.user, 'ADMIN')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

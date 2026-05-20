@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
+import { sessionHasRole } from '@/lib/user-roles';
 
 export async function GET(
   req: Request,
@@ -18,7 +19,7 @@ export async function GET(
     where: {
       id,
       // Buyers see their own orders; admins see all
-      ...(session.user.role !== 'ADMIN' && { buyerId: session.user.id }),
+      ...(!sessionHasRole(session.user, 'ADMIN') && { buyerId: session.user.id }),
     },
     include: {
       buyer: { select: { name: true, email: true } },

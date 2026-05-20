@@ -12,6 +12,7 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { NotificationType } from '@prisma/client';
 import { createNotifications } from '@/lib/notifications';
+import { sessionHasRole } from '@/lib/user-roles';
 
 export async function POST(
   _req: Request,
@@ -30,7 +31,7 @@ export async function POST(
         id,
         isPickup: false,
         // Buyers can only complete their own orders; admins can complete any.
-        ...(session.user.role !== 'ADMIN' && { buyerId: session.user.id }),
+        ...(!sessionHasRole(session.user, 'ADMIN') && { buyerId: session.user.id }),
       },
       select: {
         id: true,

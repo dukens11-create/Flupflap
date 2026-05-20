@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { authOptions } from '@/lib/auth-options';
 import { getCloudinary, isCloudinaryConfigured } from '@/lib/cloudinary';
 import { getCloudinaryThumbnailsFolder } from '@/lib/product-media';
+import { sessionHasRole } from '@/lib/user-roles';
 
 const schema = z.object({
   originalUrl: z.string().url(),
@@ -24,7 +25,7 @@ function isTrustedCloudinaryUrl(url: string) {
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
-  if (!session?.user || !['SELLER', 'ADMIN'].includes(session.user.role)) {
+  if (!session?.user || !(sessionHasRole(session.user, 'SELLER') || sessionHasRole(session.user, 'ADMIN'))) {
     return NextResponse.json({ success: false, message: 'Forbidden.' }, { status: 403 });
   }
 

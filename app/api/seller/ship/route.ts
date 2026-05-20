@@ -11,6 +11,7 @@ import {
   classifyShippingPurchaseError,
   hasActivePurchasedLabel,
 } from '@/lib/shipping-purchase';
+import { sessionHasRole } from '@/lib/user-roles';
 
 function parsePositiveNumber(value: unknown) {
   const parsed = typeof value === 'number' ? value : Number(value);
@@ -47,7 +48,7 @@ function toPurchasedLabelResponse(order: {
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== 'SELLER') {
+    if (!session?.user || !sessionHasRole(session.user, 'SELLER')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     const sellerId = session.user.id;

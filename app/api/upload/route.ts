@@ -9,11 +9,12 @@ import {
   getProductMediaUploadError,
 } from '@/lib/product-media';
 import { logError } from '@/lib/logger';
+import { sessionHasRole } from '@/lib/user-roles';
 
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user || !['SELLER', 'ADMIN'].includes(session.user.role)) {
+    if (!session?.user || !(sessionHasRole(session.user, 'SELLER') || sessionHasRole(session.user, 'ADMIN'))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

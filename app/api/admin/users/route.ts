@@ -12,6 +12,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
+import { sessionHasRole } from '@/lib/user-roles';
 
 const PAGE_SIZE = 30;
 
@@ -21,7 +22,7 @@ export async function GET(req: Request) {
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    if (session.user.role !== 'ADMIN') {
+    if (!sessionHasRole(session.user, 'ADMIN')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

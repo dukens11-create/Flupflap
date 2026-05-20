@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { isSellerVerificationApproved } from '@/lib/seller-verification';
+import { sessionHasRole } from '@/lib/user-roles';
 
 /**
  * PATCH /api/seller/products/[id]/inventory
@@ -15,7 +16,7 @@ export async function PATCH(
 ) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== 'SELLER') {
+    if (!session?.user || !sessionHasRole(session.user, 'SELLER')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     const sellerId = session.user.id;
