@@ -35,6 +35,22 @@ export async function GET(
           },
         },
       },
+      shipments: {
+        select: {
+          id: true,
+          sellerId: true,
+          seller: { select: { name: true, shopName: true } },
+          shipmentId: true,
+          shipmentStatus: true,
+          trackingNumber: true,
+          carrier: true,
+          shippingService: true,
+          labelUrl: true,
+          trackingUrl: true,
+          labelPurchasedAt: true,
+          createdAt: true,
+        },
+      },
     },
   });
 

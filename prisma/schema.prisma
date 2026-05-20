@@ -268,6 +268,7 @@ model User {
   // Garage sales
   garageSales                   GarageSale[]  @relation("GarageSaleSeller")
   garageSalePayments            GarageSalePayment[] @relation("GarageSalePaymentSeller")
+  orderShipments                OrderShipment[]     @relation("OrderShipmentSeller")
 }
 
 model SellerOtp {
@@ -438,6 +439,7 @@ model Order {
   updatedAt             DateTime    @updatedAt
   items                 OrderItem[]
   refundRequest         RefundRequest?
+  shipments             OrderShipment[]
 }
 
 model RefundRequest {
@@ -489,6 +491,33 @@ model OrderItem {
   sellerNetCents     Int     @default(0)
   commissionSource   String  @default("DEFAULT")
   commissionPlanCode String?
+}
+
+/// Per-seller shipment/tracking record for an order. Multi-seller orders store
+/// one row per seller so shipment state and tracking data are tracked independently.
+model OrderShipment {
+  id                          String    @id @default(cuid())
+  orderId                     String
+  order                       Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  sellerId                    String
+  seller                      User      @relation("OrderShipmentSeller", fields: [sellerId], references: [id])
+  shipmentId                  String?
+  shipmentStatus              String?
+  trackingNumber              String?
+  carrier                     String?
+  shippingService             String?
+  labelUrl                    String?
+  trackingUrl                 String?
+  labelPurchaseIdempotencyKey String?
+  labelProviderTransactionId  String?
+  labelPurchasedAt            DateTime?
+  labelPurchaseLastError      String?
+  createdAt                   DateTime  @default(now())
+  updatedAt                   DateTime  @updatedAt
+
+  @@unique([orderId, sellerId])
+  @@index([orderId])
+  @@index([sellerId])
 }
 
 model Account {
@@ -672,6 +701,11 @@ model Offer {
   message     String?
   status      OfferStatus @default(PENDING)
   respondedAt DateTime?
+  expiresAt   DateTime?
+  checkoutSessionId        String?   @unique
+  checkoutSessionExpiresAt DateTime?
+  convertedOrderId         String?   @unique
+  convertedAt              DateTime?
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 

@@ -9,36 +9,12 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import OrderRefundRequestCard from '@/components/OrderRefundRequestCard';
 import MarkDeliveredButton from '@/components/MarkDeliveredButton';
+import { ORDER_STATUS_LABELS, getOrderStatusBadgeClass } from '@/lib/order-status';
 
 export const metadata: Metadata = { title: 'Order Details' };
 
-const STATUS_LABELS: Record<string, string> = {
-  PENDING: 'Pending',
-  PAID: 'Paid',
-  SHIPPED: 'Shipped',
-  DELIVERED: 'Delivered',
-  REFUND_REQUESTED: 'Refund Requested',
-  PARTIALLY_REFUNDED: 'Partially Refunded',
-  CANCELLED: 'Cancelled',
-  REFUNDED: 'Refunded',
-  READY_FOR_PICKUP: 'Ready for Pickup',
-  PICKED_UP: 'Picked Up',
-};
-
 function statusBadge(status: string) {
-  const map: Record<string, string> = {
-    PENDING: 'badge-yellow',
-    PAID: 'badge-blue',
-    SHIPPED: 'badge-green',
-    DELIVERED: 'badge-green',
-    REFUND_REQUESTED: 'badge-yellow',
-    PARTIALLY_REFUNDED: 'badge-blue',
-    CANCELLED: 'badge-red',
-    REFUNDED: 'badge-slate',
-    READY_FOR_PICKUP: 'badge-blue',
-    PICKED_UP: 'badge-green',
-  };
-  return map[status] ?? 'badge-slate';
+  return getOrderStatusBadgeClass(status);
 }
 
 export default async function OrderDetailPage({
@@ -111,7 +87,7 @@ export default async function OrderDetailPage({
           <h1 className="text-2xl font-black">Order #{order.id.slice(-8).toUpperCase()}</h1>
           <p className="text-sm text-slate-500">{new Date(order.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
         </div>
-        <span className={`badge ${statusBadge(order.status)}`}>{STATUS_LABELS[order.status] ?? order.status}</span>
+        <span className={`badge ${statusBadge(order.status)}`}>{ORDER_STATUS_LABELS[order.status] ?? order.status}</span>
       </div>
 
       {/* Items */}

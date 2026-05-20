@@ -20,6 +20,7 @@ import { createNotifications } from '@/lib/notifications';
 import { z } from 'zod';
 import crypto from 'crypto';
 import { sessionHasRole } from '@/lib/user-roles';
+import { normalizeOrderStatus } from '@/lib/order-status';
 
 /** Constant-time string comparison to prevent timing side-channels. */
 function safeEqual(a: string, b: string): boolean {
@@ -86,10 +87,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'This order has already been confirmed as picked up.' }, { status: 400 });
     }
 
-    if (!['PAID', 'READY_FOR_PICKUP'].includes(order.status)) {
+    // Normalize the status to handle legacy READY_FOR_PICKUP records (which
+    // are treated as PAID — no new orders are created with that state).
+    if (normalizeOrderStatus(order.status) !== 'PAID') {
       return NextResponse.json({ error: 'This order is not eligible for pickup confirmation.' }, { status: 400 });
     }
-
     if (!order.pickupCode) {
       return NextResponse.json({ error: 'No pickup code on record for this order.' }, { status: 400 });
     }
