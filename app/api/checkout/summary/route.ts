@@ -87,7 +87,7 @@ export async function POST(req: Request) {
     const missingPackageTitles = getMissingPackageProductTitles(calculatedShippingProducts);
     if (missingPackageTitles.length > 0) {
       return NextResponse.json(
-        { error: `Shipping unavailable. The seller must add shipping package details for: ${missingPackageTitles.join(', ')}.` },
+        { error: `Some items cannot be shipped because seller package details are missing for: ${missingPackageTitles.join(', ')}. Please remove those items or contact the seller.` },
         { status: 400 },
       );
     }
@@ -110,7 +110,7 @@ export async function POST(req: Request) {
     }
 
     const shippingAmount = verifiedShippingRateInfo?.totalRateCents ?? 0;
-    if (calculatedShippingProducts.length > 0 && shippingAmount <= 0) {
+    if (calculatedShippingProducts.length > 0 && shippingAmount < 0) {
       return NextResponse.json(
         { error: 'Shipping rate unavailable. Please refresh shipping quotes.' },
         { status: 400 },

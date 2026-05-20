@@ -70,18 +70,18 @@ export async function POST(req: Request) {
                 adminFallbackStatus: true,
               },
             },
-             sellerPlan: { select: { code: true, commissionRateBps: true } },
-             shipFromName: true,
-             shipFromStreet: true,
-             shipFromCity: true,
-             shipFromState: true,
-             shipFromZip: true,
-             shipFromCountry: true,
-             shipFromPhone: true,
-             shopName: true,
-           },
-         },
-       },
+            sellerPlan: { select: { code: true, commissionRateBps: true } },
+            shipFromName: true,
+            shipFromStreet: true,
+            shipFromCity: true,
+            shipFromState: true,
+            shipFromZip: true,
+            shipFromCountry: true,
+            shipFromPhone: true,
+            shopName: true,
+          },
+        },
+      },
     }),
     ]);
 
@@ -106,7 +106,7 @@ export async function POST(req: Request) {
     const missingPackageTitles = getMissingPackageProductTitles(calculatedShippingProducts);
     if (missingPackageTitles.length > 0) {
       return NextResponse.json(
-        { error: `Shipping unavailable. The seller must add shipping package details for: ${missingPackageTitles.join(', ')}.` },
+        { error: `Some items cannot be shipped because seller package details are missing for: ${missingPackageTitles.join(', ')}. Please remove those items or contact the seller.` },
         { status: 400 },
       );
     }
@@ -198,24 +198,26 @@ export async function POST(req: Request) {
       0,
     );
     if (requiresLiveShippingSelection) {
-      const hasShippingLine = lineItems.some(item => (
-        item.price_data.product_data.name === SHIPPING_LINE_ITEM_NAME
-        && item.price_data.unit_amount === shippingAmount
-      ));
       const expectedSubtotalCents = productSubtotalCents + shippingAmount;
-      if (!hasShippingLine) {
-        console.error('[checkout/cart] shipping validation failed: missing shipping line');
-        return NextResponse.json(
-          { error: 'Unable to process checkout. Please refresh and try again.' },
-          { status: 400 },
-        );
-      }
-      if (shippingAmount <= 0) {
+      if (shippingAmount < 0) {
         console.error('[checkout/cart] shipping validation failed: invalid shipping amount', { shippingAmount });
         return NextResponse.json(
           { error: 'Unable to process checkout. Please refresh and try again.' },
           { status: 400 },
         );
+      }
+      if (shippingAmount > 0) {
+        const hasShippingLine = lineItems.some(item => (
+          item.price_data.product_data.name === SHIPPING_LINE_ITEM_NAME
+          && item.price_data.unit_amount === shippingAmount
+        ));
+        if (!hasShippingLine) {
+          console.error('[checkout/cart] shipping validation failed: missing shipping line');
+          return NextResponse.json(
+            { error: 'Unable to process checkout. Please refresh and try again.' },
+            { status: 400 },
+          );
+        }
       }
       if (checkoutSubtotalCents !== expectedSubtotalCents) {
         console.error('[checkout/cart] shipping validation failed', {

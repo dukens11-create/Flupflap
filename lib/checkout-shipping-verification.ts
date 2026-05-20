@@ -127,7 +127,7 @@ function normalizeText(value: string | undefined) {
 
 function rateToCents(rate: ShipmentRateQuote) {
   const parsed = Number(rate.rate);
-  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  if (!Number.isFinite(parsed) || parsed < 0) return null;
   return Math.round(parsed * 100);
 }
 
@@ -178,7 +178,7 @@ export async function verifySelectedShippingRates(params: VerifyShippingRatePara
 
     const fromAddress = normalizeFromAddress(seller);
     if (!fromAddress.street1 || !fromAddress.city || !fromAddress.state || !fromAddress.zip) {
-      throw new Error('Shipping unavailable. Seller shipping profile is incomplete. Please refresh shipping quotes.');
+      throw new Error('Some items cannot be shipped because seller shipping details are incomplete. Please remove those items or contact the seller.');
     }
 
     const itemSnapshot = sellerProducts.map((product) => ({
@@ -197,7 +197,7 @@ export async function verifySelectedShippingRates(params: VerifyShippingRatePara
 
     if (!weightOz || !lengthIn || !widthIn || !heightIn) {
       throw new Error(
-        `Shipping rate unavailable. Please check address or package details for seller "${seller.shopName || 'Seller'}".`,
+        `Some items cannot be shipped because seller package details are missing for "${seller.shopName || 'Seller'}". Please remove those items or contact the seller.`,
       );
     }
 
@@ -258,7 +258,7 @@ export async function verifySelectedShippingRates(params: VerifyShippingRatePara
   }
 
   const totalRateCents = verifiedGroups.reduce((sum, group) => sum + group.rateCents, 0);
-  if (totalRateCents <= 0) {
+  if (totalRateCents < 0) {
     throw new Error('Shipping rate unavailable. Please refresh shipping quotes.');
   }
 

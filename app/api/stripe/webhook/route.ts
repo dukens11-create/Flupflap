@@ -763,6 +763,7 @@ export async function POST(req: Request) {
         pickupState: isPickupOrder ? (firstPickupProduct?.pickupState ?? null) : null,
         selectedShipmentId: firstSelectedShippingRate?.shipmentId ?? null,
         selectedRateId: firstSelectedShippingRate?.rateId ?? null,
+        // Keep both fields in sync: `carrier` is canonical and `shippingCarrier` is legacy.
         carrier: firstSelectedShippingRate?.carrier ?? null,
         shippingCarrier: firstSelectedShippingRate?.carrier ?? null,
         shippingService: firstSelectedShippingRate?.service ?? null,
