@@ -724,7 +724,7 @@ export async function PATCH(
       if (workflowSchedulingDisabledError) {
         return NextResponse.json({ error: workflowSchedulingDisabledError }, { status: 400 });
       }
-      return NextResponse.json({ error: 'Invalid workflow action.' }, { status: 400 });
+      return NextResponse.json({ error: 'Unable to update listing workflow.' }, { status: 400 });
     }
 
     const submitAction = parseWorkflowAction(body.submitAction);
