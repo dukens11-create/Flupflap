@@ -15,6 +15,7 @@ import {
 import { isSellerVerificationApproved } from '@/lib/seller-verification';
 import { createNotification, createNotifications, type CreateNotificationInput } from '@/lib/notifications';
 import { purchaseShipmentRate, buildTrackingUrl } from '@/lib/shipping';
+import { buildShippingPurchaseIdempotencyKey } from '@/lib/shipping-purchase';
 import { sendEmail } from '@/lib/email';
 import { logError, logInfo, logWarn } from '@/lib/logger';
 import {
@@ -954,9 +955,15 @@ export async function POST(req: Request) {
       for (const group of shippingRateInfo.shipmentGroups) {
         if (!group.shipmentId || !group.rateId) continue;
         try {
+          const idempotencyKey = buildShippingPurchaseIdempotencyKey({
+            orderId: order.id,
+            shipmentId: group.shipmentId,
+            rateId: group.rateId,
+          });
           const result = await purchaseShipmentRate({
             shipmentId: group.shipmentId,
             rateId: group.rateId,
+            idempotencyKey,
           });
           purchasedLabels.push({ sellerId: group.sellerId, result, group });
         } catch (labelErr: any) {
@@ -981,6 +988,14 @@ export async function POST(req: Request) {
             trackingUrl: primary.result.trackingUrl ?? buildTrackingUrl(primary.result.carrier, primary.result.trackingNumber),
             shipmentId: primary.result.shipmentId ?? undefined,
             shipmentStatus: primary.result.shipmentStatus ?? 'LABEL_PURCHASED',
+            labelPurchaseIdempotencyKey: buildShippingPurchaseIdempotencyKey({
+              orderId: order.id,
+              shipmentId: primary.result.shipmentId ?? primary.group.shipmentId,
+              rateId: primary.group.rateId,
+            }),
+            labelProviderTransactionId: primary.result.providerTransactionId ?? undefined,
+            labelPurchasedAt: new Date(),
+            labelPurchaseLastError: null,
             status: 'SHIPPED',
           },
         });
