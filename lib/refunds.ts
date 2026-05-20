@@ -1,4 +1,5 @@
 import type { RefundRequestStatus } from '@prisma/client';
+import { normalizeOrderStatus } from '@/lib/order-status';
 
 export const REFUND_STATUS_LABELS: Record<RefundRequestStatus, string> = {
   REQUESTED: 'Requested',
@@ -34,12 +35,8 @@ export function normalizeRefundAmountCents(requestedAmountCents: number | undefi
 }
 
 export function isOrderRefundEligible(orderStatus: string): boolean {
-  return [
-    'PAID',
-    'SHIPPED',
-    'DELIVERED',
-    'READY_FOR_PICKUP',
-    'PICKED_UP',
-    'PARTIALLY_REFUNDED',
-  ].includes(orderStatus);
+  // Normalize deprecated statuses before checking eligibility so that legacy
+  // records (e.g. READY_FOR_PICKUP → PAID) still qualify correctly.
+  const normalized = normalizeOrderStatus(orderStatus);
+  return ['PAID', 'SHIPPED', 'DELIVERED', 'PICKED_UP', 'PARTIALLY_REFUNDED'].includes(normalized);
 }

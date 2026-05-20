@@ -33,7 +33,7 @@ interface Props {
   searchPlaceholder?: string;
 }
 
-type FilterTab = "all" | "drafts" | "scheduled" | "active" | "sold" | "archived";
+type FilterTab = "all" | "drafts" | "active" | "sold" | "archived";
 
 function dollars(cents: number) {
   return (cents / 100).toLocaleString("en-US", {
@@ -71,7 +71,6 @@ function matchesFilter(item: SellerListingItem, tab: FilterTab): boolean {
   const lifecycle = toSellerLifecycleStatus(item.status);
   if (tab === "all") return true;
   if (tab === "drafts") return lifecycle === "DRAFT";
-  if (tab === "scheduled") return lifecycle === "SCHEDULED";
   if (tab === "active") return lifecycle === "ACTIVE";
   if (tab === "sold") return lifecycle === "SOLD";
   if (tab === "archived") return lifecycle === "ARCHIVED";
@@ -402,14 +401,6 @@ function ListingCard({ item, isRestricted, onDelete }: CardProps) {
             />
           )}
           {!isRestricted && lifecycle === "DRAFT" && (
-            <Link
-              href={`/seller/edit/${item.id}`}
-              className="inline-flex items-center justify-center px-2.5 py-1 rounded-lg border border-slate-300 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors"
-            >
-              Schedule
-            </Link>
-          )}
-          {!isRestricted && lifecycle === "DRAFT" && (
             <button
               disabled={actionBusy}
               onClick={() => runWorkflowAction({ workflowAction: "PUBLISH_NOW" })}
@@ -622,7 +613,6 @@ function DeleteDialog({ item, onCancel, onConfirm }: DeleteDialogProps) {
 const FILTER_TABS: { key: FilterTab; label: string }[] = [
   { key: "all", label: "All" },
   { key: "drafts", label: "Drafts" },
-  { key: "scheduled", label: "Scheduled" },
   { key: "active", label: "Active" },
   { key: "sold", label: "Sold" },
   { key: "archived", label: "Archived" },
