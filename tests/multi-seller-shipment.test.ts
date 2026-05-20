@@ -125,8 +125,8 @@ test('multi-seller order: status correctly computed across shipment segments', (
   const allSellers = ['seller_A', 'seller_B'];
 
   const shipments = [
-    { sellerId: 'seller_A', shipmentStatus: 'LABEL_PURCHASED', labelUrl: 'https://example.com/a.pdf', trackingNumber: '1Z999' as string | null },
-    { sellerId: 'seller_B', shipmentStatus: 'RATE_QUOTED', labelUrl: null as string | null, trackingNumber: null as string | null },
+    { sellerId: 'seller_A', shipmentStatus: 'LABEL_PURCHASED', labelUrl: 'https://example.com/a.pdf', trackingNumber: '1Z999' },
+    { sellerId: 'seller_B', shipmentStatus: 'RATE_QUOTED', labelUrl: null, trackingNumber: null },
   ];
 
   const shippedSellerIds = shipments

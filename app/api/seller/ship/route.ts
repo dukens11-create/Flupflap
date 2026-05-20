@@ -227,23 +227,35 @@ export async function POST(req: Request) {
         if (order.status !== 'PAID' && order.status !== 'SHIPPED') {
           return NextResponse.json({ error: 'Labels can only be purchased for paid shipping orders.' }, { status: 400 });
         }
-        const shipmentId = (body.shipmentId ?? '').trim();
         const rateId = (body.rateId ?? '').trim();
-        if (!shipmentId || !rateId) {
+        if (!rateId) {
           return NextResponse.json({ error: 'Shipment and rate are required to purchase a label.' }, { status: 400 });
         }
 
         // Look up the per-seller OrderShipment record (created during rates action).
-        // Use it for shipmentId validation and as the idempotency / lock anchor.
+        // Use it for shipmentId resolution, validation, and as the idempotency / lock anchor.
         const existingShipment = await prisma.orderShipment.findUnique({
           where: { orderId_sellerId: { orderId: order.id, sellerId } },
         });
 
-        // Validate the shipmentId against the per-seller record first; fall back
+        // Resolve the shipmentId: prefer the explicitly provided value, then fall
+        // back to the per-seller record (most accurate for multi-seller), then to
+        // the global order field for backward-compatible single-seller callers.
+        const shipmentId = (
+          body.shipmentId?.trim() ||
+          existingShipment?.shipmentId?.trim() ||
+          order.shipmentId?.trim() ||
+          ''
+        );
+        if (!shipmentId) {
+          return NextResponse.json({ error: 'Shipment and rate are required to purchase a label.' }, { status: 400 });
+        }
+
+        // Validate the provided shipmentId against the per-seller record first; fall back
         // to the global order field for backward compatibility with single-seller
         // orders where no OrderShipment was created by the rates action.
         const expectedShipmentId = existingShipment?.shipmentId ?? order.shipmentId;
-        if (expectedShipmentId && expectedShipmentId !== shipmentId) {
+        if (body.shipmentId && expectedShipmentId && expectedShipmentId !== body.shipmentId.trim()) {
           return NextResponse.json({ error: 'Shipment mismatch for this order. Refresh rates and retry.' }, { status: 409 });
         }
 
