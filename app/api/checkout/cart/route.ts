@@ -163,7 +163,7 @@ export async function POST(req: Request) {
       offerPriceOverrides = new Map([[offer.productId, offer.amountCents]]);
       acceptedOffer = {
         id: offer.id,
-        idempotencyNonce: offer.checkoutSessionExpiresAt?.toISOString() ?? 'initial',
+        idempotencyNonce: offer.respondedAt?.toISOString() ?? 'initial',
       };
     }
 
