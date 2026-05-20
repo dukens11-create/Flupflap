@@ -34,7 +34,6 @@ export async function POST(
       },
       select: {
         id: true,
-        buyerId: true,
         status: true,
         items: {
           select: { product: { select: { sellerId: true } } },
@@ -44,13 +43,6 @@ export async function POST(
 
     if (!order) {
       return NextResponse.json({ error: 'Order not found.' }, { status: 404 });
-    }
-
-    // Only buyers and admins may trigger this action.
-    const isBuyer = session.user.id === order.buyerId;
-    const isAdmin = session.user.role === 'ADMIN';
-    if (!isBuyer && !isAdmin) {
-      return NextResponse.json({ error: 'Forbidden.' }, { status: 403 });
     }
 
     if (order.status !== 'SHIPPED') {
