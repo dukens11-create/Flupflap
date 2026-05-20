@@ -100,6 +100,7 @@ export default function EditListingForm({
     hasErrors: false,
     canSubmit: defaultImages.length > 0,
     message: defaultImages.length > 0 ? '' : 'Please upload at least one image.',
+    uploadedImageUrls: defaultImages,
   });
   const [selectedCategory, setSelectedCategory] = useState<SelectedCategoryState>(EMPTY_SELECTED_CATEGORY);
 

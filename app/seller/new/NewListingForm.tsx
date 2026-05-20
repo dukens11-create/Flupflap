@@ -6,6 +6,7 @@ import CategoryPicker, { type SelectedCategoryState } from '@/components/Categor
 import ConditionPicker from '@/components/ConditionPicker';
 import MediaUpload, { type MediaUploadState } from '@/components/MediaUpload';
 import { readApiMessage } from '@/lib/read-api-message';
+import type { AiListingResponse } from '@/app/api/ai/generate-listing/route';
 
 type FormErrors = {
   title?: string;
@@ -30,6 +31,24 @@ const EMPTY_SELECTED_CATEGORY: SelectedCategoryState = {
   stale: false,
 };
 
+/** Maps AI-returned condition keys to the ConditionPicker option labels. */
+const AI_CONDITION_MAP: Record<string, string> = {
+  new: 'New',
+  like_new: 'Like new',
+  good: 'Good',
+  fair: 'Fair',
+  poor: 'Used',
+};
+
+/** Badge shown next to AI-filled fields. */
+function AiBadge() {
+  return (
+    <span className="ml-2 inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700">
+      AI Suggested
+    </span>
+  );
+}
+
 export default function NewListingForm() {
   const router = useRouter();
   const minScheduleDate = new Date().toISOString().slice(0, 16);
@@ -44,8 +63,85 @@ export default function NewListingForm() {
     hasErrors: false,
     canSubmit: false,
     message: 'Please upload at least one image.',
+    uploadedImageUrls: [],
   });
   const [selectedCategory, setSelectedCategory] = useState<SelectedCategoryState>(EMPTY_SELECTED_CATEGORY);
+
+  // ── AI state ──────────────────────────────────────────────────────────────
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState('');
+  /** Set of field names that currently show an AI Suggested badge. */
+  const [aiSuggestedFields, setAiSuggestedFields] = useState<Set<string>>(new Set());
+
+  // Controlled values for fields that can be autofilled by AI.
+  const [titleValue, setTitleValue] = useState('');
+  const [shortDescValue, setShortDescValue] = useState('');
+  const [descValue, setDescValue] = useState('');
+  const [brandValue, setBrandValue] = useState('');
+  const [colorValue, setColorValue] = useState('');
+  const [conditionValue, setConditionValue] = useState('');
+  const [weightValue, setWeightValue] = useState('');
+  const [lengthValue, setLengthValue] = useState('');
+  const [widthValue, setWidthValue] = useState('');
+  const [heightValue, setHeightValue] = useState('');
+
+  /** Clear AI badge for a specific field when user edits it manually. */
+  function clearAiBadge(field: string) {
+    setAiSuggestedFields((prev) => {
+      if (!prev.has(field)) return prev;
+      const next = new Set(prev);
+      next.delete(field);
+      return next;
+    });
+  }
+
+  async function handleGenerateListing() {
+    const imageUrls = mediaState.uploadedImageUrls;
+    if (imageUrls.length === 0) {
+      setAiError('Please upload at least one product image before generating a listing.');
+      return;
+    }
+
+    setAiLoading(true);
+    setAiError('');
+    try {
+      const res = await fetch('/api/ai/generate-listing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageUrls }),
+      });
+
+      const json = await res.json() as { data?: AiListingResponse; error?: string };
+      if (!res.ok || !json.data) {
+        setAiError(json.error ?? 'AI generation failed. Please try again.');
+        return;
+      }
+
+      const d = json.data;
+      const suggested = new Set<string>();
+
+      if (d.title) { setTitleValue(d.title); suggested.add('title'); }
+      // Use detailedDescription for the main description, shortDescription as extra
+      if (d.detailedDescription) { setDescValue(d.detailedDescription); suggested.add('description'); }
+      if (d.shortDescription) { setShortDescValue(d.shortDescription); suggested.add('shortDescription'); }
+      if (d.brand) { setBrandValue(d.brand); suggested.add('brand'); }
+      if (d.color) { setColorValue(d.color); suggested.add('color'); }
+      if (d.condition) {
+        const mapped = AI_CONDITION_MAP[d.condition] ?? '';
+        if (mapped) { setConditionValue(mapped); suggested.add('condition'); }
+      }
+      if (d.estimatedWeightLb > 0) { setWeightValue(String(d.estimatedWeightLb)); suggested.add('weight'); }
+      if (d.estimatedLengthIn > 0) { setLengthValue(String(d.estimatedLengthIn)); suggested.add('length'); }
+      if (d.estimatedWidthIn > 0) { setWidthValue(String(d.estimatedWidthIn)); suggested.add('width'); }
+      if (d.estimatedHeightIn > 0) { setHeightValue(String(d.estimatedHeightIn)); suggested.add('height'); }
+
+      setAiSuggestedFields(suggested);
+    } catch {
+      setAiError('Network error. Please check your connection and try again.');
+    } finally {
+      setAiLoading(false);
+    }
+  }
 
   const handleMediaStateChange = useCallback((nextState: MediaUploadState) => {
     setMediaState(nextState);
@@ -206,11 +302,24 @@ export default function NewListingForm() {
     }
   }
 
+  const hasAiSuggestions = aiSuggestedFields.size > 0;
+
   return (
     <form onSubmit={handleSubmit} className="card p-6 space-y-4" noValidate>
       <div>
-        <label className="label">Title</label>
-        <input name="title" className={`input ${errors.title ? 'border-red-500 ring-1 ring-red-100' : ''}`} placeholder="e.g. Used iPhone 13" required minLength={3} />
+        <label className="label">
+          Title
+          {aiSuggestedFields.has('title') && <AiBadge />}
+        </label>
+        <input
+          name="title"
+          className={`input ${errors.title ? 'border-red-500 ring-1 ring-red-100' : ''}`}
+          placeholder="e.g. Used iPhone 13"
+          required
+          minLength={3}
+          value={titleValue}
+          onChange={(e) => { setTitleValue(e.target.value); clearAiBadge('title'); }}
+        />
         {errors.title && <p className="mt-1 text-xs text-red-600">{errors.title}</p>}
       </div>
       <div>
@@ -218,8 +327,61 @@ export default function NewListingForm() {
         <input id="scheduledFor" name="scheduledFor" type="datetime-local" className="input" min={minScheduleDate} />
       </div>
       <div>
-        <label className="label">Description</label>
-        <textarea name="description" className="input h-28 resize-none" placeholder="Describe the item in detail…" required minLength={10} />
+        <label className="label">
+          Description
+          {aiSuggestedFields.has('description') && <AiBadge />}
+        </label>
+        <textarea
+          name="description"
+          className="input h-28 resize-none"
+          placeholder="Describe the item in detail…"
+          required
+          minLength={10}
+          value={descValue}
+          onChange={(e) => { setDescValue(e.target.value); clearAiBadge('description'); }}
+        />
+      </div>
+      {shortDescValue && (
+        <div>
+          <label className="label">
+            Short Description
+            {aiSuggestedFields.has('shortDescription') && <AiBadge />}
+          </label>
+          <input
+            name="shortDescription"
+            className="input"
+            value={shortDescValue}
+            onChange={(e) => { setShortDescValue(e.target.value); clearAiBadge('shortDescription'); }}
+          />
+        </div>
+      )}
+      <div className="flex gap-3">
+        <div className="flex-1">
+          <label className="label">
+            Brand
+            {aiSuggestedFields.has('brand') && <AiBadge />}
+          </label>
+          <input
+            name="brand"
+            className="input"
+            placeholder="e.g. Apple"
+            value={brandValue}
+            onChange={(e) => { setBrandValue(e.target.value); clearAiBadge('brand'); }}
+          />
+        </div>
+        <div className="flex-1">
+          <label className="label">
+            Color
+            {aiSuggestedFields.has('color') && <AiBadge />}
+          </label>
+          <input
+            name="color"
+            className="input"
+            placeholder="e.g. Black"
+            value={colorValue}
+            onChange={(e) => { setColorValue(e.target.value); clearAiBadge('color'); }}
+          />
+        </div>
       </div>
       <div className="flex gap-3">
         <div className="flex-1">
@@ -255,7 +417,16 @@ export default function NewListingForm() {
           {errors.category && <p className="mt-1 text-xs text-red-600">{errors.category}</p>}
         </div>
         <div className="flex-1">
-          <ConditionPicker required />
+          <ConditionPicker
+            required
+            externalValue={conditionValue || undefined}
+            onConditionChange={(v) => { setConditionValue(v); clearAiBadge('condition'); }}
+          />
+          {aiSuggestedFields.has('condition') && (
+            <p className="mt-1 flex items-center gap-1 text-xs text-slate-500">
+              <AiBadge />
+            </p>
+          )}
           {errors.condition && <p className="mt-1 text-xs text-red-600">{errors.condition}</p>}
         </div>
       </div>
@@ -264,6 +435,56 @@ export default function NewListingForm() {
         onStateChange={handleMediaStateChange}
       />
       {errors.images && <p className="mt-1 text-xs text-red-600">{errors.images}</p>}
+
+      {/* ── AI Generate Listing ───────────────────────────────────────────── */}
+      <div className="rounded-xl border border-violet-200 bg-violet-50 p-4 space-y-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-violet-900">AI Listing Assistant</p>
+            <p className="text-xs text-violet-700 mt-0.5">
+              Upload images above, then let AI suggest a title, description, brand, condition, and shipping details.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleGenerateListing}
+            disabled={aiLoading || mediaState.uploadedImageUrls.length === 0}
+            className="inline-flex min-h-[44px] shrink-0 items-center gap-2 rounded-xl border border-violet-400 bg-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {aiLoading ? (
+              <>
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" aria-hidden="true" />
+                Generating…
+              </>
+            ) : (
+              <>
+                <span aria-hidden="true">✨</span>
+                {hasAiSuggestions ? 'Re-generate with AI' : 'Generate Listing with AI'}
+              </>
+            )}
+          </button>
+        </div>
+
+        {aiError && (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            {aiError}
+            <button
+              type="button"
+              onClick={handleGenerateListing}
+              className="ml-2 underline font-medium"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {hasAiSuggestions && (
+          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            ⚠️ AI estimates may be inaccurate. Please review product details, weight, and package size before publishing.
+          </p>
+        )}
+      </div>
+
       <div>
         <label className="label">Available quantity / Stock</label>
         <input name="inventoryQty" type="number" min="1" max="9999" defaultValue="1" className={`input ${errors.inventoryQty ? 'border-red-500 ring-1 ring-red-100' : ''}`} />
@@ -272,13 +493,17 @@ export default function NewListingForm() {
 
       {/* Package Info for shipping calculation */}
       <fieldset className={`border rounded-xl p-4 space-y-3 ${errors.shippingPackage ? 'border-red-300 bg-red-50/40' : 'border-slate-200'}`}>
-        <legend className="text-sm font-semibold text-slate-700 px-1">Shipping & Package Details</legend>
+        <legend className="text-sm font-semibold text-slate-700 px-1">Shipping &amp; Package Details</legend>
         <p className="text-xs text-slate-500">
           Required for reliable Shippo rate calculation. Buyers will see live carrier rates at checkout.
+          {hasAiSuggestions && ' AI-estimated values are pre-filled below — verify before publishing.'}
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
-            <label className="label">Weight</label>
+            <label className="label">
+              Weight
+              {aiSuggestedFields.has('weight') && <AiBadge />}
+            </label>
             <div className="grid grid-cols-[minmax(0,1fr)_120px] gap-3">
               <input
                 name="weight"
@@ -288,6 +513,8 @@ export default function NewListingForm() {
                 className={shippingPackageInputClass}
                 placeholder="e.g. 1"
                 required
+                value={weightValue}
+                onChange={(e) => { setWeightValue(e.target.value); clearAiBadge('weight'); }}
               />
               <select name="weightUnit" className={shippingPackageInputClass}>
                 <option value="lb">lb</option>
@@ -314,16 +541,55 @@ export default function NewListingForm() {
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div>
-            <label className="label">Length (in)</label>
-            <input name="length" type="number" step="0.01" min="0.01" className={shippingPackageInputClass} placeholder="e.g. 8" required />
+            <label className="label">
+              Length (in)
+              {aiSuggestedFields.has('length') && <AiBadge />}
+            </label>
+            <input
+              name="length"
+              type="number"
+              step="0.01"
+              min="0.01"
+              className={shippingPackageInputClass}
+              placeholder="e.g. 8"
+              required
+              value={lengthValue}
+              onChange={(e) => { setLengthValue(e.target.value); clearAiBadge('length'); }}
+            />
           </div>
           <div>
-            <label className="label">Width (in)</label>
-            <input name="width" type="number" step="0.01" min="0.01" className={shippingPackageInputClass} placeholder="e.g. 6" required />
+            <label className="label">
+              Width (in)
+              {aiSuggestedFields.has('width') && <AiBadge />}
+            </label>
+            <input
+              name="width"
+              type="number"
+              step="0.01"
+              min="0.01"
+              className={shippingPackageInputClass}
+              placeholder="e.g. 6"
+              required
+              value={widthValue}
+              onChange={(e) => { setWidthValue(e.target.value); clearAiBadge('width'); }}
+            />
           </div>
           <div>
-            <label className="label">Height (in)</label>
-            <input name="height" type="number" step="0.01" min="0.01" className={shippingPackageInputClass} placeholder="e.g. 4" required />
+            <label className="label">
+              Height (in)
+              {aiSuggestedFields.has('height') && <AiBadge />}
+            </label>
+            <input
+              name="height"
+              type="number"
+              step="0.01"
+              min="0.01"
+              className={shippingPackageInputClass}
+              placeholder="e.g. 4"
+              required
+              value={heightValue}
+              onChange={(e) => { setHeightValue(e.target.value); clearAiBadge('height'); }}
+            />
           </div>
           <div>
             <label className="label">Dimension unit</label>
@@ -382,3 +648,4 @@ export default function NewListingForm() {
     </form>
   );
 }
+
