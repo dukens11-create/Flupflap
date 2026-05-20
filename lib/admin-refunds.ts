@@ -138,6 +138,7 @@ async function getRefundRequestForAction(refundId: string) {
 
 const STRIPE_REFUND_CURRENCY = 'usd';
 const STRIPE_REFUND_SUCCESS_STATUS = 'succeeded';
+const STRIPE_REFUND_CURRENCY_UPPER = 'USD';
 
 async function performStripeBackedAdminRefund(
   input: RefundActionInput,
@@ -218,7 +219,7 @@ async function performStripeBackedAdminRefund(
     return {
       ok: false,
       status: 502,
-      error: 'Stripe refund failed. The refund was not completed. Please retry or check Stripe logs.',
+      error: 'Stripe refund failed. The refund was not completed. Please retry or contact support for details.',
     };
   }
 
@@ -232,8 +233,14 @@ async function performStripeBackedAdminRefund(
   if (
     stripeRefundStatus !== STRIPE_REFUND_SUCCESS_STATUS
     || stripeRefundAmount !== approvedAmountCents
-    || stripeRefundCurrency?.toLowerCase() !== STRIPE_REFUND_CURRENCY
+    || stripeRefundCurrency !== STRIPE_REFUND_CURRENCY_UPPER
   ) {
+    const mismatchReason = stripeRefundStatus !== STRIPE_REFUND_SUCCESS_STATUS
+      ? `Stripe refund ${stripeRefund.id} status is ${stripeRefundStatus ?? 'unknown'}.`
+      : stripeRefundAmount !== approvedAmountCents
+        ? `Stripe refund ${stripeRefund.id} amount mismatch. Expected ${approvedAmountCents}, got ${stripeRefundAmount ?? 'unknown'}.`
+        : `Stripe refund ${stripeRefund.id} currency mismatch. Expected ${STRIPE_REFUND_CURRENCY_UPPER}, got ${stripeRefundCurrency ?? 'unknown'}.`;
+
     await prisma.refundRequest.update({
       where: { id: refundRequest.id },
       data: {
@@ -243,11 +250,7 @@ async function performStripeBackedAdminRefund(
         stripeRefundCurrency,
         stripeFailureReason,
         stripeErrorCode: null,
-        stripeErrorMessage: stripeRefundStatus !== STRIPE_REFUND_SUCCESS_STATUS
-          ? `Stripe refund status is ${stripeRefundStatus ?? 'unknown'}.`
-          : stripeRefundAmount !== approvedAmountCents
-            ? `Stripe refund amount mismatch. Expected ${approvedAmountCents}, got ${stripeRefundAmount ?? 'unknown'}.`
-            : `Stripe refund currency mismatch. Expected ${STRIPE_REFUND_CURRENCY.toUpperCase()}, got ${stripeRefundCurrency ?? 'unknown'}.`,
+        stripeErrorMessage: `${mismatchReason} Verify the Stripe dashboard before retrying.`,
         stripeRefundCreatedAt,
         stripeRefundUpdatedAt,
       },
@@ -256,7 +259,7 @@ async function performStripeBackedAdminRefund(
     return {
       ok: false,
       status: 409,
-      error: 'Stripe refund is not confirmed yet. The refund request remains open.',
+      error: `${mismatchReason} Refund request remains open. Verify Stripe details and retry.`,
     };
   }
 
