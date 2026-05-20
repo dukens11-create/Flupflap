@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS "OrderShipment" (
     "labelPurchasedAt" TIMESTAMP(3),
     "labelPurchaseLastError" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "OrderShipment_pkey" PRIMARY KEY ("id")
 );

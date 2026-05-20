@@ -1071,7 +1071,7 @@ export async function POST(req: Request) {
       // purchased label so multi-seller orders reflect the true shipping state.
       if (purchasedLabels.length > 0) {
         const primary = purchasedLabels[0];
-        const allGroupsPurchased = purchasedLabels.length === shippingRateInfo.shipmentGroups.length;
+        const allShipmentGroupsPurchased = purchasedLabels.length === shippingRateInfo.shipmentGroups.length;
         // Also verify via OrderShipment records in case some groups were skipped.
         const shippedShipments = await prisma.orderShipment.findMany({
           where: { orderId: order.id },
@@ -1080,7 +1080,7 @@ export async function POST(req: Request) {
         const allOrderShipmentsShipped =
           shippedShipments.length === shippingRateInfo.shipmentGroups.length &&
           shippedShipments.every((s) => isShipmentShipped(s));
-        const orderShouldBeShipped = allGroupsPurchased && allOrderShipmentsShipped;
+        const orderShouldBeShipped = allShipmentGroupsPurchased && allOrderShipmentsShipped;
 
         await prisma.order.update({
           where: { id: order.id },
