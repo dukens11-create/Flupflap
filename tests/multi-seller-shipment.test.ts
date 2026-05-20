@@ -124,15 +124,17 @@ test('multi-seller order: status correctly computed across shipment segments', (
   // Simulate the state after seller A ships but seller B has not yet.
   const allSellers = ['seller_A', 'seller_B'];
 
-  const shipmentA = { shipmentStatus: 'LABEL_PURCHASED', labelUrl: 'https://example.com/a.pdf', trackingNumber: '1Z999' };
-  const shipmentB = { shipmentStatus: 'RATE_QUOTED', labelUrl: null as string | null, trackingNumber: null as string | null };
+  const shipments = [
+    { sellerId: 'seller_A', shipmentStatus: 'LABEL_PURCHASED', labelUrl: 'https://example.com/a.pdf', trackingNumber: '1Z999' as string | null },
+    { sellerId: 'seller_B', shipmentStatus: 'RATE_QUOTED', labelUrl: null as string | null, trackingNumber: null as string | null },
+  ];
 
-  const shippedSellerIds = [shipmentA, shipmentB]
-    .filter((s, i) => isShipmentShipped(s) ? allSellers[i] : null)
-    .map((_, i) => allSellers[i])
-    .filter((_, i) => isShipmentShipped([shipmentA, shipmentB][i]));
+  const shippedSellerIds = shipments
+    .filter((s) => isShipmentShipped(s))
+    .map((s) => s.sellerId);
 
   // Only seller A has shipped — order should NOT be marked SHIPPED yet.
+  assert.deepEqual(shippedSellerIds, ['seller_A']);
   assert.equal(allSellersShipped(allSellers, shippedSellerIds), false);
 });
 
