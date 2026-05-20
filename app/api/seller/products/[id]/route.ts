@@ -705,8 +705,8 @@ export async function PATCH(
         const updated = await setSellerListingToDraft(id);
         return NextResponse.json(updated);
       }
-      if (workflowAction === 'SCHEDULE') {
-        const workflowSchedulingDisabledError = getSchedulingDisabledError(workflowAction);
+      const workflowSchedulingDisabledError = getSchedulingDisabledError(workflowAction);
+      if (workflowSchedulingDisabledError) {
         return NextResponse.json({ error: workflowSchedulingDisabledError }, { status: 400 });
       }
       const publishValidationError = validateProductReadyForPublish(existing);
@@ -724,6 +724,7 @@ export async function PATCH(
         });
         return NextResponse.json(updated);
       }
+      console.warn('[seller/products/[id] PATCH] unexpected workflow action', { productId: id, workflowAction });
       return NextResponse.json({ error: 'Invalid workflow action.' }, { status: 400 });
     }
 
