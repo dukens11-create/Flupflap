@@ -46,10 +46,10 @@ When given one or more product images, analyze them and return a JSON object wit
 - color: Primary color(s) of the product
 - condition: One of: new, like_new, good, fair, poor (based on visible wear)
 - keywords: Array of relevant search keywords (max 10 items)
-- estimatedWeightLb: Estimated shipping weight in pounds (number). This is an AI estimate only.
-- estimatedLengthIn: Estimated package length in inches (number). This is an AI estimate only.
-- estimatedWidthIn: Estimated package width in inches (number). This is an AI estimate only.
-- estimatedHeightIn: Estimated package height in inches (number). This is an AI estimate only.
+- estimatedWeightLb: Estimated shipping weight in pounds (number) including packaging materials. Be conservative (round up) to avoid underestimating shipping costs. This is an AI estimate only.
+- estimatedLengthIn: Estimated packaged length in inches (number) including box/envelope. Be conservative (round up). This is an AI estimate only.
+- estimatedWidthIn: Estimated packaged width in inches (number) including box/envelope. Be conservative (round up). This is an AI estimate only.
+- estimatedHeightIn: Estimated packaged height in inches (number) including box/envelope. Be conservative (round up). This is an AI estimate only.
 - confidence: "low" if the photo is unclear, low quality, or shows insufficient detail; "medium" for partial clarity; "high" for clear detailed photos
 
 IMPORTANT:
