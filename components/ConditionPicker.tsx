@@ -6,6 +6,10 @@ interface Props {
   defaultCondition?: string;
   defaultSlug?: string;
   required?: boolean;
+  /** When provided, overrides internal condition state (controlled mode). */
+  externalValue?: string;
+  /** Called when the user manually changes the condition. */
+  onConditionChange?: (value: string) => void;
 }
 
 /**
@@ -21,7 +25,7 @@ interface Props {
  * in the category-specific list.  On subsequent user-driven category changes
  * the condition resets only when the current value is no longer available.
  */
-export default function ConditionPicker({ defaultCondition, defaultSlug, required }: Props) {
+export default function ConditionPicker({ defaultCondition, defaultSlug, required, externalValue, onConditionChange }: Props) {
   const [conditions, setConditions] = useState<string[]>(() => {
     const base = getConditionsForSlug(defaultSlug);
     // Ensure the server-saved condition is always present in the initial list
@@ -39,6 +43,17 @@ export default function ConditionPicker({ defaultCondition, defaultSlug, require
   // We preserve the server-saved condition on that first event so it does not
   // get cleared simply because the category-specific list differs from general.
   const isInitialCategoryEventRef = useRef(true);
+
+  // Sync external value when parent sets it (e.g. AI autofill).
+  useEffect(() => {
+    if (externalValue === undefined) return;
+    valueRef.current = externalValue;
+    setValue(externalValue);
+    // If the value isn't already in the list, add it so the select renders it.
+    setConditions((prev) =>
+      externalValue && !prev.includes(externalValue) ? [...prev, externalValue] : prev,
+    );
+  }, [externalValue]);
 
   useEffect(() => {
     function handleCategoryChange(e: Event) {
@@ -85,6 +100,7 @@ export default function ConditionPicker({ defaultCondition, defaultSlug, require
           const next = e.target.value;
           valueRef.current = next;
           setValue(next);
+          onConditionChange?.(next);
         }}
         required={required}
       >

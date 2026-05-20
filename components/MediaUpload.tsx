@@ -66,6 +66,8 @@ export type MediaUploadState = {
   hasErrors: boolean;
   canSubmit: boolean;
   message: string;
+  /** Resolved URLs of all successfully uploaded images (original or enhanced variant). */
+  uploadedImageUrls: string[];
 };
 
 function getFileNameFromUrl(url: string) {
@@ -733,6 +735,7 @@ export default function MediaUpload({
       hasErrors: hasMediaErrors,
       canSubmit: mediaReady,
       message: mediaMessage,
+      uploadedImageUrls,
     });
   }, [
     hasMediaErrors,
