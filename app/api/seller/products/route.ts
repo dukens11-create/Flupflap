@@ -22,6 +22,7 @@ import {
   SHIPPING_PACKAGE_DETAILS_REQUIRED_MESSAGE,
 } from '@/lib/product-package';
 import { buildProductSearchableText } from '@/lib/smart-search';
+import { applyRateLimitAsync } from '@/lib/security';
 
 import { SHIPPING_MODES, type ShippingMode } from '@/lib/product-constants';
 const schema = z.object({
@@ -186,6 +187,20 @@ export async function POST(req: Request) {
     const sellerId = session.user.id;
     if (!sellerId) {
       return jsonError('Forbidden', 403);
+    }
+
+    const limit = await applyRateLimitAsync({
+      request: req,
+      key: 'seller:products:create',
+      windowMs: 60 * 1000,
+      max: 20,
+      userId: sellerId,
+    });
+    if (limit.limited) {
+      return NextResponse.json(
+        { success: false, message: 'Too many listing attempts. Please wait before trying again.' },
+        { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } },
+      );
     }
 
     // Block restricted sellers from creating new listings

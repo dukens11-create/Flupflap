@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db';
 import { NotificationType } from '@prisma/client';
 import { z } from 'zod';
 import { createNotifications } from '@/lib/notifications';
+import { applyRateLimitAsync } from '@/lib/security';
 
 const createSchema = z.object({
   productId: z.string().min(1),
@@ -58,6 +59,20 @@ export async function POST(req: Request) {
     const buyerId = session.user.id;
     if (!buyerId) {
       return NextResponse.json({ error: 'Session expired. Please sign in again.' }, { status: 401 });
+    }
+
+    const limit = await applyRateLimitAsync({
+      request: req,
+      key: 'offers:create',
+      windowMs: 60 * 1000,
+      max: 20,
+      userId: buyerId,
+    });
+    if (limit.limited) {
+      return NextResponse.json(
+        { error: 'Too many offer attempts. Please wait before trying again.' },
+        { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } },
+      );
     }
 
     let parsed: z.infer<typeof createSchema>;

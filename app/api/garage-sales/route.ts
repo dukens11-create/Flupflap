@@ -7,6 +7,7 @@ import { appUrl, stripe } from '@/lib/stripe';
 import { calculateGarageSalePricing } from '@/lib/garage-sale-pricing';
 import { buildPublicGarageSaleWhere, expireGarageSales, getGarageSalePricingSettings, batchGetLiveViewerCounts } from '@/lib/garage-sales';
 import { logInfo } from '@/lib/logger';
+import { applyRateLimitAsync } from '@/lib/security';
 
 export const dynamic = 'force-dynamic';
 
@@ -193,6 +194,20 @@ export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const limit = await applyRateLimitAsync({
+    request: req,
+    key: 'garage-sales:create',
+    windowMs: 60 * 1000,
+    max: 5,
+    userId: session.user.id,
+  });
+  if (limit.limited) {
+    return NextResponse.json(
+      { error: 'Too many listing attempts. Please wait before trying again.' },
+      { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } },
+    );
   }
 
   let body: unknown;

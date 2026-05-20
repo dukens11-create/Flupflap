@@ -8,6 +8,7 @@ import { checkoutErrorResponse } from '@/lib/checkout-errors';
 import { isSellerVerificationApproved } from '@/lib/seller-verification';
 import { hasStoredPackageDetails } from '@/lib/product-package';
 import { logError } from '@/lib/logger';
+import { applyRateLimitAsync } from '@/lib/security';
 
 function isCalculatedShippingProduct(product: { shippingMode?: string | null; shippingCents: number }) {
   return product.shippingMode === 'CALCULATED' || (!product.shippingMode && product.shippingCents === 0);
@@ -18,6 +19,20 @@ export async function POST(req: Request) {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
       return NextResponse.json({ error: 'Please sign in to purchase.' }, { status: 401 });
+    }
+
+    const limit = await applyRateLimitAsync({
+      request: req,
+      key: 'checkout:buynow',
+      windowMs: 60 * 1000,
+      max: 10,
+      userId: session.user.id,
+    });
+    if (limit.limited) {
+      return NextResponse.json(
+        { error: 'Too many checkout attempts. Please wait before trying again.' },
+        { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } },
+      );
     }
 
     const { productId, isPickup = false } = await req.json() as { productId: string; isPickup?: boolean };

@@ -28,6 +28,8 @@ services:
         value: "20"    # Render installs the latest Node 20 LTS patch (≥20.19), satisfying Prisma 7's Node ^20.19 requirement
       - key: DATABASE_URL
         sync: false
+      - key: REDIS_URL
+        sync: false
       - key: NEXTAUTH_SECRET
         generateValue: true
       - key: NEXTAUTH_URL

@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { z } from 'zod';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth-options';
+import { applyRateLimitAsync } from '@/lib/security';
 
 // ── Request validation ────────────────────────────────────────────────────────
 
@@ -68,6 +71,21 @@ export async function POST(req: Request) {
     return NextResponse.json(
       { error: 'OpenAI API key is not configured' },
       { status: 503 },
+    );
+  }
+
+  const session = await getServerSession(authOptions);
+  const limit = await applyRateLimitAsync({
+    request: req,
+    key: 'ai:generate-listing',
+    windowMs: 60 * 1000,
+    max: 10,
+    userId: session?.user?.id,
+  });
+  if (limit.limited) {
+    return NextResponse.json(
+      { error: 'Too many AI requests. Please wait before trying again.' },
+      { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } },
     );
   }
 

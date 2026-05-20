@@ -11,6 +11,7 @@ import {
   MESSAGE_MAX_LENGTH,
   normalizeMessageBody,
 } from '@/lib/messages';
+import { applyRateLimitAsync } from '@/lib/security';
 
 const replySchema = z.object({
   body: z.string().max(MESSAGE_MAX_LENGTH).optional().default(''),
@@ -123,6 +124,20 @@ export async function POST(
     const userId = session.user.id;
     if (!userId) {
       return NextResponse.json({ error: 'Session expired. Please sign in again.' }, { status: 401 });
+    }
+
+    const limit = await applyRateLimitAsync({
+      request: req,
+      key: 'messages:reply',
+      windowMs: 60 * 1000,
+      max: 20,
+      userId,
+    });
+    if (limit.limited) {
+      return NextResponse.json(
+        { error: 'Too many message requests. Please wait before trying again.' },
+        { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } },
+      );
     }
 
     const { id } = await params;
