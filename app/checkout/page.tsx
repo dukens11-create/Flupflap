@@ -1,6 +1,6 @@
 "use client";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { readApiMessage } from '@/lib/read-api-message';
@@ -150,6 +150,8 @@ function itemShippingLabel(item: CartItem, isPickup: boolean): React.ReactNode {
 export default function CheckoutPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const offerId = searchParams.get('offerId');
   const shouldShowSignInPrompt = status === 'unauthenticated' || !session?.user;
   const mapboxToken = (process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? '').trim();
   const addressAutocompleteRef = useRef<HTMLDivElement | null>(null);
@@ -158,6 +160,7 @@ export default function CheckoutPage() {
   const taxRequestVersionRef = useRef(0);
   const shippingNameInitializedRef = useRef(false);
   const [items, setItems] = useState<CartItem[]>([]);
+  const [sourceOfferId, setSourceOfferId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState('');
@@ -191,13 +194,39 @@ export default function CheckoutPage() {
   const [rateRetryKey, setRateRetryKey] = useState(0);
 
   useEffect(() => {
-    try {
-      setItems(JSON.parse(localStorage.getItem('flupflap_cart') || '[]'));
-    } catch {
-      setItems([]);
+    async function loadCheckoutItems() {
+      if (!offerId) {
+        try {
+          setItems(JSON.parse(localStorage.getItem('flupflap_cart') || '[]'));
+        } catch {
+          setItems([]);
+        } finally {
+          setLoading(false);
+        }
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/offers/${offerId}/checkout`);
+        const data = await res.json();
+        if (!res.ok) {
+          setError(data.error || 'Unable to load accepted offer checkout.');
+          setItems([]);
+          setLoading(false);
+          return;
+        }
+        setItems([data.item]);
+        setSourceOfferId(data.offerId);
+      } catch {
+        setError('Unable to load accepted offer checkout.');
+        setItems([]);
+      } finally {
+        setLoading(false);
+      }
     }
-    setLoading(false);
-  }, []);
+
+    loadCheckoutItems().catch(() => undefined);
+  }, [offerId]);
 
   useEffect(() => {
     if (shippingNameInitializedRef.current || status === 'loading') {
@@ -565,6 +594,7 @@ export default function CheckoutPage() {
           body: JSON.stringify({
             items: items.map(i => ({ productId: i.id, quantity: i.quantity })),
             pickupItemIds,
+            ...(sourceOfferId ? { offerId: sourceOfferId } : {}),
             shippingRateInfo: {
               shipmentGroups: selectedRates.map((rate) => ({
                 sellerId: rate.sellerId,
@@ -620,6 +650,7 @@ export default function CheckoutPage() {
     pickupItemIds,
     rateError,
     selectedRates,
+    sourceOfferId,
     status,
     total,
   ]);
@@ -664,7 +695,7 @@ export default function CheckoutPage() {
 
   async function handleCheckout() {
     if (!session?.user) {
-      router.push('/login?callbackUrl=/checkout');
+      router.push(`/login?callbackUrl=${encodeURIComponent(offerId ? `/checkout?offerId=${offerId}` : '/checkout')}`);
       return;
     }
 
@@ -706,13 +737,14 @@ export default function CheckoutPage() {
         body: JSON.stringify({
           items: items.map(i => ({ productId: i.id, quantity: i.quantity })),
           pickupItemIds,
+          ...(sourceOfferId ? { offerId: sourceOfferId } : {}),
           shippingRateInfo,
           ...(hasCalculatedShipping && buyerAddressComplete ? { buyerAddress } : {}),
         }),
       });
       if (!res.ok) {
         if (res.status === 401 || res.status === 403) {
-          router.push('/login?callbackUrl=/checkout');
+          router.push(`/login?callbackUrl=${encodeURIComponent(offerId ? `/checkout?offerId=${offerId}` : '/checkout')}`);
           return;
         }
         setError(await readApiMessage(res, 'Checkout failed. Please try again.'));
@@ -761,7 +793,7 @@ export default function CheckoutPage() {
       {shouldShowSignInPrompt && (
         <div className="card p-4 mb-4 bg-yellow-50 border-yellow-200 text-yellow-800 text-sm">
           <span>You need to </span>
-          <Link href="/login?callbackUrl=/checkout" className="font-semibold underline">sign in</Link>
+          <Link href={`/login?callbackUrl=${encodeURIComponent(offerId ? `/checkout?offerId=${offerId}` : '/checkout')}`} className="font-semibold underline">sign in</Link>
           <span> to continue checkout.</span>
         </div>
       )}
@@ -1192,9 +1224,15 @@ export default function CheckoutPage() {
       )}
 
       <div className="flex gap-3">
-        <Link href="/cart" className="btn-outline flex-1 text-center">
-          ← Back to cart
-        </Link>
+        {sourceOfferId ? (
+          <Link href="/offers" className="btn-outline flex-1 text-center">
+            ← Back to offers
+          </Link>
+        ) : (
+          <Link href="/cart" className="btn-outline flex-1 text-center">
+            ← Back to cart
+          </Link>
+        )}
         <button
           onClick={handleCheckout}
           disabled={checking || !canProceedToCheckout}

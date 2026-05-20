@@ -12,6 +12,7 @@ type OfferRecord = {
   status: 'PENDING' | 'ACCEPTED' | 'REJECTED';
   createdAt: string;
   respondedAt: string | null;
+  expiresAt?: string | null;
   product: {
     id: string;
     title: string;
@@ -101,9 +102,18 @@ function OfferCard({
           )}
 
           {offer.status === 'ACCEPTED' && (
-            <p className="mt-3 text-xs text-green-700">
-              Accepted offers are surfaced in notifications so you can continue the conversation and finalize details.
-            </p>
+            <div className="mt-3 space-y-2">
+              {mode === 'sent' ? (
+                <Link href={`/checkout?offerId=${offer.id}`} className="btn-primary inline-flex">
+                  Checkout accepted offer
+                </Link>
+              ) : null}
+              <p className="text-xs text-green-700">
+                {offer.expiresAt
+                  ? `Accepted offers can be checked out until ${new Date(offer.expiresAt).toLocaleString()}.`
+                  : 'Accepted offers are ready for checkout.'}
+              </p>
+            </div>
           )}
         </div>
       </div>

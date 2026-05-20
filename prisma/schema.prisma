@@ -672,6 +672,11 @@ model Offer {
   message     String?
   status      OfferStatus @default(PENDING)
   respondedAt DateTime?
+  expiresAt   DateTime?
+  checkoutSessionId        String?   @unique
+  checkoutSessionExpiresAt DateTime?
+  convertedOrderId         String?   @unique
+  convertedAt              DateTime?
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
