@@ -107,6 +107,74 @@ A successful deploy shows the app live at your Render URL.
 
 ---
 
+## Distributed rate limiting (Redis)
+
+FlupFlap enforces per-endpoint throttle limits on all write-sensitive API routes
+(checkout, offers, messages, refund requests, reports, AI generation, seller
+listing creation, and garage-sale chat). These limits protect against abuse and
+credential-stuffing in multi-instance deployments.
+
+### How it works
+
+| `REDIS_URL` set? | Behavior |
+|---|---|
+| **Yes** | Counters are stored in Redis — shared across all instances. A single request threshold applies regardless of how many Node processes are running. |
+| **No** | Falls back to an in-memory counter per process. Suitable for single-instance and development deployments; limits are enforced per-process only. |
+
+When Redis is temporarily unavailable (network blip, restart) the app logs a
+`[WARN]` and falls back to in-memory automatically — **requests are not silently
+passed through**.
+
+### Setting `REDIS_URL`
+
+Add `REDIS_URL` to your environment variables. Any `redis://` or `rediss://` URL
+works (Render Redis, Redis Cloud, Upstash, etc.):
+
+```
+REDIS_URL=redis://default:your-password@your-redis-host:6379
+```
+
+For TLS-enabled providers (recommended in production), use `rediss://`:
+
+```
+REDIS_URL=rediss://default:your-password@your-redis-host:6380
+```
+
+**Render Redis** — add a new Redis instance from the Render dashboard and copy
+the **External URL** into the `REDIS_URL` environment variable of your web
+service.
+
+### Rate-limit policies
+
+| Endpoint | Window | Max requests | Identity key |
+|---|---|---|---|
+| `POST /api/checkout/buynow` | 1 min | 10 | user ID |
+| `POST /api/checkout/cart` | 1 min | 10 | user ID |
+| `POST /api/offers` | 1 min | 20 | user ID |
+| `POST /api/orders/*/refund-request` | 1 hour | 5 | user ID |
+| `POST /api/messages` | 1 min | 20 | user ID |
+| `POST /api/messages/*` (reply) | 1 min | 20 | user ID |
+| `POST /api/products/*/report` | 1 min | 10 | user ID |
+| `POST /api/sellers/*/report` | 1 min | 10 | user ID |
+| `POST /api/ai/generate-listing` | 1 min | 10 | user ID / IP |
+| `POST /api/seller/products` | 1 min | 20 | user ID |
+| `POST /api/garage-sales` | 1 min | 5 | user ID |
+| `POST /api/garage-sales/*/chat` | 1 min | 30 | user ID / IP |
+
+When a limit is exceeded, the endpoint returns **HTTP 429** with a
+`Retry-After: <seconds>` header. The response body is a plain JSON error object
+with no internal details:
+
+```json
+{ "error": "Too many checkout attempts. Please wait before trying again." }
+```
+
+The auth routes (`/api/auth/signup`, `/api/auth/forgot-password`,
+`/api/auth/reset-password`, `/api/auth/otp/*`) retain their own independent
+limits defined in their respective route handlers.
+
+---
+
 ## Metered TURN relay for live garage sales
 
 Live garage sale video uses a static Metered TURN configuration from browser

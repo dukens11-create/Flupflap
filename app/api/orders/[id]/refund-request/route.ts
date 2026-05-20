@@ -7,6 +7,7 @@ import { prisma } from '@/lib/db';
 import { createNotifications } from '@/lib/notifications';
 import { isOrderRefundEligible, normalizeRefundAmountCents } from '@/lib/refunds';
 import { sessionHasRole } from '@/lib/user-roles';
+import { applyRateLimitAsync } from '@/lib/security';
 
 const createRefundSchema = z.object({
   reason: z.string().trim().min(3).max(120),
@@ -83,6 +84,20 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const limit = await applyRateLimitAsync({
+    request: req,
+    key: 'orders:refund-request',
+    windowMs: 60 * 60 * 1000,
+    max: 5,
+    userId: session.user.id,
+  });
+  if (limit.limited) {
+    return NextResponse.json(
+      { error: 'Too many refund requests. Please wait before trying again.' },
+      { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } },
+    );
   }
 
   const { id } = await params;

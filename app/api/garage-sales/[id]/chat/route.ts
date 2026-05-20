@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { isGarageSalePubliclyVisible } from '@/lib/garage-sale-visibility';
+import { applyRateLimitAsync } from '@/lib/security';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,6 +53,21 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: 'Live session is not active' }, { status: 422 });
   }
 
+  const session = await getServerSession(authOptions);
+  const limit = await applyRateLimitAsync({
+    request: req,
+    key: 'garage-sales:chat',
+    windowMs: 60 * 1000,
+    max: 30,
+    userId: session?.user?.id,
+  });
+  if (limit.limited) {
+    return NextResponse.json(
+      { error: 'Too many messages. Please wait before sending another.' },
+      { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } },
+    );
+  }
+
   let body: unknown;
   try {
     body = await req.json();
@@ -67,7 +83,6 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: 'Message too long (max 500 chars)' }, { status: 400 });
   }
 
-  const session = await getServerSession(authOptions);
   const userId = session?.user?.id ?? null;
   let resolvedGuestName: string | null = null;
   if (!userId) {
