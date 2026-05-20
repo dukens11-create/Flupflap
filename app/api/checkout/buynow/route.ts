@@ -232,7 +232,11 @@ export async function POST(req: Request) {
         });
         checkoutCustomerId = customer.id;
       } catch (err) {
-        logError('[checkout/buynow] unable to create Stripe customer from live shipping address', err, { tag: 'checkout/buynow', action: 'createStripeCustomer' });
+        logError(
+          '[checkout/buynow] unable to create Stripe customer from live shipping address',
+          err,
+          { tag: 'checkout/buynow', action: 'createStripeCustomer' },
+        );
       }
     }
 

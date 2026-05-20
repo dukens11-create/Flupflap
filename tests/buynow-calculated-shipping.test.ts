@@ -132,12 +132,16 @@ test('P1-6 success: buy-now with calculated shipping verifies server-side total'
 // ---------------------------------------------------------------------------
 
 test('P1-6 failure: missing buyer address for calculated shipping is rejected', async () => {
+  // Omit buyerAddress to verify the server rejects requests without a shipping destination.
+  // carrier/service/shipmentId are optional fields in ShippingRateInfoInput so this is valid.
   const noAddressInfo: ShippingRateInfoInput = {
     shipmentGroups: [
       {
         sellerId: 'seller_1',
         rateId: 'rate_usps_1',
         rateCents: 850,
+        carrier: 'USPS',
+        service: 'Priority Mail',
       },
     ],
     totalRateCents: 850,
@@ -171,7 +175,13 @@ test('P1-6 failure: incomplete buyer address (missing zip) is rejected', async (
     country: 'US',
   };
   const badAddressInfo: ShippingRateInfoInput = {
-    shipmentGroups: [{ sellerId: 'seller_1', rateId: 'rate_usps_1', rateCents: 850 }],
+    shipmentGroups: [{
+      sellerId: 'seller_1',
+      rateId: 'rate_usps_1',
+      rateCents: 850,
+      carrier: 'USPS',
+      service: 'Priority Mail',
+    }],
     totalRateCents: 850,
     buyerAddress: incompleteAddress,
   };
