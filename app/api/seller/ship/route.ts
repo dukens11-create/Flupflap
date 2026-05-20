@@ -11,6 +11,7 @@ import {
   classifyShippingPurchaseError,
   hasActivePurchasedLabel,
 } from '@/lib/shipping-purchase';
+import { allSellersShipped, distinctSellerIds, isShipmentShipped } from '@/lib/order-shipment';
 
 function parsePositiveNumber(value: unknown) {
   const parsed = typeof value === 'number' ? value : Number(value);
@@ -20,26 +21,27 @@ function parsePositiveNumber(value: unknown) {
 
 const MAX_LABEL_PURCHASE_ERROR_MESSAGE_LENGTH = 500;
 
-function toPurchasedLabelResponse(order: {
+type PurchasedLabelFields = {
   shipmentId: string | null;
   shipmentStatus: string | null;
   trackingNumber: string | null;
   carrier: string | null;
-  shippingCarrier: string | null;
   shippingService: string | null;
   labelUrl: string | null;
   trackingUrl: string | null;
-}) {
-  const carrier = order.carrier ?? order.shippingCarrier ?? null;
-  const trackingUrl = order.trackingUrl ?? buildTrackingUrl(carrier, order.trackingNumber);
+};
+
+function toPurchasedLabelResponse(record: PurchasedLabelFields & { shippingCarrier?: string | null }) {
+  const carrier = record.carrier ?? record.shippingCarrier ?? null;
+  const trackingUrl = record.trackingUrl ?? buildTrackingUrl(carrier, record.trackingNumber);
   return {
     ok: true,
-    shipmentId: order.shipmentId,
-    shipmentStatus: order.shipmentStatus ?? 'LABEL_PURCHASED',
-    trackingNumber: order.trackingNumber,
+    shipmentId: record.shipmentId,
+    shipmentStatus: record.shipmentStatus ?? 'LABEL_PURCHASED',
+    trackingNumber: record.trackingNumber,
     carrier,
-    service: order.shippingService,
-    labelUrl: order.labelUrl,
+    service: record.shippingService,
+    labelUrl: record.labelUrl,
     trackingUrl,
   };
 }
@@ -119,6 +121,11 @@ export async function POST(req: Request) {
           shippingState: true,
           shippingPostalCode: true,
           shippingCountry: true,
+          items: {
+            select: {
+              product: { select: { sellerId: true } },
+            },
+          },
         },
       });
 
@@ -186,13 +193,32 @@ export async function POST(req: Request) {
           heightIn,
         });
 
-        await prisma.order.update({
-          where: { id: order.id },
-          data: {
-            shipmentId: shipment.shipmentId,
-            shipmentStatus: 'RATE_QUOTED',
-          },
-        });
+        // Store per-seller shipment quote in OrderShipment; also keep the
+        // global order field updated for backward-compatible single-seller reads.
+        await Promise.all([
+          prisma.orderShipment.upsert({
+            where: { orderId_sellerId: { orderId: order.id, sellerId } },
+            create: {
+              orderId: order.id,
+              sellerId,
+              shipmentId: shipment.shipmentId,
+              shipmentStatus: 'RATE_QUOTED',
+            },
+            update: {
+              shipmentId: shipment.shipmentId,
+              shipmentStatus: 'RATE_QUOTED',
+              // Reset any previous purchase error when re-quoting rates.
+              labelPurchaseLastError: null,
+            },
+          }),
+          prisma.order.update({
+            where: { id: order.id },
+            data: {
+              shipmentId: shipment.shipmentId,
+              shipmentStatus: 'RATE_QUOTED',
+            },
+          }),
+        ]);
 
         return NextResponse.json(shipment);
       }
@@ -201,15 +227,33 @@ export async function POST(req: Request) {
         if (order.status !== 'PAID' && order.status !== 'SHIPPED') {
           return NextResponse.json({ error: 'Labels can only be purchased for paid shipping orders.' }, { status: 400 });
         }
-        const shipmentId = (body.shipmentId ?? order.shipmentId ?? '').trim();
+        const shipmentId = (body.shipmentId ?? '').trim();
         const rateId = (body.rateId ?? '').trim();
         if (!shipmentId || !rateId) {
           return NextResponse.json({ error: 'Shipment and rate are required to purchase a label.' }, { status: 400 });
         }
-        if (order.shipmentId && order.shipmentId !== shipmentId) {
+
+        // Look up the per-seller OrderShipment record (created during rates action).
+        // Use it for shipmentId validation and as the idempotency / lock anchor.
+        const existingShipment = await prisma.orderShipment.findUnique({
+          where: { orderId_sellerId: { orderId: order.id, sellerId } },
+        });
+
+        // Validate the shipmentId against the per-seller record first; fall back
+        // to the global order field for backward compatibility with single-seller
+        // orders where no OrderShipment was created by the rates action.
+        const expectedShipmentId = existingShipment?.shipmentId ?? order.shipmentId;
+        if (expectedShipmentId && expectedShipmentId !== shipmentId) {
           return NextResponse.json({ error: 'Shipment mismatch for this order. Refresh rates and retry.' }, { status: 409 });
         }
-        if (hasActivePurchasedLabel(order)) {
+
+        // If this seller already has an active purchased label, return it immediately.
+        if (existingShipment && isShipmentShipped(existingShipment) &&
+            (existingShipment.labelUrl || existingShipment.trackingNumber)) {
+          return NextResponse.json(toPurchasedLabelResponse(existingShipment));
+        }
+        // Backward compat: single-seller orders where no per-seller record exists yet.
+        if (!existingShipment && hasActivePurchasedLabel(order)) {
           return NextResponse.json(toPurchasedLabelResponse(order));
         }
 
@@ -219,7 +263,37 @@ export async function POST(req: Request) {
           rateId,
         });
 
-        const lockAcquired = await prisma.order.updateMany({
+        // Detect in-progress purchase for the same idempotency key.
+        if (existingShipment?.shipmentStatus === 'PENDING_PURCHASE' &&
+            existingShipment.labelPurchaseIdempotencyKey === idempotencyKey) {
+          return NextResponse.json(
+            { error: 'A label purchase is already in progress for this shipment. Please retry in a moment.' },
+            { status: 409 },
+          );
+        }
+
+        // Soft lock: mark PENDING_PURCHASE in the per-seller record. Idempotency
+        // key protection at the Shippo level prevents duplicate charges.
+        await prisma.orderShipment.upsert({
+          where: { orderId_sellerId: { orderId: order.id, sellerId } },
+          create: {
+            orderId: order.id,
+            sellerId,
+            shipmentId,
+            shipmentStatus: 'PENDING_PURCHASE',
+            labelPurchaseIdempotencyKey: idempotencyKey,
+            labelPurchaseLastError: null,
+          },
+          update: {
+            shipmentId,
+            shipmentStatus: 'PENDING_PURCHASE',
+            labelPurchaseIdempotencyKey: idempotencyKey,
+            labelPurchaseLastError: null,
+          },
+        });
+
+        // Also update the global order record for backward-compatible consumers.
+        await prisma.order.updateMany({
           where: {
             id: order.id,
             OR: [
@@ -236,37 +310,6 @@ export async function POST(req: Request) {
             labelPurchaseLastError: null,
           },
         });
-
-        if (!lockAcquired.count) {
-          const latestOrder = await prisma.order.findUnique({
-            where: { id: order.id },
-            select: {
-              shipmentStatus: true,
-              labelUrl: true,
-              trackingNumber: true,
-              carrier: true,
-              shippingCarrier: true,
-              shippingService: true,
-              trackingUrl: true,
-              shipmentId: true,
-              labelPurchaseIdempotencyKey: true,
-            },
-          });
-          if (latestOrder && hasActivePurchasedLabel(latestOrder)) {
-            return NextResponse.json(toPurchasedLabelResponse({
-              ...latestOrder,
-              shipmentStatus: latestOrder.shipmentStatus,
-            }));
-          }
-
-          if (latestOrder?.shipmentStatus === 'PENDING_PURCHASE' && latestOrder.labelPurchaseIdempotencyKey === idempotencyKey) {
-            return NextResponse.json(
-              { error: 'A label purchase is already in progress for this shipment. Please retry in a moment.' },
-              { status: 409 },
-            );
-          }
-          return NextResponse.json({ error: 'Shipment label state changed. Refresh and retry.' }, { status: 409 });
-        }
 
         let purchased: Awaited<ReturnType<typeof purchaseShipmentRate>> | null = null;
         try {
@@ -286,13 +329,18 @@ export async function POST(req: Request) {
           }
 
           if (!purchased) {
-            await prisma.order.update({
-              where: { id: order.id },
-              data: {
-                shipmentStatus: classified.retryable ? 'PURCHASE_RETRYABLE_FAILURE' : 'PURCHASE_FAILED',
-                labelPurchaseLastError: classified.message.slice(0, MAX_LABEL_PURCHASE_ERROR_MESSAGE_LENGTH),
-              },
-            });
+            const errorStatus = classified.retryable ? 'PURCHASE_RETRYABLE_FAILURE' : 'PURCHASE_FAILED';
+            const errorMsg = classified.message.slice(0, MAX_LABEL_PURCHASE_ERROR_MESSAGE_LENGTH);
+            await Promise.all([
+              prisma.orderShipment.update({
+                where: { orderId_sellerId: { orderId: order.id, sellerId } },
+                data: { shipmentStatus: errorStatus, labelPurchaseLastError: errorMsg },
+              }),
+              prisma.order.update({
+                where: { id: order.id },
+                data: { shipmentStatus: errorStatus, labelPurchaseLastError: errorMsg },
+              }),
+            ]);
             return NextResponse.json(
               { error: classified.message, retryable: classified.retryable },
               { status: classified.retryable ? 502 : 400 },
@@ -303,10 +351,57 @@ export async function POST(req: Request) {
         const carrier = purchased.carrier;
         const trackingUrl = purchased.trackingUrl ?? buildTrackingUrl(carrier, purchased.trackingNumber);
 
+        // Persist the result in the per-seller OrderShipment record.
+        await prisma.orderShipment.upsert({
+          where: { orderId_sellerId: { orderId: order.id, sellerId } },
+          create: {
+            orderId: order.id,
+            sellerId,
+            shipmentId: purchased.shipmentId || shipmentId,
+            shipmentStatus: purchased.shipmentStatus || 'LABEL_PURCHASED',
+            trackingNumber: purchased.trackingNumber ?? null,
+            carrier: carrier ?? null,
+            shippingService: purchased.service ?? null,
+            labelUrl: purchased.labelUrl ?? null,
+            trackingUrl: trackingUrl ?? null,
+            labelPurchaseIdempotencyKey: idempotencyKey,
+            labelProviderTransactionId: purchased.providerTransactionId ?? null,
+            labelPurchasedAt: new Date(),
+            labelPurchaseLastError: null,
+          },
+          update: {
+            shipmentId: purchased.shipmentId || shipmentId,
+            shipmentStatus: purchased.shipmentStatus || 'LABEL_PURCHASED',
+            trackingNumber: purchased.trackingNumber ?? null,
+            carrier: carrier ?? null,
+            shippingService: purchased.service ?? null,
+            labelUrl: purchased.labelUrl ?? null,
+            trackingUrl: trackingUrl ?? null,
+            labelPurchaseIdempotencyKey: idempotencyKey,
+            labelProviderTransactionId: purchased.providerTransactionId ?? null,
+            labelPurchasedAt: new Date(),
+            labelPurchaseLastError: null,
+          },
+        });
+
+        // Determine if all sellers in this order have now shipped so we can
+        // transition the order status to SHIPPED correctly for multi-seller orders.
+        const allSellerIds = distinctSellerIds(order.items);
+        const shippedShipments = await prisma.orderShipment.findMany({
+          where: { orderId: order.id, sellerId: { in: allSellerIds } },
+          select: { sellerId: true, shipmentStatus: true, labelUrl: true, trackingNumber: true },
+        });
+        const shippedSellerIds = shippedShipments
+          .filter((s) => isShipmentShipped(s))
+          .map((s) => s.sellerId);
+        const orderIsFullyShipped = allSellersShipped(allSellerIds, shippedSellerIds);
+
+        // Update the global order record. Sync tracking fields so existing API
+        // consumers and the mobile client continue to work.
         await prisma.order.update({
           where: { id: order.id },
           data: {
-            status: 'SHIPPED',
+            ...(orderIsFullyShipped ? { status: 'SHIPPED' } : {}),
             trackingNumber: purchased.trackingNumber || order.trackingNumber || null,
             carrier: carrier || null,
             // Keep legacy field in sync for existing consumers while `carrier`
@@ -338,9 +433,9 @@ export async function POST(req: Request) {
               userId: order.buyerId,
               type: NotificationType.ORDER_UPDATE,
               title: 'Order status updated',
-              body: 'Your order moved to Shipped.',
+              body: orderIsFullyShipped ? 'Your order has fully shipped.' : 'One seller has shipped part of your order.',
               link: `/orders/${order.id}`,
-              data: { orderId: order.id, status: 'SHIPPED' },
+              data: { orderId: order.id, status: orderIsFullyShipped ? 'SHIPPED' : 'PAID' },
             },
           ]);
         }
@@ -380,6 +475,11 @@ export async function POST(req: Request) {
         id: true,
         buyerId: true,
         status: true,
+        items: {
+          select: {
+            product: { select: { sellerId: true } },
+          },
+        },
       },
     });
     if (!order) {
@@ -389,10 +489,38 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Shipping can only be recorded for paid orders.' }, { status: 400 });
     }
 
+    // Create/update per-seller shipment record for manual tracking entry.
+    await prisma.orderShipment.upsert({
+      where: { orderId_sellerId: { orderId: order.id, sellerId } },
+      create: {
+        orderId: order.id,
+        sellerId,
+        trackingNumber: trackingNumber || null,
+        carrier: shippingCarrier || null,
+        shipmentStatus: 'SHIPPED_MANUAL',
+      },
+      update: {
+        trackingNumber: trackingNumber || null,
+        carrier: shippingCarrier || null,
+        shipmentStatus: 'SHIPPED_MANUAL',
+      },
+    });
+
+    // Determine whether all sellers in the order have now shipped.
+    const allSellerIds = distinctSellerIds(order.items);
+    const shippedShipments = await prisma.orderShipment.findMany({
+      where: { orderId: order.id, sellerId: { in: allSellerIds } },
+      select: { sellerId: true, shipmentStatus: true, labelUrl: true, trackingNumber: true },
+    });
+    const shippedSellerIds = shippedShipments
+      .filter((s) => isShipmentShipped(s))
+      .map((s) => s.sellerId);
+    const orderIsFullyShipped = allSellersShipped(allSellerIds, shippedSellerIds);
+
     await prisma.order.update({
       where: { id: orderId },
       data: {
-        status: 'SHIPPED',
+        ...(orderIsFullyShipped ? { status: 'SHIPPED' } : {}),
         trackingNumber: trackingNumber || null,
         carrier: shippingCarrier || null,
         // Legacy compatibility mirror.
@@ -416,9 +544,9 @@ export async function POST(req: Request) {
         userId: order.buyerId,
         type: NotificationType.ORDER_UPDATE,
         title: 'Order status updated',
-        body: 'Your order moved to Shipped.',
+        body: orderIsFullyShipped ? 'Your order has fully shipped.' : 'One seller has shipped part of your order.',
         link: `/orders/${order.id}`,
-        data: { orderId: order.id, status: 'SHIPPED' },
+        data: { orderId: order.id, status: orderIsFullyShipped ? 'SHIPPED' : 'PAID' },
       },
     ]);
 
