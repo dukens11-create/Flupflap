@@ -33,7 +33,7 @@ import {
   hasStoredPackageDetails,
 } from '@/lib/product-package';
 import { toSellerLifecycleStatus } from '@/lib/listing-status';
-import { normalizeOrderStatus, ORDER_STATUS_BADGE_CLASSES } from '@/lib/order-status';
+import { normalizeOrderStatus, getOrderStatusBadgeClass } from '@/lib/order-status';
 import { getRoleNavigation } from '@/lib/role-experience';
 import { isSchemaNotInitializedError } from '@/lib/db-errors';
 
@@ -91,7 +91,7 @@ function calcConversionRate(orders: number, views: number): string | null {
 }
 
 function orderStatusBadge(status: string) {
-  return ORDER_STATUS_BADGE_CLASSES[status] ?? 'badge-yellow';
+  return getOrderStatusBadgeClass(status);
 }
 
 function sellerVerificationStatusLabel(status?: string | null) {

@@ -7,7 +7,7 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import UserAvatar from '@/components/UserAvatar';
 import AdminRemoveProfileImageButton from '@/components/AdminRemoveProfileImageButton';
-import { ORDER_STATUS_BADGE_CLASSES } from '@/lib/order-status';
+import { getOrderStatusBadgeClass } from '@/lib/order-status';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,7 +27,7 @@ const REASON_LABELS: Record<string, string> = {
 };
 
 function orderStatusBadge(status: string) {
-  return ORDER_STATUS_BADGE_CLASSES[status] ?? 'badge-slate';
+  return getOrderStatusBadgeClass(status);
 }
 
 function productStatusBadge(status: string) {

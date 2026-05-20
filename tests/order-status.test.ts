@@ -9,6 +9,7 @@ import {
   DEPRECATED_STATUS_NORMALIZATIONS,
   ORDER_STATUS_LABELS,
   ORDER_STATUS_BADGE_CLASSES,
+  getOrderStatusBadgeClass,
 } from '@/lib/order-status';
 import { isOrderRefundEligible } from '@/lib/refunds';
 
@@ -172,6 +173,16 @@ test('ORDER_STATUS_BADGE_CLASSES covers deprecated statuses for legacy display',
   for (const dep of DEPRECATED_ORDER_STATUSES) {
     assert.ok(dep in ORDER_STATUS_BADGE_CLASSES, `${dep} should have a badge class`);
   }
+});
+
+test('getOrderStatusBadgeClass: returns the correct class for known statuses', () => {
+  assert.equal(getOrderStatusBadgeClass('PAID'), 'badge-blue');
+  assert.equal(getOrderStatusBadgeClass('SHIPPED'), 'badge-green');
+  assert.equal(getOrderStatusBadgeClass('CANCELLED'), 'badge-red');
+});
+
+test('getOrderStatusBadgeClass: falls back to badge-slate for unknown status', () => {
+  assert.equal(getOrderStatusBadgeClass('UNKNOWN_STATUS'), 'badge-slate');
 });
 
 // ── Refund eligibility backward compatibility ─────────────────────────────────

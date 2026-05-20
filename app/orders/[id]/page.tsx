@@ -9,12 +9,12 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import OrderRefundRequestCard from '@/components/OrderRefundRequestCard';
 import MarkDeliveredButton from '@/components/MarkDeliveredButton';
-import { ORDER_STATUS_LABELS, ORDER_STATUS_BADGE_CLASSES } from '@/lib/order-status';
+import { ORDER_STATUS_LABELS, getOrderStatusBadgeClass } from '@/lib/order-status';
 
 export const metadata: Metadata = { title: 'Order Details' };
 
 function statusBadge(status: string) {
-  return ORDER_STATUS_BADGE_CLASSES[status] ?? 'badge-slate';
+  return getOrderStatusBadgeClass(status);
 }
 
 export default async function OrderDetailPage({

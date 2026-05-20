@@ -164,3 +164,12 @@ export const ORDER_STATUS_BADGE_CLASSES: Record<string, string> = {
   READY_FOR_PICKUP: 'badge-blue',
   CANCELLED: 'badge-red',
 };
+
+/**
+ * Returns the badge CSS class for a given order status.
+ * Falls back to 'badge-slate' for any unrecognized value (e.g. future statuses
+ * not yet reflected in client code).
+ */
+export function getOrderStatusBadgeClass(status: string): string {
+  return ORDER_STATUS_BADGE_CLASSES[status] ?? 'badge-slate';
+}

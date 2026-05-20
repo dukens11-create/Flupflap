@@ -5,14 +5,14 @@ import { prisma } from '@/lib/db';
 import { dollars } from '@/lib/money';
 import { buildTrackingUrl } from '@/lib/shipping';
 import type { Metadata } from 'next';
-import { ORDER_STATUS_LABELS, ORDER_STATUS_BADGE_CLASSES } from '@/lib/order-status';
+import { ORDER_STATUS_LABELS, getOrderStatusBadgeClass } from '@/lib/order-status';
 
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = { title: 'My Orders' };
 
 function statusBadge(status: string) {
-  return ORDER_STATUS_BADGE_CLASSES[status] ?? 'badge-slate';
+  return getOrderStatusBadgeClass(status);
 }
 
 export default async function OrdersPage() {
