@@ -33,6 +33,14 @@ type RefundRecord = {
   status: RefundRequestStatus;
   stripePaymentIntentId: string | null;
   stripeRefundId: string | null;
+  stripeRefundStatus: string | null;
+  stripeRefundAmount: number | null;
+  stripeRefundCurrency: string | null;
+  stripeFailureReason: string | null;
+  stripeErrorCode: string | null;
+  stripeErrorMessage: string | null;
+  stripeRefundCreatedAt: string | null;
+  stripeRefundUpdatedAt: string | null;
   createdAt: string;
   resolvedAt: string | null;
 };
@@ -48,6 +56,14 @@ function serializeRefundRequest(refundRequest: {
   sellerResponse: string | null;
   status: RefundRequestStatus;
   stripeRefundId: string | null;
+  stripeRefundStatus: string | null;
+  stripeRefundAmount: number | null;
+  stripeRefundCurrency: string | null;
+  stripeFailureReason: string | null;
+  stripeErrorCode: string | null;
+  stripeErrorMessage: string | null;
+  stripeRefundCreatedAt: Date | null;
+  stripeRefundUpdatedAt: Date | null;
   createdAt: Date;
   resolvedAt: Date | null;
   buyer: { id: string; name: string | null; email: string };
@@ -69,6 +85,14 @@ function serializeRefundRequest(refundRequest: {
     status: refundRequest.status,
     stripePaymentIntentId: refundRequest.order.stripePaymentIntentId,
     stripeRefundId: refundRequest.stripeRefundId,
+    stripeRefundStatus: refundRequest.stripeRefundStatus,
+    stripeRefundAmount: refundRequest.stripeRefundAmount,
+    stripeRefundCurrency: refundRequest.stripeRefundCurrency,
+    stripeFailureReason: refundRequest.stripeFailureReason,
+    stripeErrorCode: refundRequest.stripeErrorCode,
+    stripeErrorMessage: refundRequest.stripeErrorMessage,
+    stripeRefundCreatedAt: refundRequest.stripeRefundCreatedAt?.toISOString() ?? null,
+    stripeRefundUpdatedAt: refundRequest.stripeRefundUpdatedAt?.toISOString() ?? null,
     createdAt: refundRequest.createdAt.toISOString(),
     resolvedAt: refundRequest.resolvedAt?.toISOString() ?? null,
   };
