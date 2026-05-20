@@ -245,10 +245,14 @@ export async function POST(req: Request) {
       select: {
         id: true,
         buyerId: true,
+        status: true,
       },
     });
     if (!order) {
       return NextResponse.json({ error: 'Order not found.' }, { status: 404 });
+    }
+    if (order.status !== 'PAID') {
+      return NextResponse.json({ error: 'Shipping can only be recorded for paid orders.' }, { status: 400 });
     }
 
     await prisma.order.update({

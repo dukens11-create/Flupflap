@@ -123,16 +123,23 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const requestedAmountCents = normalizeRefundAmountCents(parsed.data.requestedAmountCents, order.totalCents);
 
-  const refundRequest = await prisma.refundRequest.create({
-    data: {
-      orderId: order.id,
-      buyerId: order.buyerId,
-      sellerId: sellerIds[0],
-      reason: parsed.data.reason,
-      details: parsed.data.details || null,
-      requestedAmountCents,
-      status: 'REQUESTED',
-    },
+  const refundRequest = await prisma.$transaction(async (tx) => {
+    await tx.order.update({
+      where: { id: order.id },
+      data: { status: 'REFUND_REQUESTED' },
+    });
+
+    return tx.refundRequest.create({
+      data: {
+        orderId: order.id,
+        buyerId: order.buyerId,
+        sellerId: sellerIds[0],
+        reason: parsed.data.reason,
+        details: parsed.data.details || null,
+        requestedAmountCents,
+        status: 'REQUESTED',
+      },
+    });
   });
 
   await createNotifications([

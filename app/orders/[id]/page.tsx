@@ -8,6 +8,7 @@ import { buildTrackingUrl } from '@/lib/shipping';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import OrderRefundRequestCard from '@/components/OrderRefundRequestCard';
+import MarkDeliveredButton from '@/components/MarkDeliveredButton';
 
 export const metadata: Metadata = { title: 'Order Details' };
 
@@ -247,6 +248,17 @@ export default async function OrderDetailPage({
               Track Package
             </a>
           )}
+        </div>
+      )}
+
+      {/* Buyer: confirm delivery for shipped non-pickup orders */}
+      {!order.isPickup && order.status === 'SHIPPED' && session.user.id === order.buyerId && (
+        <div className="card p-5 mb-4 bg-blue-50 border-blue-200">
+          <h2 className="font-bold mb-1 text-blue-800">📬 Have you received your package?</h2>
+          <p className="text-sm text-blue-700 mb-3">
+            If your order has arrived, let us know so we can complete the order.
+          </p>
+          <MarkDeliveredButton orderId={order.id} />
         </div>
       )}
 
