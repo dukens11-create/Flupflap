@@ -725,7 +725,7 @@ export async function PATCH(
         return NextResponse.json(updated);
       }
       console.warn('[seller/products/[id] PATCH] unexpected workflow action', { productId: id, workflowAction });
-      return NextResponse.json({ error: 'Invalid workflow action.' }, { status: 400 });
+      return NextResponse.json({ error: 'Invalid workflow action. Expected SAVE_DRAFT or PUBLISH_NOW.' }, { status: 400 });
     }
 
     const submitAction = parseWorkflowAction(body.submitAction);
