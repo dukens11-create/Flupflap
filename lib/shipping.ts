@@ -86,6 +86,7 @@ export type ShipmentPurchaseResult = {
   service: string | null;
   labelUrl: string | null;
   trackingUrl: string | null;
+  providerTransactionId: string | null;
 };
 
 function getShippoApiToken() {
@@ -115,6 +116,7 @@ function serializeAddress(address: AddressInput) {
 }
 
 const SHIPPO_REQUEST_TIMEOUT_MS = 30_000;
+const SHIPPO_TRANSACTIONS_RECONCILE_LIMIT = 50;
 
 async function shippoRequest(path: string, method: 'GET' | 'POST', body?: unknown) {
   const controller = new AbortController();
@@ -129,6 +131,45 @@ async function shippoRequest(path: string, method: 'GET' | 'POST', body?: unknow
         'Content-Type': 'application/json',
       },
       body: body ? JSON.stringify(body) : undefined,
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+  } catch (err: unknown) {
+    clearTimeout(timeoutId);
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new Error('Shipping rate request timed out. Please try again.');
+    }
+    throw err;
+  }
+  clearTimeout(timeoutId);
+
+  const payload = await res.json().catch(() => null);
+  if (!res.ok) {
+    const message = payload?.detail || payload?.error?.message || payload?.message || 'Shippo request failed.';
+    throw new Error(message);
+  }
+  return payload;
+}
+
+async function shippoRequestWithHeaders(params: {
+  path: string;
+  method: 'GET' | 'POST';
+  body?: unknown;
+  extraHeaders?: Record<string, string | undefined>;
+}) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), SHIPPO_REQUEST_TIMEOUT_MS);
+
+  let res: Response;
+  try {
+    res = await fetch(`${SHIPPO_API_BASE}${params.path}`, {
+      method: params.method,
+      headers: {
+        Authorization: `ShippoToken ${getShippoApiToken()}`,
+        'Content-Type': 'application/json',
+        ...(params.extraHeaders ?? {}),
+      },
+      body: params.body ? JSON.stringify(params.body) : undefined,
       cache: 'no-store',
       signal: controller.signal,
     });
@@ -267,11 +308,19 @@ export async function createShipmentRates(params: {
 export async function purchaseShipmentRate(params: {
   shipmentId: string;
   rateId: string;
+  idempotencyKey?: string;
 }): Promise<ShipmentPurchaseResult> {
-  const payload = await shippoRequest('/transactions/', 'POST', {
-    rate: params.rateId,
-    label_file_type: 'PDF',
-    async: false,
+  const payload = await shippoRequestWithHeaders({
+    path: '/transactions/',
+    method: 'POST',
+    body: {
+      rate: params.rateId,
+      label_file_type: 'PDF',
+      async: false,
+    },
+    extraHeaders: {
+      'Idempotency-Key': params.idempotencyKey,
+    },
   });
 
   const trackingCode = parseOptionalString(payload?.tracking_number);
@@ -284,6 +333,7 @@ export async function purchaseShipmentRate(params: {
   const rateShipmentId = parseOptionalString(payload?.rate?.shipment);
   const transactionShipmentObjectId = parseOptionalString(payload?.shipment?.object_id);
   const transactionShipmentId = parseOptionalString(payload?.shipment);
+  const providerTransactionId = parseOptionalString(payload?.object_id);
   const responseShipmentId = rateShipmentId
     ?? transactionShipmentObjectId
     ?? transactionShipmentId;
@@ -302,6 +352,44 @@ export async function purchaseShipmentRate(params: {
     service,
     labelUrl,
     trackingUrl,
+    providerTransactionId,
+  };
+}
+
+export async function findPurchasedShipmentRate(params: {
+  shipmentId: string;
+  rateId: string;
+}): Promise<ShipmentPurchaseResult | null> {
+  const payload = await shippoRequest(
+    `/transactions/?shipment=${encodeURIComponent(params.shipmentId)}&results=${SHIPPO_TRANSACTIONS_RECONCILE_LIMIT}`,
+    'GET',
+  );
+  const rows = Array.isArray(payload?.results) ? payload.results : [];
+  const match = rows.find((row: any) => {
+    const rowRateId = parseOptionalString(row?.rate?.object_id) ?? parseOptionalString(row?.rate);
+    const rowShipmentId = parseOptionalString(row?.rate?.shipment)
+      ?? parseOptionalString(row?.shipment?.object_id)
+      ?? parseOptionalString(row?.shipment);
+    const status = String(row?.status ?? '').toUpperCase();
+    return rowRateId === params.rateId
+      && rowShipmentId === params.shipmentId
+      && (status === 'SUCCESS' || status === 'PURCHASED');
+  });
+  if (!match) return null;
+
+  const carrier = normalizeCarrier(match?.rate?.provider || match?.provider) || null;
+  const trackingCode = parseOptionalString(match?.tracking_number);
+  return {
+    shipmentId: params.shipmentId,
+    shipmentStatus: typeof match?.status === 'string' ? match.status : null,
+    trackingNumber: trackingCode,
+    carrier,
+    service: parseOptionalString(match?.rate?.servicelevel?.name)
+      ?? parseOptionalString(match?.rate?.servicelevel?.token),
+    labelUrl: parseOptionalString(match?.label_url),
+    trackingUrl: parseOptionalString(match?.tracking_url_provider)
+      || buildTrackingUrl(carrier, trackingCode),
+    providerTransactionId: parseOptionalString(match?.object_id),
   };
 }
 

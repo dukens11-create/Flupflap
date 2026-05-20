@@ -409,6 +409,10 @@ model Order {
   shippingCarrier       String?
   trackingUrl           String?
   labelUrl              String?
+  labelPurchaseIdempotencyKey String?
+  labelProviderTransactionId  String?
+  labelPurchasedAt      DateTime?
+  labelPurchaseLastError String?
   shipmentStatus        String?
   shipmentId            String?
   shippingName          String?
