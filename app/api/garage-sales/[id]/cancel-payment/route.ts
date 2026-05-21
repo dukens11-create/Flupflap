@@ -134,12 +134,6 @@ export async function POST(_req: Request, { params }: Params) {
       return stripeFailureResponse('Unable to create Stripe refund.', err);
     }
 
-    if (!stripeRefund) {
-      return NextResponse.json({
-        error: 'Unable to create Stripe refund.',
-      }, { status: 502 });
-    }
-
     try {
       await prisma.$transaction(async (tx) => {
         await tx.garageSalePayment.updateMany({

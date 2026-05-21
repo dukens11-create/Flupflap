@@ -16,6 +16,12 @@ function formatRefundHistoryStatus(status: string): string {
     .join(' ');
 }
 
+const refundHistoryDateFormatter = new Intl.DateTimeFormat('en-US', {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+  timeZone: 'UTC',
+});
+
 export default async function SellerRefundsPage() {
   const { sellerId } = await requireSeller();
 
@@ -94,7 +100,7 @@ export default async function SellerRefundsPage() {
                 </p>
                 <p className="text-xs text-slate-500">
                   {entry.reason ? `Reason: ${entry.reason} · ` : ''}
-                  Recorded {entry.createdAt.toISOString()}
+                  Recorded {refundHistoryDateFormatter.format(entry.createdAt)} UTC
                   {entry.stripeRefundId ? ` · Stripe refund ${entry.stripeRefundId}` : ''}
                 </p>
               </div>
