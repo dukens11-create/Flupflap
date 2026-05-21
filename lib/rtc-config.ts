@@ -26,6 +26,7 @@ function parseTurnUrls(value: string | undefined): string[] {
 const turnUrls = parseTurnUrls(process.env.NEXT_PUBLIC_TURN_URL);
 const turnUsername = process.env.NEXT_PUBLIC_TURN_USERNAME?.trim();
 const turnCredential = process.env.NEXT_PUBLIC_TURN_CREDENTIAL?.trim();
+const forceRelay = process.env.NEXT_PUBLIC_RTC_FORCE_RELAY === 'true';
 const missingTurnEnvVars = [
   ...(turnUrls.length === 0 ? ['NEXT_PUBLIC_TURN_URL'] : []),
   ...(!turnUsername ? ['NEXT_PUBLIC_TURN_USERNAME'] : []),
@@ -40,6 +41,10 @@ if (missingTurnEnvVars.length > 0) {
 
 if (process.env.NODE_ENV === 'production' && missingTurnEnvVars.length === 0) {
   console.info('[RTC] Metered TURN relay configuration detected.');
+}
+
+if (forceRelay) {
+  console.info('[RTC] Relay-only ICE transport policy enabled (NEXT_PUBLIC_RTC_FORCE_RELAY=true).');
 }
 
 function buildIceServers(): RTCIceServer[] {
@@ -58,4 +63,5 @@ export const HAS_TURN_CONFIG = turnUrls.length > 0 && Boolean(turnUsername && tu
 export const RTC_CONFIG: RTCConfiguration = {
   iceServers: buildIceServers(),
   iceCandidatePoolSize: 10,
+  ...(forceRelay ? { iceTransportPolicy: 'relay' as const } : {}),
 };

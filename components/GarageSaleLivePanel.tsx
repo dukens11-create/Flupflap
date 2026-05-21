@@ -28,6 +28,7 @@ const MOBILE_CAMERA_LOG_PREFIX = '[GarageSaleLivePanel][mobile-camera]';
 const MEDIA_READY_TIMEOUT_MS = 1500;
 // Retry once shortly after the first play() rejection for iOS/Safari startup timing quirks.
 const PLAYBACK_RETRY_DELAY_MS = 120;
+type IceCandidateType = 'host' | 'srflx' | 'relay' | 'prflx' | 'unknown';
 
 type CameraStatus = 'idle' | 'connecting' | 'ready' | 'awaitingInteraction' | 'blocked' | 'denied' | 'unsupported';
 
@@ -43,6 +44,20 @@ function getCameraMessageStyles(cameraStatus: CameraStatus, hasError: boolean) {
 
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(' ');
+}
+
+function getIceCandidateType(candidate?: string): IceCandidateType {
+  if (!candidate) return 'unknown';
+  const rawType = candidate.match(/\btyp\s+([a-z0-9]+)/i)?.[1]?.toLowerCase();
+  switch (rawType) {
+    case 'host':
+    case 'srflx':
+    case 'relay':
+    case 'prflx':
+      return rawType;
+    default:
+      return 'unknown';
+  }
 }
 
 export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
@@ -263,9 +278,10 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         }
 
         if (signal.kind === 'ICE') {
-          logLiveDebug('signal-ice', { createdAt: signal.createdAt });
           const payload = signal.payload as { candidate?: RTCIceCandidateInit } | null;
           if (!payload?.candidate) continue;
+          const candidateType = getIceCandidateType(payload.candidate.candidate);
+          logLiveDebug('signal-ice', { createdAt: signal.createdAt, candidateType });
           if (!hasRemoteAnswerRef.current) {
             // Buffer the candidate until setRemoteDescription(answer) completes.
             // Adding a candidate before the remote description is set throws and
@@ -321,6 +337,16 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
 
     const pc = new RTCPeerConnection(RTC_CONFIG);
     peerRef.current = pc;
+    const logPeerStates = (event: string, details?: Record<string, unknown>) => {
+      logLiveDebug(event, {
+        connectionState: pc.connectionState,
+        iceConnectionState: pc.iceConnectionState,
+        iceGatheringState: pc.iceGatheringState,
+        signalingState: pc.signalingState,
+        ...details,
+      });
+    };
+    logPeerStates('peer-created');
 
     stream.getTracks().forEach((track) => {
       pc.addTrack(track, stream);
@@ -329,11 +355,13 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
 
     pc.onicecandidate = (event) => {
       if (!event.candidate) return;
+      const candidateType = getIceCandidateType(event.candidate.candidate);
+      logPeerStates('local-ice-candidate', { candidateType });
       void postSignal('ICE', { candidate: event.candidate.toJSON() });
     };
 
     pc.onconnectionstatechange = () => {
-      logLiveDebug('peer-connection-state', { state: pc.connectionState });
+      logPeerStates('peer-connection-state-change');
       if (pc.connectionState === 'connected') {
         setError(null);
         if (reconnectTimeoutRef.current) {
@@ -378,7 +406,15 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     };
 
     pc.oniceconnectionstatechange = () => {
-      logLiveDebug('ice-connection-state', { state: pc.iceConnectionState });
+      logPeerStates('ice-connection-state-change');
+    };
+
+    pc.onicegatheringstatechange = () => {
+      logPeerStates('ice-gathering-state-change');
+    };
+
+    pc.onsignalingstatechange = () => {
+      logPeerStates('signaling-state-change');
     };
 
     const offer = await pc.createOffer();
