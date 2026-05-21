@@ -13,7 +13,7 @@ import { applyRateLimitAsync } from '@/lib/security';
 
 export const dynamic = 'force-dynamic';
 
-const DEFAULT_DISPLAY_NAME = 'Buyer';
+const DEFAULT_BUYER_DISPLAY_NAME = 'Buyer';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -100,13 +100,12 @@ export async function POST(req: Request, { params }: Params) {
   if (!userId) {
     return NextResponse.json({ error: 'Please log in to chat' }, { status: 401 });
   }
-  const resolvedGuestId = null;
   const sessionDisplayName = typeof session?.user?.name === 'string' ? session.user.name.trim() : '';
   const resolvedDisplayName = sessionDisplayName
     ? sessionDisplayName.slice(0, 50)
-    : DEFAULT_DISPLAY_NAME;
+    : DEFAULT_BUYER_DISPLAY_NAME;
   const liveContext = resolveLiveEngagementContext(id, sale.liveStartedAt ?? null, { liveSessionId, roomId });
-  const actorId = getLiveEngagementActorId(userId, resolvedGuestId);
+  const actorId = getLiveEngagementActorId(userId, null);
   const insertCreatedAt = new Date();
   const insertPayload = {
     liveId: id,
@@ -114,7 +113,7 @@ export async function POST(req: Request, { params }: Params) {
     roomId: liveContext.roomId,
     liveSessionId: liveContext.liveSessionId,
     userId,
-    guestId: resolvedGuestId,
+    guestId: null,
     displayName: resolvedDisplayName,
     message: message.trim(),
     createdAt: insertCreatedAt.toISOString(),
