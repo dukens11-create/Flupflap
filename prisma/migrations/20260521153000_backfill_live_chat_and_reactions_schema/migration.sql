@@ -10,7 +10,6 @@ CREATE TABLE IF NOT EXISTS "GarageSaleChat" (
   "id" TEXT NOT NULL,
   "saleId" TEXT NOT NULL,
   "userId" TEXT,
-  "sellerId" TEXT,
   "guestName" TEXT,
   "message" VARCHAR(500) NOT NULL,
   "isHidden" BOOLEAN NOT NULL DEFAULT false,

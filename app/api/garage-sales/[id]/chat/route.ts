@@ -18,6 +18,12 @@ const DEFAULT_AUTHENTICATED_BUYER_NAME = 'Anonymous Buyer';
 
 type Params = { params: Promise<{ id: string }> };
 
+function getPrismaErrorCode(error: unknown) {
+  if (!error || typeof error !== 'object') return null;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === 'string' ? code : null;
+}
+
 /** GET /api/garage-sales/[id]/chat — fetch recent messages (public) */
 export async function GET(req: Request, { params }: Params) {
   const { id } = await params;
@@ -180,7 +186,7 @@ export async function POST(req: Request, { params }: Params) {
         error: signalError,
         errorName: signalError instanceof Error ? signalError.name : 'unknown',
         errorMessage: signalError instanceof Error ? signalError.message : 'unknown',
-        prismaCode: (signalError as { code?: string } | null)?.code ?? null,
+        prismaCode: getPrismaErrorCode(signalError),
       });
     }
 
@@ -210,7 +216,7 @@ export async function POST(req: Request, { params }: Params) {
       errorName: error instanceof Error ? error.name : 'unknown',
       errorMessage: error instanceof Error ? error.message : 'unknown',
       errorStack: error instanceof Error ? error.stack : null,
-      prismaCode: (error as { code?: string } | null)?.code ?? null,
+      prismaCode: getPrismaErrorCode(error),
     });
     return NextResponse.json({ error: 'Failed to save live chat message' }, { status: 500 });
   }
