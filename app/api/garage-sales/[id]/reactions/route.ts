@@ -3,6 +3,13 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { isGarageSalePubliclyVisible } from '@/lib/garage-sale-visibility';
+import {
+  LIVE_ENGAGEMENT_EVENTS,
+  LIVE_ENGAGEMENT_SIGNAL_KINDS,
+  getLiveEngagementActorId,
+  normalizeGuestId,
+  resolveLiveEngagementContext,
+} from '@/lib/live-engagement';
 import { applyRateLimitAsync } from '@/lib/security';
 
 export const dynamic = 'force-dynamic';
@@ -12,12 +19,14 @@ type Params = { params: Promise<{ id: string }> };
 /** GET /api/garage-sales/[id]/reactions — get total like count + recent reactions */
 export async function GET(_req: Request, { params }: Params) {
   const { id } = await params;
+  const session = await getServerSession(authOptions);
+  const userId = session?.user?.id ?? null;
 
   const sale = await prisma.garageSale.findUnique({
     where: { id },
-    select: { status: true, paymentStatus: true, isArchived: true, isSpam: true, isLive: true, startDate: true, endDate: true },
+    select: { status: true, paymentStatus: true, isArchived: true, isSpam: true, isLive: true, startDate: true, endDate: true, sellerId: true },
   });
-  if (!sale || !isGarageSalePubliclyVisible(sale)) {
+  if (!sale || (!isGarageSalePubliclyVisible(sale) && sale.sellerId !== userId)) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
@@ -40,7 +49,7 @@ export async function POST(req: Request, { params }: Params) {
 
   const sale = await prisma.garageSale.findUnique({
     where: { id },
-    select: { status: true, paymentStatus: true, isArchived: true, isSpam: true, isLive: true, startDate: true, endDate: true },
+    select: { status: true, paymentStatus: true, isArchived: true, isSpam: true, isLive: true, startDate: true, endDate: true, liveStartedAt: true },
   });
   if (!sale || !isGarageSalePubliclyVisible(sale)) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -71,30 +80,97 @@ export async function POST(req: Request, { params }: Params) {
     body = {};
   }
 
-  const { type, guestId } = body as { type?: string; guestId?: string };
+  const { type, guestId, liveSessionId, roomId } = body as {
+    type?: string;
+    guestId?: string;
+    liveSessionId?: string | null;
+    roomId?: string;
+  };
   const reactionType = type === 'heart' ? 'heart' : 'like';
-
-  // Only accept guestId values that contain safe characters (alphanumeric, dash, underscore, dot).
-  // This prevents injection of arbitrary strings into the database.
-  const GUEST_ID_PATTERN = /^[a-zA-Z0-9_\-\.]+$/;
   const userId = session?.user?.id ?? null;
-  const trimmedGuestId = typeof guestId === 'string' ? guestId.trim() : '';
-  const resolvedGuestId =
-    !userId && trimmedGuestId && GUEST_ID_PATTERN.test(trimmedGuestId)
-      ? trimmedGuestId.slice(0, 64)
-      : null;
+  const resolvedGuestId = !userId ? normalizeGuestId(guestId) : null;
+  const actorId = getLiveEngagementActorId(userId, resolvedGuestId);
+  const liveContext = resolveLiveEngagementContext(id, sale.liveStartedAt ?? null, { liveSessionId, roomId });
 
-  const reaction = await prisma.garageSaleReaction.create({
-    data: {
-      saleId: id,
-      userId,
-      guestId: resolvedGuestId,
-      type: reactionType,
-    },
-    select: { id: true, type: true, createdAt: true },
+  console.info('[garage-sale-reactions] like event received', {
+    saleId: id,
+    liveSessionId: liveContext.liveSessionId,
+    receivedLiveSessionId: liveContext.receivedLiveSessionId,
+    roomId: liveContext.roomId,
+    receivedRoomId: liveContext.receivedRoomId,
+    roomMatches: liveContext.roomMatches,
+    liveSessionMatches: liveContext.liveSessionMatches,
+    actorId,
   });
 
-  const totalLikes = await prisma.garageSaleReaction.count({ where: { saleId: id } });
+  try {
+    const duplicateWhere = userId
+      ? { saleId: id, userId, createdAt: sale.liveStartedAt ? { gte: sale.liveStartedAt } : undefined }
+      : resolvedGuestId
+        ? { saleId: id, guestId: resolvedGuestId, createdAt: sale.liveStartedAt ? { gte: sale.liveStartedAt } : undefined }
+        : null;
 
-  return NextResponse.json({ reaction, totalLikes }, { status: 201 });
+    const existingReaction = duplicateWhere
+      ? await prisma.garageSaleReaction.findFirst({
+        where: duplicateWhere,
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, type: true, createdAt: true },
+      })
+      : null;
+
+    const reaction = existingReaction ?? await prisma.garageSaleReaction.create({
+      data: {
+        saleId: id,
+        userId,
+        guestId: resolvedGuestId,
+        type: reactionType,
+      },
+      select: { id: true, type: true, createdAt: true },
+    });
+
+    const totalLikes = await prisma.garageSaleReaction.count({ where: { saleId: id } });
+
+    await prisma.garageSaleLiveSignal.create({
+      data: {
+        saleId: id,
+        sender: 'BUYER',
+        kind: LIVE_ENGAGEMENT_SIGNAL_KINDS.LIKES_UPDATE,
+        payload: {
+          event: LIVE_ENGAGEMENT_EVENTS.LIKES_UPDATE,
+          roomId: liveContext.roomId,
+          liveSessionId: liveContext.liveSessionId,
+          actorId,
+          totalLikes,
+          reactionId: reaction.id,
+          deduplicated: Boolean(existingReaction),
+        },
+      },
+    });
+
+    console.info('[garage-sale-reactions] live_likes_update emitted', {
+      saleId: id,
+      liveSessionId: liveContext.liveSessionId,
+      roomId: liveContext.roomId,
+      totalLikes,
+      actorId,
+      deduplicated: Boolean(existingReaction),
+    });
+
+    return NextResponse.json({
+      reaction,
+      totalLikes,
+      deduplicated: Boolean(existingReaction),
+      roomId: liveContext.roomId,
+      liveSessionId: liveContext.liveSessionId,
+      event: LIVE_ENGAGEMENT_EVENTS.LIKES_UPDATE,
+    }, { status: 201 });
+  } catch (error) {
+    console.error('[garage-sale-reactions] like save error', {
+      saleId: id,
+      liveSessionId: liveContext.liveSessionId,
+      actorId,
+      error: error instanceof Error ? error.message : 'unknown',
+    });
+    return NextResponse.json({ error: 'Failed to save live reaction' }, { status: 500 });
+  }
 }
