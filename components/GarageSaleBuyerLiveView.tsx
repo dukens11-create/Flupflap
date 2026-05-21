@@ -279,7 +279,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
   const logLiveRoomDetails = useCallback((roomId: string, liveSessionId: string | null, source: string) => {
     if (roomId !== lastLoggedRoomRef.current) {
       console.info('[GarageSaleBuyerLiveView] VIEWER ROOM ID', roomId);
-      console.info('[GarageSaleBuyerLiveView] SELLER ROOM ID', roomId);
+      console.info('[GarageSaleBuyerLiveView] SELLER ROOM ID (from signaling room)', roomId);
       lastLoggedRoomRef.current = roomId;
     }
     if (liveSessionId !== lastLoggedSessionRef.current) {
