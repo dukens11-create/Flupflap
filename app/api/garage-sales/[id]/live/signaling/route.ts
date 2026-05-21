@@ -267,6 +267,21 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: 'payload.viewerId is required for this signal' }, { status: 400 });
   }
 
+  // When the seller posts a new OFFER, clear stale seller + peer-answer/ICE
+  // rows so a restarted publisher session does not process old connection state.
+  if (role === 'SELLER' && kind === 'OFFER') {
+    await prisma.garageSaleLiveSignal.deleteMany({
+      where: {
+        saleId: id,
+        OR: [
+          { sender: 'SELLER' },
+          { sender: 'BUYER', kind: 'ANSWER' },
+          { sender: 'BUYER', kind: 'ICE' },
+        ],
+      },
+    });
+  }
+
   const signal = await prisma.garageSaleLiveSignal.create({
     data: {
       saleId: id,

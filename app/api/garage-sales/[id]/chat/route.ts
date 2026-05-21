@@ -149,12 +149,12 @@ export async function POST(req: Request, { params }: Params) {
           saleId: id,
           sender: 'BUYER',
           kind: LIVE_ENGAGEMENT_SIGNAL_KINDS.MESSAGE_SENT,
-          payload: {
-            event: LIVE_ENGAGEMENT_EVENTS.MESSAGE_SENT,
-            liveId: id,
-            roomId: liveContext.roomId,
-            liveSessionId: liveContext.liveSessionId,
-            actorId,
+        payload: {
+          event: LIVE_ENGAGEMENT_EVENTS.MESSAGE_SENT,
+          liveId: id,
+          roomId: liveContext.roomId,
+          liveSessionId: liveContext.liveSessionId,
+          actorId,
             message: {
               id: createdMessage.id,
               userId: createdMessage.userId,
