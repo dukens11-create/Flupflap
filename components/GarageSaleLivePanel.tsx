@@ -473,7 +473,6 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
 
       if (pc.connectionState === 'failed') {
         setPublishConnected(false);
-        setError(LIVE_RECONNECTING_MESSAGE);
         setLiveConnectionWarning(LIVE_RECONNECTING_MESSAGE);
         const attempt = reconnectAttemptRef.current + 1;
         reconnectAttemptRef.current = attempt;
@@ -539,7 +538,6 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     setPublishConnected(false);
     setSubscriberPathReady(false);
     setStreamReadyCount(0);
-    setError(null);
     stopSignalPolling();
     clearReconnectRetryTimeout();
     if (reconnectTimeoutRef.current) {
