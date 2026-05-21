@@ -17,7 +17,7 @@ import {
   type ViewerConnectionStatus,
 } from '@/lib/live-stream-viewer-state';
 
-const DEFAULT_BUYER_DISPLAY_NAME = 'Buyer';
+const DEFAULT_BUYER_DISPLAY_NAME = 'Anonymous Buyer';
 const MEDIA_READY_TIMEOUT_MS = 1200;
 const PLAYBACK_RETRY_DELAY_MS = 250;
 const PLAYBACK_RECOVERY_THROTTLE_MS = 1200;
@@ -1286,7 +1286,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
         saleId,
         liveSessionId: liveSessionIdRef.current,
         buyerId: buyerId ?? null,
-        error: err,
+        error: err instanceof Error ? err.message : 'unknown',
       });
       setError(err instanceof Error ? err.message : 'Failed to send message');
     } finally {
