@@ -628,7 +628,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       await createAndSendOfferRef.current?.();
     } catch (err) {
       console.warn('[GarageSaleLivePanel] Restart live connection failed', err);
-      setError(err instanceof Error ? err.message : 'Failed to restart live connection due to an unexpected error. Please check your internet connection and try again.');
+      setError(err instanceof Error ? err.message : 'Failed to restart live connection. Please try again.');
       startSignalPollingRef.current?.();
     }
   }, [clearReconnectRetryTimeout, closePeerConnection, logLiveDebug, stopSignalPolling]);
