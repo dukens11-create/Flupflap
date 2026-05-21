@@ -476,6 +476,31 @@ model RefundRequest {
   @@index([status, createdAt])
 }
 
+model SellerRefundHistory {
+  id                    String   @id @default(cuid())
+  sellerId              String
+  orderId               String?
+  saleId                String?
+  refundType            String
+  sourceLabel           String?
+  sourceKey             String   @unique
+  stripePaymentIntentId String?
+  stripeRefundId        String?  @unique
+  amountCents           Int?
+  currency              String?
+  status                String
+  reason                String?
+  refundedAt            DateTime?
+  resolvedAt            DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([sellerId, createdAt])
+  @@index([orderId])
+  @@index([saleId])
+  @@index([stripePaymentIntentId])
+}
+
 model OrderItem {
   id                 String  @id @default(cuid())
   orderId            String

@@ -6,6 +6,7 @@ import { isOrderRefundEligible, normalizeRefundAmountCents } from '@/lib/refunds
 import { stripe } from '@/lib/stripe';
 import { isSchemaNotInitializedError } from '@/lib/db-errors';
 import { ADMIN_REFUNDS_LOAD_ERROR, ADMIN_REFUNDS_SCHEMA_INIT_ERROR } from '@/lib/admin-refunds-errors';
+import { recordSellerRefundHistory } from '@/lib/seller-refund-history';
 
 export type AdminRefundRecord = {
   id: string;
@@ -272,7 +273,7 @@ async function performStripeBackedAdminRefund(
       data: { status: nextOrderStatus },
     });
 
-    return tx.refundRequest.update({
+    const updatedRefundRequest = await tx.refundRequest.update({
       where: { id: refundRequest.id },
       data: {
         status: 'REFUNDED',
@@ -313,6 +314,23 @@ async function performStripeBackedAdminRefund(
         },
       },
     });
+
+    await recordSellerRefundHistory({
+      sellerId: refundRequest.sellerId,
+      orderId: refundRequest.orderId,
+      refundType: 'admin_order_refund',
+      sourceLabel: 'Admin order refund',
+      stripePaymentIntentId: refundRequest.order.stripePaymentIntentId,
+      stripeRefundId: stripeRefund.id,
+      amountCents: stripeRefundAmount ?? approvedAmountCents,
+      currency: stripeRefundCurrency ?? STRIPE_REFUND_CURRENCY_UPPER,
+      status: stripeRefundStatus ?? STRIPE_REFUND_SUCCESS_STATUS,
+      reason: refundRequest.reason,
+      refundedAt: stripeRefundCreatedAt ?? resolvedAt,
+      resolvedAt,
+    }, tx);
+
+    return updatedRefundRequest;
   });
 
   await createNotifications([
