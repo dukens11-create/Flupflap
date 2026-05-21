@@ -19,6 +19,8 @@ import { buildShippingPurchaseIdempotencyKey } from '@/lib/shipping-purchase';
 import { isShipmentShipped } from '@/lib/order-shipment';
 import { sendEmail } from '@/lib/email';
 import { logError, logInfo, logWarn } from '@/lib/logger';
+import { routeSupplierOrder } from '@/lib/suppliers';
+import { persistSupplierErrorLog } from '@/lib/suppliers/logging';
 import {
   confirmGarageSalePayment,
   failGarageSaleCheckoutSession,
@@ -28,6 +30,7 @@ import {
 
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 const CHECKOUT_COMPLETION_EVENTS = new Set(['checkout.session.completed', 'checkout.session.async_payment_succeeded']);
+const SUPPLIER_PROVIDERS = ['CJ', 'FAIRE', 'ALIBABA', 'SPOCKET'] as const;
 
 /** Generate a cryptographically secure 6-digit pickup confirmation code. */
 function generatePickupCode(): string {
@@ -803,6 +806,31 @@ export async function POST(req: Request) {
         },
       },
     });
+
+    for (const provider of SUPPLIER_PROVIDERS) {
+      try {
+        await routeSupplierOrder({
+          provider,
+          orderId: order.id,
+          submitToSupplier: false,
+        });
+      } catch (routingError) {
+        await persistSupplierErrorLog({
+          provider,
+          operation: 'ORDER_ROUTING',
+          error: routingError,
+          requestContext: {
+            orderId: order.id,
+            source: 'stripe_webhook_auto_route',
+          },
+        });
+        logError('Supplier order routing bootstrap failed', routingError, {
+          tag: 'stripe/webhook',
+          provider,
+          orderId: order.id,
+        });
+      }
+    }
 
     if (metadataOfferId) {
       await prisma.offer.updateMany({

@@ -133,6 +133,32 @@ enum OrderStatus {
   PICKED_UP
 }
 
+enum SupplierProvider {
+  CJ
+  FAIRE
+  ALIBABA
+  SPOCKET
+}
+
+enum SupplierSyncStatus {
+  STARTED
+  COMPLETED
+  FAILED
+}
+
+enum SupplierSyncOperation {
+  PRODUCT_SYNC
+  INVENTORY_SYNC
+  ORDER_ROUTING
+}
+
+enum SupplierRoutingStatus {
+  PENDING_SUBMISSION
+  SUBMISSION_SKIPPED
+  SUBMITTED
+  FAILED
+}
+
 enum RefundRequestStatus {
   REQUESTED
   SELLER_REVIEW
@@ -367,6 +393,7 @@ model Product {
   packageType       String?         // 'PACKAGE' | 'LETTER' | 'FLAT_RATE_ENVELOPE' etc.
   /// Shipping mode: 'FLAT' uses shippingCents, 'FREE' = no cost, 'CALCULATED' = live rates
   shippingMode      String?         // 'FLAT' | 'FREE' | 'CALCULATED'
+  supplierCatalogItems SupplierCatalogItem[] @relation("SupplierCatalogProduct")
 
   @@index([status, category, condition])
   @@index([title])
@@ -440,6 +467,7 @@ model Order {
   items                 OrderItem[]
   refundRequest         RefundRequest?
   shipments             OrderShipment[]
+  supplierOrderRoutings SupplierOrderRouting[]
 }
 
 model RefundRequest {
@@ -516,6 +544,97 @@ model OrderItem {
   sellerNetCents     Int     @default(0)
   commissionSource   String  @default("DEFAULT")
   commissionPlanCode String?
+  supplierOrderRoutings SupplierOrderRouting[] @relation("SupplierRoutingOrderItem")
+}
+
+model SupplierCatalogItem {
+  id                String           @id @default(cuid())
+  provider          SupplierProvider
+  externalProductId String
+  sku               String?
+  title             String
+  description       String?
+  priceCents        Int?
+  currency          String?
+  inventory         Int?
+  available         Boolean          @default(true)
+  rawPayload        Json?
+  mappedProductId   String?
+  mappedProduct     Product?         @relation("SupplierCatalogProduct", fields: [mappedProductId], references: [id], onDelete: SetNull)
+  lastSyncedAt      DateTime         @default(now())
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  supplierOrderRoutings SupplierOrderRouting[]
+
+  @@unique([provider, externalProductId])
+  @@index([mappedProductId])
+  @@index([provider, available])
+}
+
+model SupplierSyncRun {
+  id            String                @id @default(cuid())
+  provider      SupplierProvider
+  operation     SupplierSyncOperation
+  status        SupplierSyncStatus    @default(STARTED)
+  startedAt     DateTime              @default(now())
+  completedAt   DateTime?
+  failedAt      DateTime?
+  fetchedCount  Int                   @default(0)
+  upsertedCount Int                   @default(0)
+  failedCount   Int                   @default(0)
+  metadata      Json?
+  errorCode     String?
+  errorMessage  String?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  errorLogs     SupplierIntegrationErrorLog[]
+
+  @@index([provider, operation, createdAt])
+  @@index([status, createdAt])
+}
+
+model SupplierOrderRouting {
+  id                     String                @id @default(cuid())
+  provider               SupplierProvider
+  platformOrderId        String
+  platformOrder          Order                 @relation(fields: [platformOrderId], references: [id], onDelete: Cascade)
+  orderItemId            String
+  orderItem              OrderItem             @relation("SupplierRoutingOrderItem", fields: [orderItemId], references: [id], onDelete: Cascade)
+  supplierCatalogItemId  String?
+  supplierCatalogItem    SupplierCatalogItem?  @relation(fields: [supplierCatalogItemId], references: [id], onDelete: SetNull)
+  supplierOrderId        String?
+  status                 SupplierRoutingStatus @default(PENDING_SUBMISSION)
+  submissionEnabled      Boolean               @default(false)
+  requestPayload         Json?
+  responsePayload        Json?
+  errorCode              String?
+  errorMessage           String?
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+  errorLogs              SupplierIntegrationErrorLog[]
+
+  @@unique([provider, platformOrderId, orderItemId])
+  @@index([platformOrderId])
+  @@index([provider, status])
+  @@index([supplierCatalogItemId])
+}
+
+model SupplierIntegrationErrorLog {
+  id              String                 @id @default(cuid())
+  provider        SupplierProvider
+  operation       SupplierSyncOperation
+  requestContext  Json?
+  errorCode       String?
+  errorMessage    String
+  syncRunId       String?
+  syncRun         SupplierSyncRun?       @relation(fields: [syncRunId], references: [id], onDelete: SetNull)
+  orderRoutingId  String?
+  orderRouting    SupplierOrderRouting?  @relation(fields: [orderRoutingId], references: [id], onDelete: SetNull)
+  createdAt       DateTime               @default(now())
+
+  @@index([provider, operation, createdAt])
+  @@index([syncRunId])
+  @@index([orderRoutingId])
 }
 
 /// Per-seller shipment/tracking record for an order. Multi-seller orders store
