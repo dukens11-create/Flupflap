@@ -686,7 +686,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
           console.info('[GarageSaleLivePanel] live_likes_update received', {
             roomId: payload?.roomId ?? liveRoomIdRef.current,
             liveSessionId: payload?.liveSessionId ?? liveSessionIdRef.current,
-            totalLikes: payload?.totalLikes,
+            totalLikes: payload?.totalLikes ?? totalLikes,
             reactionId: payload?.reactionId,
           });
         }
@@ -729,7 +729,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     } catch {
       console.warn('[GarageSaleLivePanel] Network error while polling seller signals');
     }
-  }, [handleGuestIce, handleGuestOffer, logLiveDebug, logSellerRoomDetails, saleId, stopSignalPolling]);
+  }, [handleGuestIce, handleGuestOffer, logLiveDebug, logSellerRoomDetails, saleId, stopSignalPolling, totalLikes]);
 
   const startSignalPolling = useCallback(() => {
     stopSignalPolling();
