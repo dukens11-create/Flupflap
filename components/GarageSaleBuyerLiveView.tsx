@@ -783,7 +783,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
               <>
                 <p className="text-sm font-semibold">Waiting for seller stream…</p>
                 <p className="text-xs text-slate-300 px-4 text-center">
-                  The seller has started a session but hasn&apos;t sent a video stream yet. Please wait.
+                  The seller has started a session but hasn't sent a video stream yet. Please wait.
                 </p>
               </>
             ) : (

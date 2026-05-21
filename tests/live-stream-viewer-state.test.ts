@@ -70,6 +70,18 @@ test('computeReconnectDelay: delay never exceeds ceiling even with jitter', () =
   assert.ok(delay <= RECONNECT_MAX_DELAY_MS, `delay ${delay} exceeded ceiling ${RECONNECT_MAX_DELAY_MS}`);
 });
 
+test('computeReconnectDelay: caps at boundary when exponential first exceeds RECONNECT_MAX_DELAY_MS', () => {
+  // Attempt 4 → 1200 * 2^3 = 9600, which exceeds 8000 and should be capped.
+  const delay = computeReconnectDelay(4, 0);
+  assert.equal(delay, RECONNECT_MAX_DELAY_MS);
+});
+
+test('computeReconnectDelay: attempt just below cap is not clamped', () => {
+  // Attempt 3 → 1200 * 2^2 = 4800 < 8000, so no clamping occurs.
+  const delay = computeReconnectDelay(3, 0);
+  assert.ok(delay < RECONNECT_MAX_DELAY_MS);
+});
+
 // ── getConnectionStatusLabel ──────────────────────────────────────────────────
 
 const ALL_STATUSES: ViewerConnectionStatus[] = [
