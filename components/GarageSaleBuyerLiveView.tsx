@@ -1038,7 +1038,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
       let msg = 'Could not access camera or microphone.';
       if (name === 'NotAllowedError') msg = 'Camera/microphone permission was denied. Please allow access and try again.';
       else if (name === 'NotFoundError') msg = 'No camera or microphone found on this device.';
-      else if (name === 'NotReadableError') msg = 'Camera or microphone is already in use by another app. Close it and try again.';
+      else if (name === 'NotReadableError') msg = 'Camera or microphone is already in use by another app or tab. Please close other applications using your camera/microphone and try again.';
       setGuestJoinError(msg);
       setGuestJoinStatus('idle');
       guestJoinStatusRef.current = 'idle';

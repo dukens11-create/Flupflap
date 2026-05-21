@@ -328,8 +328,8 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       for (const candidate of peerState.pendingIce) {
         try {
           await pc.addIceCandidate(new RTCIceCandidate(candidate));
-        } catch {
-          logLiveDebug('guest-add-ice-candidate-failed', { requestId });
+        } catch (error) {
+          logLiveDebug('guest-add-ice-candidate-failed', { requestId, error: error instanceof Error ? error.message : String(error) });
         }
       }
       peerState.pendingIce = [];
