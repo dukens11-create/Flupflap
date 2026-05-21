@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db';
 import { z } from 'zod';
 import { stripe } from '@/lib/stripe';
 import { deriveGarageSaleLifecycle } from '@/lib/garage-sale-lifecycle';
+import { recordSellerRefundHistory } from '@/lib/seller-refund-history';
 
 export const dynamic = 'force-dynamic';
 
@@ -94,15 +95,21 @@ export async function PATCH(req: Request, { params }: Params) {
       if (!latestPaid?.stripePaymentId) {
         return NextResponse.json({ error: 'No refundable payment found' }, { status: 400 });
       }
-      await stripe.refunds.create({
+      const stripeRefund = await stripe.refunds.create({
         payment_intent: latestPaid.stripePaymentId,
+        metadata: {
+          type: 'garage_sale_listing',
+          saleId: sale.id,
+          sellerId: sale.sellerId,
+          action: 'admin_refund',
+        },
       });
-      await prisma.$transaction([
-        prisma.garageSalePayment.update({
+      await prisma.$transaction(async (tx) => {
+        await tx.garageSalePayment.update({
           where: { id: latestPaid.id },
           data: { status: 'REFUNDED' },
-        }),
-        prisma.garageSale.update({
+        });
+        await tx.garageSale.update({
           where: { id: sale.id },
           data: {
             paymentStatus: 'REFUNDED',
@@ -111,8 +118,23 @@ export async function PATCH(req: Request, { params }: Params) {
             archivedAt: new Date(),
             isFeatured: false,
           },
-        }),
-      ]);
+        });
+        await recordSellerRefundHistory({
+          sellerId: sale.sellerId,
+          saleId: sale.id,
+          refundType: 'admin_garage_sale_refund',
+          sourceLabel: 'Admin garage sale refund',
+          sourceKey: `admin_garage_sale_refund:${sale.id}:${stripeRefund.id}`,
+          stripePaymentIntentId: latestPaid.stripePaymentId,
+          stripeRefundId: stripeRefund.id,
+          amountCents: Number.isFinite(stripeRefund.amount) ? stripeRefund.amount : latestPaid.amountCents,
+          currency: stripeRefund.currency ?? null,
+          status: stripeRefund.status ?? 'succeeded',
+          reason: 'Admin-initiated garage sale refund',
+          refundedAt: Number.isFinite(stripeRefund.created) ? new Date(stripeRefund.created * 1000) : new Date(),
+          resolvedAt: new Date(),
+        }, tx);
+      });
       const refunded = await prisma.garageSale.findUnique({ where: { id: sale.id } });
       return NextResponse.json(refunded);
     }

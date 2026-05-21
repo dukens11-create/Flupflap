@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { resolveGarageSaleByRouteParam } from '@/lib/garage-sales';
 import { classifyStripeError, stripe } from '@/lib/stripe';
+import { recordSellerRefundHistory } from '@/lib/seller-refund-history';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -118,8 +119,9 @@ export async function POST(_req: Request, { params }: Params) {
     if (!paymentIntentId) {
       return NextResponse.json({ error: 'A successful payment exists, but no Stripe payment intent was found to refund.' }, { status: 400 });
     }
+    let stripeRefund: Stripe.Refund;
     try {
-      await stripe.refunds.create({
+      stripeRefund = await stripe.refunds.create({
         payment_intent: paymentIntentId,
         metadata: {
           type: 'garage_sale_listing',
@@ -133,16 +135,16 @@ export async function POST(_req: Request, { params }: Params) {
     }
 
     try {
-      await prisma.$transaction([
-        prisma.garageSalePayment.updateMany({
+      await prisma.$transaction(async (tx) => {
+        await tx.garageSalePayment.updateMany({
           where: {
             saleId: sale.id,
             stripePaymentId: paymentIntentId,
             status: { in: ['PAID', 'PENDING'] },
           },
           data: { status: 'REFUNDED' },
-        }),
-        prisma.garageSale.update({
+        });
+        await tx.garageSale.update({
           where: { id: sale.id },
           data: {
             paymentStatus: 'REFUNDED',
@@ -152,8 +154,23 @@ export async function POST(_req: Request, { params }: Params) {
             isFeatured: false,
             isLive: false,
           },
-        }),
-      ]);
+        });
+        await recordSellerRefundHistory({
+          sellerId: sale.sellerId,
+          saleId: sale.id,
+          refundType: 'garage_sale_cancel_payment_refund',
+          sourceLabel: 'Garage sale cancel payment refund',
+          sourceKey: `garage_sale_cancel_payment_refund:${sale.id}:${stripeRefund.id}`,
+          stripePaymentIntentId: paymentIntentId,
+          stripeRefundId: stripeRefund.id,
+          amountCents: Number.isFinite(stripeRefund.amount) ? stripeRefund.amount : null,
+          currency: stripeRefund.currency ?? null,
+          status: stripeRefund.status ?? 'succeeded',
+          reason: 'Seller cancelled a paid garage sale listing',
+          refundedAt: Number.isFinite(stripeRefund.created) ? new Date(stripeRefund.created * 1000) : new Date(),
+          resolvedAt: new Date(),
+        }, tx);
+      });
     } catch {
       return NextResponse.json({
         error: 'Refund completed in Stripe, but listing state could not be updated. Please contact support.',
