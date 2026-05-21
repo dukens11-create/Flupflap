@@ -13,7 +13,7 @@ import { applyRateLimitAsync } from '@/lib/security';
 
 export const dynamic = 'force-dynamic';
 
-const DEFAULT_BUYER_DISPLAY_NAME = 'Buyer';
+const DEFAULT_BUYER_DISPLAY_NAME = 'Anonymous Buyer';
 
 type Params = { params: Promise<{ id: string }> };
 
