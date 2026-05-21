@@ -2,6 +2,14 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { MessageCircle, Send, Radio, Eye } from 'lucide-react';
 import { RTC_CONFIG, HAS_TURN_CONFIG } from '@/lib/rtc-config';
+import {
+  MAX_RECONNECT_ATTEMPTS,
+  WAITING_FOR_PUBLISHER_TIMEOUT_MS,
+  STREAM_RECONNECTING_MESSAGE,
+  STREAM_TERMINAL_FAILURE_MESSAGE,
+  getConnectionStatusLabel,
+  type ViewerConnectionStatus,
+} from '@/lib/live-stream-viewer-state';
 
 const DEFAULT_GUEST_NAME = 'Guest';
 const MEDIA_READY_TIMEOUT_MS = 1200;
@@ -11,11 +19,6 @@ const CONNECTION_RECOVERY_TIMEOUT_MS = 8000;
 const RECONNECT_STEP_DELAY_MS = 1200;
 const RECONNECT_MAX_DELAY_MS = 8000;
 const RECONNECT_JITTER_MS = 250;
-const MAX_RECONNECT_ATTEMPTS = 5;
-const STREAM_RECONNECTING_MESSAGE = 'Live stream connection was interrupted. Trying to reconnect…';
-const STREAM_TERMINAL_FAILURE_MESSAGE = 'Unable to connect to this live stream right now. Please try again in a moment.';
-
-type ViewerConnectionStatus = 'connecting' | 'live' | 'reconnecting' | 'failed' | 'ended';
 
 interface ChatMessage {
   id: string;
@@ -46,6 +49,8 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
   const [recoveringConnection, setRecoveringConnection] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<ViewerConnectionStatus>(initialIsLive ? 'connecting' : 'ended');
   const [viewerCount, setViewerCount] = useState(0);
+  const [debugPcState, setDebugPcState] = useState<string>('none');
+  const [debugIceState, setDebugIceState] = useState<string>('none');
 
   const lastSeenRef = useRef<string | null>(null);
   const chatBottomRef = useRef<HTMLDivElement>(null);
@@ -67,6 +72,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
   const playbackRecoveryAtRef = useRef(0);
   const hasRemoteDescriptionRef = useRef(false);
   const pendingRemoteIceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
+  const waitingForPublisherTimerRef = useRef<number | null>(null);
   const liveDebugEnabled = process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_DEBUG_LIVE_STREAM === '1';
 
   const logLiveDebug = useCallback((event: string, details?: Record<string, unknown>) => {
@@ -151,6 +157,13 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     if (reconnectRetryTimeoutRef.current != null) {
       window.clearTimeout(reconnectRetryTimeoutRef.current);
       reconnectRetryTimeoutRef.current = null;
+    }
+  }, []);
+
+  const clearWaitingForPublisherTimer = useCallback(() => {
+    if (waitingForPublisherTimerRef.current != null) {
+      window.clearTimeout(waitingForPublisherTimerRef.current);
+      waitingForPublisherTimerRef.current = null;
     }
   }, []);
 
@@ -367,6 +380,8 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     }
 
     closePeerConnection();
+    // Cancel the waiting-for-publisher timer — we received an offer
+    clearWaitingForPublisherTimer();
 
     const remoteStream = new MediaStream();
     remoteStreamRef.current = remoteStream;
@@ -380,6 +395,8 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     setConnectionStatus('connecting');
     setRecoveringConnection(false);
     resetReconnectState();
+    setDebugPcState('new');
+    setDebugIceState('new');
     logLiveDebug('offer-received', { signalId });
 
     pc.ontrack = (event) => {
@@ -403,6 +420,8 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
         muted: event.track.muted,
         readyState: event.track.readyState,
         streamTrackCount: remoteStream.getTracks().length,
+        audioTracks: remoteStream.getAudioTracks().length,
+        videoTracks: remoteStream.getVideoTracks().length,
       });
       setHasRemoteMedia(true);
       setStreamError(null);
@@ -416,6 +435,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
 
     pc.onconnectionstatechange = () => {
       logLiveDebug('peer-connection-state', { state: pc.connectionState });
+      setDebugPcState(pc.connectionState);
       if (pc.connectionState === 'connected') {
         resetReconnectState();
         setRecoveringConnection(false);
@@ -436,6 +456,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
 
     pc.oniceconnectionstatechange = () => {
       logLiveDebug('ice-connection-state', { state: pc.iceConnectionState });
+      setDebugIceState(pc.iceConnectionState);
       if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
         resetReconnectState();
         setRecoveringConnection(false);
@@ -473,7 +494,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
       videoRef.current.srcObject = remoteStream;
       void playRemoteStream();
     }
-  }, [closePeerConnection, logLiveDebug, playRemoteStream, postSignal, resetReconnectState, scheduleConnectionRecovery]);
+  }, [clearWaitingForPublisherTimer, closePeerConnection, logLiveDebug, playRemoteStream, postSignal, resetReconnectState, scheduleConnectionRecovery]);
 
   const pollSignals = useCallback(async () => {
     if (!isLive) return;
@@ -567,6 +588,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
       signalCursorRef.current = null;
       clearReconnectRetryTimeout();
       clearConnectionRecoveryTimeout();
+      clearWaitingForPublisherTimer();
       closePeerConnection();
       setConnectionStatus('ended');
       setStreamError(null);
@@ -577,10 +599,21 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     pollSignals();
     signalPollRef.current = setInterval(pollSignals, 2000);
 
+    // If no seller OFFER is received within the timeout, transition to
+    // 'waitingForPublisher' so viewers see a clear "no stream yet" message
+    // rather than an indefinite "Connecting…" spinner.
+    waitingForPublisherTimerRef.current = window.setTimeout(() => {
+      waitingForPublisherTimerRef.current = null;
+      if (activeOfferSignalRef.current !== null) return;
+      setConnectionStatus((prev) => (prev === 'connecting' ? 'waitingForPublisher' : prev));
+      logLiveDebug('waiting-for-publisher-timeout');
+    }, WAITING_FOR_PUBLISHER_TIMEOUT_MS);
+
     return () => {
       stopSignalPolling();
+      clearWaitingForPublisherTimer();
     };
-  }, [clearConnectionRecoveryTimeout, clearReconnectRetryTimeout, closePeerConnection, isLive, pollSignals, stopSignalPolling]);
+  }, [clearConnectionRecoveryTimeout, clearReconnectRetryTimeout, clearWaitingForPublisherTimer, closePeerConnection, isLive, logLiveDebug, pollSignals, stopSignalPolling]);
 
   useEffect(() => {
     if (!isLive) {
@@ -604,10 +637,11 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
       stopSignalPolling();
       clearReconnectRetryTimeout();
       clearConnectionRecoveryTimeout();
+      clearWaitingForPublisherTimer();
       closePeerConnection();
       if (viewerHeartbeatRef.current) clearInterval(viewerHeartbeatRef.current);
     };
-  }, [clearConnectionRecoveryTimeout, clearReconnectRetryTimeout, closePeerConnection, stopSignalPolling]);
+  }, [clearConnectionRecoveryTimeout, clearReconnectRetryTimeout, clearWaitingForPublisherTimer, closePeerConnection, stopSignalPolling]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -698,24 +732,13 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     );
   }
   const showRemoteVideo = streamConnected || hasRemoteMedia;
-  const connectionStatusLabel = (() => {
-    switch (connectionStatus) {
-      case 'live':
-        return 'Live';
-      case 'reconnecting':
-        return 'Reconnecting…';
-      case 'failed':
-        return 'Unable to connect';
-      case 'ended':
-        return 'Stream ended';
-      default:
-        return 'Connecting…';
-    }
-  })();
+  const connectionStatusLabel = getConnectionStatusLabel(connectionStatus);
   const connectionStatusTone = (() => {
     switch (connectionStatus) {
       case 'live':
         return 'bg-emerald-100 text-emerald-700';
+      case 'waitingForPublisher':
+        return 'bg-slate-100 text-slate-600';
       case 'reconnecting':
         return 'bg-amber-100 text-amber-800';
       case 'failed':
@@ -730,9 +753,11 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
   return (
     <div className="card space-y-4 p-4">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-red-500 px-3 py-1 text-xs font-bold text-white animate-pulse">
-          🔴 LIVE NOW
-        </span>
+        {connectionStatus === 'live' && (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-red-500 px-3 py-1 text-xs font-bold text-white animate-pulse">
+            🔴 LIVE NOW
+          </span>
+        )}
         <p className="text-xs text-slate-500">The seller is live! Ask questions below.</p>
         <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
           <Eye size={12} /> {viewerCount} watching
@@ -749,22 +774,33 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
           playsInline
           preload="auto"
           controls
-          className={`h-full w-full object-cover ${showRemoteVideo ? '' : 'hidden'}`}
+          className={`h-full w-full object-contain ${showRemoteVideo ? '' : 'hidden'}`}
         />
         {!showRemoteVideo && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white">
             <Radio size={40} className="animate-pulse text-red-400" />
-            <p className="text-sm font-semibold">Connecting to seller stream…</p>
-            <p className="text-xs text-slate-300 px-4 text-center">
-              Live video may take a few seconds on mobile networks.
-            </p>
+            {connectionStatus === 'waitingForPublisher' ? (
+              <>
+                <p className="text-sm font-semibold">Waiting for seller stream…</p>
+                <p className="text-xs text-slate-300 px-4 text-center">
+                  The seller has started a session but hasn&apos;t sent a video stream yet. Please wait.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-semibold">Connecting to seller stream…</p>
+                <p className="text-xs text-slate-300 px-4 text-center">
+                  Live video may take a few seconds on mobile networks.
+                </p>
+              </>
+            )}
           </div>
         )}
         {showRemoteVideo && playbackBlocked && (
           <div className="absolute inset-0 flex items-center justify-center bg-slate-950/50 p-4">
             <button
               type="button"
-              onClick={() => void playRemoteStream()}
+              onClick={() => void playRemoteStream({ tryMutedFirst: false })}
               className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-900 shadow-lg transition hover:bg-slate-100"
             >
               Tap to start live
@@ -859,6 +895,32 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
           </button>
         </div>
       </div>
+
+      {liveDebugEnabled && (
+        <details className="rounded-lg border border-slate-200 bg-slate-50 text-[10px] text-slate-600">
+          <summary className="cursor-pointer px-3 py-1.5 font-semibold text-slate-500 select-none">
+            🛠 Debug Panel (dev only)
+          </summary>
+          <dl className="grid grid-cols-2 gap-x-3 gap-y-0.5 px-3 py-2 font-mono">
+            <dt className="font-semibold text-slate-500">Sale ID</dt>
+            <dd className="truncate">{saleId}</dd>
+            <dt className="font-semibold text-slate-500">Status</dt>
+            <dd>{connectionStatus}</dd>
+            <dt className="font-semibold text-slate-500">PC State</dt>
+            <dd>{debugPcState}</dd>
+            <dt className="font-semibold text-slate-500">ICE State</dt>
+            <dd>{debugIceState}</dd>
+            <dt className="font-semibold text-slate-500">Has Media</dt>
+            <dd>{hasRemoteMedia ? 'yes' : 'no'}</dd>
+            <dt className="font-semibold text-slate-500">Reconnects</dt>
+            <dd>{reconnectAttemptRef.current} / {MAX_RECONNECT_ATTEMPTS}</dd>
+            <dt className="font-semibold text-slate-500">TURN</dt>
+            <dd>{HAS_TURN_CONFIG ? 'configured' : 'STUN only'}</dd>
+            <dt className="font-semibold text-slate-500">Audio Unlock</dt>
+            <dd>{audioUnlockRequired ? 'needed' : 'ok'}</dd>
+          </dl>
+        </details>
+      )}
     </div>
   );
 }
