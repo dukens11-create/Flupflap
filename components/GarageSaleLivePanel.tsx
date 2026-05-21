@@ -127,7 +127,7 @@ export default function GarageSaleLivePanel({
     for (const viewerId of Array.from(viewerPeersRef.current.keys())) {
       closeViewerConnection(viewerId);
     }
-  }, []);
+  }, [closeViewerConnection]);
 
   const postSignal = useCallback(async (
     kind: 'BROADCASTER_READY' | 'OFFER' | 'ICE',
