@@ -1,28 +1,24 @@
 'use client';
 import { useRef, useState, useCallback, useEffect } from 'react';
-import { Video, VideoOff, Mic, MicOff, Radio, AlertTriangle, Eye, RefreshCcw, MessageCircle, Heart, Trash2, Maximize2, X } from 'lucide-react';
-import { LIVE_ENGAGEMENT_EVENTS, LIVE_ENGAGEMENT_SIGNAL_KINDS, isSameLiveSession } from '@/lib/live-engagement';
+import { Video, VideoOff, Mic, MicOff, Radio, AlertTriangle, Eye, RefreshCcw } from 'lucide-react';
 import { RTC_CONFIG, HAS_TURN_CONFIG } from '@/lib/rtc-config';
-import { getIceCandidateType } from '@/lib/rtc-diagnostics';
-import { LIVE_SIGNAL_EVENTS, LIVE_SIGNAL_KINDS, LIVE_SIGNAL_ROLES, getLiveRoomId, getLiveSessionId } from '@/lib/live-signaling';
+import {
+  buildGarageSaleLiveSessionId,
+  getSignalViewerId,
+  isSellerLiveReady,
+  payloadHasLiveSession,
+} from '@/lib/garage-sale-live-stream';
 
 interface Props {
   saleId: string;
   initialIsLive: boolean;
-}
-
-interface SellerChatMessage {
-  id: string;
-  userId: string | null;
-  guestName: string | null;
-  message: string;
-  createdAt: string;
+  initialLiveSessionId?: string | null;
 }
 
 const PREVIEW_REQUIRED_MESSAGE = 'Preview your camera before starting your live garage sale.';
 const CAMERA_BLOCKED_MESSAGE = 'Camera access blocked';
 const CAMERA_READY_MESSAGE = 'Camera ready';
-const CAMERA_CONNECTING_MESSAGE = 'Connecting camera…';
+const CAMERA_CONNECTING_MESSAGE = 'Connecting camera...';
 const CAMERA_PREVIEW_PLACEHOLDER = 'Camera preview will appear here.';
 const CAMERA_STATUS_UNKNOWN_MESSAGE = 'Camera status unknown.';
 const INSECURE_CAMERA_CONTEXT_MESSAGE = 'Camera requires HTTPS in this browser.';
@@ -31,13 +27,15 @@ const MOBILE_CAMERA_LOG_PREFIX = '[GarageSaleLivePanel][mobile-camera]';
 const MEDIA_READY_TIMEOUT_MS = 1500;
 // Retry once shortly after the first play() rejection for iOS/Safari startup timing quirks.
 const PLAYBACK_RETRY_DELAY_MS = 120;
-const SELLER_RECONNECT_MAX_ATTEMPTS = 3;
-const SELLER_RECONNECT_STEP_DELAY_MS = 1200;
-const SELLER_RECONNECT_MAX_DELAY_MS = 8000;
-const SELLER_RECONNECT_JITTER_MS = 250;
-const LIVE_RECONNECTING_MESSAGE = 'Connection lost. Reconnecting…';
 
 type CameraStatus = 'idle' | 'connecting' | 'ready' | 'awaitingInteraction' | 'blocked' | 'denied' | 'unsupported';
+type ViewerPeerConnection = {
+  peer: RTCPeerConnection;
+  hasRemoteAnswer: boolean;
+  pendingIceCandidates: RTCIceCandidateInit[];
+  reconnectTimeoutId: number | null;
+  offerToken: string;
+};
 
 const sleep = (ms: number) => new Promise<void>((resolve) => {
   setTimeout(resolve, ms);
@@ -53,62 +51,36 @@ function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(' ');
 }
 
-export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
+export default function GarageSaleLivePanel({
+  saleId,
+  initialIsLive,
+  initialLiveSessionId = null,
+}: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const expandedVideoRef = useRef<HTMLVideoElement>(null);
-  const expandedPreviewRef = useRef<HTMLDivElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const peerRef = useRef<RTCPeerConnection | null>(null);
+  const viewerPeersRef = useRef<Map<string, ViewerPeerConnection>>(new Map());
   const signalPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const signalCursorRef = useRef<string | null>(null);
-  const hasRemoteAnswerRef = useRef(false);
   const liveRef = useRef(initialIsLive);
   const micOnRef = useRef(true);
   const micPermissionDeniedRef = useRef(false);
   const preferredFacingModeRef = useRef<'user' | 'environment'>('user');
-
-  const reconnectTimeoutRef = useRef<number | null>(null);
-  // Always points at the latest createAndSendOffer so connection-state handlers
-  // can re-offer without holding a stale closure.
-  const createAndSendOfferRef = useRef<(() => Promise<void>) | null>(null);
-  // Always points at the latest startSignalPolling so reconnect error paths can
-  // restart polling without a stale closure.
-  const startSignalPollingRef = useRef<(() => void) | null>(null);
-  // ICE candidates received before the remote answer is applied are buffered here
-  // and drained once setRemoteDescription(answer) completes.
-  const pendingIceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
-  const reconnectRetryTimeoutRef = useRef<number | null>(null);
-  const reconnectAttemptRef = useRef(0);
-  const liveRoomIdRef = useRef<string>(getLiveRoomId(saleId));
-  const liveSessionIdRef = useRef<string | null>(null);
-  const lastLoggedRoomRef = useRef<string | null>(null);
-  const lastLoggedSessionRef = useRef<string | null>(null);
-
-  const hardRestartLiveRef = useRef<(() => Promise<void>) | null>(null);
+  const liveSessionIdRef = useRef<string | null>(initialLiveSessionId);
 
   const [isLive, setIsLive] = useState(initialIsLive);
-  const [publishConnected, setPublishConnected] = useState(false);
-  const [streamReadyCount, setStreamReadyCount] = useState(0);
-  const [subscriberPathReady, setSubscriberPathReady] = useState(false);
+  const [liveSessionId, setLiveSessionId] = useState<string | null>(initialLiveSessionId);
   const [camOn, setCamOn] = useState(false);
   const [previewReady, setPreviewReady] = useState(false);
   const [micOn, setMicOn] = useState(true);
   const [showWarning, setShowWarning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [isRestartingLive, setIsRestartingLive] = useState(false);
-  const [liveConnectionWarning, setLiveConnectionWarning] = useState<string | null>(null);
   const [cameraStatus, setCameraStatus] = useState<CameraStatus>('idle');
   const [viewerCount, setViewerCount] = useState(0);
   const [canSwitchCamera, setCanSwitchCamera] = useState(false);
   const [currentCamera, setCurrentCamera] = useState<'front' | 'back'>('front');
-  const [chatMessages, setChatMessages] = useState<SellerChatMessage[]>([]);
-  const [totalLikes, setTotalLikes] = useState(0);
-  const [showExpandedPreview, setShowExpandedPreview] = useState(false);
-  const chatLastSeenRef = useRef<string | null>(null);
-  const chatPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const reactionPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const chatBottomRef = useRef<HTMLDivElement>(null);
+  const [signalingJoined, setSignalingJoined] = useState(Boolean(initialIsLive && initialLiveSessionId));
+  const [publishConfirmed, setPublishConfirmed] = useState(Boolean(initialIsLive && initialLiveSessionId));
   const liveDebugEnabled = process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_DEBUG_LIVE_STREAM === '1';
 
   const logLiveDebug = useCallback((event: string, details?: Record<string, unknown>) => {
@@ -119,6 +91,10 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     }
     console.info('[GarageSaleLivePanel]', event);
   }, [liveDebugEnabled]);
+
+  useEffect(() => {
+    liveSessionIdRef.current = liveSessionId;
+  }, [liveSessionId]);
 
   const logMobileCameraIssue = useCallback((issue: string, details?: Record<string, unknown>) => {
     if (details) {
@@ -135,123 +111,68 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     }
   }, []);
 
-  const stopChatPolling = useCallback(() => {
-    if (chatPollRef.current) {
-      clearInterval(chatPollRef.current);
-      chatPollRef.current = null;
+  const closeViewerConnection = useCallback((viewerId: string) => {
+    const existing = viewerPeersRef.current.get(viewerId);
+    if (!existing) return;
+
+    if (existing.reconnectTimeoutId != null) {
+      window.clearTimeout(existing.reconnectTimeoutId);
     }
+
+    existing.peer.close();
+    viewerPeersRef.current.delete(viewerId);
   }, []);
 
-  const stopReactionPolling = useCallback(() => {
-    if (reactionPollRef.current) {
-      clearInterval(reactionPollRef.current);
-      reactionPollRef.current = null;
+  const closeAllViewerConnections = useCallback(() => {
+    for (const viewerId of Array.from(viewerPeersRef.current.keys())) {
+      closeViewerConnection(viewerId);
     }
   }, []);
-
-  const fetchSellerChat = useCallback(async () => {
-    try {
-      const p = new URLSearchParams({ role: 'SELLER' });
-      if (chatLastSeenRef.current) p.set('since', chatLastSeenRef.current);
-      const res = await fetch(`/api/garage-sales/${saleId}/chat?${p.toString()}`);
-      if (!res.ok) return;
-      const data = await res.json() as { messages: SellerChatMessage[]; isLive: boolean };
-      if (data.messages.length > 0) {
-        setChatMessages((prev) => {
-          const existingIds = new Set(prev.map((m) => m.id));
-          const newMsgs = data.messages.filter((m) => !existingIds.has(m.id));
-          return newMsgs.length > 0 ? [...prev, ...newMsgs] : prev;
-        });
-        chatLastSeenRef.current = data.messages[data.messages.length - 1].createdAt;
-      }
-    } catch {
-      // Silent fail — polling will retry
-    }
-  }, [saleId]);
-
-  const fetchReactionCount = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/garage-sales/${saleId}/reactions`);
-      if (!res.ok) return;
-      const data = await res.json() as { totalLikes: number };
-      setTotalLikes(data.totalLikes);
-    } catch {
-      // Silent fail — polling will retry
-    }
-  }, [saleId]);
-
-  const handleHideMessage = useCallback(async (msgId: string) => {
-    try {
-      const res = await fetch(`/api/garage-sales/${saleId}/chat/${msgId}`, { method: 'DELETE' });
-      if (res.ok) {
-        setChatMessages((prev) => prev.filter((m) => m.id !== msgId));
-      }
-    } catch {
-      // Silent fail
-    }
-  }, [saleId]);
-
-  const closePeerConnection = useCallback(() => {
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current);
-      reconnectTimeoutRef.current = null;
-    }
-    hasRemoteAnswerRef.current = false;
-    pendingIceCandidatesRef.current = [];
-    peerRef.current?.close();
-    peerRef.current = null;
-  }, []);
-
-  const clearReconnectRetryTimeout = useCallback(() => {
-    if (reconnectRetryTimeoutRef.current != null) {
-      clearTimeout(reconnectRetryTimeoutRef.current);
-      reconnectRetryTimeoutRef.current = null;
-    }
-  }, []);
-
-  const resetReconnectState = useCallback(() => {
-    reconnectAttemptRef.current = 0;
-    clearReconnectRetryTimeout();
-  }, [clearReconnectRetryTimeout]);
-
-  const logSellerRoomDetails = useCallback((roomId: string, liveSessionId: string | null, source: string) => {
-    if (roomId !== lastLoggedRoomRef.current || liveSessionId !== lastLoggedSessionRef.current) {
-      console.info('[GarageSaleLivePanel] room joined successfully', { roomId, liveSessionId, source });
-    }
-    if (roomId !== lastLoggedRoomRef.current) {
-      console.info('[GarageSaleLivePanel] SELLER ROOM ID', roomId);
-      lastLoggedRoomRef.current = roomId;
-    }
-    if (liveSessionId !== lastLoggedSessionRef.current) {
-      console.info('[GarageSaleLivePanel] SELLER LIVE SESSION ID', liveSessionId ?? 'none');
-      lastLoggedSessionRef.current = liveSessionId;
-    }
-    logLiveDebug(LIVE_SIGNAL_EVENTS.BROADCASTER_JOIN, { source, roomId, liveSessionId });
-    if (roomId !== getLiveRoomId(saleId)) {
-      console.warn('[GarageSaleLivePanel] ROOM MISMATCH', { sellerRoomId: roomId, expectedRoomId: getLiveRoomId(saleId) });
-    }
-  }, [logLiveDebug, saleId]);
 
   const postSignal = useCallback(async (
-    kind: 'OFFER' | 'ICE',
+    kind: 'BROADCASTER_READY' | 'OFFER' | 'ICE',
     payload: Record<string, unknown>,
     options?: { critical?: boolean },
   ) => {
+    const sessionId = liveSessionIdRef.current;
+    if (!sessionId) {
+      if (options?.critical) {
+        throw new Error('Live session is not ready');
+      }
+      return false;
+    }
+
     try {
       const res = await fetch(`/api/garage-sales/${saleId}/live/signaling`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: LIVE_SIGNAL_ROLES.SELLER, kind, payload }),
+        body: JSON.stringify({
+          role: 'SELLER',
+          kind,
+          payload: {
+            liveSessionId: sessionId,
+            ...payload,
+          },
+        }),
       });
       if (res.ok) return true;
 
-      console.warn('[GarageSaleLivePanel] Failed to post seller signal', { kind, status: res.status });
+      console.warn('[GarageSaleLivePanel] Failed to post seller signal', {
+        kind,
+        liveSessionId: sessionId,
+        viewerId: typeof payload.viewerId === 'string' ? payload.viewerId : undefined,
+        status: res.status,
+      });
       if (options?.critical) {
         throw new Error(`Failed to post ${kind} signal`);
       }
       return false;
     } catch (error) {
-      console.warn('[GarageSaleLivePanel] Network error posting seller signal', { kind });
+      console.warn('[GarageSaleLivePanel] Network error posting seller signal', {
+        kind,
+        liveSessionId: sessionId,
+        viewerId: typeof payload.viewerId === 'string' ? payload.viewerId : undefined,
+      });
       if (options?.critical) {
         throw error;
       }
@@ -259,208 +180,14 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     }
   }, [saleId]);
 
-  const pollSignals = useCallback(async () => {
-    // Read live state from the ref so this callback works correctly even when
-    // captured in a setInterval closure before the React state update flushes.
-    // Without this, the interval started by createAndSendOffer() would always
-    // see isLive=false and return early, preventing the seller from ever
-    // processing the buyer's ANSWER signal.
-    if (!liveRef.current) return;
-
-    try {
-      const params = new URLSearchParams({ role: 'SELLER' });
-      if (signalCursorRef.current) params.set('since', signalCursorRef.current);
-      const res = await fetch(`/api/garage-sales/${saleId}/live/signaling?${params.toString()}`);
-      if (!res.ok) {
-        console.warn('[GarageSaleLivePanel] Failed to poll seller signals', { status: res.status });
-        return;
-      }
-
-      const data = await res.json() as {
-        isLive: boolean;
-        roomId?: string;
-        liveSessionId?: string | null;
-        viewerCount?: number;
-        streamReadyCount?: number;
-        signals: Array<{ kind: string; payload: unknown; createdAt: string }>;
-      };
-
-      if (typeof data.roomId === 'string') {
-        liveRoomIdRef.current = data.roomId;
-      }
-      if (typeof data.liveSessionId === 'string' || data.liveSessionId === null) {
-        liveSessionIdRef.current = data.liveSessionId ?? null;
-      }
-      logSellerRoomDetails(liveRoomIdRef.current, liveSessionIdRef.current, 'poll');
-
-      if (!data.isLive) {
-        setIsLive(false);
-        setStreamReadyCount(0);
-        setSubscriberPathReady(false);
-        setViewerCount(0);
-        stopSignalPolling();
-        return;
-      }
-
-      setViewerCount(data.viewerCount ?? 0);
-      setStreamReadyCount(data.streamReadyCount ?? 0);
-      if ((data.streamReadyCount ?? 0) > 0) {
-        setSubscriberPathReady(true);
-      }
-
-      for (const signal of data.signals) {
-        signalCursorRef.current = signal.createdAt;
-
-        if (signal.kind === LIVE_SIGNAL_KINDS.ANSWER && !hasRemoteAnswerRef.current) {
-          logLiveDebug('signal-answer', { createdAt: signal.createdAt });
-          const payload = signal.payload as { type?: string; sdp?: string } | null;
-          if (!payload) continue;
-          const type = payload?.type === 'answer' ? payload.type : null;
-          if (!type || !payload.sdp || !peerRef.current) continue;
-
-          await peerRef.current.setRemoteDescription({ type, sdp: payload.sdp });
-          hasRemoteAnswerRef.current = true;
-          setSubscriberPathReady(true);
-          logLiveDebug(LIVE_SIGNAL_EVENTS.ANSWER, { createdAt: signal.createdAt });
-
-          // Drain ICE candidates that arrived before the answer was applied.
-          for (const candidate of pendingIceCandidatesRef.current) {
-            if (!peerRef.current) break;
-            try {
-              await peerRef.current.addIceCandidate(new RTCIceCandidate(candidate));
-            } catch {
-              // Stale or incompatible candidate — ignore
-            }
-          }
-          pendingIceCandidatesRef.current = [];
-        }
-
-        if (signal.kind === LIVE_SIGNAL_KINDS.ICE) {
-          const payload = signal.payload as { candidate?: RTCIceCandidateInit } | null;
-          if (!payload?.candidate) continue;
-          const candidateType = getIceCandidateType(payload.candidate.candidate);
-          logLiveDebug('signal-ice', { createdAt: signal.createdAt, candidateType });
-          if (!hasRemoteAnswerRef.current) {
-            // Buffer the candidate until setRemoteDescription(answer) completes.
-            // Adding a candidate before the remote description is set throws and
-            // the candidate would be permanently dropped.
-            pendingIceCandidatesRef.current.push(payload.candidate);
-            continue;
-          }
-          if (!peerRef.current) continue;
-          try {
-            await peerRef.current.addIceCandidate(new RTCIceCandidate(payload.candidate));
-          } catch {
-            // Ignore stale candidates from a previous peer connection
-          }
-        }
-
-        if (signal.kind === LIVE_SIGNAL_KINDS.STREAM_READY) {
-          const payload = signal.payload as { roomId?: string } | null;
-          if (payload?.roomId) {
-            console.info('[GarageSaleLivePanel] VIEWER ROOM ID', payload.roomId);
-            if (payload.roomId !== liveRoomIdRef.current) {
-              console.warn('[GarageSaleLivePanel] ROOM MISMATCH', {
-                sellerRoomId: liveRoomIdRef.current,
-                viewerRoomId: payload.roomId,
-              });
-            }
-          }
-          setSubscriberPathReady(true);
-          logLiveDebug(LIVE_SIGNAL_EVENTS.STREAM_READY, {
-            createdAt: signal.createdAt,
-            payload: signal.payload,
-          });
-        }
-
-        if (signal.kind === LIVE_ENGAGEMENT_SIGNAL_KINDS.LIKES_UPDATE) {
-          const payload = signal.payload as {
-            roomId?: string;
-            liveSessionId?: string | null;
-            totalLikes?: number;
-            reactionId?: string;
-          } | null;
-          if (!liveSessionIdRef.current && payload?.liveSessionId) {
-            liveSessionIdRef.current = payload.liveSessionId;
-          }
-          const sameSession = isSameLiveSession(liveSessionIdRef.current, payload?.liveSessionId);
-          if (payload?.roomId && payload.roomId !== liveRoomIdRef.current) {
-            console.warn('[GarageSaleLivePanel] live_likes_update room mismatch', {
-              sellerRoomId: liveRoomIdRef.current,
-              buyerRoomId: payload.roomId,
-            });
-          }
-          if (!sameSession) {
-            console.warn('[GarageSaleLivePanel] Ignoring live_likes_update for stale session', {
-              sellerLiveSessionId: liveSessionIdRef.current,
-              buyerLiveSessionId: payload?.liveSessionId ?? null,
-            });
-            continue;
-          }
-          if (typeof payload?.totalLikes === 'number') {
-            setTotalLikes(payload.totalLikes);
-          }
-          console.info('[GarageSaleLivePanel] live_likes_update received', {
-            roomId: payload?.roomId ?? liveRoomIdRef.current,
-            liveSessionId: payload?.liveSessionId ?? liveSessionIdRef.current,
-            totalLikes: payload?.totalLikes ?? totalLikes,
-            reactionId: payload?.reactionId,
-          });
-        }
-
-        if (signal.kind === LIVE_ENGAGEMENT_SIGNAL_KINDS.MESSAGE_SENT) {
-          const payload = signal.payload as {
-            roomId?: string;
-            liveSessionId?: string | null;
-            message?: SellerChatMessage;
-          } | null;
-          if (!liveSessionIdRef.current && payload?.liveSessionId) {
-            liveSessionIdRef.current = payload.liveSessionId;
-          }
-          const sameSession = isSameLiveSession(liveSessionIdRef.current, payload?.liveSessionId);
-          if (payload?.roomId && payload.roomId !== liveRoomIdRef.current) {
-            console.warn('[GarageSaleLivePanel] live_message_sent room mismatch', {
-              sellerRoomId: liveRoomIdRef.current,
-              buyerRoomId: payload.roomId,
-            });
-          }
-          if (!sameSession) {
-            console.warn('[GarageSaleLivePanel] Ignoring live_message_sent for stale session', {
-              sellerLiveSessionId: liveSessionIdRef.current,
-              buyerLiveSessionId: payload?.liveSessionId ?? null,
-            });
-            continue;
-          }
-          const nextMessage = payload?.message;
-          if (nextMessage) {
-            setChatMessages((prev) => {
-              if (prev.some((message) => message.id === nextMessage.id)) return prev;
-              return [...prev, nextMessage];
-            });
-            chatLastSeenRef.current = nextMessage.createdAt;
-          }
-          console.info('[GarageSaleLivePanel] live_message_sent received', {
-            roomId: payload?.roomId ?? liveRoomIdRef.current,
-            liveSessionId: payload?.liveSessionId ?? liveSessionIdRef.current,
-            messageId: nextMessage?.id,
-          });
-        }
-      }
-    } catch {
-      console.warn('[GarageSaleLivePanel] Network error while polling seller signals');
-    }
-  }, [logLiveDebug, logSellerRoomDetails, saleId, stopSignalPolling, totalLikes]);
-
-  const startSignalPolling = useCallback(() => {
-    stopSignalPolling();
-    pollSignals();
-    signalPollRef.current = setInterval(pollSignals, 2000);
-  }, [pollSignals, stopSignalPolling]);
-
-  const createAndSendOffer = useCallback(async () => {
+  const createAndSendOffer = useCallback(async (viewerId: string) => {
     const stream = streamRef.current;
+    const sessionId = liveSessionIdRef.current;
     if (!stream) {
       throw new Error(PREVIEW_REQUIRED_MESSAGE);
+    }
+    if (!sessionId) {
+      throw new Error('Live session is not ready');
     }
     if (typeof RTCPeerConnection === 'undefined') {
       throw new Error('Live streaming is not supported in this browser.');
@@ -469,6 +196,8 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     const videoTracks = stream.getVideoTracks();
     const audioTracks = stream.getAudioTracks();
     logLiveDebug('offer-tracks', {
+      liveSessionId: sessionId,
+      viewerId,
       videoTracks: videoTracks.length,
       audioTracks: audioTracks.length,
       videoEnabled: videoTracks[0]?.enabled ?? false,
@@ -477,27 +206,18 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       audioReadyState: audioTracks[0]?.readyState ?? 'none',
     });
 
-    if (videoTracks.length === 0 || videoTracks[0].readyState !== 'live') {
-      throw new Error('Video track is not ready. Please try starting the stream again.');
-    }
-
-    signalCursorRef.current = null;
-    closePeerConnection();
-    setSubscriberPathReady(false);
-    setStreamReadyCount(0);
+    closeViewerConnection(viewerId);
 
     const pc = new RTCPeerConnection(RTC_CONFIG);
-    peerRef.current = pc;
-    const logPeerStates = (event: string, details?: Record<string, unknown>) => {
-      logLiveDebug(event, {
-        connectionState: pc.connectionState,
-        iceConnectionState: pc.iceConnectionState,
-        iceGatheringState: pc.iceGatheringState,
-        signalingState: pc.signalingState,
-        ...details,
-      });
+    const offerToken = window.crypto?.randomUUID?.() ?? `${viewerId}-${Date.now().toString(36)}`;
+    const connection: ViewerPeerConnection = {
+      peer: pc,
+      hasRemoteAnswer: false,
+      pendingIceCandidates: [],
+      reconnectTimeoutId: null,
+      offerToken,
     };
-    logPeerStates('peer-created');
+    viewerPeersRef.current.set(viewerId, connection);
 
     stream.getTracks().forEach((track) => {
       pc.addTrack(track, stream);
@@ -506,143 +226,211 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
 
     pc.onicecandidate = (event) => {
       if (!event.candidate) return;
-      const candidateType = getIceCandidateType(event.candidate.candidate);
-      logPeerStates('local-ice-candidate', { candidateType });
-      void postSignal(LIVE_SIGNAL_KINDS.ICE, { candidate: event.candidate.toJSON() });
+      void postSignal('ICE', { viewerId, offerToken, candidate: event.candidate.toJSON() });
     };
 
     pc.onconnectionstatechange = () => {
-      logPeerStates('peer-connection-state-change');
+      logLiveDebug('peer-connection-state', {
+        liveSessionId: sessionId,
+        viewerId,
+        state: pc.connectionState,
+      });
       if (pc.connectionState === 'connected') {
         setError(null);
-        setPublishConnected(true);
-        setLiveConnectionWarning(null);
-        resetReconnectState();
-        if (reconnectTimeoutRef.current) {
-          clearTimeout(reconnectTimeoutRef.current);
-          reconnectTimeoutRef.current = null;
+        if (connection.reconnectTimeoutId != null) {
+          window.clearTimeout(connection.reconnectTimeoutId);
+          connection.reconnectTimeoutId = null;
         }
+        return;
       }
 
-      if (pc.connectionState === 'disconnected') {
-        setPublishConnected(false);
-        // Give ICE 5 seconds to self-recover before scheduling a bounded reconnect.
-        if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
-        reconnectTimeoutRef.current = window.setTimeout(() => {
-          reconnectTimeoutRef.current = null;
-          if (!liveRef.current || peerRef.current !== pc) return;
-          const attempt = reconnectAttemptRef.current + 1;
-          reconnectAttemptRef.current = attempt;
-          if (attempt > SELLER_RECONNECT_MAX_ATTEMPTS) {
-            setLiveConnectionWarning('Connection lost. Could not reconnect the live stream.');
-            return;
-          }
-          const retryDelay = Math.min(
-            SELLER_RECONNECT_MAX_DELAY_MS,
-            SELLER_RECONNECT_STEP_DELAY_MS * (2 ** (attempt - 1)),
-          ) + Math.floor(Math.random() * SELLER_RECONNECT_JITTER_MS);
-          clearReconnectRetryTimeout();
-          reconnectRetryTimeoutRef.current = window.setTimeout(() => {
-            reconnectRetryTimeoutRef.current = null;
-            if (!liveRef.current || peerRef.current !== pc) return;
-            logLiveDebug('seller-reconnect', { reason: 'peer-disconnected', attempt, retryDelay });
-            void hardRestartLiveRef.current?.();
-          }, retryDelay);
-        }, 5000);
-      }
-
-      if (pc.connectionState === 'failed') {
-        setPublishConnected(false);
-        setLiveConnectionWarning(LIVE_RECONNECTING_MESSAGE);
-        const attempt = reconnectAttemptRef.current + 1;
-        reconnectAttemptRef.current = attempt;
-        if (attempt > SELLER_RECONNECT_MAX_ATTEMPTS) {
-          setLiveConnectionWarning('Connection lost. Could not reconnect the live stream.');
-          return;
+      if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+        if (connection.reconnectTimeoutId != null) {
+          window.clearTimeout(connection.reconnectTimeoutId);
         }
-        const retryDelay = Math.min(
-          SELLER_RECONNECT_MAX_DELAY_MS,
-          SELLER_RECONNECT_STEP_DELAY_MS * (2 ** (attempt - 1)),
-        ) + Math.floor(Math.random() * SELLER_RECONNECT_JITTER_MS);
-        clearReconnectRetryTimeout();
-        reconnectRetryTimeoutRef.current = window.setTimeout(() => {
-          reconnectRetryTimeoutRef.current = null;
-          if (!liveRef.current || peerRef.current !== pc) return;
-          logLiveDebug('seller-reconnect', { reason: 'peer-failed', attempt, retryDelay });
-          void hardRestartLiveRef.current?.();
-        }, retryDelay);
+        connection.reconnectTimeoutId = window.setTimeout(() => {
+          connection.reconnectTimeoutId = null;
+          if (!liveRef.current || liveSessionIdRef.current !== sessionId) return;
+          void createAndSendOffer(viewerId).catch(() => {
+            setError('Connection lost. Attempting to reconnect…');
+          });
+        }, pc.connectionState === 'failed' ? 2000 : 5000);
       }
     };
 
     pc.oniceconnectionstatechange = () => {
-      logPeerStates('ice-connection-state-change');
-    };
-
-    pc.onicegatheringstatechange = () => {
-      logPeerStates('ice-gathering-state-change');
-    };
-
-    pc.onsignalingstatechange = () => {
-      logPeerStates('signaling-state-change');
+      logLiveDebug('ice-connection-state', {
+        liveSessionId: sessionId,
+        viewerId,
+        state: pc.iceConnectionState,
+      });
     };
 
     const offer = await pc.createOffer();
-    logLiveDebug('offer-created', { hasSdp: Boolean(offer.sdp) });
     await pc.setLocalDescription(offer);
-    logLiveDebug('offer-local-description-set', { type: offer.type });
-    await postSignal(LIVE_SIGNAL_KINDS.OFFER, {
-      type: offer.type,
-      sdp: offer.sdp,
-      roomId: liveRoomIdRef.current,
-      liveSessionId: liveSessionIdRef.current,
-    }, { critical: true });
-    logLiveDebug(LIVE_SIGNAL_EVENTS.OFFER, { roomId: liveRoomIdRef.current, liveSessionId: liveSessionIdRef.current });
+    logLiveDebug('offer-created', {
+      liveSessionId: sessionId,
+      viewerId,
+      offerToken,
+      hasSdp: Boolean(offer.sdp),
+    });
+    await postSignal('OFFER', { viewerId, offerToken, type: offer.type, sdp: offer.sdp }, { critical: true });
+  }, [closeViewerConnection, logLiveDebug, postSignal]);
 
-    startSignalPolling();
-  }, [clearReconnectRetryTimeout, closePeerConnection, logLiveDebug, postSignal, resetReconnectState, startSignalPolling]);
+  const pollSignals = useCallback(async () => {
+    if (!liveRef.current || !liveSessionIdRef.current) return;
 
-  // Keep the ref current so connection-state handlers can always call the latest version.
-  useEffect(() => {
-    createAndSendOfferRef.current = createAndSendOffer;
-  }, [createAndSendOffer]);
-
-  // Keep the ref current so reconnect error paths can restart polling without a stale closure.
-  useEffect(() => {
-    startSignalPollingRef.current = startSignalPolling;
-  }, [startSignalPolling]);
-
-  // Hard restart: stops all polling/timers, closes old PeerConnection (PC), resets signaling state,
-  // and re-runs the offer/publish flow without requiring the seller to end/restart the live.
-  const hardRestartLive = useCallback(async () => {
-    if (!liveRef.current) return;
-    setPublishConnected(false);
-    setSubscriberPathReady(false);
-    setStreamReadyCount(0);
-    stopSignalPolling();
-    clearReconnectRetryTimeout();
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current);
-      reconnectTimeoutRef.current = null;
-    }
-    closePeerConnection();
-    signalCursorRef.current = null;
-    hasRemoteAnswerRef.current = false;
-    pendingIceCandidatesRef.current = [];
-    reconnectAttemptRef.current = 0;
-    logLiveDebug('seller-hard-restart', { roomId: liveRoomIdRef.current, liveSessionId: liveSessionIdRef.current });
     try {
-      await createAndSendOfferRef.current?.();
-    } catch (err) {
-      console.error('[GarageSaleLivePanel] Failed to restart live connection', err);
-      setError(err instanceof Error ? err.message : 'Failed to restart live connection. Please try again.');
-      startSignalPollingRef.current?.();
-    }
-  }, [clearReconnectRetryTimeout, closePeerConnection, logLiveDebug, stopSignalPolling]);
+      const params = new URLSearchParams({ role: 'SELLER' });
+      if (signalCursorRef.current) params.set('since', signalCursorRef.current);
+      const res = await fetch(`/api/garage-sales/${saleId}/live/signaling?${params.toString()}`);
+      if (!res.ok) {
+        console.warn('[GarageSaleLivePanel] Failed to poll seller signals', {
+          liveSessionId: liveSessionIdRef.current,
+          status: res.status,
+        });
+        return;
+      }
 
-  // Keep the ref current so connection-state handlers can call the latest version.
-  useEffect(() => {
-    hardRestartLiveRef.current = hardRestartLive;
-  }, [hardRestartLive]);
+      const data = await res.json() as {
+        isLive: boolean;
+        liveSessionId: string | null;
+        viewerCount?: number;
+        signals: Array<{ id: string; kind: string; payload: unknown; createdAt: string }>;
+      };
+
+      if (!data.isLive) {
+        setIsLive(false);
+        setLiveSessionId(null);
+        setSignalingJoined(false);
+        setPublishConfirmed(false);
+        setViewerCount(0);
+        stopSignalPolling();
+        return;
+      }
+
+      if (data.liveSessionId && data.liveSessionId !== liveSessionIdRef.current) {
+        logLiveDebug('live-session-updated', {
+          previousLiveSessionId: liveSessionIdRef.current,
+          nextLiveSessionId: data.liveSessionId,
+        });
+        setLiveSessionId(data.liveSessionId);
+        signalCursorRef.current = null;
+        closeAllViewerConnections();
+      }
+
+      setViewerCount(data.viewerCount ?? 0);
+      logLiveDebug('viewer-count-update', {
+        liveSessionId: data.liveSessionId,
+        viewerCount: data.viewerCount ?? 0,
+      });
+
+      for (const signal of data.signals) {
+        signalCursorRef.current = signal.createdAt;
+
+        if (!payloadHasLiveSession(signal.payload, liveSessionIdRef.current)) {
+          continue;
+        }
+
+        const viewerId = getSignalViewerId(signal.payload);
+        if (!viewerId) continue;
+
+        if (signal.kind === 'VIEWER_JOIN') {
+          logLiveDebug('viewer-room-joined', {
+            liveSessionId: liveSessionIdRef.current,
+            viewerId,
+            createdAt: signal.createdAt,
+          });
+          if (!viewerPeersRef.current.has(viewerId)) {
+            await createAndSendOffer(viewerId);
+          }
+          continue;
+        }
+
+        if (signal.kind === 'VIEWER_HEARTBEAT') {
+          if (!viewerPeersRef.current.has(viewerId)) {
+            await createAndSendOffer(viewerId);
+          }
+          continue;
+        }
+
+        if (signal.kind === 'VIEWER_LEAVE') {
+          logLiveDebug('viewer-room-left', {
+            liveSessionId: liveSessionIdRef.current,
+            viewerId,
+            createdAt: signal.createdAt,
+          });
+          closeViewerConnection(viewerId);
+          continue;
+        }
+
+        const viewerConnection = viewerPeersRef.current.get(viewerId);
+        if (!viewerConnection) continue;
+
+        if (signal.kind === 'ANSWER') {
+          logLiveDebug('signal-answer', {
+            liveSessionId: liveSessionIdRef.current,
+            viewerId,
+            createdAt: signal.createdAt,
+          });
+          const payload = signal.payload as { offerToken?: string; type?: string; sdp?: string } | null;
+          const type = payload?.type === 'answer' ? payload.type : null;
+          if (
+            !type
+            || !payload?.sdp
+            || (typeof payload.offerToken === 'string' && payload.offerToken !== viewerConnection.offerToken)
+          ) continue;
+
+          await viewerConnection.peer.setRemoteDescription({ type, sdp: payload.sdp });
+          viewerConnection.hasRemoteAnswer = true;
+
+          for (const candidate of viewerConnection.pendingIceCandidates) {
+            try {
+              await viewerConnection.peer.addIceCandidate(new RTCIceCandidate(candidate));
+            } catch {
+              // Ignore stale or incompatible candidate
+            }
+          }
+          viewerConnection.pendingIceCandidates = [];
+          continue;
+        }
+
+        if (signal.kind === 'ICE') {
+          logLiveDebug('signal-ice', {
+            liveSessionId: liveSessionIdRef.current,
+            viewerId,
+            createdAt: signal.createdAt,
+          });
+          const payload = signal.payload as { offerToken?: string; candidate?: RTCIceCandidateInit } | null;
+          if (!payload?.candidate) continue;
+          if (typeof payload.offerToken === 'string' && payload.offerToken !== viewerConnection.offerToken) {
+            continue;
+          }
+          if (!viewerConnection.hasRemoteAnswer) {
+            viewerConnection.pendingIceCandidates.push(payload.candidate);
+            continue;
+          }
+          try {
+            await viewerConnection.peer.addIceCandidate(new RTCIceCandidate(payload.candidate));
+          } catch {
+            // Ignore stale candidates from a previous peer connection
+          }
+        }
+      }
+    } catch {
+      console.warn('[GarageSaleLivePanel] Network error while polling seller signals', {
+        liveSessionId: liveSessionIdRef.current,
+      });
+    }
+  }, [closeAllViewerConnections, closeViewerConnection, createAndSendOffer, logLiveDebug, saleId, stopSignalPolling]);
+
+  const startSignalPolling = useCallback(() => {
+    stopSignalPolling();
+    void pollSignals();
+    signalPollRef.current = setInterval(() => {
+      void pollSignals();
+    }, 2000);
+  }, [pollSignals, stopSignalPolling]);
 
   // Sync liveRef so connection-state handlers have an up-to-date value without
   // capturing stale closure state.  This prevents zombie re-offer attempts after
@@ -650,6 +438,19 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   useEffect(() => {
     liveRef.current = isLive;
   }, [isLive]);
+
+  useEffect(() => {
+    if (!isLive || !liveSessionId) {
+      stopSignalPolling();
+      signalCursorRef.current = null;
+      return;
+    }
+
+    startSignalPolling();
+    return () => {
+      stopSignalPolling();
+    };
+  }, [isLive, liveSessionId, startSignalPolling, stopSignalPolling]);
 
   useEffect(() => {
     micOnRef.current = micOn;
@@ -781,16 +582,6 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       }
       setCamOn(true);
       setCurrentCamera(nextFacingMode === 'user' ? 'front' : 'back');
-      logLiveDebug('local-stream-created', {
-        roomId: liveRoomIdRef.current,
-        tracks: stream.getTracks().map((track) => ({
-          id: track.id,
-          kind: track.kind,
-          enabled: track.enabled,
-          readyState: track.readyState,
-          muted: 'muted' in track ? track.muted : undefined,
-        })),
-      });
       const previewStarted = await ensurePreviewPlayback();
       if (!previewStarted) {
         logMobileCameraIssue('stream initialization failure', { reason: 'preview playback blocked' });
@@ -904,19 +695,21 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         videoRef.current.srcObject = newStream;
       }
 
-      // If live, replace the video track in the peer connection without renegotiating.
-      if (isLive && peerRef.current) {
-        const videoSender = peerRef.current.getSenders().find((s) => s.track?.kind === 'video');
-        if (videoSender) {
+      // If live, replace the video track for every active viewer connection.
+      if (isLive) {
+        await Promise.all(Array.from(viewerPeersRef.current.entries()).map(async ([viewerId, connection]) => {
+          const videoSender = connection.peer.getSenders().find((s) => s.track?.kind === 'video');
+          if (!videoSender) return;
           try {
             await videoSender.replaceTrack(newVideoTrack);
           } catch (replaceErr) {
             logMobileCameraIssue('camera constraint fallback', {
               reason: 'replaceTrack failed during live switch',
+              viewerId,
               error: replaceErr instanceof Error ? replaceErr.message : 'unknown',
             });
           }
-        }
+        }));
       }
 
       setCurrentCamera(nextCamera);
@@ -980,6 +773,21 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         }
       }
 
+      const videoTracks = streamRef.current?.getVideoTracks().filter((track) => track.readyState === 'live') ?? [];
+      const audioTracks = streamRef.current?.getAudioTracks().filter((track) => track.readyState === 'live' && track.enabled) ?? [];
+      logLiveDebug('local-tracks-ready', {
+        liveSessionId: liveSessionIdRef.current,
+        videoTracks: videoTracks.length,
+        audioTracks: audioTracks.length,
+      });
+
+      if (videoTracks.length === 0) {
+        throw new Error('Seller video track is not ready yet.');
+      }
+      if (micOnRef.current && !micPermissionDeniedRef.current && audioTracks.length === 0) {
+        throw new Error('Seller audio track is not ready yet.');
+      }
+
       const res = await fetch(`/api/garage-sales/${saleId}/live`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -989,25 +797,39 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         const data = await res.json().catch(() => ({}));
         throw new Error((data as { error?: string }).error ?? 'Failed to start live');
       }
-      const liveData = await res.json() as { liveStartedAt?: string | null };
+      const data = await res.json() as { liveSessionId?: string | null; liveStartedAt?: string | null };
+      const nextSessionId = data.liveSessionId
+        ?? buildGarageSaleLiveSessionId(saleId, data.liveStartedAt ?? null);
+      if (!nextSessionId) {
+        throw new Error('Live session could not be initialized.');
+      }
+
+      setLiveSessionId(nextSessionId);
+      liveSessionIdRef.current = nextSessionId;
+      signalCursorRef.current = null;
+      setSignalingJoined(false);
+      setPublishConfirmed(false);
+      await postSignal('BROADCASTER_READY', {}, { critical: true });
+      setSignalingJoined(true);
+      setPublishConfirmed(true);
       setIsLive(true);
-      setStreamReadyCount(0);
-      setSubscriberPathReady(false);
-      liveSessionIdRef.current = getLiveSessionId(saleId, liveData.liveStartedAt ? new Date(liveData.liveStartedAt) : null);
-      logSellerRoomDetails(liveRoomIdRef.current, liveSessionIdRef.current, 'start-live');
-      logLiveDebug('seller-publish-start', {
-        roomId: liveRoomIdRef.current,
-        liveSessionId: liveSessionIdRef.current,
-        hasStream: Boolean(streamRef.current),
-        videoTracks: streamRef.current?.getVideoTracks().length ?? 0,
-        audioTracks: streamRef.current?.getAudioTracks().length ?? 0,
+      logLiveDebug('broadcaster-room-joined', {
+        liveSessionId: nextSessionId,
+        signalingJoined: true,
       });
-      // Keep liveRef in sync immediately so the pollSignals closure running
-      // inside the setInterval (started by createAndSendOffer below) sees the
-      // correct live state before the React re-render has a chance to flush.
-      liveRef.current = true;
-      await createAndSendOffer();
     } catch (err) {
+      if (liveSessionIdRef.current && !liveRef.current) {
+        void fetch(`/api/garage-sales/${saleId}/live`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'end' }),
+          keepalive: true,
+        }).catch(() => undefined);
+        setLiveSessionId(null);
+        liveSessionIdRef.current = null;
+        setSignalingJoined(false);
+        setPublishConfirmed(false);
+      }
       setError(err instanceof Error ? err.message : 'Failed to start live session');
     } finally {
       setLoading(false);
@@ -1028,14 +850,13 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         throw new Error((data as { error?: string }).error ?? 'Failed to end live');
       }
       setIsLive(false);
-      setPublishConnected(false);
-      setSubscriberPathReady(false);
-      setStreamReadyCount(0);
-      resetReconnectState();
+      setLiveSessionId(null);
+      liveSessionIdRef.current = null;
+      setSignalingJoined(false);
+      setPublishConfirmed(false);
       setViewerCount(0);
-      setLiveConnectionWarning(null);
       stopSignalPolling();
-      closePeerConnection();
+      closeAllViewerConnections();
       stopCamera();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to end live session');
@@ -1043,47 +864,6 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       setLoading(false);
     }
   };
-
-  const restartLiveConnection = useCallback(async () => {
-    if (!liveRef.current) return;
-    setIsRestartingLive(true);
-    setLiveConnectionWarning(null);
-    setError(null);
-    try {
-      // Close old peer connection and stop signal polling
-      stopSignalPolling();
-      closePeerConnection();
-
-      // Reacquire camera/mic if the video tracks have ended
-      const stream = streamRef.current;
-      const videoTracks = stream?.getVideoTracks() ?? [];
-      if (!stream || videoTracks.length === 0 || videoTracks[0].readyState !== 'live') {
-        const cameraStarted = await startCamera();
-        if (!cameraStarted) {
-          throw new Error('Failed to reacquire camera. Please allow camera access and try again.');
-        }
-      }
-
-      // Reset liveStartedAt on the server and clear old signals so that stale
-      // ANSWER/ICE signals from the previous session are not applied to the new peer.
-      const res = await fetch(`/api/garage-sales/${saleId}/live`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'restart' }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error((data as { error?: string }).error ?? 'Failed to restart live connection');
-      }
-
-      // Send a fresh WebRTC offer to viewers
-      await createAndSendOffer();
-    } catch (err) {
-      setLiveConnectionWarning(err instanceof Error ? err.message : 'Failed to restart live connection');
-    } finally {
-      setIsRestartingLive(false);
-    }
-  }, [closePeerConnection, createAndSendOffer, saleId, startCamera, stopSignalPolling]);
 
   const endLiveOnPageLeave = useCallback(() => {
     if (!liveRef.current) return;
@@ -1108,50 +888,12 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   // Clean up stream and connection on unmount
   useEffect(() => {
     return () => {
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-        reconnectTimeoutRef.current = null;
-      }
-      clearReconnectRetryTimeout();
       endLiveOnPageLeave();
       stopSignalPolling();
-      stopChatPolling();
-      stopReactionPolling();
-      closePeerConnection();
+      closeAllViewerConnections();
       streamRef.current?.getTracks().forEach((t) => t.stop());
     };
-  }, [clearReconnectRetryTimeout, closePeerConnection, endLiveOnPageLeave, stopChatPolling, stopReactionPolling, stopSignalPolling]);
-
-  // Start/stop chat + reaction polling when live state changes
-  useEffect(() => {
-    if (isLive) {
-      startSignalPolling();
-      console.info('[GarageSaleLivePanel] seller subscription connected', {
-        roomId: liveRoomIdRef.current,
-        liveSessionId: liveSessionIdRef.current,
-        subscriptions: [LIVE_ENGAGEMENT_EVENTS.MESSAGE_SENT, LIVE_ENGAGEMENT_EVENTS.LIKES_UPDATE],
-      });
-      chatLastSeenRef.current = null;
-      void fetchSellerChat();
-      chatPollRef.current = setInterval(fetchSellerChat, 5000);
-      void fetchReactionCount();
-      reactionPollRef.current = setInterval(fetchReactionCount, 10000);
-    } else {
-      stopSignalPolling();
-      stopChatPolling();
-      stopReactionPolling();
-    }
-    return () => {
-      stopSignalPolling();
-      stopChatPolling();
-      stopReactionPolling();
-    };
-  }, [isLive, fetchSellerChat, fetchReactionCount, startSignalPolling, stopChatPolling, stopReactionPolling, stopSignalPolling]);
-
-  // Auto-scroll chat to newest message
-  useEffect(() => {
-    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [chatMessages]);
+  }, [closeAllViewerConnections, endLiveOnPageLeave, stopSignalPolling]);
 
   useEffect(() => {
     const hasTouchUi = window.matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
@@ -1232,35 +974,16 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   const videoPreviewClassName = camOn
     ? `h-full w-full rounded-2xl object-cover transition-opacity duration-500 ${previewReady ? 'opacity-100' : 'opacity-0'}`
     : 'hidden';
-  const sellerLiveReady = isLive && publishConnected && (subscriberPathReady || streamReadyCount > 0);
-  const recentMessages = chatMessages.slice(-3).reverse();
-
-  const syncVideoElement = useCallback((element: HTMLVideoElement | null) => {
-    if (!element || !streamRef.current) return;
-    if (element.srcObject !== streamRef.current) {
-      element.srcObject = streamRef.current;
-    }
-    void element.play().catch(() => undefined);
-  }, []);
-
-  useEffect(() => {
-    syncVideoElement(videoRef.current);
-  }, [camOn, previewReady, showExpandedPreview, syncVideoElement]);
-
-  useEffect(() => {
-    if (!showExpandedPreview) return;
-    syncVideoElement(expandedVideoRef.current);
-  }, [showExpandedPreview, syncVideoElement]);
-
-  const handleFullscreenExpandedPreview = useCallback(async () => {
-    const element = expandedPreviewRef.current;
-    if (!element || typeof element.requestFullscreen !== 'function') return;
-    try {
-      await element.requestFullscreen();
-    } catch {
-      console.warn('[GarageSaleLivePanel] Fullscreen preview request failed');
-    }
-  }, []);
+  const activeVideoTrackCount = streamRef.current?.getVideoTracks().filter((track) => track.readyState === 'live').length ?? 0;
+  const activeAudioTrackCount = streamRef.current?.getAudioTracks().filter((track) => track.readyState === 'live' && track.enabled).length ?? 0;
+  const sellerLiveNow = isSellerLiveReady({
+    cameraPermissionGranted: cameraStatus === 'ready' || previewReady,
+    hasVideoTrack: activeVideoTrackCount > 0,
+    hasAudioTrack: !micOnRef.current || micPermissionDeniedRef.current || activeAudioTrackCount > 0,
+    joinedSignalingRoom: signalingJoined,
+    publishConfirmed,
+    serverActive: isLive && Boolean(liveSessionId),
+  });
 
   return (
     <div className="card space-y-4 p-4 sm:space-y-5 sm:p-5 transition-all duration-300">
@@ -1269,16 +992,6 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
           <Radio size={13} /> Live Preview
         </h2>
         <div className="flex flex-wrap items-center gap-2">
-          {camOn && (
-            <button
-              type="button"
-              onClick={() => setShowExpandedPreview(true)}
-              className="btn-outline flex items-center gap-1.5 px-3 text-xs"
-            >
-              <Maximize2 size={13} />
-              <span>Enlarge Video</span>
-            </button>
-          )}
           <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
             cameraStatus === 'ready'
               ? 'bg-emerald-50 text-emerald-700'
@@ -1295,13 +1008,13 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
             }`} />
             {cameraStatusLabel}
           </span>
-          {isLive && (
+          {sellerLiveNow && (
             <>
-              <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold text-white ${sellerLiveReady ? 'animate-pulse bg-red-500' : 'bg-amber-500'}`}>
-                {sellerLiveReady ? '🔴 LIVE NOW' : '🟠 Starting live…'}
+              <span className="inline-flex items-center gap-1 rounded-full bg-red-500 px-3 py-1 text-xs font-bold text-white animate-pulse">
+                🔴 LIVE NOW
               </span>
               <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                <Eye size={12} /> {viewerCount} watching • {streamReadyCount} ready
+                <Eye size={12} /> {viewerCount} watching
               </span>
             </>
           )}
@@ -1322,7 +1035,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
             <p className="text-sm font-medium">{CAMERA_PREVIEW_PLACEHOLDER}</p>
           </div>
         )}
-        {sellerLiveReady && (
+        {sellerLiveNow && (
           <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-red-500 px-2.5 py-1 text-[11px] font-bold text-white animate-pulse shadow-lg" aria-live="polite">
             <span aria-hidden="true" className="inline-flex items-center gap-1.5">
               <span>🔴</span> LIVE <Eye size={11} /> {viewerCount}
@@ -1359,6 +1072,16 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
           TURN relay is not configured. Some mobile viewers may fail to connect.
         </p>
+      )}
+      {liveDebugEnabled && (
+        <div className="grid grid-cols-2 gap-2 rounded-lg bg-slate-50 p-3 text-[11px] text-slate-600 sm:grid-cols-3">
+          <div><span className="font-semibold text-slate-800">session</span><br />{liveSessionId ?? 'pending'}</div>
+          <div><span className="font-semibold text-slate-800">signaling</span><br />{signalingJoined ? 'joined' : 'idle'}</div>
+          <div><span className="font-semibold text-slate-800">published</span><br />{publishConfirmed ? 'yes' : 'no'}</div>
+          <div><span className="font-semibold text-slate-800">video tracks</span><br />{activeVideoTrackCount}</div>
+          <div><span className="font-semibold text-slate-800">audio tracks</span><br />{activeAudioTrackCount}</div>
+          <div><span className="font-semibold text-slate-800">viewers</span><br />{viewerCount}</div>
+        </div>
       )}
       {(cameraStatus === 'denied' || cameraStatus === 'blocked') && !camOn && (
         <button
@@ -1427,170 +1150,20 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
           <Radio size={14} /> {loading ? 'Starting…' : 'Start Live'}
         </button>
       ) : (
-        <div className="flex flex-col gap-2">
-          <button
-            type="button"
-            onClick={() => void restartLiveConnection()}
-            disabled={loading || isRestartingLive}
-            className="w-full flex items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-amber-600 disabled:opacity-50"
-          >
-            <RefreshCcw size={14} /> {isRestartingLive ? 'Restarting…' : 'Restart Live Connection'}
-          </button>
-          <button
-            type="button"
-            onClick={handleEndLive}
-            disabled={loading || isRestartingLive}
-            className="w-full flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-50"
-          >
-            <span className="inline-flex h-2 w-2 animate-pulse rounded-full bg-white" />
-            <VideoOff size={14} /> {loading ? 'Ending…' : 'End Live'}
-          </button>
-        </div>
-      )}
-
-      {liveConnectionWarning && (
-        <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
-          {liveConnectionWarning}
-        </p>
+        <button
+          type="button"
+          onClick={handleEndLive}
+          disabled={loading}
+          className="w-full flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+        >
+          <span className="inline-flex h-2 w-2 animate-pulse rounded-full bg-white" />
+          <VideoOff size={14} /> {loading ? 'Ending…' : 'End Live'}
+        </button>
       )}
 
       <p className="text-center text-[11px] text-slate-400">
         Temporary live stream only • recordings are not stored • your stream ends automatically if you leave this page.
       </p>
-
-      {/* Live engagement panel — chat + likes (shown only when live) */}
-      {isLive && (
-        <div className="space-y-4 border-t border-slate-100 pt-4">
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-2xl border border-red-100 bg-red-50 p-3">
-              <p className="text-[11px] font-bold uppercase tracking-wide text-red-600">❤️ Total likes</p>
-              <p className="mt-1 flex items-center gap-1 text-lg font-semibold text-red-700">
-                <Heart size={16} className="fill-red-500 text-red-500" />
-                {totalLikes}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Viewer count</p>
-              <p className="mt-1 flex items-center gap-1 text-lg font-semibold text-slate-800">
-                <Eye size={16} />
-                {viewerCount}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-3">
-              <p className="text-[11px] font-bold uppercase tracking-wide text-indigo-600">Recent messages</p>
-              <div className="mt-1 space-y-1">
-                {recentMessages.length === 0 ? (
-                  <p className="text-xs text-indigo-500">Waiting for first question…</p>
-                ) : (
-                  recentMessages.map((message) => (
-                    <p key={message.id} className="truncate text-xs text-indigo-700">
-                      <span className="font-semibold">{message.guestName ?? 'Buyer'}:</span> {message.message}
-                    </p>
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Live Questions / Chat */}
-          <div className="space-y-2">
-            <h3 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-500">
-              <MessageCircle size={13} /> Live Questions / Chat
-            </h3>
-            <div
-              role="log"
-              aria-live="polite"
-              aria-label="Live chat messages"
-              className="h-52 overflow-y-auto space-y-2 rounded-xl bg-slate-50 p-3 text-sm"
-            >
-              {chatMessages.length === 0 ? (
-                <p className="mt-8 text-center text-xs text-slate-400">No questions yet.</p>
-              ) : (
-                chatMessages.map((m) => (
-                  <div key={m.id} className="group flex items-start gap-2">
-                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-[10px] font-bold text-indigo-700">
-                      {(m.guestName ?? 'U').charAt(0).toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-baseline gap-1.5">
-                        <span className="text-[11px] font-semibold text-slate-700 truncate">
-                          {m.guestName ?? 'Buyer'}
-                        </span>
-                        <span className="text-[10px] text-slate-400 shrink-0">
-                          {new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                      </div>
-                      <p className="text-slate-600 text-xs break-words">{m.message}</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => void handleHideMessage(m.id)}
-                      title="Hide message"
-                      className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded text-slate-400 hover:text-red-500 hover:bg-red-50"
-                      aria-label="Hide message"
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
-                ))
-              )}
-              <div ref={chatBottomRef} />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showExpandedPreview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4">
-          <div
-            ref={expandedPreviewRef}
-            className="relative flex h-full max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl bg-slate-950 shadow-2xl"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Expanded live preview"
-          >
-            <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3 text-white">
-              <div>
-                <p className="text-sm font-semibold">Seller live preview</p>
-                <p className="text-xs text-slate-300">Review your camera in a larger view before or during the live sale.</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => void handleFullscreenExpandedPreview()}
-                  className="rounded-full border border-white/15 px-3 py-2 text-xs font-semibold text-white transition hover:bg-white/10"
-                >
-                  Fullscreen
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowExpandedPreview(false)}
-                  className="rounded-full border border-white/15 p-2 text-white transition hover:bg-white/10"
-                  aria-label="Close enlarged live preview"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-            </div>
-            <div className="flex min-h-0 flex-1 items-center justify-center bg-slate-950 p-3 sm:p-6">
-              <video
-                ref={expandedVideoRef}
-                autoPlay
-                playsInline
-                muted
-                aria-label="Enlarged seller camera preview"
-                className={camOn ? 'h-full w-full rounded-2xl object-contain' : 'hidden'}
-              />
-              {!camOn && (
-                <div className="flex flex-col items-center gap-3 text-center text-slate-300">
-                  <VideoOff size={40} />
-                  <p className="text-sm font-medium">Start camera preview to enlarge the live view.</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {showWarning && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
