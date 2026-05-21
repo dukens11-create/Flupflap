@@ -41,10 +41,10 @@ function readStringOrNull(value: unknown) {
  */
 export function getCanonicalLiveSaleId(input?: CanonicalLiveSaleIdInput | null) {
   if (!input) return null;
-  const candidates = [input.saleId, input.liveSaleId, input.liveId, input.streamId];
-  const normalizedCandidates = candidates.filter((candidate): candidate is string => typeof candidate === 'string' && candidate.trim().length > 0);
+  const normalizedCandidates = [input.saleId, input.liveSaleId, input.liveId, input.streamId]
+    .filter((candidate): candidate is string => typeof candidate === 'string' && candidate.trim().length > 0);
   const [firstCandidate, ...restCandidates] = normalizedCandidates;
-  if (firstCandidate && restCandidates.some((candidate) => candidate !== firstCandidate)) {
+  if (firstCandidate && new Set(normalizedCandidates).size > 1) {
     console.warn('[live-engagement] conflicting sale identifiers detected', {
       saleId: input.saleId ?? null,
       liveSaleId: input.liveSaleId ?? null,
@@ -52,12 +52,8 @@ export function getCanonicalLiveSaleId(input?: CanonicalLiveSaleIdInput | null) 
       streamId: input.streamId ?? null,
     });
   }
-  for (const candidate of candidates) {
-    if (typeof candidate === 'string' && candidate.trim()) {
-      return candidate;
-    }
-  }
-  return null;
+  if (firstCandidate) return firstCandidate;
+  return restCandidates[0] ?? null;
 }
 
 export function resolveLiveEngagementContext(
