@@ -12,6 +12,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  buildLiveEngagementIdentifiers,
   getLiveEngagementActorId,
   isSameLiveSession,
   normalizeGuestId,
@@ -183,6 +184,17 @@ test('session ID consistency: live engagement context resolves shared room and s
   assert.equal(context.liveSessionId, 'cuid-garage-sale-001:2026-05-21T04:05:47.162Z');
   assert.equal(context.roomMatches, true);
   assert.equal(context.liveSessionMatches, true);
+});
+
+test('session ID consistency: likes and chat payloads use the same canonical sale identifiers', () => {
+  const saleId = 'cuid-garage-sale-001';
+  const identifiers = buildLiveEngagementIdentifiers(saleId);
+
+  assert.deepEqual(identifiers, {
+    liveSaleId: saleId,
+    liveId: saleId,
+    streamId: saleId,
+  });
 });
 
 // ── Optimistic like update ────────────────────────────────────────────────────

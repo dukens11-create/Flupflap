@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { isGarageSalePubliclyVisible } from '@/lib/garage-sale-visibility';
 import {
+  buildLiveEngagementIdentifiers,
   LIVE_ENGAGEMENT_EVENTS,
   LIVE_ENGAGEMENT_SIGNAL_KINDS,
   getLiveEngagementActorId,
@@ -94,6 +95,7 @@ export async function POST(req: Request, { params }: Params) {
   const resolvedGuestId = !userId ? normalizeGuestId(guestId) : null;
   const actorId = getLiveEngagementActorId(userId, resolvedGuestId);
   const liveContext = resolveLiveEngagementContext(id, sale.liveStartedAt ?? null, { liveSessionId, roomId });
+  const identifiers = buildLiveEngagementIdentifiers(id);
 
   console.info('[garage-sale-reactions] like event received', {
     saleId: id,
@@ -145,7 +147,7 @@ export async function POST(req: Request, { params }: Params) {
           kind: LIVE_ENGAGEMENT_SIGNAL_KINDS.LIKES_UPDATE,
           payload: {
             event: LIVE_ENGAGEMENT_EVENTS.LIKES_UPDATE,
-            liveId: id,
+            ...identifiers,
             roomId: liveContext.roomId,
             liveSessionId: liveContext.liveSessionId,
             actorId,
@@ -182,7 +184,7 @@ export async function POST(req: Request, { params }: Params) {
       totalLikes,
       deduplicated: Boolean(existingReaction),
       signalEmitted,
-      liveId: id,
+      ...identifiers,
       roomId: liveContext.roomId,
       liveSessionId: liveContext.liveSessionId,
       event: LIVE_ENGAGEMENT_EVENTS.LIKES_UPDATE,

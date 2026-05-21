@@ -1225,6 +1225,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
   }, [isLive, stopGuestPeer]);
 
   const handleSend = async () => {
+    if (sending) return;
     const trimmed = input.trim();
     if (!trimmed) return;
     if (!isAuthenticatedBuyer) {
