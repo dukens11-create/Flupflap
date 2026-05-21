@@ -32,6 +32,7 @@ interface Props {
   initialIsLive: boolean;
   initialLiveSessionId?: string | null;
   buyerName?: string | null;
+  buyerId?: string | null;
 }
 
 export default function GarageSaleBuyerLiveView({
