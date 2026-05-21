@@ -49,11 +49,21 @@ export default async function SellerRefundsPage() {
     createdAt: request.createdAt.toISOString(),
   }));
 
-  const refundHistory = await prisma.sellerRefundHistory.findMany({
-    where: { sellerId },
-    orderBy: { createdAt: 'desc' },
-    take: 100,
-  });
+  let refundHistory: Awaited<ReturnType<typeof prisma.sellerRefundHistory.findMany>> = [];
+  let refundHistoryUnavailable = false;
+  try {
+    refundHistory = await prisma.sellerRefundHistory.findMany({
+      where: { sellerId },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+  } catch (error) {
+    refundHistoryUnavailable = true;
+    console.error('[seller/refunds] Failed to load seller refund history', {
+      sellerId,
+      error,
+    });
+  }
 
   return (
     <main className="mx-auto max-w-4xl space-y-6">
@@ -67,7 +77,11 @@ export default async function SellerRefundsPage() {
 
       <section className="space-y-3">
         <h2 className="text-xl font-semibold">Refund history</h2>
-        {refundHistory.length === 0 ? (
+        {refundHistoryUnavailable ? (
+          <div className="card p-6 text-sm text-amber-700">
+            Refund history is temporarily unavailable. Please try again shortly.
+          </div>
+        ) : refundHistory.length === 0 ? (
           <div className="card p-6 text-sm text-slate-500">No refund history yet.</div>
         ) : (
           <div className="space-y-3">
