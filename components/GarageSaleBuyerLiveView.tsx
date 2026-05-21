@@ -58,9 +58,13 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
   const lastSeenRef = useRef<string | null>(null);
   const chatBottomRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  // Stable anonymous guest ID for like/reaction tracking across multiple taps
+  // Stable anonymous guest ID for like/reaction tracking across multiple taps.
+  // Uses crypto.randomUUID when available; falls back to combining timestamp and
+  // two random segments to reduce collision probability.
   const guestIdRef = useRef<string>(
-    typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2),
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`,
   );
 
   const videoRef = useRef<HTMLVideoElement>(null);

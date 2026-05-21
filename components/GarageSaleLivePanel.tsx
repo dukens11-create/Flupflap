@@ -1088,7 +1088,12 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
             <h3 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-500">
               <MessageCircle size={13} /> Live Questions / Chat
             </h3>
-            <div className="h-52 overflow-y-auto space-y-2 rounded-xl bg-slate-50 p-3 text-sm">
+            <div
+              role="log"
+              aria-live="polite"
+              aria-label="Live chat messages"
+              className="h-52 overflow-y-auto space-y-2 rounded-xl bg-slate-50 p-3 text-sm"
+            >
               {chatMessages.length === 0 ? (
                 <p className="mt-8 text-center text-xs text-slate-400">No questions yet.</p>
               ) : (

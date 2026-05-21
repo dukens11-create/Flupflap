@@ -74,9 +74,15 @@ export async function POST(req: Request, { params }: Params) {
   const { type, guestId } = body as { type?: string; guestId?: string };
   const reactionType = type === 'heart' ? 'heart' : 'like';
 
+  // Only accept guestId values that contain safe characters (alphanumeric, dash, underscore, dot).
+  // This prevents injection of arbitrary strings into the database.
+  const GUEST_ID_PATTERN = /^[a-zA-Z0-9_\-\.]+$/;
   const userId = session?.user?.id ?? null;
   const trimmedGuestId = typeof guestId === 'string' ? guestId.trim() : '';
-  const resolvedGuestId = !userId && trimmedGuestId ? trimmedGuestId.slice(0, 64) : null;
+  const resolvedGuestId =
+    !userId && trimmedGuestId && GUEST_ID_PATTERN.test(trimmedGuestId)
+      ? trimmedGuestId.slice(0, 64)
+      : null;
 
   const reaction = await prisma.garageSaleReaction.create({
     data: {
