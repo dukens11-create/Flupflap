@@ -1,11 +1,19 @@
 'use client';
 import { useRef, useState, useCallback, useEffect } from 'react';
-import { Video, VideoOff, Mic, MicOff, Radio, AlertTriangle, Eye, RefreshCcw } from 'lucide-react';
+import { Video, VideoOff, Mic, MicOff, Radio, AlertTriangle, Eye, RefreshCcw, MessageCircle, Heart, Trash2 } from 'lucide-react';
 import { RTC_CONFIG, HAS_TURN_CONFIG } from '@/lib/rtc-config';
 
 interface Props {
   saleId: string;
   initialIsLive: boolean;
+}
+
+interface SellerChatMessage {
+  id: string;
+  userId: string | null;
+  guestName: string | null;
+  message: string;
+  createdAt: string;
 }
 
 const PREVIEW_REQUIRED_MESSAGE = 'Preview your camera before starting your live garage sale.';
@@ -71,6 +79,12 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   const [viewerCount, setViewerCount] = useState(0);
   const [canSwitchCamera, setCanSwitchCamera] = useState(false);
   const [currentCamera, setCurrentCamera] = useState<'front' | 'back'>('front');
+  const [chatMessages, setChatMessages] = useState<SellerChatMessage[]>([]);
+  const [totalLikes, setTotalLikes] = useState(0);
+  const chatLastSeenRef = useRef<string | null>(null);
+  const chatPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const reactionPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const chatBottomRef = useRef<HTMLDivElement>(null);
   const liveDebugEnabled = process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_DEBUG_LIVE_STREAM === '1';
 
   const logLiveDebug = useCallback((event: string, details?: Record<string, unknown>) => {
@@ -96,6 +110,62 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       signalPollRef.current = null;
     }
   }, []);
+
+  const stopChatPolling = useCallback(() => {
+    if (chatPollRef.current) {
+      clearInterval(chatPollRef.current);
+      chatPollRef.current = null;
+    }
+  }, []);
+
+  const stopReactionPolling = useCallback(() => {
+    if (reactionPollRef.current) {
+      clearInterval(reactionPollRef.current);
+      reactionPollRef.current = null;
+    }
+  }, []);
+
+  const fetchSellerChat = useCallback(async () => {
+    try {
+      const p = new URLSearchParams({ role: 'SELLER' });
+      if (chatLastSeenRef.current) p.set('since', chatLastSeenRef.current);
+      const res = await fetch(`/api/garage-sales/${saleId}/chat?${p.toString()}`);
+      if (!res.ok) return;
+      const data = await res.json() as { messages: SellerChatMessage[]; isLive: boolean };
+      if (data.messages.length > 0) {
+        setChatMessages((prev) => {
+          const existingIds = new Set(prev.map((m) => m.id));
+          const newMsgs = data.messages.filter((m) => !existingIds.has(m.id));
+          return newMsgs.length > 0 ? [...prev, ...newMsgs] : prev;
+        });
+        chatLastSeenRef.current = data.messages[data.messages.length - 1].createdAt;
+      }
+    } catch {
+      // Silent fail — polling will retry
+    }
+  }, [saleId]);
+
+  const fetchReactionCount = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/garage-sales/${saleId}/reactions`);
+      if (!res.ok) return;
+      const data = await res.json() as { totalLikes: number };
+      setTotalLikes(data.totalLikes);
+    } catch {
+      // Silent fail — polling will retry
+    }
+  }, [saleId]);
+
+  const handleHideMessage = useCallback(async (msgId: string) => {
+    try {
+      const res = await fetch(`/api/garage-sales/${saleId}/chat/${msgId}`, { method: 'DELETE' });
+      if (res.ok) {
+        setChatMessages((prev) => prev.filter((m) => m.id !== msgId));
+      }
+    } catch {
+      // Silent fail
+    }
+  }, [saleId]);
 
   const closePeerConnection = useCallback(() => {
     if (reconnectTimeoutRef.current) {
@@ -722,10 +792,35 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       }
       endLiveOnPageLeave();
       stopSignalPolling();
+      stopChatPolling();
+      stopReactionPolling();
       closePeerConnection();
       streamRef.current?.getTracks().forEach((t) => t.stop());
     };
-  }, [closePeerConnection, endLiveOnPageLeave, stopSignalPolling]);
+  }, [closePeerConnection, endLiveOnPageLeave, stopChatPolling, stopReactionPolling, stopSignalPolling]);
+
+  // Start/stop chat + reaction polling when live state changes
+  useEffect(() => {
+    if (isLive) {
+      chatLastSeenRef.current = null;
+      void fetchSellerChat();
+      chatPollRef.current = setInterval(() => { void fetchSellerChat(); }, 5000);
+      void fetchReactionCount();
+      reactionPollRef.current = setInterval(() => { void fetchReactionCount(); }, 10000);
+    } else {
+      stopChatPolling();
+      stopReactionPolling();
+    }
+    return () => {
+      stopChatPolling();
+      stopReactionPolling();
+    };
+  }, [isLive, fetchSellerChat, fetchReactionCount, stopChatPolling, stopReactionPolling]);
+
+  // Auto-scroll chat to newest message
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages]);
 
   useEffect(() => {
     const hasTouchUi = window.matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
@@ -976,6 +1071,60 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       <p className="text-center text-[11px] text-slate-400">
         Temporary live stream only • recordings are not stored • your stream ends automatically if you leave this page.
       </p>
+
+      {/* Live engagement panel — chat + likes (shown only when live) */}
+      {isLive && (
+        <div className="space-y-4 border-t border-slate-100 pt-4">
+          {/* Like counter */}
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-3 py-1 text-sm font-semibold text-red-600">
+              <Heart size={14} className="fill-red-500 text-red-500" />
+              {totalLikes} {totalLikes === 1 ? 'like' : 'likes'}
+            </span>
+          </div>
+
+          {/* Live Questions / Chat */}
+          <div className="space-y-2">
+            <h3 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-500">
+              <MessageCircle size={13} /> Live Questions / Chat
+            </h3>
+            <div className="h-52 overflow-y-auto space-y-2 rounded-xl bg-slate-50 p-3 text-sm">
+              {chatMessages.length === 0 ? (
+                <p className="mt-8 text-center text-xs text-slate-400">No questions yet.</p>
+              ) : (
+                chatMessages.map((m) => (
+                  <div key={m.id} className="group flex items-start gap-2">
+                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-[10px] font-bold text-indigo-700">
+                      {(m.guestName ?? 'U').charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-[11px] font-semibold text-slate-700 truncate">
+                          {m.guestName ?? 'Buyer'}
+                        </span>
+                        <span className="text-[10px] text-slate-400 shrink-0">
+                          {new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      <p className="text-slate-600 text-xs break-words">{m.message}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void handleHideMessage(m.id)}
+                      title="Hide message"
+                      className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded text-slate-400 hover:text-red-500 hover:bg-red-50"
+                      aria-label="Hide message"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                ))
+              )}
+              <div ref={chatBottomRef} />
+            </div>
+          </div>
+        </div>
+      )}
 
       {showWarning && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
