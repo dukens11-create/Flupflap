@@ -17,7 +17,7 @@ import {
   type ViewerConnectionStatus,
 } from '@/lib/live-stream-viewer-state';
 
-const DEFAULT_BUYER_DISPLAY_NAME = 'Anonymous Buyer';
+const FALLBACK_BUYER_DISPLAY_NAME = 'Anonymous Buyer';
 const MEDIA_READY_TIMEOUT_MS = 1200;
 const PLAYBACK_RETRY_DELAY_MS = 250;
 const PLAYBACK_RECOVERY_THROTTLE_MS = 1200;
@@ -1070,7 +1070,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           guestId: guestIdRef.current,
-          guestName: buyerName || DEFAULT_BUYER_DISPLAY_NAME,
+          guestName: buyerName || FALLBACK_BUYER_DISPLAY_NAME,
         }),
       });
       const data = await res.json() as { request?: { id: string; status: string }; error?: string; roomFull?: boolean };
@@ -1239,7 +1239,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
       const requestPayload = {
         liveId: saleId,
         message: trimmed,
-        displayName: buyerName || DEFAULT_BUYER_DISPLAY_NAME,
+        displayName: buyerName || FALLBACK_BUYER_DISPLAY_NAME,
         userId: buyerId,
         roomId: liveContext.roomId,
         liveSessionId: liveContext.liveSessionId,

@@ -13,7 +13,7 @@ import { applyRateLimitAsync } from '@/lib/security';
 
 export const dynamic = 'force-dynamic';
 
-const DEFAULT_BUYER_DISPLAY_NAME = 'Anonymous Buyer';
+const FALLBACK_BUYER_DISPLAY_NAME = 'Anonymous Buyer';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -103,7 +103,7 @@ export async function POST(req: Request, { params }: Params) {
   const sessionDisplayName = typeof session?.user?.name === 'string' ? session.user.name.trim() : '';
   const resolvedDisplayName = sessionDisplayName
     ? sessionDisplayName.slice(0, 50)
-    : DEFAULT_BUYER_DISPLAY_NAME;
+    : FALLBACK_BUYER_DISPLAY_NAME;
   const liveContext = resolveLiveEngagementContext(id, sale.liveStartedAt ?? null, { liveSessionId, roomId });
   const actorId = getLiveEngagementActorId(userId, null);
   const insertCreatedAt = new Date();
