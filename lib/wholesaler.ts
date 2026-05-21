@@ -239,7 +239,6 @@ function supplierListingPublicUpdate(payload: SupplierProductPayload, supplierAp
   const available = supplierApproved && payload.quantity > 0;
   return {
     inventory: payload.quantity,
-    status: available ? 'APPROVED' : 'HIDDEN',
     delistedAt: available ? null : new Date(),
     updatedAt: new Date(),
   } as Prisma.ProductUpdateInput;
@@ -337,6 +336,18 @@ async function upsertSupplierRows(input: {
       where: { sourceSupplierProductId: supplierProduct.id },
       data: supplierListingPublicUpdate(payload, input.supplier.status === 'APPROVED'),
     });
+    const shouldBeAvailable = input.supplier.status === 'APPROVED' && payload.quantity > 0;
+    if (shouldBeAvailable) {
+      await prisma.product.updateMany({
+        where: { sourceSupplierProductId: supplierProduct.id, status: 'HIDDEN' },
+        data: { status: 'APPROVED', delistedAt: null, updatedAt: new Date() },
+      });
+    } else {
+      await prisma.product.updateMany({
+        where: { sourceSupplierProductId: supplierProduct.id },
+        data: { status: 'HIDDEN', delistedAt: new Date(), updatedAt: new Date() },
+      });
+    }
 
     if (existing) updated += 1;
     else created += 1;

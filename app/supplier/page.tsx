@@ -21,11 +21,11 @@ export default async function SupplierDashboardPage() {
         <h1 className="text-2xl font-bold">Supplier Dashboard</h1>
         <p className="text-sm text-slate-600">No supplier profile is connected to this account yet. Start onboarding below.</p>
         <form action="/api/supplier/profile" method="post" className="card p-4 space-y-3 max-w-lg">
-          <label className="block text-sm">Display name
-            <input name="displayName" className="mt-1 w-full border rounded px-3 py-2" required />
+          <label htmlFor="supplier-display-name" className="block text-sm">Display name
+            <input id="supplier-display-name" name="displayName" className="mt-1 w-full border rounded px-3 py-2" required />
           </label>
-          <label className="block text-sm">Company name
-            <input name="companyName" className="mt-1 w-full border rounded px-3 py-2" />
+          <label htmlFor="supplier-company-name" className="block text-sm">Company name
+            <input id="supplier-company-name" name="companyName" className="mt-1 w-full border rounded px-3 py-2" />
           </label>
           <button type="submit" className="px-4 py-2 rounded bg-slate-900 text-white">Create supplier profile</button>
         </form>
