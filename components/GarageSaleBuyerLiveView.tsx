@@ -1261,6 +1261,8 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
       if (!res.ok) {
         console.error('[GarageSaleBuyerLiveView] chat api error', {
           status: res.status,
+          operation: 'buyer.chat.send',
+          timestamp: new Date().toISOString(),
           requestPayload,
           response: data,
         });
@@ -1284,6 +1286,8 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
     } catch (err) {
       console.error('[GarageSaleBuyerLiveView] message save error', {
         saleId,
+        operation: 'buyer.chat.send',
+        timestamp: new Date().toISOString(),
         liveSessionId: liveSessionIdRef.current,
         buyerId: buyerId ?? null,
         error: err instanceof Error ? err.message : 'unknown',
@@ -1326,6 +1330,8 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
       } else {
         console.warn('[GarageSaleBuyerLiveView] Like event send failed', {
           status: res.status,
+          operation: 'buyer.like.send',
+          timestamp: new Date().toISOString(),
           roomId: liveContext.roomId,
           liveSessionId: liveContext.liveSessionId,
         });
@@ -1334,6 +1340,8 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
     } catch {
       console.warn('[GarageSaleBuyerLiveView] Network error sending like event', {
         saleId,
+        operation: 'buyer.like.send',
+        timestamp: new Date().toISOString(),
         liveSessionId: liveSessionIdRef.current,
       });
       await fetchReactionCount();

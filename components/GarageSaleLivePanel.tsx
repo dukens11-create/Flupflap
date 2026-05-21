@@ -676,11 +676,25 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
         }
         if (signal.kind === LIVE_ENGAGEMENT_SIGNAL_KINDS.LIKES_UPDATE) {
           const payload = signal.payload as {
+            saleId?: string;
+            liveSaleId?: string;
+            liveId?: string;
+            streamId?: string;
             roomId?: string;
             liveSessionId?: string | null;
             totalLikes?: number;
             reactionId?: string;
           } | null;
+          const payloadSaleId = payload?.saleId ?? payload?.liveSaleId ?? payload?.liveId ?? payload?.streamId ?? null;
+          if (payloadSaleId && payloadSaleId !== saleId) {
+            console.warn('[GarageSaleLivePanel] Ignoring live_likes_update for different sale', {
+              operation: 'seller.subscription.likes',
+              expectedSaleId: saleId,
+              receivedSaleId: payloadSaleId,
+              timestamp: new Date().toISOString(),
+            });
+            continue;
+          }
           if (!liveSessionIdRef.current && payload?.liveSessionId) {
             liveSessionIdRef.current = payload.liveSessionId;
           }
@@ -693,8 +707,10 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
           }
           if (!sameSession) {
             console.warn('[GarageSaleLivePanel] Ignoring live_likes_update for stale session', {
+              operation: 'seller.subscription.likes',
               sellerLiveSessionId: liveSessionIdRef.current,
               buyerLiveSessionId: payload?.liveSessionId ?? null,
+              timestamp: new Date().toISOString(),
             });
             continue;
           }
@@ -706,15 +722,31 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
             liveSessionId: payload?.liveSessionId ?? liveSessionIdRef.current,
             totalLikes: payload?.totalLikes ?? totalLikes,
             reactionId: payload?.reactionId,
+            operation: 'seller.subscription.likes',
+            timestamp: new Date().toISOString(),
           });
         }
 
         if (signal.kind === LIVE_ENGAGEMENT_SIGNAL_KINDS.MESSAGE_SENT) {
           const payload = signal.payload as {
+            saleId?: string;
+            liveSaleId?: string;
+            liveId?: string;
+            streamId?: string;
             roomId?: string;
             liveSessionId?: string | null;
             message?: SellerChatMessage;
           } | null;
+          const payloadSaleId = payload?.saleId ?? payload?.liveSaleId ?? payload?.liveId ?? payload?.streamId ?? null;
+          if (payloadSaleId && payloadSaleId !== saleId) {
+            console.warn('[GarageSaleLivePanel] Ignoring live_message_sent for different sale', {
+              operation: 'seller.subscription.chat',
+              expectedSaleId: saleId,
+              receivedSaleId: payloadSaleId,
+              timestamp: new Date().toISOString(),
+            });
+            continue;
+          }
           if (!liveSessionIdRef.current && payload?.liveSessionId) {
             liveSessionIdRef.current = payload.liveSessionId;
           }
@@ -727,8 +759,10 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
           }
           if (!sameSession) {
             console.warn('[GarageSaleLivePanel] Ignoring live_message_sent for stale session', {
+              operation: 'seller.subscription.chat',
               sellerLiveSessionId: liveSessionIdRef.current,
               buyerLiveSessionId: payload?.liveSessionId ?? null,
+              timestamp: new Date().toISOString(),
             });
             continue;
           }
@@ -744,11 +778,19 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
             roomId: payload?.roomId ?? liveRoomIdRef.current,
             liveSessionId: payload?.liveSessionId ?? liveSessionIdRef.current,
             messageId: nextMessage?.id,
+            operation: 'seller.subscription.chat',
+            timestamp: new Date().toISOString(),
           });
         }
       }
     } catch {
-      console.warn('[GarageSaleLivePanel] Network error while polling seller signals');
+      console.warn('[GarageSaleLivePanel] Network error while polling seller signals', {
+        operation: 'seller.subscription.poll',
+        saleId,
+        roomId: liveRoomIdRef.current,
+        liveSessionId: liveSessionIdRef.current,
+        timestamp: new Date().toISOString(),
+      });
     }
   }, [handleGuestIce, handleGuestOffer, logLiveDebug, logSellerRoomDetails, saleId, stopSignalPolling, totalLikes]);
 
@@ -1442,9 +1484,12 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
     if (isLive) {
       startSignalPolling();
       console.info('[GarageSaleLivePanel] seller subscription connected', {
+        operation: 'seller.subscription.connected',
+        saleId,
         roomId: liveRoomIdRef.current,
         liveSessionId: liveSessionIdRef.current,
         subscriptions: [LIVE_ENGAGEMENT_EVENTS.MESSAGE_SENT, LIVE_ENGAGEMENT_EVENTS.LIKES_UPDATE],
+        timestamp: new Date().toISOString(),
       });
       chatLastSeenRef.current = null;
       void fetchSellerChat();
@@ -1461,7 +1506,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
       stopChatPolling();
       stopReactionPolling();
     };
-  }, [isLive, fetchSellerChat, fetchReactionCount, startSignalPolling, stopChatPolling, stopReactionPolling, stopSignalPolling]);
+  }, [isLive, fetchSellerChat, fetchReactionCount, saleId, startSignalPolling, stopChatPolling, stopReactionPolling, stopSignalPolling]);
 
   // Auto-scroll chat to newest message
   useEffect(() => {

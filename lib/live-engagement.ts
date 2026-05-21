@@ -12,8 +12,31 @@ export const LIVE_ENGAGEMENT_SIGNAL_KINDS = {
 
 type LiveEngagementContextInput = {
   roomId?: unknown;
+  room_id?: unknown;
   liveSessionId?: unknown;
+  live_session_id?: unknown;
+  saleId?: unknown;
+  liveId?: unknown;
+  liveSaleId?: unknown;
+  streamId?: unknown;
 };
+
+function readStringOrNull(value: unknown) {
+  if (typeof value === 'string') return value;
+  if (value === null) return null;
+  return undefined;
+}
+
+function readCanonicalLiveSaleId(input?: LiveEngagementContextInput) {
+  if (!input) return null;
+  const candidates = [input.saleId, input.liveSaleId, input.liveId, input.streamId];
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return candidate;
+    }
+  }
+  return null;
+}
 
 export function resolveLiveEngagementContext(
   saleId: string,
@@ -22,17 +45,17 @@ export function resolveLiveEngagementContext(
 ) {
   const roomId = getLiveRoomId(saleId);
   const liveSessionId = getLiveSessionId(saleId, liveStartedAt);
-  const receivedRoomId = typeof input?.roomId === 'string' ? input.roomId : null;
-  const receivedLiveSessionId =
-    typeof input?.liveSessionId === 'string' || input?.liveSessionId === null
-      ? input.liveSessionId
-      : null;
+  const receivedRoomId = readStringOrNull(input?.roomId) ?? readStringOrNull(input?.room_id) ?? null;
+  const receivedLiveSessionId = readStringOrNull(input?.liveSessionId) ?? readStringOrNull(input?.live_session_id) ?? null;
+  const receivedCanonicalSaleId = readCanonicalLiveSaleId(input);
 
   return {
     roomId,
     liveSessionId,
     receivedRoomId,
     receivedLiveSessionId,
+    receivedCanonicalSaleId,
+    saleMatches: receivedCanonicalSaleId == null || receivedCanonicalSaleId === saleId,
     roomMatches: receivedRoomId == null || receivedRoomId === roomId,
     liveSessionMatches: receivedLiveSessionId == null || receivedLiveSessionId === liveSessionId,
   };
@@ -40,6 +63,7 @@ export function resolveLiveEngagementContext(
 
 export function buildLiveEngagementIdentifiers(saleId: string) {
   return {
+    saleId,
     liveSaleId: saleId,
     liveId: saleId,
     streamId: saleId,
