@@ -45,6 +45,7 @@ export default function GarageSaleBrowseClient({
   const [geoStatus, setGeoStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
   const [actionError, setActionError] = useState('');
   const mapRef = useRef<HTMLDivElement>(null);
+  const hasMapboxToken = Boolean(process.env.NEXT_PUBLIC_MAPBOX_TOKEN);
   // mapboxMapRef is used to track if the map has been initialized
   // to prevent re-initialization on re-renders
   const mapInitialized = useRef(false);
@@ -377,11 +378,18 @@ export default function GarageSaleBrowseClient({
       {view === 'map' && (
         <div className="card overflow-hidden">
           <div ref={mapRef} className="h-[480px] w-full bg-slate-100 flex items-center justify-center">
-            <div className="text-center text-slate-500">
-              <MapPin size={32} className="mx-auto mb-2 opacity-40" />
-              <p className="text-sm font-medium">Map view requires a Mapbox token.</p>
-              <p className="text-xs">Set <code className="bg-slate-100 px-1 rounded">NEXT_PUBLIC_MAPBOX_TOKEN</code> to enable the interactive map.</p>
-            </div>
+            {!hasMapboxToken ? (
+              <div className="text-center text-slate-500">
+                <MapPin size={32} className="mx-auto mb-2 opacity-40" />
+                <p className="text-sm font-medium">Map view requires a Mapbox token.</p>
+                <p className="text-xs">Set <code className="bg-slate-100 px-1 rounded">NEXT_PUBLIC_MAPBOX_TOKEN</code> to enable the interactive map.</p>
+              </div>
+            ) : (
+              <div className="text-center text-slate-500">
+                <MapPin size={32} className="mx-auto mb-2 opacity-40" />
+                <p className="text-sm font-medium">Loading map…</p>
+              </div>
+            )}
           </div>
         </div>
       )}
