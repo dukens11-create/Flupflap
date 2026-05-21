@@ -39,9 +39,19 @@ function readStringOrNull(value: unknown) {
  * Picks the first non-empty canonical sale identifier from supported aliases in
  * precedence order: saleId, liveSaleId, liveId, then streamId.
  */
-export function getCanonicalLiveSaleId(input?: CanonicalLiveSaleIdInput) {
+export function getCanonicalLiveSaleId(input?: CanonicalLiveSaleIdInput | null) {
   if (!input) return null;
   const candidates = [input.saleId, input.liveSaleId, input.liveId, input.streamId];
+  const normalizedCandidates = candidates.filter((candidate): candidate is string => typeof candidate === 'string' && candidate.trim().length > 0);
+  const [firstCandidate, ...restCandidates] = normalizedCandidates;
+  if (firstCandidate && restCandidates.some((candidate) => candidate !== firstCandidate)) {
+    console.warn('[live-engagement] conflicting sale identifiers detected', {
+      saleId: input.saleId ?? null,
+      liveSaleId: input.liveSaleId ?? null,
+      liveId: input.liveId ?? null,
+      streamId: input.streamId ?? null,
+    });
+  }
   for (const candidate of candidates) {
     if (typeof candidate === 'string' && candidate.trim()) {
       return candidate;

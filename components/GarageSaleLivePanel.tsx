@@ -685,7 +685,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
             totalLikes?: number;
             reactionId?: string;
           } | null;
-          const payloadSaleId = getCanonicalLiveSaleId(payload ?? undefined);
+          const payloadSaleId = getCanonicalLiveSaleId(payload);
           if (payloadSaleId && payloadSaleId !== saleId) {
             console.warn('[GarageSaleLivePanel] Ignoring live_likes_update for different sale', {
               operation: 'seller.subscription.likes',
@@ -737,7 +737,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
             liveSessionId?: string | null;
             message?: SellerChatMessage;
           } | null;
-          const payloadSaleId = getCanonicalLiveSaleId(payload ?? undefined);
+          const payloadSaleId = getCanonicalLiveSaleId(payload);
           if (payloadSaleId && payloadSaleId !== saleId) {
             console.warn('[GarageSaleLivePanel] Ignoring live_message_sent for different sale', {
               operation: 'seller.subscription.chat',

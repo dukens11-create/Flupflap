@@ -172,11 +172,11 @@ export async function POST(req: Request, { params }: Params) {
   });
 
   try {
-    const createChatMessage = async (withSellerId: boolean) => prisma.garageSaleChat.create({
+    const createChatMessage = async (includeSellerId: boolean) => prisma.garageSaleChat.create({
       data: {
         saleId: id,
         userId,
-        ...(withSellerId ? { sellerId: sale.sellerId } : {}),
+        ...(includeSellerId ? { sellerId: sale.sellerId } : {}),
         guestName: resolvedDisplayName,
         message: insertPayload.message,
         createdAt: insertCreatedAt,
@@ -196,6 +196,7 @@ export async function POST(req: Request, { params }: Params) {
         prismaCode: getPrismaErrorCode(chatInsertError),
         timestamp: new Date().toISOString(),
       });
+      // TODO(garage-sale-chat): remove this fallback after all environments have the sellerId column.
       msg = await createChatMessage(false);
     }
 
