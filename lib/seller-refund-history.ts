@@ -33,7 +33,8 @@ function normalizeSourceKey(input: RecordSellerRefundHistoryInput): string {
   const paymentIntentKey = input.stripePaymentIntentId ?? 'no_payment_intent';
   const amountKey = Number.isFinite(input.amountCents) ? String(input.amountCents) : 'unknown_amount';
   const reasonKey = input.reason?.trim().toLowerCase().replace(/\s+/g, '_') ?? 'no_reason';
-  return `${input.refundType}:${scope}:${paymentIntentKey}:${amountKey}:${reasonKey}`;
+  const timeKey = input.refundedAt?.toISOString() ?? input.resolvedAt?.toISOString() ?? 'no_time';
+  return `${input.refundType}:${scope}:${paymentIntentKey}:${amountKey}:${reasonKey}:${timeKey}`;
 }
 
 export async function recordSellerRefundHistory(

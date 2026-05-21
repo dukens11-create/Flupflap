@@ -119,20 +119,22 @@ export async function POST(_req: Request, { params }: Params) {
     if (!paymentIntentId) {
       return NextResponse.json({ error: 'A successful payment exists, but no Stripe payment intent was found to refund.' }, { status: 400 });
     }
-    let stripeRefund: Stripe.Refund | null = null;
-    try {
-      stripeRefund = await stripe.refunds.create({
-        payment_intent: paymentIntentId,
-        metadata: {
-          type: 'garage_sale_listing',
-          saleId: sale.id,
-          sellerId: sale.sellerId,
-          action: 'seller_cancel_payment',
-        },
-      });
-    } catch (err) {
-      return stripeFailureResponse('Unable to create Stripe refund.', err);
+    const stripeRefundResult = await stripe.refunds.create({
+      payment_intent: paymentIntentId,
+      metadata: {
+        type: 'garage_sale_listing',
+        saleId: sale.id,
+        sellerId: sale.sellerId,
+        action: 'seller_cancel_payment',
+      },
+    }).then((refund) => ({ refund } as const))
+      .catch((err) => ({ err } as const));
+
+    if ('err' in stripeRefundResult) {
+      return stripeFailureResponse('Unable to create Stripe refund.', stripeRefundResult.err);
     }
+
+    const stripeRefund = stripeRefundResult.refund;
 
     try {
       await prisma.$transaction(async (tx) => {
