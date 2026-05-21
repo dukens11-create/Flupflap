@@ -6,8 +6,16 @@ import { RTC_CONFIG, HAS_TURN_CONFIG } from '@/lib/rtc-config';
 const DEFAULT_GUEST_NAME = 'Guest';
 const MEDIA_READY_TIMEOUT_MS = 1200;
 const PLAYBACK_RETRY_DELAY_MS = 250;
+const PLAYBACK_RECOVERY_THROTTLE_MS = 1200;
 const CONNECTION_RECOVERY_TIMEOUT_MS = 8000;
+const RECONNECT_STEP_DELAY_MS = 1200;
+const RECONNECT_MAX_DELAY_MS = 8000;
+const RECONNECT_JITTER_MS = 250;
+const MAX_RECONNECT_ATTEMPTS = 5;
 const STREAM_RECONNECTING_MESSAGE = 'Live stream connection was interrupted. Trying to reconnect…';
+const STREAM_TERMINAL_FAILURE_MESSAGE = 'Unable to connect to this live stream right now. Please try again in a moment.';
+
+type ViewerConnectionStatus = 'connecting' | 'live' | 'reconnecting' | 'failed' | 'ended';
 
 interface ChatMessage {
   id: string;
@@ -34,7 +42,9 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
   const [streamConnected, setStreamConnected] = useState(false);
   const [hasRemoteMedia, setHasRemoteMedia] = useState(false);
   const [playbackBlocked, setPlaybackBlocked] = useState(false);
+  const [audioUnlockRequired, setAudioUnlockRequired] = useState(false);
   const [recoveringConnection, setRecoveringConnection] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<ViewerConnectionStatus>(initialIsLive ? 'connecting' : 'ended');
   const [viewerCount, setViewerCount] = useState(0);
 
   const lastSeenRef = useRef<string | null>(null);
@@ -45,13 +55,28 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
   const remoteStreamRef = useRef<MediaStream | null>(null);
   const peerRef = useRef<RTCPeerConnection | null>(null);
   const signalPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Reconnect timers outlive a single render; use a ref to avoid stale poll closures.
+  const pollSignalsRef = useRef<(() => Promise<void>) | null>(null);
   const signalCursorRef = useRef<string | null>(null);
   const activeOfferSignalRef = useRef<string | null>(null);
   const viewerHeartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const viewerIdRef = useRef<string | null>(null);
   const connectionRecoveryTimeoutRef = useRef<number | null>(null);
+  const reconnectRetryTimeoutRef = useRef<number | null>(null);
+  const reconnectAttemptRef = useRef(0);
+  const playbackRecoveryAtRef = useRef(0);
   const hasRemoteDescriptionRef = useRef(false);
   const pendingRemoteIceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
+  const liveDebugEnabled = process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_DEBUG_LIVE_STREAM === '1';
+
+  const logLiveDebug = useCallback((event: string, details?: Record<string, unknown>) => {
+    if (!liveDebugEnabled) return;
+    if (details) {
+      console.info('[GarageSaleBuyerLiveView]', event, details);
+      return;
+    }
+    console.info('[GarageSaleBuyerLiveView]', event);
+  }, [liveDebugEnabled]);
 
   const fetchMessages = useCallback(async () => {
     try {
@@ -108,6 +133,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     setStreamConnected(false);
     setHasRemoteMedia(false);
     setPlaybackBlocked(false);
+    setAudioUnlockRequired(false);
     setRecoveringConnection(false);
     if (videoRef.current) {
       videoRef.current.srcObject = null;
@@ -121,20 +147,20 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     }
   }, []);
 
-  const scheduleConnectionRecoveryTimeout = useCallback((pc: RTCPeerConnection) => {
-    clearConnectionRecoveryTimeout();
-    connectionRecoveryTimeoutRef.current = window.setTimeout(() => {
-      connectionRecoveryTimeoutRef.current = null;
-      if (peerRef.current !== pc) return;
-      const currentPeer = peerRef.current;
-      if (currentPeer?.connectionState === 'connected') return;
-      setStreamConnected(false);
-      setRecoveringConnection(false);
-      setStreamError('Live stream is reconnecting. Waiting for the seller to refresh the connection…');
-    }, CONNECTION_RECOVERY_TIMEOUT_MS);
-  }, [clearConnectionRecoveryTimeout]);
+  const clearReconnectRetryTimeout = useCallback(() => {
+    if (reconnectRetryTimeoutRef.current != null) {
+      window.clearTimeout(reconnectRetryTimeoutRef.current);
+      reconnectRetryTimeoutRef.current = null;
+    }
+  }, []);
 
-  const playRemoteStream = useCallback(async () => {
+  const resetReconnectState = useCallback(() => {
+    reconnectAttemptRef.current = 0;
+    clearConnectionRecoveryTimeout();
+    clearReconnectRetryTimeout();
+  }, [clearConnectionRecoveryTimeout, clearReconnectRetryTimeout]);
+
+  const playRemoteStream = useCallback(async (options?: { tryMutedFirst?: boolean }) => {
     const video = videoRef.current;
     if (!video) return false;
 
@@ -151,6 +177,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
       video.defaultMuted = muted;
       await video.play();
       setPlaybackBlocked(false);
+      setAudioUnlockRequired(muted);
       return true;
     };
 
@@ -180,20 +207,30 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
       });
     }
 
-    try {
-      return await tryPlay(false);
-    } catch {
+    const initialMuted = options?.tryMutedFirst ?? true;
+    const attempts = initialMuted ? [true, false] : [false, true];
+
+    for (const muted of attempts) {
       try {
-        // Mobile Safari often requires muted autoplay; use muted fallback to
-        // prioritize rendering and let users unmute via controls.
-        await new Promise((resolve) => window.setTimeout(resolve, PLAYBACK_RETRY_DELAY_MS));
-        return await tryPlay(true);
+        logLiveDebug('play-attempt', {
+          muted,
+          readyState: video.readyState,
+          paused: video.paused,
+        });
+        return await tryPlay(muted);
       } catch {
-        setPlaybackBlocked(true);
-        return false;
+        await new Promise((resolve) => window.setTimeout(resolve, PLAYBACK_RETRY_DELAY_MS));
       }
     }
-  }, []);
+
+    setPlaybackBlocked(true);
+    logLiveDebug('play-failed', {
+      readyState: video.readyState,
+      paused: video.paused,
+      networkState: video.networkState,
+    });
+    return false;
+  }, [logLiveDebug]);
 
   const postSignal = useCallback(async (
     kind: 'ANSWER' | 'ICE',
@@ -272,6 +309,55 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     }
   }, [getViewerId, isLive, saleId]);
 
+  const scheduleConnectionRecovery = useCallback((reason: string) => {
+    if (!isLive) return false;
+    if (reconnectRetryTimeoutRef.current != null) return true;
+
+    const attempt = reconnectAttemptRef.current + 1;
+    reconnectAttemptRef.current = attempt;
+
+    if (attempt > MAX_RECONNECT_ATTEMPTS) {
+      setRecoveringConnection(false);
+      setConnectionStatus('failed');
+      setStreamConnected(false);
+      setStreamError(STREAM_TERMINAL_FAILURE_MESSAGE);
+      logLiveDebug('reconnect-terminal-failure', { reason, attempts: attempt - 1 });
+      return false;
+    }
+
+    const retryDelay = Math.min(
+      RECONNECT_MAX_DELAY_MS,
+      RECONNECT_STEP_DELAY_MS * (2 ** (attempt - 1)),
+    ) + Math.floor(Math.random() * RECONNECT_JITTER_MS);
+
+    setRecoveringConnection(true);
+    setConnectionStatus('reconnecting');
+    setStreamConnected(false);
+    setStreamError(STREAM_RECONNECTING_MESSAGE);
+    logLiveDebug('reconnect-scheduled', { reason, attempt, retryDelay });
+
+    clearConnectionRecoveryTimeout();
+    connectionRecoveryTimeoutRef.current = window.setTimeout(() => {
+      connectionRecoveryTimeoutRef.current = null;
+      if (peerRef.current?.connectionState === 'connected') return;
+      setStreamError(STREAM_RECONNECTING_MESSAGE);
+    }, CONNECTION_RECOVERY_TIMEOUT_MS);
+
+    reconnectRetryTimeoutRef.current = window.setTimeout(() => {
+      reconnectRetryTimeoutRef.current = null;
+      if (!isLive) return;
+      logLiveDebug('reconnect-executing', { attempt });
+      closePeerConnection();
+      setRecoveringConnection(true);
+      activeOfferSignalRef.current = null;
+      hasRemoteDescriptionRef.current = false;
+      pendingRemoteIceCandidatesRef.current = [];
+      signalCursorRef.current = null;
+      void pollSignalsRef.current?.();
+    }, retryDelay);
+    return true;
+  }, [clearConnectionRecoveryTimeout, closePeerConnection, isLive, logLiveDebug]);
+
   const handleSellerOffer = useCallback(async (signalId: string, payload: { type?: string; sdp?: string }) => {
     const type = payload.type === 'offer' ? payload.type : null;
     if (!type || !payload.sdp) return;
@@ -291,6 +377,10 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     hasRemoteDescriptionRef.current = false;
     pendingRemoteIceCandidatesRef.current = [];
     setHasRemoteMedia(false);
+    setConnectionStatus('connecting');
+    setRecoveringConnection(false);
+    resetReconnectState();
+    logLiveDebug('offer-received', { signalId });
 
     pc.ontrack = (event) => {
       const streamTracks = event.streams[0]?.getTracks() ?? [];
@@ -306,6 +396,14 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
       if (videoRef.current && videoRef.current.srcObject !== remoteStream) {
         videoRef.current.srcObject = remoteStream;
       }
+      logLiveDebug('track-received', {
+        trackId: event.track.id,
+        kind: event.track.kind,
+        enabled: event.track.enabled,
+        muted: event.track.muted,
+        readyState: event.track.readyState,
+        streamTrackCount: remoteStream.getTracks().length,
+      });
       setHasRemoteMedia(true);
       setStreamError(null);
       void playRemoteStream();
@@ -317,44 +415,40 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     };
 
     pc.onconnectionstatechange = () => {
+      logLiveDebug('peer-connection-state', { state: pc.connectionState });
       if (pc.connectionState === 'connected') {
-        clearConnectionRecoveryTimeout();
+        resetReconnectState();
         setRecoveringConnection(false);
         setStreamConnected(true);
+        setConnectionStatus('live');
         setStreamError(null);
         void playRemoteStream();
       }
 
       if (pc.connectionState === 'disconnected') {
-        setRecoveringConnection(true);
-        scheduleConnectionRecoveryTimeout(pc);
-        // Show reconnect message but keep the video visible so ICE can self-recover
-        setStreamError(STREAM_RECONNECTING_MESSAGE);
+        scheduleConnectionRecovery('peer-disconnected');
       }
 
       if (pc.connectionState === 'failed') {
-        setRecoveringConnection(true);
-        scheduleConnectionRecoveryTimeout(pc);
-        setStreamError(STREAM_RECONNECTING_MESSAGE);
+        scheduleConnectionRecovery('peer-failed');
       }
     };
 
     pc.oniceconnectionstatechange = () => {
+      logLiveDebug('ice-connection-state', { state: pc.iceConnectionState });
       if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
-        clearConnectionRecoveryTimeout();
+        resetReconnectState();
         setRecoveringConnection(false);
         return;
       }
 
       if (pc.iceConnectionState === 'disconnected') {
-        setRecoveringConnection(true);
-        scheduleConnectionRecoveryTimeout(pc);
+        scheduleConnectionRecovery('ice-disconnected');
         return;
       }
 
       if (pc.iceConnectionState === 'failed') {
-        setRecoveringConnection(true);
-        scheduleConnectionRecoveryTimeout(pc);
+        scheduleConnectionRecovery('ice-failed');
       }
     };
 
@@ -379,7 +473,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
       videoRef.current.srcObject = remoteStream;
       void playRemoteStream();
     }
-  }, [clearConnectionRecoveryTimeout, closePeerConnection, playRemoteStream, postSignal, scheduleConnectionRecoveryTimeout]);
+  }, [closePeerConnection, logLiveDebug, playRemoteStream, postSignal, resetReconnectState, scheduleConnectionRecovery]);
 
   const pollSignals = useCallback(async () => {
     if (!isLive) return;
@@ -402,6 +496,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
       if (!data.isLive) {
         setIsLive(false);
         setViewerCount(0);
+        setConnectionStatus('ended');
         return;
       }
 
@@ -409,6 +504,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
 
       for (const signal of data.signals) {
         if (signal.kind === 'OFFER') {
+          logLiveDebug('signal-offer', { id: signal.id, createdAt: signal.createdAt });
           // Skip already-processed offers without losing the cursor position.
           if (activeOfferSignalRef.current === signal.id) {
             signalCursorRef.current = signal.createdAt;
@@ -425,14 +521,18 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
           try {
             await handleSellerOffer(signal.id, payload);
             // Advance cursor only after the offer was successfully processed.
-            // Unlike ICE, an OFFER must be retried on error, so the cursor is
-            // intentionally NOT advanced in the catch branch.
             signalCursorRef.current = signal.createdAt;
           } catch {
-            // Leave cursor unchanged so the offer is retried on the next poll.
+            const willRetry = scheduleConnectionRecovery('offer-processing-failed');
+            if (!willRetry) {
+              // After terminal failure, consume the current offer and wait for a newer one.
+              signalCursorRef.current = signal.createdAt;
+            }
+            // During active recovery we keep the cursor unchanged to retry this offer.
             break;
           }
         } else if (signal.kind === 'ICE') {
+          logLiveDebug('signal-ice', { createdAt: signal.createdAt });
           const payload = signal.payload as { candidate?: RTCIceCandidateInit } | null;
           if (payload?.candidate) {
             if (!peerRef.current || !hasRemoteDescriptionRef.current) {
@@ -455,23 +555,32 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     } catch {
       console.warn('[GarageSaleBuyerLiveView] Network error while polling buyer signals');
     }
-  }, [clearConnectionRecoveryTimeout, handleSellerOffer, isLive, saleId]);
+  }, [clearConnectionRecoveryTimeout, handleSellerOffer, isLive, logLiveDebug, saleId, scheduleConnectionRecovery]);
+
+  useEffect(() => {
+    pollSignalsRef.current = pollSignals;
+  }, [pollSignals]);
 
   useEffect(() => {
     if (!isLive) {
       stopSignalPolling();
       signalCursorRef.current = null;
+      clearReconnectRetryTimeout();
+      clearConnectionRecoveryTimeout();
       closePeerConnection();
+      setConnectionStatus('ended');
+      setStreamError(null);
       return;
     }
 
+    setConnectionStatus('connecting');
     pollSignals();
     signalPollRef.current = setInterval(pollSignals, 2000);
 
     return () => {
       stopSignalPolling();
     };
-  }, [closePeerConnection, isLive, pollSignals, stopSignalPolling]);
+  }, [clearConnectionRecoveryTimeout, clearReconnectRetryTimeout, closePeerConnection, isLive, pollSignals, stopSignalPolling]);
 
   useEffect(() => {
     if (!isLive) {
@@ -493,10 +602,55 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
   useEffect(() => {
     return () => {
       stopSignalPolling();
+      clearReconnectRetryTimeout();
+      clearConnectionRecoveryTimeout();
       closePeerConnection();
       if (viewerHeartbeatRef.current) clearInterval(viewerHeartbeatRef.current);
     };
-  }, [closePeerConnection, stopSignalPolling]);
+  }, [clearConnectionRecoveryTimeout, clearReconnectRetryTimeout, closePeerConnection, stopSignalPolling]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const handleLoadedMetadata = () => {
+      logLiveDebug('remote-video-metadata', {
+        width: video.videoWidth,
+        height: video.videoHeight,
+      });
+      void playRemoteStream();
+    };
+
+    const handlePause = () => {
+      if (!isLive || !hasRemoteMedia) return;
+      const now = Date.now();
+      if (now - playbackRecoveryAtRef.current < PLAYBACK_RECOVERY_THROTTLE_MS) return;
+      playbackRecoveryAtRef.current = now;
+      logLiveDebug('remote-video-paused-retrying');
+      void playRemoteStream();
+    };
+
+    const handleBuffering = (event: Event) => {
+      if (!isLive) return;
+      const now = Date.now();
+      if (now - playbackRecoveryAtRef.current < PLAYBACK_RECOVERY_THROTTLE_MS) return;
+      playbackRecoveryAtRef.current = now;
+      logLiveDebug('remote-video-buffering', { type: event.type });
+      void playRemoteStream({ tryMutedFirst: false });
+    };
+
+    video.addEventListener('loadedmetadata', handleLoadedMetadata);
+    video.addEventListener('pause', handlePause);
+    video.addEventListener('stalled', handleBuffering);
+    video.addEventListener('waiting', handleBuffering);
+
+    return () => {
+      video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      video.removeEventListener('pause', handlePause);
+      video.removeEventListener('stalled', handleBuffering);
+      video.removeEventListener('waiting', handleBuffering);
+    };
+  }, [hasRemoteMedia, isLive, logLiveDebug, playRemoteStream]);
 
   const handleSend = async () => {
     const trimmed = input.trim();
@@ -544,6 +698,34 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     );
   }
   const showRemoteVideo = streamConnected || hasRemoteMedia;
+  const connectionStatusLabel = (() => {
+    switch (connectionStatus) {
+      case 'live':
+        return 'Live';
+      case 'reconnecting':
+        return 'Reconnecting…';
+      case 'failed':
+        return 'Unable to connect';
+      case 'ended':
+        return 'Stream ended';
+      default:
+        return 'Connecting…';
+    }
+  })();
+  const connectionStatusTone = (() => {
+    switch (connectionStatus) {
+      case 'live':
+        return 'bg-emerald-100 text-emerald-700';
+      case 'reconnecting':
+        return 'bg-amber-100 text-amber-800';
+      case 'failed':
+        return 'bg-red-100 text-red-700';
+      case 'ended':
+        return 'bg-slate-200 text-slate-700';
+      default:
+        return 'bg-slate-100 text-slate-700';
+    }
+  })();
 
   return (
     <div className="card space-y-4 p-4">
@@ -554,6 +736,9 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
         <p className="text-xs text-slate-500">The seller is live! Ask questions below.</p>
         <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
           <Eye size={12} /> {viewerCount} watching
+        </span>
+        <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${connectionStatusTone}`}>
+          {connectionStatusLabel}
         </span>
       </div>
 
@@ -583,6 +768,17 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
               className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-900 shadow-lg transition hover:bg-slate-100"
             >
               Tap to start live
+            </button>
+          </div>
+        )}
+        {showRemoteVideo && !playbackBlocked && audioUnlockRequired && (
+          <div className="absolute inset-0 flex items-end justify-center p-4 sm:items-center">
+            <button
+              type="button"
+              onClick={() => void playRemoteStream({ tryMutedFirst: false })}
+              className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-900 shadow-lg transition hover:bg-slate-100"
+            >
+              Tap for live audio
             </button>
           </div>
         )}

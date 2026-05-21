@@ -42,18 +42,11 @@ function checkSellerOwner(saleSellerId: string, userId: string | null) {
   return { ok: true as const };
 }
 
-function requireAuthenticatedUser(userId: string | null) {
-  if (!userId) {
-    return { ok: false as const, response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
-  }
-  return { ok: true as const };
-}
-
 function requireRoleAccess(role: SignalRole, saleSellerId: string, userId: string | null) {
   if (role === 'SELLER') {
     return checkSellerOwner(saleSellerId, userId);
   }
-  return requireAuthenticatedUser(userId);
+  return { ok: true as const };
 }
 
 async function getActiveViewerCount(saleId: string, liveStartedAt: Date | null) {
