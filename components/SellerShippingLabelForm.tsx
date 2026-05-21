@@ -204,7 +204,7 @@ export default function SellerShippingLabelForm({
             <button
               type="button"
               className="btn-primary text-sm"
-              onClick={() => window.open(labelUrl, '_blank')}
+              onClick={() => window.open(`/seller/orders/${encodeURIComponent(orderId)}/print-label`, '_blank')}
             >
               Print Label
             </button>
