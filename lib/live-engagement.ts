@@ -21,6 +21,8 @@ type LiveEngagementContextInput = {
   streamId?: unknown;
 };
 
+type CanonicalLiveSaleIdInput = Pick<LiveEngagementContextInput, 'saleId' | 'liveSaleId' | 'liveId' | 'streamId'>;
+
 /**
  * Returns a string when the payload provided a concrete string value, null when
  * the payload explicitly set null, and undefined when the key was missing or
@@ -37,7 +39,7 @@ function readStringOrNull(value: unknown) {
  * Picks the first non-empty canonical sale identifier from supported aliases in
  * precedence order: saleId, liveSaleId, liveId, then streamId.
  */
-function readCanonicalLiveSaleId(input?: LiveEngagementContextInput) {
+export function getCanonicalLiveSaleId(input?: CanonicalLiveSaleIdInput) {
   if (!input) return null;
   const candidates = [input.saleId, input.liveSaleId, input.liveId, input.streamId];
   for (const candidate of candidates) {
@@ -57,7 +59,7 @@ export function resolveLiveEngagementContext(
   const liveSessionId = getLiveSessionId(saleId, liveStartedAt);
   const receivedRoomId = readStringOrNull(input?.roomId) ?? readStringOrNull(input?.room_id) ?? null;
   const receivedLiveSessionId = readStringOrNull(input?.liveSessionId) ?? readStringOrNull(input?.live_session_id) ?? null;
-  const receivedCanonicalSaleId = readCanonicalLiveSaleId(input);
+  const receivedCanonicalSaleId = getCanonicalLiveSaleId(input);
 
   return {
     roomId,

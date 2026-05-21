@@ -172,11 +172,11 @@ export async function POST(req: Request, { params }: Params) {
   });
 
   try {
-    const createChatMessage = async (useSellerIdColumn: boolean) => prisma.garageSaleChat.create({
+    const createChatMessage = async (withSellerId: boolean) => prisma.garageSaleChat.create({
       data: {
         saleId: id,
         userId,
-        ...(useSellerIdColumn ? { sellerId: sale.sellerId } : {}),
+        ...(withSellerId ? { sellerId: sale.sellerId } : {}),
         guestName: resolvedDisplayName,
         message: insertPayload.message,
         createdAt: insertCreatedAt,

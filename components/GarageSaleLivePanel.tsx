@@ -1,7 +1,7 @@
 'use client';
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { Video, VideoOff, Mic, MicOff, Radio, AlertTriangle, Eye, RefreshCcw, MessageCircle, Heart, Trash2, Users, PhoneOff, VolumeX, Volume2, Maximize2, X } from 'lucide-react';
-import { LIVE_ENGAGEMENT_EVENTS, LIVE_ENGAGEMENT_SIGNAL_KINDS, isSameLiveSession } from '@/lib/live-engagement';
+import { getCanonicalLiveSaleId, LIVE_ENGAGEMENT_EVENTS, LIVE_ENGAGEMENT_SIGNAL_KINDS, isSameLiveSession } from '@/lib/live-engagement';
 import { RTC_CONFIG, HAS_TURN_CONFIG } from '@/lib/rtc-config';
 import { getIceCandidateType } from '@/lib/rtc-diagnostics';
 import { LIVE_SIGNAL_EVENTS, LIVE_SIGNAL_KINDS, LIVE_SIGNAL_ROLES, getLiveRoomId, getLiveSessionId, MAX_LIVE_GUESTS } from '@/lib/live-signaling';
@@ -79,15 +79,6 @@ function isSafeViewerAvatar(value: string | null | undefined) {
   } catch {
     return false;
   }
-}
-
-function getPayloadSaleId(payload: {
-  saleId?: string;
-  liveSaleId?: string;
-  liveId?: string;
-  streamId?: string;
-} | null | undefined) {
-  return payload?.saleId ?? payload?.liveSaleId ?? payload?.liveId ?? payload?.streamId ?? null;
 }
 
 export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLiveSessionId }: Props) {
@@ -694,7 +685,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
             totalLikes?: number;
             reactionId?: string;
           } | null;
-          const payloadSaleId = getPayloadSaleId(payload);
+          const payloadSaleId = getCanonicalLiveSaleId(payload ?? undefined);
           if (payloadSaleId && payloadSaleId !== saleId) {
             console.warn('[GarageSaleLivePanel] Ignoring live_likes_update for different sale', {
               operation: 'seller.subscription.likes',
@@ -746,7 +737,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
             liveSessionId?: string | null;
             message?: SellerChatMessage;
           } | null;
-          const payloadSaleId = getPayloadSaleId(payload);
+          const payloadSaleId = getCanonicalLiveSaleId(payload ?? undefined);
           if (payloadSaleId && payloadSaleId !== saleId) {
             console.warn('[GarageSaleLivePanel] Ignoring live_message_sent for different sale', {
               operation: 'seller.subscription.chat',
