@@ -1,9 +1,9 @@
 'use client';
 import { useRef, useState, useCallback, useEffect } from 'react';
-import { Video, VideoOff, Mic, MicOff, Radio, AlertTriangle, Eye, RefreshCcw, MessageCircle, Heart, Trash2 } from 'lucide-react';
+import { Video, VideoOff, Mic, MicOff, Radio, AlertTriangle, Eye, RefreshCcw, MessageCircle, Heart, Trash2, Users, PhoneOff, VolumeX, Volume2 } from 'lucide-react';
 import { RTC_CONFIG, HAS_TURN_CONFIG } from '@/lib/rtc-config';
 import { getIceCandidateType } from '@/lib/rtc-diagnostics';
-import { LIVE_SIGNAL_EVENTS, LIVE_SIGNAL_KINDS, LIVE_SIGNAL_ROLES, getLiveRoomId, getLiveSessionId } from '@/lib/live-signaling';
+import { LIVE_SIGNAL_EVENTS, LIVE_SIGNAL_KINDS, LIVE_SIGNAL_ROLES, getLiveRoomId, getLiveSessionId, MAX_LIVE_GUESTS } from '@/lib/live-signaling';
 
 interface Props {
   saleId: string;
@@ -16,6 +16,22 @@ interface SellerChatMessage {
   guestName: string | null;
   message: string;
   createdAt: string;
+}
+
+interface GuestRequest {
+  id: string;
+  guestId: string;
+  guestName: string | null;
+  status: string;
+  isMuted: boolean;
+  createdAt: string;
+}
+
+interface GuestPeerState {
+  pc: RTCPeerConnection;
+  hasRemoteDesc: boolean;
+  pendingIce: RTCIceCandidateInit[];
+  stream: MediaStream | null;
 }
 
 const PREVIEW_REQUIRED_MESSAGE = 'Preview your camera before starting your live garage sale.';
@@ -102,6 +118,13 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   const chatPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const reactionPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const chatBottomRef = useRef<HTMLDivElement>(null);
+
+  // Guest video call state
+  const [guestRequests, setGuestRequests] = useState<GuestRequest[]>([]);
+  const guestPeersRef = useRef<Map<string, GuestPeerState>>(new Map());
+  const guestVideoElsRef = useRef<Map<string, HTMLVideoElement>>(new Map());
+  const guestPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const liveDebugEnabled = process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_DEBUG_LIVE_STREAM === '1';
 
   const logLiveDebug = useCallback((event: string, details?: Record<string, unknown>) => {
@@ -183,6 +206,261 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       // Silent fail
     }
   }, [saleId]);
+
+  // ── Guest Video Call — Seller side ───────────────────────────────────────────
+
+  const postGuestSignal = useCallback(async (kind: 'GUEST_ANSWER' | 'GUEST_ICE', payload: Record<string, unknown>) => {
+    try {
+      const res = await fetch(`/api/garage-sales/${saleId}/live/signaling`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: LIVE_SIGNAL_ROLES.SELLER, kind, payload }),
+      });
+      if (!res.ok) {
+        console.warn('[GuestCall] Seller failed to post guest signal', { kind, status: res.status });
+        return false;
+      }
+      return true;
+    } catch {
+      console.warn('[GuestCall] Seller network error posting guest signal', { kind });
+      return false;
+    }
+  }, [saleId]);
+
+  /** Handle a GUEST_OFFER signal from an approved buyer-guest.
+   *  Creates a peer connection, sets remote desc, sends GUEST_ANSWER. */
+  const handleGuestOffer = useCallback(async (signal: {
+    payload: unknown;
+    createdAt: string;
+  }) => {
+    const payload = signal.payload as {
+      type?: string;
+      sdp?: string;
+      requestId?: string;
+      guestId?: string;
+    } | null;
+
+    if (!payload?.sdp || payload?.type !== 'offer' || !payload?.requestId) {
+      console.warn('[GuestCall] Invalid GUEST_OFFER payload');
+      return;
+    }
+
+    const { requestId, guestId } = payload;
+
+    // Fetch the latest request list to verify approval (avoids stale local state)
+    let isApproved = false;
+    try {
+      const listRes = await fetch(`/api/garage-sales/${saleId}/guest-requests`);
+      if (listRes.ok) {
+        const listData = await listRes.json() as { requests: GuestRequest[] };
+        const req = listData.requests.find((r) => r.id === requestId);
+        isApproved = Boolean(req && ['APPROVED', 'ACTIVE'].includes(req.status));
+      }
+    } catch {
+      // On network error, check local state as fallback
+      const local = guestRequests.find((r) => r.id === requestId);
+      isApproved = Boolean(local && ['APPROVED', 'ACTIVE'].includes(local.status));
+    }
+
+    if (!isApproved) {
+      console.warn('[GuestCall] GUEST_OFFER from non-approved request', { requestId });
+      return;
+    }
+
+    // Avoid creating duplicate peer connections
+    if (guestPeersRef.current.has(requestId)) {
+      const existing = guestPeersRef.current.get(requestId)!;
+      if (!existing.hasRemoteDesc) {
+        try {
+          await existing.pc.setRemoteDescription({ type: 'offer', sdp: payload.sdp });
+          existing.hasRemoteDesc = true;
+          const answer = await existing.pc.createAnswer();
+          await existing.pc.setLocalDescription(answer);
+          await postGuestSignal(LIVE_SIGNAL_KINDS.GUEST_ANSWER, { type: answer.type, sdp: answer.sdp, requestId });
+        } catch (err) {
+          console.warn('[GuestCall] Failed to re-apply GUEST_OFFER to existing peer', err);
+        }
+      }
+      return;
+    }
+
+    if (typeof RTCPeerConnection === 'undefined') {
+      console.warn('[GuestCall] RTCPeerConnection not available');
+      return;
+    }
+
+    const pc = new RTCPeerConnection(RTC_CONFIG);
+    const peerState: GuestPeerState = { pc, hasRemoteDesc: false, pendingIce: [], stream: null };
+    guestPeersRef.current.set(requestId, peerState);
+
+    pc.ontrack = (event) => {
+      const stream = event.streams[0] ?? new MediaStream([event.track]);
+      peerState.stream = stream;
+      const videoEl = guestVideoElsRef.current.get(requestId);
+      if (videoEl) {
+        videoEl.srcObject = stream;
+        void videoEl.play().catch(() => undefined);
+      }
+      logLiveDebug(LIVE_SIGNAL_EVENTS.GUEST_JOINED_LIVE, { requestId, guestId });
+      console.info('[GuestCall] Seller received guest track', { requestId, guestId });
+    };
+
+    pc.onicecandidate = (event) => {
+      if (!event.candidate) return;
+      void postGuestSignal(LIVE_SIGNAL_KINDS.GUEST_ICE, { candidate: event.candidate.toJSON(), requestId });
+    };
+
+    pc.onconnectionstatechange = () => {
+      logLiveDebug('guest-peer-state', { state: pc.connectionState, requestId });
+      if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+        console.warn('[GuestCall] Guest peer disconnected/failed', { requestId });
+      }
+    };
+
+    try {
+      await pc.setRemoteDescription({ type: 'offer', sdp: payload.sdp });
+      peerState.hasRemoteDesc = true;
+
+      for (const candidate of peerState.pendingIce) {
+        try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); } catch { /* ignore */ }
+      }
+      peerState.pendingIce = [];
+
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      await postGuestSignal(LIVE_SIGNAL_KINDS.GUEST_ANSWER, { type: answer.type, sdp: answer.sdp, requestId });
+      console.info('[GuestCall] Seller sent GUEST_ANSWER', { requestId });
+    } catch (err) {
+      console.warn('[GuestCall] Failed to handle GUEST_OFFER', err);
+      pc.close();
+      guestPeersRef.current.delete(requestId);
+    }
+  }, [guestRequests, logLiveDebug, postGuestSignal, saleId]);
+
+  /** Process a GUEST_ICE signal from a buyer-guest. */
+  const handleGuestIce = useCallback(async (signal: { payload: unknown }) => {
+    const payload = signal.payload as { candidate?: RTCIceCandidateInit; requestId?: string } | null;
+    if (!payload?.candidate || !payload?.requestId) return;
+    const { requestId, candidate } = payload;
+    const peerState = guestPeersRef.current.get(requestId);
+    if (!peerState) return;
+    if (!peerState.hasRemoteDesc) {
+      peerState.pendingIce.push(candidate);
+      return;
+    }
+    try {
+      await peerState.pc.addIceCandidate(new RTCIceCandidate(candidate));
+    } catch {
+      // ignore stale
+    }
+  }, []);
+
+  const pollGuestRequests = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/garage-sales/${saleId}/guest-requests`);
+      if (!res.ok) return;
+      const data = await res.json() as { requests: GuestRequest[]; activeCount: number; isLive: boolean };
+      setGuestRequests(data.requests);
+
+      // Close peer connections for guests that are no longer active
+      for (const [reqId, peerState] of guestPeersRef.current.entries()) {
+        const req = data.requests.find((r) => r.id === reqId);
+        if (!req || ['DECLINED', 'REMOVED', 'ENDED'].includes(req.status)) {
+          peerState.pc.close();
+          guestPeersRef.current.delete(reqId);
+          const el = guestVideoElsRef.current.get(reqId);
+          if (el) el.srcObject = null;
+        }
+      }
+    } catch {
+      // Silent fail — polling will retry
+    }
+  }, [saleId]);
+
+  const handleAcceptGuest = useCallback(async (reqId: string) => {
+    try {
+      const res = await fetch(`/api/garage-sales/${saleId}/guest-requests/${reqId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'approve' }),
+      });
+      if (res.ok) {
+        const data = await res.json() as { request: GuestRequest };
+        setGuestRequests((prev) => prev.map((r) => r.id === reqId ? { ...r, ...data.request } : r));
+        console.info('[GuestCall] Seller accepted guest', { requestId: reqId });
+      }
+    } catch {
+      // Silent fail
+    }
+  }, [saleId]);
+
+  const handleDeclineGuest = useCallback(async (reqId: string) => {
+    try {
+      const res = await fetch(`/api/garage-sales/${saleId}/guest-requests/${reqId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'decline' }),
+      });
+      if (res.ok) {
+        setGuestRequests((prev) => prev.filter((r) => r.id !== reqId));
+        console.info('[GuestCall] Seller declined guest', { requestId: reqId });
+      }
+    } catch {
+      // Silent fail
+    }
+  }, [saleId]);
+
+  const handleRemoveGuest = useCallback(async (reqId: string) => {
+    try {
+      const res = await fetch(`/api/garage-sales/${saleId}/guest-requests/${reqId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'remove' }),
+      });
+      if (res.ok) {
+        setGuestRequests((prev) => prev.filter((r) => r.id !== reqId));
+        const peerState = guestPeersRef.current.get(reqId);
+        if (peerState) {
+          peerState.pc.close();
+          guestPeersRef.current.delete(reqId);
+        }
+        logLiveDebug(LIVE_SIGNAL_EVENTS.GUEST_REMOVED, { requestId: reqId });
+      }
+    } catch {
+      // Silent fail
+    }
+  }, [logLiveDebug, saleId]);
+
+  const handleToggleMuteGuest = useCallback(async (reqId: string, currentlyMuted: boolean) => {
+    const action = currentlyMuted ? 'unmute' : 'mute';
+    try {
+      const res = await fetch(`/api/garage-sales/${saleId}/guest-requests/${reqId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      if (res.ok) {
+        setGuestRequests((prev) => prev.map((r) => r.id === reqId ? { ...r, isMuted: !currentlyMuted } : r));
+        logLiveDebug(LIVE_SIGNAL_EVENTS.GUEST_MUTED, { requestId: reqId, isMuted: !currentlyMuted });
+      }
+    } catch {
+      // Silent fail
+    }
+  }, [logLiveDebug, saleId]);
+
+  // Ref callback to bind video elements for guest streams
+  const setGuestVideoRef = useCallback((reqId: string, el: HTMLVideoElement | null) => {
+    if (el) {
+      guestVideoElsRef.current.set(reqId, el);
+      const peerState = guestPeersRef.current.get(reqId);
+      if (peerState?.stream) {
+        el.srcObject = peerState.stream;
+        void el.play().catch(() => undefined);
+      }
+    } else {
+      guestVideoElsRef.current.delete(reqId);
+    }
+  }, []);
 
   const closePeerConnection = useCallback(() => {
     if (reconnectTimeoutRef.current) {
@@ -363,11 +641,20 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
             payload: signal.payload,
           });
         }
+
+        // Handle guest video call signals from buyer
+        if (signal.kind === LIVE_SIGNAL_KINDS.GUEST_OFFER) {
+          await handleGuestOffer(signal);
+        }
+
+        if (signal.kind === LIVE_SIGNAL_KINDS.GUEST_ICE) {
+          await handleGuestIce(signal);
+        }
       }
     } catch {
       console.warn('[GarageSaleLivePanel] Network error while polling seller signals');
     }
-  }, [logLiveDebug, logSellerRoomDetails, saleId, stopSignalPolling]);
+  }, [handleGuestIce, handleGuestOffer, logLiveDebug, logSellerRoomDetails, saleId, stopSignalPolling]);
 
   const startSignalPolling = useCallback(() => {
     stopSignalPolling();
@@ -1020,8 +1307,39 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       stopReactionPolling();
       closePeerConnection();
       streamRef.current?.getTracks().forEach((t) => t.stop());
+      // Clean up all guest peer connections
+      for (const peerState of guestPeersRef.current.values()) {
+        peerState.pc.close();
+      }
+      guestPeersRef.current.clear();
+      if (guestPollRef.current) clearInterval(guestPollRef.current);
     };
   }, [clearReconnectRetryTimeout, closePeerConnection, endLiveOnPageLeave, stopChatPolling, stopReactionPolling, stopSignalPolling]);
+
+  // Start/stop guest request polling when live state changes
+  useEffect(() => {
+    if (isLive) {
+      void pollGuestRequests();
+      guestPollRef.current = setInterval(() => { void pollGuestRequests(); }, 3000);
+    } else {
+      if (guestPollRef.current) {
+        clearInterval(guestPollRef.current);
+        guestPollRef.current = null;
+      }
+      // Close all guest peers when live ends
+      for (const peerState of guestPeersRef.current.values()) {
+        peerState.pc.close();
+      }
+      guestPeersRef.current.clear();
+      setGuestRequests([]);
+    }
+    return () => {
+      if (guestPollRef.current) {
+        clearInterval(guestPollRef.current);
+        guestPollRef.current = null;
+      }
+    };
+  }, [isLive, pollGuestRequests]);
 
   // Start/stop chat + reaction polling when live state changes
   useEffect(() => {
@@ -1322,6 +1640,105 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
               <Heart size={14} className="fill-red-500 text-red-500" />
               {totalLikes} {totalLikes === 1 ? 'like' : 'likes'}
             </span>
+          </div>
+
+          {/* Live Guest Requests panel */}
+          <div className="space-y-3 rounded-xl border border-indigo-100 bg-indigo-50/50 p-3">
+            <h3 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-indigo-700">
+              <Users size={13} /> Live Guest Requests
+              {guestRequests.filter((r) => ['APPROVED', 'ACTIVE'].includes(r.status)).length > 0 && (
+                <span className="ml-auto inline-flex items-center rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">
+                  {guestRequests.filter((r) => ['APPROVED', 'ACTIVE'].includes(r.status)).length} / {MAX_LIVE_GUESTS} live
+                </span>
+              )}
+            </h3>
+
+            {guestRequests.length === 0 && (
+              <p className="text-center text-xs text-slate-400 py-1">No join requests yet.</p>
+            )}
+
+            {/* Pending requests */}
+            {guestRequests.filter((r) => r.status === 'PENDING').map((req) => (
+              <div key={req.id} className="flex items-center gap-2 rounded-lg bg-white border border-indigo-100 px-3 py-2 shadow-sm">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-700">
+                  {(req.guestName ?? 'G').charAt(0).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-slate-800 truncate">{req.guestName ?? 'Guest'}</p>
+                  <p className="text-[10px] text-slate-400">Wants to join live on video</p>
+                </div>
+                <div className="flex gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => void handleAcceptGuest(req.id)}
+                    disabled={guestRequests.filter((r) => ['APPROVED', 'ACTIVE'].includes(r.status)).length >= MAX_LIVE_GUESTS}
+                    className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Accept
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleDeclineGuest(req.id)}
+                    className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-[11px] font-bold text-red-600 hover:bg-red-50 transition-colors"
+                  >
+                    Decline
+                  </button>
+                </div>
+              </div>
+            ))}
+
+            {/* Active/approved guests */}
+            {guestRequests.filter((r) => ['APPROVED', 'ACTIVE'].includes(r.status)).map((req) => (
+              <div key={req.id} className="space-y-2">
+                <div className="flex items-center gap-2 rounded-lg bg-white border border-emerald-200 px-3 py-2 shadow-sm">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-700">
+                    {(req.guestName ?? 'G').charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-slate-800 truncate">{req.guestName ?? 'Guest'}</p>
+                    <p className="text-[10px] text-emerald-600 font-medium">
+                      {req.status === 'ACTIVE' ? '🟢 Live on video' : '⏳ Connecting…'}
+                    </p>
+                  </div>
+                  <div className="flex gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => void handleToggleMuteGuest(req.id, req.isMuted)}
+                      title={req.isMuted ? 'Unmute guest' : 'Mute guest'}
+                      className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-1"
+                    >
+                      {req.isMuted ? <Volume2 size={11} /> : <VolumeX size={11} />}
+                      {req.isMuted ? 'Unmute' : 'Mute'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleRemoveGuest(req.id)}
+                      className="rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-red-600 hover:bg-red-50 transition-colors flex items-center gap-1"
+                    >
+                      <PhoneOff size={11} /> Remove
+                    </button>
+                  </div>
+                </div>
+                {/* Guest video tile */}
+                <div className="relative aspect-video overflow-hidden rounded-xl bg-slate-900">
+                  <video
+                    ref={(el) => setGuestVideoRef(req.id, el)}
+                    autoPlay
+                    playsInline
+                    muted={req.isMuted}
+                    className="h-full w-full object-cover"
+                  />
+                  <div className="absolute bottom-0 left-0 right-0 flex items-center justify-between p-1.5 bg-gradient-to-t from-black/60 to-transparent">
+                    <span className="text-[10px] font-semibold text-white">{req.guestName ?? 'Guest'}</span>
+                    {req.isMuted && (
+                      <span className="inline-flex items-center gap-0.5 rounded bg-slate-800/80 px-1.5 py-0.5 text-[9px] text-white">
+                        <VolumeX size={9} /> Muted
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
 
           {/* Live Questions / Chat */}

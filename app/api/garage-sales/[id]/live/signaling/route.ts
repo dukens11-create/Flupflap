@@ -197,7 +197,7 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: 'role must be BUYER or SELLER' }, { status: 400 });
   }
   if (!isSignalKind(kind)) {
-    return NextResponse.json({ error: 'kind must be OFFER, ANSWER, ICE, VIEWER_HEARTBEAT, or STREAM_READY' }, { status: 400 });
+    return NextResponse.json({ error: 'kind must be OFFER, ANSWER, ICE, VIEWER_HEARTBEAT, STREAM_READY, GUEST_OFFER, GUEST_ANSWER, or GUEST_ICE' }, { status: 400 });
   }
 
   if (role === LIVE_SIGNAL_ROLES.SELLER && kind === LIVE_SIGNAL_KINDS.ANSWER) {
@@ -211,6 +211,13 @@ export async function POST(req: Request, { params }: Params) {
   }
   if (role === LIVE_SIGNAL_ROLES.SELLER && kind === LIVE_SIGNAL_KINDS.STREAM_READY) {
     return NextResponse.json({ error: 'Seller cannot send STREAM_READY' }, { status: 400 });
+  }
+  // Guest signaling: GUEST_OFFER comes from BUYER, GUEST_ANSWER comes from SELLER
+  if (role === LIVE_SIGNAL_ROLES.SELLER && kind === LIVE_SIGNAL_KINDS.GUEST_OFFER) {
+    return NextResponse.json({ error: 'Seller cannot send GUEST_OFFER' }, { status: 400 });
+  }
+  if (role === LIVE_SIGNAL_ROLES.BUYER && kind === LIVE_SIGNAL_KINDS.GUEST_ANSWER) {
+    return NextResponse.json({ error: 'Buyer cannot send GUEST_ANSWER' }, { status: 400 });
   }
 
   if (payload == null || typeof payload !== 'object') {

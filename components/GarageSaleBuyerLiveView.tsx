@@ -1,9 +1,9 @@
 'use client';
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { MessageCircle, Send, Radio, Eye, Heart } from 'lucide-react';
+import { MessageCircle, Send, Radio, Eye, Heart, Video, VideoOff, PhoneOff } from 'lucide-react';
 import { RTC_CONFIG, HAS_TURN_CONFIG } from '@/lib/rtc-config';
 import { getIceCandidateType, type IceCandidateType } from '@/lib/rtc-diagnostics';
-import { LIVE_SIGNAL_EVENTS, LIVE_SIGNAL_KINDS, LIVE_SIGNAL_ROLES, getLiveRoomId } from '@/lib/live-signaling';
+import { LIVE_SIGNAL_EVENTS, LIVE_SIGNAL_KINDS, LIVE_SIGNAL_ROLES, getLiveRoomId, MAX_LIVE_GUESTS } from '@/lib/live-signaling';
 import {
   MAX_RECONNECT_ATTEMPTS,
   RECONNECT_STEP_DELAY_MS,
@@ -37,6 +37,17 @@ interface Props {
   buyerName?: string | null;
 }
 
+type GuestJoinStatus =
+  | 'idle'
+  | 'requesting-media'
+  | 'pending'
+  | 'waiting'
+  | 'approved'
+  | 'active'
+  | 'declined'
+  | 'full'
+  | 'ended';
+
 export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerName }: Props) {
   const [isLive, setIsLive] = useState(initialIsLive);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -61,6 +72,10 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
   const [likeCount, setLikeCount] = useState(0);
   const [likeAnimating, setLikeAnimating] = useState(false);
   const [likeSending, setLikeSending] = useState(false);
+
+  // Guest video call state
+  const [guestJoinStatus, setGuestJoinStatus] = useState<GuestJoinStatus>('idle');
+  const [guestJoinError, setGuestJoinError] = useState<string | null>(null);
 
   const lastSeenRef = useRef<string | null>(null);
   const chatBottomRef = useRef<HTMLDivElement>(null);
@@ -98,6 +113,18 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
   const streamReadySentForOfferRef = useRef<string | null>(null);
   const liveDebugEnabled = process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_DEBUG_LIVE_STREAM === '1';
   const liveDebugOverlayEnabled = process.env.NEXT_PUBLIC_LIVE_DEBUG_OVERLAY === 'true';
+
+  // Guest video call refs
+  const guestRequestIdRef = useRef<string | null>(null);
+  const guestLocalStreamRef = useRef<MediaStream | null>(null);
+  const guestPeerRef = useRef<RTCPeerConnection | null>(null);
+  const guestLocalVideoRef = useRef<HTMLVideoElement | null>(null);
+  const guestPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const guestHasRemoteDescRef = useRef(false);
+  const guestPendingIceRef = useRef<RTCIceCandidateInit[]>([]);
+  const guestSignalOfferSentRef = useRef(false);
+  // Stable ref so polling callbacks always see the latest status without stale closures
+  const guestJoinStatusRef = useRef<GuestJoinStatus>('idle');
 
   const logLiveDebug = useCallback((event: string, details?: Record<string, unknown>) => {
     if (!liveDebugEnabled) return;
@@ -679,6 +706,49 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
           // ICE candidates are always consumed — failures are non-fatal and the
           // candidate should not be replayed on the next poll.
           signalCursorRef.current = signal.createdAt;
+        } else if (signal.kind === LIVE_SIGNAL_KINDS.GUEST_ANSWER) {
+          // Seller's WebRTC answer for the guest call
+          const payload = signal.payload as { type?: string; sdp?: string; requestId?: string } | null;
+          if (
+            payload?.sdp
+            && payload?.type === 'answer'
+            && guestPeerRef.current
+            && !guestHasRemoteDescRef.current
+          ) {
+            try {
+              await guestPeerRef.current.setRemoteDescription({ type: 'answer', sdp: payload.sdp });
+              guestHasRemoteDescRef.current = true;
+              // Drain buffered ICE candidates
+              for (const candidate of guestPendingIceRef.current) {
+                if (!guestPeerRef.current) break;
+                try {
+                  await guestPeerRef.current.addIceCandidate(new RTCIceCandidate(candidate));
+                } catch {
+                  // ignore stale
+                }
+              }
+              guestPendingIceRef.current = [];
+              logLiveDebug('guest-answer-applied', { requestId: payload.requestId });
+            } catch (err) {
+              console.warn('[GuestCall] Failed to apply guest answer', err);
+            }
+          }
+          signalCursorRef.current = signal.createdAt;
+        } else if (signal.kind === LIVE_SIGNAL_KINDS.GUEST_ICE) {
+          // ICE candidate from seller for the guest peer connection
+          const payload = signal.payload as { candidate?: RTCIceCandidateInit; requestId?: string } | null;
+          if (payload?.candidate && guestPeerRef.current) {
+            if (!guestHasRemoteDescRef.current) {
+              guestPendingIceRef.current.push(payload.candidate);
+            } else {
+              try {
+                await guestPeerRef.current.addIceCandidate(new RTCIceCandidate(payload.candidate));
+              } catch {
+                // ignore stale
+              }
+            }
+          }
+          signalCursorRef.current = signal.createdAt;
         } else {
           signalCursorRef.current = signal.createdAt;
         }
@@ -749,8 +819,15 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
       clearConnectionRecoveryTimeout();
       clearWaitingForPublisherTimer();
       closePeerConnection();
+      // Inline guest peer cleanup (stopGuestPeer is declared after this hook)
+      guestPeerRef.current?.close();
+      guestPeerRef.current = null;
+      guestLocalStreamRef.current?.getTracks().forEach((t) => t.stop());
+      guestLocalStreamRef.current = null;
+      if (guestPollRef.current) clearInterval(guestPollRef.current);
       if (viewerHeartbeatRef.current) clearInterval(viewerHeartbeatRef.current);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clearConnectionRecoveryTimeout, clearReconnectRetryTimeout, clearWaitingForPublisherTimer, closePeerConnection, stopSignalPolling]);
 
   useEffect(() => {
@@ -795,6 +872,296 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
       video.removeEventListener('waiting', handleBuffering);
     };
   }, [hasRemoteMedia, isLive, logLiveDebug, playRemoteStream]);
+
+  // ── Guest Video Call ─────────────────────────────────────────────────────────
+
+  const stopGuestPeer = useCallback(() => {
+    guestPeerRef.current?.close();
+    guestPeerRef.current = null;
+    guestLocalStreamRef.current?.getTracks().forEach((t) => t.stop());
+    guestLocalStreamRef.current = null;
+    guestHasRemoteDescRef.current = false;
+    guestPendingIceRef.current = [];
+    guestSignalOfferSentRef.current = false;
+    if (guestLocalVideoRef.current) guestLocalVideoRef.current.srcObject = null;
+  }, []);
+
+  const postGuestSignal = useCallback(async (kind: 'GUEST_OFFER' | 'GUEST_ICE', payload: Record<string, unknown>) => {
+    try {
+      const res = await fetch(`/api/garage-sales/${saleId}/live/signaling`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: LIVE_SIGNAL_ROLES.BUYER, kind, payload }),
+      });
+      if (!res.ok) {
+        console.warn('[GuestCall] Failed to post guest signal', { kind, status: res.status });
+        return false;
+      }
+      return true;
+    } catch {
+      console.warn('[GuestCall] Network error posting guest signal', { kind });
+      return false;
+    }
+  }, [saleId]);
+
+  const startGuestOffer = useCallback(async (requestId: string) => {
+    if (!guestLocalStreamRef.current) {
+      console.warn('[GuestCall] No local stream for guest offer');
+      return;
+    }
+    if (typeof RTCPeerConnection === 'undefined') {
+      setGuestJoinError('Live video calls are not supported in this browser.');
+      return;
+    }
+    guestHasRemoteDescRef.current = false;
+    guestPendingIceRef.current = [];
+    guestSignalOfferSentRef.current = false;
+
+    const pc = new RTCPeerConnection(RTC_CONFIG);
+    guestPeerRef.current = pc;
+
+    guestLocalStreamRef.current.getTracks().forEach((track) => {
+      pc.addTrack(track, guestLocalStreamRef.current!);
+    });
+
+    pc.onicecandidate = (event) => {
+      if (!event.candidate) return;
+      void postGuestSignal(LIVE_SIGNAL_KINDS.GUEST_ICE, { candidate: event.candidate.toJSON(), requestId });
+    };
+
+    pc.onconnectionstatechange = () => {
+      logLiveDebug(LIVE_SIGNAL_EVENTS.GUEST_JOINED_LIVE, { state: pc.connectionState, requestId });
+      if (pc.connectionState === 'connected') {
+        setGuestJoinStatus('active');
+        guestJoinStatusRef.current = 'active';
+        console.info('[GuestCall] Guest peer connected', { requestId });
+      } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+        console.warn('[GuestCall] Guest peer connection lost', { state: pc.connectionState, requestId });
+      }
+    };
+
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    guestSignalOfferSentRef.current = true;
+    await postGuestSignal(LIVE_SIGNAL_KINDS.GUEST_OFFER, {
+      type: offer.type,
+      sdp: offer.sdp,
+      requestId,
+      guestId: guestIdRef.current,
+    });
+    console.info('[GuestCall] Guest offer sent', { requestId });
+  }, [logLiveDebug, postGuestSignal]);
+
+  const handleRequestToJoin = useCallback(async () => {
+    if (!isLive) return;
+    setGuestJoinError(null);
+    setGuestJoinStatus('requesting-media');
+    guestJoinStatusRef.current = 'requesting-media';
+
+    // 1. Request camera + mic BEFORE creating the join request (never publish until approved)
+    let localStream: MediaStream | null = null;
+    try {
+      localStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+        audio: true,
+      });
+      guestLocalStreamRef.current = localStream;
+      // Show local preview (muted so no echo)
+      if (guestLocalVideoRef.current) {
+        guestLocalVideoRef.current.srcObject = localStream;
+        guestLocalVideoRef.current.muted = true;
+        void guestLocalVideoRef.current.play().catch(() => undefined);
+      }
+      logLiveDebug(LIVE_SIGNAL_EVENTS.REQUEST_JOIN_LIVE, { guestId: guestIdRef.current });
+    } catch (err) {
+      const name = err instanceof DOMException ? err.name : '';
+      let msg = 'Could not access camera or microphone.';
+      if (name === 'NotAllowedError') msg = 'Camera/microphone permission was denied. Please allow access and try again.';
+      else if (name === 'NotFoundError') msg = 'No camera or microphone found on this device.';
+      setGuestJoinError(msg);
+      setGuestJoinStatus('idle');
+      guestJoinStatusRef.current = 'idle';
+      return;
+    }
+
+    // 2. Check room capacity
+    try {
+      const checkRes = await fetch(`/api/garage-sales/${saleId}/guest-requests?guestId=${encodeURIComponent(guestIdRef.current)}`);
+      if (checkRes.ok) {
+        const checkData = await checkRes.json() as { activeCount: number; maxGuests: number };
+        if (checkData.activeCount >= checkData.maxGuests) {
+          localStream.getTracks().forEach((t) => t.stop());
+          guestLocalStreamRef.current = null;
+          setGuestJoinStatus('full');
+          guestJoinStatusRef.current = 'full';
+          return;
+        }
+      }
+    } catch {
+      // Continue — the create API will also enforce the limit
+    }
+
+    // 3. Create the join request in the database
+    try {
+      const res = await fetch(`/api/garage-sales/${saleId}/guest-requests`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          guestId: guestIdRef.current,
+          guestName: guestName || DEFAULT_GUEST_NAME,
+        }),
+      });
+      const data = await res.json() as { request?: { id: string; status: string }; error?: string; roomFull?: boolean };
+      if (!res.ok) {
+        if (data.roomFull) {
+          localStream.getTracks().forEach((t) => t.stop());
+          guestLocalStreamRef.current = null;
+          setGuestJoinStatus('full');
+          guestJoinStatusRef.current = 'full';
+          return;
+        }
+        throw new Error(data.error ?? 'Failed to send request');
+      }
+      if (data.request) {
+        guestRequestIdRef.current = data.request.id;
+        setGuestJoinStatus('pending');
+        guestJoinStatusRef.current = 'pending';
+        console.info('[GuestCall] Join request created', { requestId: data.request.id });
+      }
+    } catch (err) {
+      localStream.getTracks().forEach((t) => t.stop());
+      guestLocalStreamRef.current = null;
+      setGuestJoinError(err instanceof Error ? err.message : 'Failed to send request');
+      setGuestJoinStatus('idle');
+      guestJoinStatusRef.current = 'idle';
+    }
+  }, [guestName, isLive, logLiveDebug, saleId]);
+
+  const handleEndGuestCall = useCallback(async () => {
+    const reqId = guestRequestIdRef.current;
+    setGuestJoinStatus('ended');
+    guestJoinStatusRef.current = 'ended';
+    stopGuestPeer();
+    logLiveDebug(LIVE_SIGNAL_EVENTS.GUEST_LEFT_LIVE, { requestId: reqId });
+    if (reqId) {
+      try {
+        await fetch(`/api/garage-sales/${saleId}/guest-requests/${reqId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'end', guestId: guestIdRef.current }),
+        });
+        console.info('[GuestCall] Guest call ended', { requestId: reqId });
+      } catch {
+        // Cleanup is most important even if the API call fails
+      }
+    }
+    guestRequestIdRef.current = null;
+    setTimeout(() => {
+      setGuestJoinStatus('idle');
+      guestJoinStatusRef.current = 'idle';
+    }, 2000);
+  }, [logLiveDebug, saleId, stopGuestPeer]);
+
+  // Poll for guest request status (approval, decline, mute, remove)
+  const pollGuestStatus = useCallback(async () => {
+    const currentStatus = guestJoinStatusRef.current;
+    if (currentStatus === 'idle' || currentStatus === 'requesting-media' || currentStatus === 'ended') return;
+
+    try {
+      const res = await fetch(`/api/garage-sales/${saleId}/guest-requests?guestId=${encodeURIComponent(guestIdRef.current)}`);
+      if (!res.ok) return;
+      const data = await res.json() as {
+        request?: { id: string; status: string; isMuted: boolean } | null;
+        activeCount: number;
+        maxGuests: number;
+        isLive: boolean;
+      };
+
+      if (!data.isLive) {
+        stopGuestPeer();
+        setGuestJoinStatus('ended');
+        guestJoinStatusRef.current = 'ended';
+        return;
+      }
+
+      const req = data.request;
+      if (!req) return;
+
+      if (req.status === 'DECLINED') {
+        logLiveDebug(LIVE_SIGNAL_EVENTS.DECLINE_JOIN_REQUEST, { requestId: req.id });
+        stopGuestPeer();
+        setGuestJoinStatus('declined');
+        guestJoinStatusRef.current = 'declined';
+        return;
+      }
+
+      if (req.status === 'REMOVED') {
+        logLiveDebug(LIVE_SIGNAL_EVENTS.GUEST_REMOVED, { requestId: req.id });
+        stopGuestPeer();
+        setGuestJoinStatus('ended');
+        guestJoinStatusRef.current = 'ended';
+        setTimeout(() => { setGuestJoinStatus('idle'); guestJoinStatusRef.current = 'idle'; }, 2000);
+        return;
+      }
+
+      if (req.status === 'ENDED') {
+        setGuestJoinStatus('idle');
+        guestJoinStatusRef.current = 'idle';
+        return;
+      }
+
+      if (req.status === 'APPROVED' && (currentStatus === 'pending' || currentStatus === 'waiting')) {
+        logLiveDebug(LIVE_SIGNAL_EVENTS.APPROVE_JOIN_REQUEST, { requestId: req.id });
+        setGuestJoinStatus('approved');
+        guestJoinStatusRef.current = 'approved';
+        if (!guestSignalOfferSentRef.current && guestLocalStreamRef.current) {
+          await startGuestOffer(req.id);
+        }
+      }
+
+      // Reflect mute state on local audio tracks
+      if (guestLocalStreamRef.current) {
+        guestLocalStreamRef.current.getAudioTracks().forEach((t) => { t.enabled = !req.isMuted; });
+      }
+    } catch {
+      // Silent fail — will retry on next interval
+    }
+  }, [logLiveDebug, saleId, startGuestOffer, stopGuestPeer]);
+
+  // Start/stop guest status polling when guestJoinStatus changes to an active state
+  useEffect(() => {
+    const active = guestJoinStatus === 'pending' || guestJoinStatus === 'waiting'
+      || guestJoinStatus === 'approved' || guestJoinStatus === 'active';
+    if (active) {
+      if (!guestPollRef.current) {
+        void pollGuestStatus();
+        guestPollRef.current = setInterval(() => { void pollGuestStatus(); }, 3000);
+      }
+    } else {
+      if (guestPollRef.current) {
+        clearInterval(guestPollRef.current);
+        guestPollRef.current = null;
+      }
+    }
+    return () => {
+      if (guestPollRef.current) {
+        clearInterval(guestPollRef.current);
+        guestPollRef.current = null;
+      }
+    };
+  }, [guestJoinStatus, pollGuestStatus]);
+
+  // Clean up guest resources on unmount or when live ends
+  useEffect(() => {
+    if (!isLive) {
+      if (guestJoinStatusRef.current !== 'idle') {
+        stopGuestPeer();
+        setGuestJoinStatus('idle');
+        guestJoinStatusRef.current = 'idle';
+        guestRequestIdRef.current = null;
+      }
+    }
+  }, [isLive, stopGuestPeer]);
 
   const handleSend = async () => {
     const trimmed = input.trim();
@@ -992,6 +1359,143 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
           TURN relay is not configured. Some mobile viewers may fail to connect.
         </p>
       )}
+
+      {/* ── Guest Join Live section ──────────────────────────────────────────── */}
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-3">
+        <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Join Live on Video</p>
+
+        {guestJoinStatus === 'idle' && (
+          <button
+            type="button"
+            onClick={() => void handleRequestToJoin()}
+            className="w-full flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-indigo-700 active:bg-indigo-800"
+          >
+            <Video size={15} />
+            Request to Join Live
+          </button>
+        )}
+
+        {guestJoinStatus === 'requesting-media' && (
+          <p className="text-center text-sm text-slate-600 py-1">Requesting camera &amp; microphone…</p>
+        )}
+
+        {guestJoinStatus === 'full' && (
+          <p className="text-center text-sm font-medium text-amber-700 rounded-lg bg-amber-50 px-3 py-2">
+            Live guest room is full. Please wait.
+          </p>
+        )}
+
+        {guestJoinStatus === 'pending' && (
+          <div className="space-y-2">
+            <p className="text-center text-sm text-slate-700 font-medium">
+              ✉️ Request sent — waiting for seller approval
+            </p>
+            {/* Show local preview so user sees their camera is ready */}
+            <div className="relative aspect-video overflow-hidden rounded-xl bg-slate-900">
+              <video
+                ref={guestLocalVideoRef}
+                autoPlay
+                playsInline
+                muted
+                className="h-full w-full object-cover scale-x-[-1]"
+              />
+              <span className="absolute bottom-2 left-2 rounded bg-black/60 px-2 py-0.5 text-[10px] font-semibold text-white">
+                Your camera (preview only)
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => void handleEndGuestCall()}
+              className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-100"
+            >
+              <PhoneOff size={13} /> Cancel Request
+            </button>
+          </div>
+        )}
+
+        {guestJoinStatus === 'approved' && (
+          <div className="space-y-2">
+            <p className="text-center text-sm text-emerald-700 font-medium">
+              ✅ Approved — connecting…
+            </p>
+            <div className="relative aspect-video overflow-hidden rounded-xl bg-slate-900">
+              <video
+                ref={guestLocalVideoRef}
+                autoPlay
+                playsInline
+                muted
+                className="h-full w-full object-cover scale-x-[-1]"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => void handleEndGuestCall()}
+              className="w-full flex items-center justify-center gap-1.5 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700"
+            >
+              <PhoneOff size={13} /> End Guest Call
+            </button>
+          </div>
+        )}
+
+        {guestJoinStatus === 'active' && (
+          <div className="space-y-2">
+            <p className="text-center text-sm font-bold text-emerald-700">
+              🎙 You are live with seller
+            </p>
+            <div className="relative aspect-video overflow-hidden rounded-xl bg-slate-900">
+              <video
+                ref={guestLocalVideoRef}
+                autoPlay
+                playsInline
+                muted
+                className="h-full w-full object-cover scale-x-[-1]"
+              />
+              <span className="absolute top-2 left-2 inline-flex items-center gap-1 rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold text-white animate-pulse">
+                🔴 LIVE
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => void handleEndGuestCall()}
+              className="w-full flex items-center justify-center gap-1.5 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700"
+            >
+              <PhoneOff size={13} /> End Guest Call
+            </button>
+          </div>
+        )}
+
+        {guestJoinStatus === 'declined' && (
+          <div className="space-y-2">
+            <p className="text-center text-sm text-red-700 font-medium rounded-lg bg-red-50 px-3 py-2">
+              ❌ Seller declined your request
+            </p>
+            <button
+              type="button"
+              onClick={() => { setGuestJoinStatus('idle'); guestJoinStatusRef.current = 'idle'; }}
+              className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Try Again
+            </button>
+          </div>
+        )}
+
+        {guestJoinStatus === 'ended' && (
+          <p className="text-center text-sm text-slate-600 py-1">
+            <VideoOff size={14} className="inline mr-1" />
+            Guest call ended
+          </p>
+        )}
+
+        {guestJoinError && (
+          <p className="text-xs text-red-600 rounded-lg bg-red-50 px-3 py-2">{guestJoinError}</p>
+        )}
+
+        {guestJoinStatus === 'idle' && (
+          <p className="text-[11px] text-slate-400 text-center">
+            Up to {MAX_LIVE_GUESTS} guests can join the seller on video at once.
+          </p>
+        )}
+      </div>
 
       {/* Like / heart button */}
       <div className="flex items-center gap-3">
