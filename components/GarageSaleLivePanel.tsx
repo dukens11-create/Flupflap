@@ -71,6 +71,16 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   const [viewerCount, setViewerCount] = useState(0);
   const [canSwitchCamera, setCanSwitchCamera] = useState(false);
   const [currentCamera, setCurrentCamera] = useState<'front' | 'back'>('front');
+  const liveDebugEnabled = process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_DEBUG_LIVE_STREAM === '1';
+
+  const logLiveDebug = useCallback((event: string, details?: Record<string, unknown>) => {
+    if (!liveDebugEnabled) return;
+    if (details) {
+      console.info('[GarageSaleLivePanel]', event, details);
+      return;
+    }
+    console.info('[GarageSaleLivePanel]', event);
+  }, [liveDebugEnabled]);
 
   const logMobileCameraIssue = useCallback((issue: string, details?: Record<string, unknown>) => {
     if (details) {
@@ -156,6 +166,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         signalCursorRef.current = signal.createdAt;
 
         if (signal.kind === 'ANSWER' && !hasRemoteAnswerRef.current) {
+          logLiveDebug('signal-answer', { createdAt: signal.createdAt });
           const payload = signal.payload as { type?: string; sdp?: string } | null;
           if (!payload) continue;
           const type = payload?.type === 'answer' ? payload.type : null;
@@ -177,6 +188,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         }
 
         if (signal.kind === 'ICE') {
+          logLiveDebug('signal-ice', { createdAt: signal.createdAt });
           const payload = signal.payload as { candidate?: RTCIceCandidateInit } | null;
           if (!payload?.candidate) continue;
           if (!hasRemoteAnswerRef.current) {
@@ -197,7 +209,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     } catch {
       console.warn('[GarageSaleLivePanel] Network error while polling seller signals');
     }
-  }, [isLive, saleId, stopSignalPolling]);
+  }, [isLive, logLiveDebug, saleId, stopSignalPolling]);
 
   const startSignalPolling = useCallback(() => {
     stopSignalPolling();
@@ -230,6 +242,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     };
 
     pc.onconnectionstatechange = () => {
+      logLiveDebug('peer-connection-state', { state: pc.connectionState });
       if (pc.connectionState === 'connected') {
         setError(null);
         if (reconnectTimeoutRef.current) {
@@ -273,12 +286,17 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       }
     };
 
+    pc.oniceconnectionstatechange = () => {
+      logLiveDebug('ice-connection-state', { state: pc.iceConnectionState });
+    };
+
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
+    logLiveDebug('offer-created', { hasSdp: Boolean(offer.sdp) });
     await postSignal('OFFER', { type: offer.type, sdp: offer.sdp }, { critical: true });
 
     startSignalPolling();
-  }, [closePeerConnection, postSignal, startSignalPolling]);
+  }, [closePeerConnection, logLiveDebug, postSignal, startSignalPolling]);
 
   // Keep the ref current so connection-state handlers can always call the latest version.
   useEffect(() => {
