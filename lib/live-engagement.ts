@@ -51,3 +51,9 @@ export function getLiveEngagementActorId(userId: string | null, guestId: string 
   if (guestId) return `guest:${guestId}`;
   return null;
 }
+
+export function isSameLiveSession(activeLiveSessionId: string | null, incomingLiveSessionId: string | null | undefined) {
+  if (!incomingLiveSessionId) return true;
+  if (!activeLiveSessionId) return true;
+  return incomingLiveSessionId === activeLiveSessionId;
+}

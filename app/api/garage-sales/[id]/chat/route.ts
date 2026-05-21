@@ -7,14 +7,13 @@ import {
   LIVE_ENGAGEMENT_EVENTS,
   LIVE_ENGAGEMENT_SIGNAL_KINDS,
   getLiveEngagementActorId,
-  normalizeGuestId,
   resolveLiveEngagementContext,
 } from '@/lib/live-engagement';
 import { applyRateLimitAsync } from '@/lib/security';
 
 export const dynamic = 'force-dynamic';
 
-const DEFAULT_GUEST_NAME = 'Guest';
+const DEFAULT_BUYER_DISPLAY_NAME = 'Buyer';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -85,10 +84,8 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { message, guestName, guestId, liveSessionId, roomId } = body as {
+  const { message, liveSessionId, roomId } = body as {
     message?: string;
-    guestName?: string;
-    guestId?: string;
     liveSessionId?: string | null;
     roomId?: string;
   };
@@ -100,14 +97,27 @@ export async function POST(req: Request, { params }: Params) {
   }
 
   const userId = session?.user?.id ?? null;
-  const resolvedGuestId = !userId ? normalizeGuestId(guestId) : null;
-  let resolvedGuestName: string | null = null;
   if (!userId) {
-    const trimmedName = typeof guestName === 'string' ? guestName.trim() : '';
-    resolvedGuestName = trimmedName ? trimmedName.slice(0, 50) : DEFAULT_GUEST_NAME;
+    return NextResponse.json({ error: 'Please log in to chat' }, { status: 401 });
   }
+  const sessionDisplayName = typeof session?.user?.name === 'string' ? session.user.name.trim() : '';
+  const resolvedDisplayName = sessionDisplayName
+    ? sessionDisplayName.slice(0, 50)
+    : DEFAULT_BUYER_DISPLAY_NAME;
   const liveContext = resolveLiveEngagementContext(id, sale.liveStartedAt ?? null, { liveSessionId, roomId });
-  const actorId = getLiveEngagementActorId(userId, resolvedGuestId);
+  const actorId = getLiveEngagementActorId(userId, null);
+  const insertCreatedAt = new Date();
+  const insertPayload = {
+    liveId: id,
+    streamId: id,
+    roomId: liveContext.roomId,
+    liveSessionId: liveContext.liveSessionId,
+    userId,
+    guestId: null,
+    displayName: resolvedDisplayName,
+    message: message.trim(),
+    createdAt: insertCreatedAt.toISOString(),
+  };
 
   console.info('[garage-sale-chat] message send attempt', {
     saleId: id,
@@ -118,6 +128,7 @@ export async function POST(req: Request, { params }: Params) {
     roomMatches: liveContext.roomMatches,
     liveSessionMatches: liveContext.liveSessionMatches,
     actorId,
+    insertPayload,
   });
 
   try {
@@ -126,8 +137,9 @@ export async function POST(req: Request, { params }: Params) {
         data: {
           saleId: id,
           userId,
-          guestName: resolvedGuestName,
-          message: message.trim(),
+          guestName: resolvedDisplayName,
+          message: insertPayload.message,
+          createdAt: insertCreatedAt,
         },
         select: { id: true, userId: true, guestName: true, message: true, createdAt: true },
       });
@@ -137,11 +149,12 @@ export async function POST(req: Request, { params }: Params) {
           saleId: id,
           sender: 'BUYER',
           kind: LIVE_ENGAGEMENT_SIGNAL_KINDS.MESSAGE_SENT,
-          payload: {
-            event: LIVE_ENGAGEMENT_EVENTS.MESSAGE_SENT,
-            roomId: liveContext.roomId,
-            liveSessionId: liveContext.liveSessionId,
-            actorId,
+        payload: {
+          event: LIVE_ENGAGEMENT_EVENTS.MESSAGE_SENT,
+          liveId: id,
+          roomId: liveContext.roomId,
+          liveSessionId: liveContext.liveSessionId,
+          actorId,
             message: {
               id: createdMessage.id,
               userId: createdMessage.userId,
@@ -166,6 +179,7 @@ export async function POST(req: Request, { params }: Params) {
 
     return NextResponse.json({
       ...msg,
+      liveId: id,
       roomId: liveContext.roomId,
       liveSessionId: liveContext.liveSessionId,
       event: LIVE_ENGAGEMENT_EVENTS.MESSAGE_SENT,
@@ -175,7 +189,10 @@ export async function POST(req: Request, { params }: Params) {
       saleId: id,
       liveSessionId: liveContext.liveSessionId,
       actorId,
-      error: error instanceof Error ? error.message : 'unknown',
+      insertPayload,
+      error,
+      errorMessage: error instanceof Error ? error.message : 'unknown',
+      prismaCode: (error as { code?: string } | null)?.code ?? null,
     });
     return NextResponse.json({ error: 'Failed to save live chat message' }, { status: 500 });
   }
