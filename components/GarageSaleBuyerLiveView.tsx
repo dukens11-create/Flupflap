@@ -888,7 +888,6 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
       if (guestPollRef.current) clearInterval(guestPollRef.current);
       if (viewerHeartbeatRef.current) clearInterval(viewerHeartbeatRef.current);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clearConnectionRecoveryTimeout, clearReconnectRetryTimeout, clearWaitingForPublisherTimer, closePeerConnection, stopSignalPolling]);
 
   useEffect(() => {
