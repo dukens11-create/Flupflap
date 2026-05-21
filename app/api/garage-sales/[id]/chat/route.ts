@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { isGarageSalePubliclyVisible } from '@/lib/garage-sale-visibility';
 import {
+  buildLiveEngagementIdentifiers,
   LIVE_ENGAGEMENT_EVENTS,
   LIVE_ENGAGEMENT_SIGNAL_KINDS,
   getLiveEngagementActorId,
@@ -53,7 +54,7 @@ export async function POST(req: Request, { params }: Params) {
 
   const sale = await prisma.garageSale.findUnique({
     where: { id },
-    select: { status: true, paymentStatus: true, isArchived: true, isSpam: true, isLive: true, startDate: true, endDate: true, liveStartedAt: true },
+    select: { status: true, paymentStatus: true, isArchived: true, isSpam: true, isLive: true, startDate: true, endDate: true, liveStartedAt: true, sellerId: true },
   });
   if (!sale || !isGarageSalePubliclyVisible(sale)) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -107,13 +108,14 @@ export async function POST(req: Request, { params }: Params) {
   const liveContext = resolveLiveEngagementContext(id, sale.liveStartedAt ?? null, { liveSessionId, roomId });
   const actorId = getLiveEngagementActorId(userId, null);
   const insertCreatedAt = new Date();
+  const identifiers = buildLiveEngagementIdentifiers(id);
   const insertPayload = {
-    liveId: id,
-    streamId: id,
+    ...identifiers,
     roomId: liveContext.roomId,
     liveSessionId: liveContext.liveSessionId,
     userId,
     guestId: null,
+    sellerId: sale.sellerId,
     displayName: resolvedDisplayName,
     message: message.trim(),
     createdAt: insertCreatedAt.toISOString(),
@@ -132,42 +134,55 @@ export async function POST(req: Request, { params }: Params) {
   });
 
   try {
-    const msg = await prisma.$transaction(async (tx) => {
-      const createdMessage = await tx.garageSaleChat.create({
-        data: {
-          saleId: id,
-          userId,
-          guestName: resolvedDisplayName,
-          message: insertPayload.message,
-          createdAt: insertCreatedAt,
-        },
-        select: { id: true, userId: true, guestName: true, message: true, createdAt: true },
-      });
+    const msg = await prisma.garageSaleChat.create({
+      data: {
+        saleId: id,
+        userId,
+        sellerId: sale.sellerId,
+        guestName: resolvedDisplayName,
+        message: insertPayload.message,
+        createdAt: insertCreatedAt,
+      },
+      select: { id: true, userId: true, guestName: true, message: true, createdAt: true },
+    });
 
-      await tx.garageSaleLiveSignal.create({
+    let signalEmitted = true;
+    try {
+      await prisma.garageSaleLiveSignal.create({
         data: {
           saleId: id,
           sender: 'BUYER',
           kind: LIVE_ENGAGEMENT_SIGNAL_KINDS.MESSAGE_SENT,
           payload: {
             event: LIVE_ENGAGEMENT_EVENTS.MESSAGE_SENT,
-            liveId: id,
+            ...identifiers,
             roomId: liveContext.roomId,
             liveSessionId: liveContext.liveSessionId,
             actorId,
             message: {
-              id: createdMessage.id,
-              userId: createdMessage.userId,
-              guestName: createdMessage.guestName,
-              message: createdMessage.message,
-              createdAt: createdMessage.createdAt.toISOString(),
+              id: msg.id,
+              userId: msg.userId,
+              guestName: msg.guestName,
+              message: msg.message,
+              createdAt: msg.createdAt.toISOString(),
             },
           },
         },
       });
-
-      return createdMessage;
-    });
+    } catch (signalError) {
+      signalEmitted = false;
+      console.error('[garage-sale-chat] live_message_sent signal emit error', {
+        saleId: id,
+        liveSessionId: liveContext.liveSessionId,
+        roomId: liveContext.roomId,
+        actorId,
+        messageId: msg.id,
+        error: signalError,
+        errorName: signalError instanceof Error ? signalError.name : 'unknown',
+        errorMessage: signalError instanceof Error ? signalError.message : 'unknown',
+        prismaCode: (signalError as { code?: string } | null)?.code ?? null,
+      });
+    }
 
     console.info('[garage-sale-chat] live_message_sent emitted', {
       saleId: id,
@@ -175,11 +190,12 @@ export async function POST(req: Request, { params }: Params) {
       liveSessionId: liveContext.liveSessionId,
       roomId: liveContext.roomId,
       actorId,
+      signalEmitted,
     });
 
     return NextResponse.json({
       ...msg,
-      liveId: id,
+      ...identifiers,
       roomId: liveContext.roomId,
       liveSessionId: liveContext.liveSessionId,
       event: LIVE_ENGAGEMENT_EVENTS.MESSAGE_SENT,
@@ -191,7 +207,9 @@ export async function POST(req: Request, { params }: Params) {
       actorId,
       insertPayload,
       error,
+      errorName: error instanceof Error ? error.name : 'unknown',
       errorMessage: error instanceof Error ? error.message : 'unknown',
+      errorStack: error instanceof Error ? error.stack : null,
       prismaCode: (error as { code?: string } | null)?.code ?? null,
     });
     return NextResponse.json({ error: 'Failed to save live chat message' }, { status: 500 });
