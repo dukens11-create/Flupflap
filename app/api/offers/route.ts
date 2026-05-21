@@ -6,6 +6,7 @@ import { NotificationType } from '@prisma/client';
 import { z } from 'zod';
 import { createNotifications } from '@/lib/notifications';
 import { applyRateLimitAsync } from '@/lib/security';
+import { supplierPublicVisibilityWhere } from '@/lib/wholesaler';
 
 const createSchema = z.object({
   productId: z.string().min(1),
@@ -82,8 +83,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid input.' }, { status: 400 });
     }
 
-    const product = await prisma.product.findUnique({
-      where: { id: parsed.productId },
+    const product = await prisma.product.findFirst({
+      where: { id: parsed.productId, AND: [supplierPublicVisibilityWhere()] },
       select: {
         id: true,
         title: true,

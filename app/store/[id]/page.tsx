@@ -6,6 +6,7 @@ import ProductCard from '@/components/ProductCard';
 import { ShieldCheck } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
 import { createPageMetadata } from '@/lib/seo';
+import { supplierPublicVisibilityWhere } from '@/lib/wholesaler';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,7 +29,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         select: { name: true, shopName: true, shopDescription: true },
       }),
       prisma.product.count({
-        where: { sellerId: id, status: { in: ['APPROVED', 'ACTIVE'] } },
+        where: {
+          sellerId: id,
+          status: { in: ['APPROVED', 'ACTIVE'] },
+          inventory: { gt: 0 },
+          AND: [supplierPublicVisibilityWhere()],
+        },
       }),
     ]);
     if (!seller) {
@@ -129,7 +135,12 @@ export default async function SellerStorePage({ params }: Props) {
     if (!seller) notFound();
 
     const rawProducts = await prisma.product.findMany({
-      where: { sellerId: id, status: { in: ['APPROVED', 'ACTIVE'] } },
+      where: {
+        sellerId: id,
+        status: { in: ['APPROVED', 'ACTIVE'] },
+        inventory: { gt: 0 },
+        AND: [supplierPublicVisibilityWhere()],
+      },
       orderBy: { createdAt: 'desc' },
       include: {
         seller: {

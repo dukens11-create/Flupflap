@@ -2,6 +2,7 @@ import type { MetadataRoute } from 'next';
 import { isDatabaseConfigured, prisma } from '@/lib/db';
 import { absoluteUrl } from '@/lib/seo';
 import { DEFAULT_CATEGORY_TREE, DefaultCategoryNode } from '@/lib/default-categories';
+import { supplierPublicVisibilityWhere } from '@/lib/wholesaler';
 
 /** Flatten a category tree into category route data. */
 function flattenCategoryEntries(nodes: DefaultCategoryNode[]): Array<{ id: string; slug: string }> {
@@ -53,7 +54,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   try {
     const [products, sellers, garageSales] = await Promise.all([
       prisma.product.findMany({
-        where: { status: { in: ['APPROVED', 'ACTIVE'] } },
+        where: {
+          status: { in: ['APPROVED', 'ACTIVE'] },
+          inventory: { gt: 0 },
+          AND: [supplierPublicVisibilityWhere()],
+        },
         select: { id: true, updatedAt: true },
         // Limit to a manageable page size; for very large catalogues a
         // sitemap-index with multiple sitemap files should be used instead.
@@ -65,7 +70,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
           role: 'SELLER',
           sellerStatus: 'ACTIVE',
           deletedAt: null,
-          products: { some: { status: { in: ['APPROVED', 'ACTIVE'] } } },
+          products: {
+            some: {
+              status: { in: ['APPROVED', 'ACTIVE'] },
+              inventory: { gt: 0 },
+              AND: [supplierPublicVisibilityWhere()],
+            },
+          },
         },
         select: { id: true },
       }),

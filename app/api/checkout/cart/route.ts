@@ -18,6 +18,7 @@ import {
   validateOfferCheckoutAccess,
 } from '@/lib/offer-checkout';
 import { applyRateLimitAsync } from '@/lib/security';
+import { supplierPublicVisibilityWhere } from '@/lib/wholesaler';
 
 const SHIPPING_LINE_ITEM_NAME = 'Shipping';
 
@@ -75,6 +76,7 @@ export async function POST(req: Request) {
         id: { in: items.map(i => i.productId) },
         status: { in: ['APPROVED', 'ACTIVE'] },
         inventory: { gt: 0 },
+        AND: [supplierPublicVisibilityWhere()],
       },
       include: {
         seller: {

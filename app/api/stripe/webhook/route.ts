@@ -652,6 +652,20 @@ export async function POST(req: Request) {
       prisma.product.findMany({
         where: { id: { in: items.map(i => i.productId) } },
         include: {
+          sourceSupplierProduct: {
+            select: {
+              id: true,
+              sku: true,
+              wholesalePriceCents: true,
+              supplier: {
+                select: {
+                  id: true,
+                  userId: true,
+                  status: true,
+                },
+              },
+            },
+          },
           seller: {
             select: {
               id: true,
@@ -821,6 +835,83 @@ export async function POST(req: Request) {
       });
     }
 
+    const persistedOrderItems = await prisma.orderItem.findMany({
+      where: { orderId: order.id },
+      select: {
+        id: true,
+        productId: true,
+      },
+    });
+    const persistedOrderItemByProductId = new Map(persistedOrderItems.map((item) => [item.productId, item.id]));
+
+    const routedSupplierGroups = orderItems.reduce<
+      Map<string, {
+        supplierUserId: string;
+        sellerId: string;
+        items: Array<{ supplierProductId: string; orderItemId: string | null; quantity: number; wholesalePriceCents: number; commissionFeeCents: number; lineSubtotalCents: number }>;
+      }>
+    >((groups, item) => {
+      const sourceSupplierProduct = item.product.sourceSupplierProduct;
+      const supplierUserId = sourceSupplierProduct?.supplier.userId;
+      if (!sourceSupplierProduct || !supplierUserId) return groups;
+
+      const groupKey = `${supplierUserId}:${item.product.seller.id}`;
+      const existing = groups.get(groupKey) ?? {
+        supplierUserId,
+        sellerId: item.product.seller.id,
+        items: [],
+      };
+      existing.items.push({
+        supplierProductId: sourceSupplierProduct.id,
+        orderItemId: persistedOrderItemByProductId.get(item.product.id) ?? null,
+        quantity: item.quantity,
+        wholesalePriceCents: sourceSupplierProduct.wholesalePriceCents,
+        commissionFeeCents: item.commissionFeeCents,
+        lineSubtotalCents: item.lineSubtotalCents,
+      });
+      groups.set(groupKey, existing);
+      return groups;
+    }, new Map());
+
+    for (const group of routedSupplierGroups.values()) {
+      const routing = await prisma.supplierOrderRouting.create({
+        data: {
+          orderId: order.id,
+          supplierUserId: group.supplierUserId,
+          sellerId: group.sellerId,
+          buyerId,
+          status: 'PENDING',
+          items: {
+            create: group.items.map((routingItem) => ({
+              supplierProductId: routingItem.supplierProductId,
+              orderItemId: routingItem.orderItemId,
+              quantity: routingItem.quantity,
+            })),
+          },
+        },
+      });
+
+      const supplierAmountCents = group.items.reduce((sum, routingItem) => (
+        sum + (routingItem.wholesalePriceCents * routingItem.quantity)
+      ), 0);
+      const platformCommissionCents = group.items.reduce((sum, routingItem) => (
+        sum + routingItem.commissionFeeCents
+      ), 0);
+      const sellerCommissionCents = group.items.reduce((sum, routingItem) => (
+        sum + Math.max(0, routingItem.lineSubtotalCents - (routingItem.wholesalePriceCents * routingItem.quantity) - routingItem.commissionFeeCents)
+      ), 0);
+
+      await prisma.supplierPayout.create({
+        data: {
+          routingId: routing.id,
+          supplierAmountCents,
+          platformCommissionCents,
+          sellerCommissionCents,
+          status: 'PENDING',
+        },
+      });
+    }
+
     const buyerNotifications: CreateNotificationInput[] = [
       {
         userId: buyerId,
@@ -979,7 +1070,7 @@ export async function POST(req: Request) {
         data: {
           inventory: newInventory,
           soldQty: { increment: item.quantity },
-          ...(newInventory <= 0 ? { delistedAt: new Date() } : {}),
+          ...(newInventory <= 0 ? { delistedAt: new Date(), status: 'HIDDEN' } : {}),
         },
       });
     }

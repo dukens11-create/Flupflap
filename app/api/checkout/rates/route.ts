@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db';
 import { createShipmentRates } from '@/lib/shipping';
 import { getMissingPackageProductTitles } from '@/lib/product-package';
 import { apiError } from '@/lib/api-response';
+import { supplierPublicVisibilityWhere } from '@/lib/wholesaler';
 
 type BuyerAddress = {
   name?: string;
@@ -121,6 +122,7 @@ export async function POST(req: Request) {
         id: { in: items.map(i => i.productId.trim()) },
         status: { in: ['APPROVED', 'ACTIVE'] },
         inventory: { gt: 0 },
+        AND: [supplierPublicVisibilityWhere()],
       },
       select: {
         id: true,

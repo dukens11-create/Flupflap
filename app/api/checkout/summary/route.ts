@@ -11,6 +11,7 @@ import {
   type VerifiedShippingRateInfo,
 } from '@/lib/checkout-shipping-verification';
 import { validateOfferCheckoutAccess } from '@/lib/offer-checkout';
+import { supplierPublicVisibilityWhere } from '@/lib/wholesaler';
 
 function isCalculatedShippingProduct(product: { shippingMode?: string | null; shippingCents: number }) {
   return product.shippingMode === 'CALCULATED' || (!product.shippingMode && product.shippingCents === 0);
@@ -46,6 +47,7 @@ export async function POST(req: Request) {
           id: { in: items.map(item => item.productId) },
           status: { in: ['APPROVED', 'ACTIVE'] },
           inventory: { gt: 0 },
+          AND: [supplierPublicVisibilityWhere()],
         },
         include: {
           seller: {

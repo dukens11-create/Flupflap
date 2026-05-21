@@ -14,6 +14,7 @@ import {
   type ShippingRateInfoInput,
   type VerifiedShippingRateInfo,
 } from '@/lib/checkout-shipping-verification';
+import { supplierPublicVisibilityWhere } from '@/lib/wholesaler';
 
 const SHIPPING_LINE_ITEM_NAME = 'Shipping';
 const DEFAULT_BUYER_NAME = 'Buyer';
@@ -56,8 +57,11 @@ export async function POST(req: Request) {
     const { productId, isPickup = false, shippingRateInfo } = body;
     const [settings, product] = await Promise.all([
       getMarketplaceSettings(),
-      prisma.product.findUnique({
-      where: { id: productId },
+      prisma.product.findFirst({
+      where: {
+        id: productId,
+        AND: [supplierPublicVisibilityWhere()],
+      },
       include: {
         seller: {
           select: {
