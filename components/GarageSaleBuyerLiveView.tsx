@@ -36,6 +36,7 @@ interface ChatMessage {
 interface Props {
   saleId: string;
   initialIsLive: boolean;
+  initialLiveSessionId?: string | null;
   buyerName?: string | null;
   buyerId?: string | null;
 }
@@ -51,7 +52,7 @@ type GuestJoinStatus =
   | 'full'
   | 'ended';
 
-export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerName, buyerId }: Props) {
+export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initialLiveSessionId, buyerName, buyerId }: Props) {
   const [isLive, setIsLive] = useState(initialIsLive);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -110,7 +111,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
   const pendingRemoteIceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const waitingForPublisherTimerRef = useRef<number | null>(null);
   const liveRoomIdRef = useRef<string>(getLiveRoomId(saleId));
-  const liveSessionIdRef = useRef<string | null>(null);
+  const liveSessionIdRef = useRef<string | null>(initialLiveSessionId ?? null);
   const lastLoggedRoomRef = useRef<string | null>(null);
   const lastLoggedSessionRef = useRef<string | null>(null);
   const streamReadySentForOfferRef = useRef<string | null>(null);

@@ -9,6 +9,7 @@ import { LIVE_SIGNAL_EVENTS, LIVE_SIGNAL_KINDS, LIVE_SIGNAL_ROLES, getLiveRoomId
 interface Props {
   saleId: string;
   initialIsLive: boolean;
+  initialLiveSessionId?: string | null;
 }
 
 interface SellerChatMessage {
@@ -68,7 +69,7 @@ function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(' ');
 }
 
-export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
+export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLiveSessionId }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const expandedVideoRef = useRef<HTMLVideoElement>(null);
   const expandedPreviewRef = useRef<HTMLDivElement>(null);
@@ -95,7 +96,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   const reconnectRetryTimeoutRef = useRef<number | null>(null);
   const reconnectAttemptRef = useRef(0);
   const liveRoomIdRef = useRef<string>(getLiveRoomId(saleId));
-  const liveSessionIdRef = useRef<string | null>(null);
+  const liveSessionIdRef = useRef<string | null>(initialLiveSessionId ?? null);
   const lastLoggedRoomRef = useRef<string | null>(null);
   const lastLoggedSessionRef = useRef<string | null>(null);
 
