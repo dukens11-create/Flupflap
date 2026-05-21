@@ -55,7 +55,7 @@ test('recordSellerRefundHistory builds deterministic source key when stripe refu
   }, mockDb);
 
   const payload = capturedArgs as { where: { sourceKey: string } };
-  assert.equal(payload.where.sourceKey, 'garage_sale_cancel_payment_refund:sale:sale_1:pi_123:299');
+  assert.equal(payload.where.sourceKey, 'garage_sale_cancel_payment_refund:sale:sale_1:pi_123:299:no_reason');
 });
 
 test('recordSellerRefundHistory gives explicit sourceKey priority over stripe refund key', async () => {

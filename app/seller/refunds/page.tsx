@@ -94,7 +94,7 @@ export default async function SellerRefundsPage() {
                 </p>
                 <p className="text-xs text-slate-500">
                   {entry.reason ? `Reason: ${entry.reason} · ` : ''}
-                  Recorded {entry.createdAt.toLocaleString()}
+                  Recorded {entry.createdAt.toISOString()}
                   {entry.stripeRefundId ? ` · Stripe refund ${entry.stripeRefundId}` : ''}
                 </p>
               </div>

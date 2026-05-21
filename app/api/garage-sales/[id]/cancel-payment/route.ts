@@ -119,7 +119,7 @@ export async function POST(_req: Request, { params }: Params) {
     if (!paymentIntentId) {
       return NextResponse.json({ error: 'A successful payment exists, but no Stripe payment intent was found to refund.' }, { status: 400 });
     }
-    let stripeRefund: Stripe.Refund;
+    let stripeRefund: Stripe.Refund | null = null;
     try {
       stripeRefund = await stripe.refunds.create({
         payment_intent: paymentIntentId,
@@ -132,6 +132,12 @@ export async function POST(_req: Request, { params }: Params) {
       });
     } catch (err) {
       return stripeFailureResponse('Unable to create Stripe refund.', err);
+    }
+
+    if (!stripeRefund) {
+      return NextResponse.json({
+        error: 'Unable to create Stripe refund.',
+      }, { status: 502 });
     }
 
     try {
