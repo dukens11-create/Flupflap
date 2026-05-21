@@ -54,6 +54,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
   const remoteStreamRef = useRef<MediaStream | null>(null);
   const peerRef = useRef<RTCPeerConnection | null>(null);
   const signalPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Reconnect timers outlive a single render; use a ref to avoid stale poll closures.
   const pollSignalsRef = useRef<(() => Promise<void>) | null>(null);
   const signalCursorRef = useRef<string | null>(null);
   const activeOfferSignalRef = useRef<string | null>(null);
@@ -156,7 +157,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     clearReconnectRetryTimeout();
   }, [clearConnectionRecoveryTimeout, clearReconnectRetryTimeout]);
 
-  const playRemoteStream = useCallback(async (options?: { preferMuted?: boolean }) => {
+  const playRemoteStream = useCallback(async (options?: { tryMutedFirst?: boolean }) => {
     const video = videoRef.current;
     if (!video) return false;
 
@@ -203,7 +204,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
       });
     }
 
-    const initialMuted = options?.preferMuted ?? false;
+    const initialMuted = options?.tryMutedFirst ?? false;
     const attempts = initialMuted ? [true, false] : [false, true];
 
     for (const muted of attempts) {
@@ -323,7 +324,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
 
     const retryDelay = Math.min(
       RECONNECT_MAX_DELAY_MS,
-      RECONNECT_BASE_DELAY_MS * (2 ** (attempt - 1)),
+      RECONNECT_BASE_DELAY_MS * attempt,
     ) + Math.floor(Math.random() * RECONNECT_JITTER_MS);
 
     setRecoveringConnection(true);
@@ -625,7 +626,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     const handleStalled = () => {
       if (!isLive) return;
       logLiveDebug('remote-video-stalled');
-      void playRemoteStream({ preferMuted: video.muted });
+      void playRemoteStream({ tryMutedFirst: false });
     };
 
     video.addEventListener('loadedmetadata', handleLoadedMetadata);
@@ -764,7 +765,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
           <div className="absolute inset-0 flex items-end justify-center p-4 sm:items-center">
             <button
               type="button"
-              onClick={() => void playRemoteStream({ preferMuted: false })}
+              onClick={() => void playRemoteStream({ tryMutedFirst: false })}
               className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-900 shadow-lg transition hover:bg-slate-100"
             >
               Tap for live audio
