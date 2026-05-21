@@ -78,7 +78,7 @@ export default async function SellerPrintLabelPage({ params }: Params) {
               priority
               className="h-auto w-[140px] md:w-[168px]"
             />
-            <p className="text-xs text-slate-500">Branded print wrapper. Official carrier label is embedded below unchanged.</p>
+            <p className="text-xs text-slate-500">Branded print wrapper. The official carrier label is embedded below unchanged.</p>
           </div>
           <div className="space-y-2 text-right">
             <PrintLabelActions />
@@ -107,7 +107,12 @@ export default async function SellerPrintLabelPage({ params }: Params) {
 
         {labelUrl ? (
           <div className="overflow-hidden rounded-xl border border-slate-200 print:border-0 print:rounded-none">
-            <object data={labelUrl} type="application/pdf" className="h-[70vh] w-full print:h-[88vh]">
+            <object
+              data={labelUrl}
+              type="application/pdf"
+              title="Official shipping label PDF"
+              className="h-[70vh] w-full print:h-[88vh]"
+            >
               <div className="space-y-3 p-4 text-sm text-slate-600 print:hidden">
                 <p>Unable to embed this label in your browser.</p>
                 <div className="flex flex-wrap gap-2">
