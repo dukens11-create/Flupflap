@@ -16,6 +16,19 @@ function isValidGuestId(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0 && value.length <= 64 && GUEST_ID_PATTERN.test(value);
 }
 
+function sanitizeViewerAvatar(value: unknown) {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return null;
+    return parsed.toString().slice(0, 500);
+  } catch {
+    return null;
+  }
+}
+
 /** GET /api/garage-sales/[id]/guest-requests
  *  Seller: returns all pending + active requests for this sale.
  *  Buyer: returns just their own request status (requires guestId query param). */
@@ -152,6 +165,11 @@ export async function POST(req: Request, { params }: Params) {
     typeof guestName === 'string' && guestName.trim().length > 0
       ? guestName.trim().slice(0, 50)
       : null;
+  const resolvedViewerAvatar = sanitizeViewerAvatar(viewerAvatar);
+  const resolvedViewerId =
+    typeof viewerId === 'string' && viewerId.trim().length > 0
+      ? viewerId.trim().slice(0, 191)
+      : (session?.user?.id ?? `guest:${guestId as string}`);
 
   const request = await prisma.garageSaleGuestRequest.create({
     data: {
@@ -159,8 +177,8 @@ export async function POST(req: Request, { params }: Params) {
       guestId: guestId as string,
       guestName: resolvedGuestName,
       sellerId: sale.sellerId,
-      viewerId: typeof viewerId === 'string' && viewerId.trim().length > 0 ? viewerId.trim().slice(0, 191) : (session?.user?.id ?? (guestId as string)),
-      viewerAvatar: typeof viewerAvatar === 'string' && viewerAvatar.trim().length > 0 ? viewerAvatar.trim().slice(0, 500) : null,
+      viewerId: resolvedViewerId,
+      viewerAvatar: resolvedViewerAvatar,
       status: 'pending',
     },
     select: { id: true, guestId: true, guestName: true, viewerId: true, viewerAvatar: true, status: true, createdAt: true },
