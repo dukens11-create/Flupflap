@@ -1,6 +1,7 @@
 'use client';
 import { useRef, useState, useCallback, useEffect } from 'react';
-import { Video, VideoOff, Mic, MicOff, Radio, AlertTriangle, Eye, RefreshCcw, MessageCircle, Heart, Trash2 } from 'lucide-react';
+import { Video, VideoOff, Mic, MicOff, Radio, AlertTriangle, Eye, RefreshCcw, MessageCircle, Heart, Trash2, Maximize2, X } from 'lucide-react';
+import { LIVE_ENGAGEMENT_EVENTS, LIVE_ENGAGEMENT_SIGNAL_KINDS } from '@/lib/live-engagement';
 import { RTC_CONFIG, HAS_TURN_CONFIG } from '@/lib/rtc-config';
 import { getIceCandidateType } from '@/lib/rtc-diagnostics';
 import { LIVE_SIGNAL_EVENTS, LIVE_SIGNAL_KINDS, LIVE_SIGNAL_ROLES, getLiveRoomId, getLiveSessionId } from '@/lib/live-signaling';
@@ -21,7 +22,7 @@ interface SellerChatMessage {
 const PREVIEW_REQUIRED_MESSAGE = 'Preview your camera before starting your live garage sale.';
 const CAMERA_BLOCKED_MESSAGE = 'Camera access blocked';
 const CAMERA_READY_MESSAGE = 'Camera ready';
-const CAMERA_CONNECTING_MESSAGE = 'Connecting camera...';
+const CAMERA_CONNECTING_MESSAGE = 'Connecting camera…';
 const CAMERA_PREVIEW_PLACEHOLDER = 'Camera preview will appear here.';
 const CAMERA_STATUS_UNKNOWN_MESSAGE = 'Camera status unknown.';
 const INSECURE_CAMERA_CONTEXT_MESSAGE = 'Camera requires HTTPS in this browser.';
@@ -54,6 +55,8 @@ function cx(...classes: Array<string | false | null | undefined>) {
 
 export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const expandedVideoRef = useRef<HTMLVideoElement>(null);
+  const expandedPreviewRef = useRef<HTMLDivElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const peerRef = useRef<RTCPeerConnection | null>(null);
   const signalPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -101,6 +104,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   const [currentCamera, setCurrentCamera] = useState<'front' | 'back'>('front');
   const [chatMessages, setChatMessages] = useState<SellerChatMessage[]>([]);
   const [totalLikes, setTotalLikes] = useState(0);
+  const [showExpandedPreview, setShowExpandedPreview] = useState(false);
   const chatLastSeenRef = useRef<string | null>(null);
   const chatPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const reactionPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -211,6 +215,9 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   }, [clearReconnectRetryTimeout]);
 
   const logSellerRoomDetails = useCallback((roomId: string, liveSessionId: string | null, source: string) => {
+    if (roomId !== lastLoggedRoomRef.current || liveSessionId !== lastLoggedSessionRef.current) {
+      console.info('[GarageSaleLivePanel] room joined successfully', { roomId, liveSessionId, source });
+    }
     if (roomId !== lastLoggedRoomRef.current) {
       console.info('[GarageSaleLivePanel] SELLER ROOM ID', roomId);
       lastLoggedRoomRef.current = roomId;
@@ -365,11 +372,78 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
             payload: signal.payload,
           });
         }
+
+        if (signal.kind === LIVE_ENGAGEMENT_SIGNAL_KINDS.LIKES_UPDATE) {
+          const payload = signal.payload as {
+            roomId?: string;
+            liveSessionId?: string | null;
+            totalLikes?: number;
+            reactionId?: string;
+          } | null;
+          const sameSession = !payload?.liveSessionId || payload.liveSessionId === liveSessionIdRef.current;
+          if (payload?.roomId && payload.roomId !== liveRoomIdRef.current) {
+            console.warn('[GarageSaleLivePanel] live_likes_update room mismatch', {
+              sellerRoomId: liveRoomIdRef.current,
+              buyerRoomId: payload.roomId,
+            });
+          }
+          if (!sameSession) {
+            console.warn('[GarageSaleLivePanel] Ignoring live_likes_update for stale session', {
+              sellerLiveSessionId: liveSessionIdRef.current,
+              buyerLiveSessionId: payload?.liveSessionId ?? null,
+            });
+            continue;
+          }
+          if (typeof payload?.totalLikes === 'number') {
+            setTotalLikes(payload.totalLikes);
+          }
+          console.info('[GarageSaleLivePanel] live_likes_update received', {
+            roomId: payload?.roomId ?? liveRoomIdRef.current,
+            liveSessionId: payload?.liveSessionId ?? liveSessionIdRef.current,
+            totalLikes: payload?.totalLikes ?? totalLikes,
+            reactionId: payload?.reactionId,
+          });
+        }
+
+        if (signal.kind === LIVE_ENGAGEMENT_SIGNAL_KINDS.MESSAGE_SENT) {
+          const payload = signal.payload as {
+            roomId?: string;
+            liveSessionId?: string | null;
+            message?: SellerChatMessage;
+          } | null;
+          const sameSession = !payload?.liveSessionId || payload.liveSessionId === liveSessionIdRef.current;
+          if (payload?.roomId && payload.roomId !== liveRoomIdRef.current) {
+            console.warn('[GarageSaleLivePanel] live_message_sent room mismatch', {
+              sellerRoomId: liveRoomIdRef.current,
+              buyerRoomId: payload.roomId,
+            });
+          }
+          if (!sameSession) {
+            console.warn('[GarageSaleLivePanel] Ignoring live_message_sent for stale session', {
+              sellerLiveSessionId: liveSessionIdRef.current,
+              buyerLiveSessionId: payload?.liveSessionId ?? null,
+            });
+            continue;
+          }
+          const nextMessage = payload?.message;
+          if (nextMessage) {
+            setChatMessages((prev) => {
+              if (prev.some((message) => message.id === nextMessage.id)) return prev;
+              return [...prev, nextMessage];
+            });
+            chatLastSeenRef.current = nextMessage.createdAt;
+          }
+          console.info('[GarageSaleLivePanel] live_message_sent received', {
+            roomId: payload?.roomId ?? liveRoomIdRef.current,
+            liveSessionId: payload?.liveSessionId ?? liveSessionIdRef.current,
+            messageId: nextMessage?.id,
+          });
+        }
       }
     } catch {
       console.warn('[GarageSaleLivePanel] Network error while polling seller signals');
     }
-  }, [logLiveDebug, logSellerRoomDetails, saleId, stopSignalPolling]);
+  }, [logLiveDebug, logSellerRoomDetails, saleId, stopSignalPolling, totalLikes]);
 
   const startSignalPolling = useCallback(() => {
     stopSignalPolling();
@@ -1044,6 +1118,11 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   // Start/stop chat + reaction polling when live state changes
   useEffect(() => {
     if (isLive) {
+      console.info('[GarageSaleLivePanel] seller subscription connected', {
+        roomId: liveRoomIdRef.current,
+        liveSessionId: liveSessionIdRef.current,
+        subscriptions: [LIVE_ENGAGEMENT_EVENTS.MESSAGE_SENT, LIVE_ENGAGEMENT_EVENTS.LIKES_UPDATE],
+      });
       chatLastSeenRef.current = null;
       void fetchSellerChat();
       chatPollRef.current = setInterval(fetchSellerChat, 5000);
@@ -1144,6 +1223,34 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     ? `h-full w-full rounded-2xl object-cover transition-opacity duration-500 ${previewReady ? 'opacity-100' : 'opacity-0'}`
     : 'hidden';
   const sellerLiveReady = isLive && publishConnected && (subscriberPathReady || streamReadyCount > 0);
+  const recentMessages = chatMessages.slice(-3).reverse();
+
+  const syncVideoElement = useCallback((element: HTMLVideoElement | null) => {
+    if (!element || !streamRef.current) return;
+    if (element.srcObject !== streamRef.current) {
+      element.srcObject = streamRef.current;
+    }
+    void element.play().catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    syncVideoElement(videoRef.current);
+  }, [camOn, previewReady, showExpandedPreview, syncVideoElement]);
+
+  useEffect(() => {
+    if (!showExpandedPreview) return;
+    syncVideoElement(expandedVideoRef.current);
+  }, [showExpandedPreview, syncVideoElement]);
+
+  const handleFullscreenExpandedPreview = useCallback(async () => {
+    const element = expandedPreviewRef.current;
+    if (!element || typeof element.requestFullscreen !== 'function') return;
+    try {
+      await element.requestFullscreen();
+    } catch {
+      console.warn('[GarageSaleLivePanel] Fullscreen preview request failed');
+    }
+  }, []);
 
   return (
     <div className="card space-y-4 p-4 sm:space-y-5 sm:p-5 transition-all duration-300">
@@ -1152,6 +1259,16 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
           <Radio size={13} /> Live Preview
         </h2>
         <div className="flex flex-wrap items-center gap-2">
+          {camOn && (
+            <button
+              type="button"
+              onClick={() => setShowExpandedPreview(true)}
+              className="btn-outline flex items-center gap-1.5 px-3 text-xs"
+            >
+              <Maximize2 size={13} />
+              <span>Enlarge Video</span>
+            </button>
+          )}
           <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
             cameraStatus === 'ready'
               ? 'bg-emerald-50 text-emerald-700'
@@ -1334,12 +1451,35 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       {/* Live engagement panel — chat + likes (shown only when live) */}
       {isLive && (
         <div className="space-y-4 border-t border-slate-100 pt-4">
-          {/* Like counter */}
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-3 py-1 text-sm font-semibold text-red-600">
-              <Heart size={14} className="fill-red-500 text-red-500" />
-              {totalLikes} {totalLikes === 1 ? 'like' : 'likes'}
-            </span>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-2xl border border-red-100 bg-red-50 p-3">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-red-600">❤️ Total likes</p>
+              <p className="mt-1 flex items-center gap-1 text-lg font-semibold text-red-700">
+                <Heart size={16} className="fill-red-500 text-red-500" />
+                {totalLikes}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Viewer count</p>
+              <p className="mt-1 flex items-center gap-1 text-lg font-semibold text-slate-800">
+                <Eye size={16} />
+                {viewerCount}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-3">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-indigo-600">Recent messages</p>
+              <div className="mt-1 space-y-1">
+                {recentMessages.length === 0 ? (
+                  <p className="text-xs text-indigo-500">Waiting for first question…</p>
+                ) : (
+                  recentMessages.map((message) => (
+                    <p key={message.id} className="truncate text-xs text-indigo-700">
+                      <span className="font-semibold">{message.guestName ?? 'Buyer'}:</span> {message.message}
+                    </p>
+                  ))
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Live Questions / Chat */}
@@ -1385,6 +1525,58 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
                 ))
               )}
               <div ref={chatBottomRef} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showExpandedPreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4">
+          <div
+            ref={expandedPreviewRef}
+            className="relative flex h-full max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl bg-slate-950 shadow-2xl"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Expanded live preview"
+          >
+            <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3 text-white">
+              <div>
+                <p className="text-sm font-semibold">Seller live preview</p>
+                <p className="text-xs text-slate-300">Review your camera in a larger view before or during the live sale.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void handleFullscreenExpandedPreview()}
+                  className="rounded-full border border-white/15 px-3 py-2 text-xs font-semibold text-white transition hover:bg-white/10"
+                >
+                  Fullscreen
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowExpandedPreview(false)}
+                  className="rounded-full border border-white/15 p-2 text-white transition hover:bg-white/10"
+                  aria-label="Close enlarged live preview"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+            <div className="flex min-h-0 flex-1 items-center justify-center bg-slate-950 p-3 sm:p-6">
+              <video
+                ref={expandedVideoRef}
+                autoPlay
+                playsInline
+                muted
+                aria-label="Enlarged seller camera preview"
+                className={camOn ? 'h-full w-full rounded-2xl object-contain' : 'hidden'}
+              />
+              {!camOn && (
+                <div className="flex flex-col items-center gap-3 text-center text-slate-300">
+                  <VideoOff size={40} />
+                  <p className="text-sm font-medium">Start camera preview to enlarge the live view.</p>
+                </div>
+              )}
             </div>
           </div>
         </div>

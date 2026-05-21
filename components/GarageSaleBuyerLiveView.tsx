@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { MessageCircle, Send, Radio, Eye, Heart } from 'lucide-react';
+import { LIVE_ENGAGEMENT_EVENTS } from '@/lib/live-engagement';
 import { RTC_CONFIG, HAS_TURN_CONFIG } from '@/lib/rtc-config';
 import { getIceCandidateType, type IceCandidateType } from '@/lib/rtc-diagnostics';
 import { LIVE_SIGNAL_EVENTS, LIVE_SIGNAL_KINDS, LIVE_SIGNAL_ROLES, getLiveRoomId } from '@/lib/live-signaling';
@@ -130,6 +131,17 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     }
   }, [saleId]);
 
+  const fetchReactionCount = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/garage-sales/${saleId}/reactions`);
+      if (!res.ok) return;
+      const data = await res.json() as { totalLikes: number };
+      setLikeCount(data.totalLikes);
+    } catch {
+      // Silent fail — polling or optimistic updates will retry
+    }
+  }, [saleId]);
+
   useEffect(() => {
     fetchMessages();
     pollRef.current = setInterval(fetchMessages, 5000);
@@ -137,6 +149,10 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
       if (pollRef.current) clearInterval(pollRef.current);
     };
   }, [fetchMessages]);
+
+  useEffect(() => {
+    void fetchReactionCount();
+  }, [fetchReactionCount]);
 
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -277,6 +293,8 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
   }, [logLiveDebug]);
 
   const logLiveRoomDetails = useCallback((roomId: string, liveSessionId: string | null, source: string) => {
+    const roomChanged = roomId !== lastLoggedRoomRef.current;
+    const sessionChanged = liveSessionId !== lastLoggedSessionRef.current;
     if (roomId !== lastLoggedRoomRef.current) {
       console.info('[GarageSaleBuyerLiveView] VIEWER ROOM ID', roomId);
       console.info('[GarageSaleBuyerLiveView] SELLER ROOM ID (from signaling room)', roomId);
@@ -285,6 +303,9 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     if (liveSessionId !== lastLoggedSessionRef.current) {
       console.info('[GarageSaleBuyerLiveView] VIEWER LIVE SESSION ID', liveSessionId ?? 'none');
       lastLoggedSessionRef.current = liveSessionId;
+    }
+    if (roomChanged || sessionChanged) {
+      console.info('[GarageSaleBuyerLiveView] room joined successfully', { roomId, liveSessionId, source });
     }
     logLiveDebug(LIVE_SIGNAL_EVENTS.VIEWER_JOIN, {
       source,
@@ -417,6 +438,46 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     }, retryDelay);
     return true;
   }, [clearConnectionRecoveryTimeout, closePeerConnection, isLive, logLiveDebug, sendViewerHeartbeat]);
+
+  const ensureLiveEngagementContext = useCallback(async () => {
+    if (liveSessionIdRef.current) {
+      return {
+        roomId: liveRoomIdRef.current,
+        liveSessionId: liveSessionIdRef.current,
+      };
+    }
+
+    try {
+      const res = await fetch(`/api/garage-sales/${saleId}/live/signaling?role=BUYER`);
+      if (!res.ok) {
+        console.warn('[GarageSaleBuyerLiveView] Failed to refresh live engagement context', { status: res.status });
+        return {
+          roomId: liveRoomIdRef.current,
+          liveSessionId: liveSessionIdRef.current,
+        };
+      }
+
+      const data = await res.json() as {
+        roomId?: string;
+        liveSessionId?: string | null;
+      };
+
+      if (typeof data.roomId === 'string') {
+        liveRoomIdRef.current = data.roomId;
+      }
+      if (typeof data.liveSessionId === 'string' || data.liveSessionId === null) {
+        liveSessionIdRef.current = data.liveSessionId ?? null;
+      }
+      logLiveRoomDetails(liveRoomIdRef.current, liveSessionIdRef.current, 'engagement-refresh');
+    } catch {
+      console.warn('[GarageSaleBuyerLiveView] Network error refreshing live engagement context');
+    }
+
+    return {
+      roomId: liveRoomIdRef.current,
+      liveSessionId: liveSessionIdRef.current,
+    };
+  }, [logLiveRoomDetails, saleId]);
 
   const handleSellerOffer = useCallback(async (signalId: string, payload: { type?: string; sdp?: string }) => {
     const type = payload.type === 'offer' ? payload.type : null;
@@ -802,16 +863,31 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     setSending(true);
     setError(null);
     try {
+      const liveContext = await ensureLiveEngagementContext();
       const res = await fetch(`/api/garage-sales/${saleId}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: trimmed, guestName: guestName || DEFAULT_GUEST_NAME }),
+        body: JSON.stringify({
+          message: trimmed,
+          guestName: guestName || DEFAULT_GUEST_NAME,
+          guestId: guestIdRef.current,
+          roomId: liveContext.roomId,
+          liveSessionId: liveContext.liveSessionId,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      console.info('[GarageSaleBuyerLiveView] chat api response', {
+        status: res.status,
+        ok: res.ok,
+        roomId: liveContext.roomId,
+        liveSessionId: liveContext.liveSessionId,
+        responseMessageId: (data as { id?: string }).id,
+        responseEvent: (data as { event?: string }).event,
       });
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
         throw new Error((data as { error?: string }).error ?? 'Failed to send');
       }
-      const msg = await res.json() as ChatMessage;
+      const msg = data as ChatMessage & { event?: string };
       setMessages((prev) => {
         const existingIds = new Set(prev.map((m) => m.id));
         if (existingIds.has(msg.id)) return prev;
@@ -819,7 +895,19 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
       });
       lastSeenRef.current = msg.createdAt;
       setInput('');
+      setError(null);
+      console.info('[GarageSaleBuyerLiveView] live_message_sent', {
+        roomId: liveContext.roomId,
+        liveSessionId: liveContext.liveSessionId,
+        messageId: msg.id,
+        event: msg.event ?? LIVE_ENGAGEMENT_EVENTS.MESSAGE_SENT,
+      });
     } catch (err) {
+      console.error('[GarageSaleBuyerLiveView] message save error', {
+        saleId,
+        liveSessionId: liveSessionIdRef.current,
+        error: err instanceof Error ? err.message : 'unknown',
+      });
       setError(err instanceof Error ? err.message : 'Failed to send message');
     } finally {
       setSending(false);
@@ -834,17 +922,41 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     setLikeAnimating(true);
     setTimeout(() => setLikeAnimating(false), 700);
     try {
+      const liveContext = await ensureLiveEngagementContext();
       const res = await fetch(`/api/garage-sales/${saleId}/reactions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'heart', guestId: guestIdRef.current }),
+        body: JSON.stringify({
+          type: 'heart',
+          guestId: guestIdRef.current,
+          roomId: liveContext.roomId,
+          liveSessionId: liveContext.liveSessionId,
+        }),
       });
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        const data = await res.json() as { totalLikes: number };
-        setLikeCount(data.totalLikes);
+        const totalLikes = (data as { totalLikes?: number }).totalLikes ?? 0;
+        console.info('[GarageSaleBuyerLiveView] live_likes_update', {
+          roomId: liveContext.roomId,
+          liveSessionId: liveContext.liveSessionId,
+          totalLikes,
+          deduplicated: (data as { deduplicated?: boolean }).deduplicated ?? false,
+        });
+        setLikeCount(totalLikes);
+      } else {
+        console.warn('[GarageSaleBuyerLiveView] Like event send failed', {
+          status: res.status,
+          roomId: liveContext.roomId,
+          liveSessionId: liveContext.liveSessionId,
+        });
+        await fetchReactionCount();
       }
     } catch {
-      // Optimistic — no rollback needed for likes
+      console.warn('[GarageSaleBuyerLiveView] Network error sending like event', {
+        saleId,
+        liveSessionId: liveSessionIdRef.current,
+      });
+      await fetchReactionCount();
     } finally {
       setLikeSending(false);
     }

@@ -11,6 +11,11 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {
+  getLiveEngagementActorId,
+  normalizeGuestId,
+  resolveLiveEngagementContext,
+} from '@/lib/live-engagement';
 
 // ── Chat message filtering ────────────────────────────────────────────────────
 
@@ -165,6 +170,20 @@ test('session ID consistency: chat message moderation endpoint uses same saleId'
   assert.ok(moderationUrl.includes(msgId));
 });
 
+test('session ID consistency: live engagement context resolves shared room and session IDs', () => {
+  const saleId = 'cuid-garage-sale-001';
+  const liveStartedAt = new Date('2026-05-21T04:05:47.162Z');
+  const context = resolveLiveEngagementContext(saleId, liveStartedAt, {
+    roomId: 'garage-sale:cuid-garage-sale-001',
+    liveSessionId: 'cuid-garage-sale-001:2026-05-21T04:05:47.162Z',
+  });
+
+  assert.equal(context.roomId, 'garage-sale:cuid-garage-sale-001');
+  assert.equal(context.liveSessionId, 'cuid-garage-sale-001:2026-05-21T04:05:47.162Z');
+  assert.equal(context.roomMatches, true);
+  assert.equal(context.liveSessionMatches, true);
+});
+
 // ── Optimistic like update ────────────────────────────────────────────────────
 
 test('optimistic like: count increments immediately before server response', () => {
@@ -229,4 +248,16 @@ test('resolveGuestName: truncates long names to 50 chars', () => {
   const long = 'A'.repeat(100);
   const resolved = resolveGuestName(null, long);
   assert.equal(resolved?.length, 50);
+});
+
+test('normalizeGuestId: keeps safe guest IDs and rejects unsafe input', () => {
+  assert.equal(normalizeGuestId('guest-123_ok.test'), 'guest-123_ok.test');
+  assert.equal(normalizeGuestId('../guest'), null);
+  assert.equal(normalizeGuestId(''), null);
+});
+
+test('getLiveEngagementActorId: prefers authenticated users and falls back to guests', () => {
+  assert.equal(getLiveEngagementActorId('user-1', 'guest-1'), 'user:user-1');
+  assert.equal(getLiveEngagementActorId(null, 'guest-1'), 'guest:guest-1');
+  assert.equal(getLiveEngagementActorId(null, null), null);
 });

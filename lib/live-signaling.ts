@@ -9,6 +9,8 @@ export const LIVE_SIGNAL_KINDS = {
   ICE: 'ICE',
   VIEWER_HEARTBEAT: 'VIEWER_HEARTBEAT',
   STREAM_READY: 'STREAM_READY',
+  MESSAGE_SENT: 'LIVE_MESSAGE_SENT',
+  LIKES_UPDATE: 'LIVE_LIKES_UPDATE',
 } as const;
 
 export const LIVE_SIGNAL_EVENTS = {
@@ -18,6 +20,8 @@ export const LIVE_SIGNAL_EVENTS = {
   ANSWER: 'answer',
   ICE_CANDIDATE: 'ice_candidate',
   STREAM_READY: 'stream_ready',
+  MESSAGE_SENT: 'live_message_sent',
+  LIKES_UPDATE: 'live_likes_update',
 } as const;
 
 export type LiveSignalRole = (typeof LIVE_SIGNAL_ROLES)[keyof typeof LIVE_SIGNAL_ROLES];
