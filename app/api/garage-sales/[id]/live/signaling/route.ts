@@ -4,26 +4,32 @@ import { Prisma } from '@prisma/client';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { isGarageSalePubliclyVisible } from '@/lib/garage-sale-visibility';
+import {
+  LIVE_SIGNAL_KINDS,
+  LIVE_SIGNAL_ROLES,
+  type LiveSignalKind,
+  type LiveSignalRole,
+  getLiveRoomId,
+  getLiveSessionId,
+} from '@/lib/live-signaling';
 
 export const dynamic = 'force-dynamic';
 
 type Params = { params: Promise<{ id: string }> };
 
-const SIGNAL_ROLES = ['SELLER', 'BUYER'] as const;
-const SIGNAL_KINDS = ['OFFER', 'ANSWER', 'ICE', 'VIEWER_HEARTBEAT'] as const;
 // Buyer heartbeats are sent every 15 seconds, so a 35-second window keeps the
 // count responsive while tolerating a missed poll or brief network delay.
 const ACTIVE_VIEWER_WINDOW_MS = 35_000;
 
-type SignalRole = (typeof SIGNAL_ROLES)[number];
-type SignalKind = (typeof SIGNAL_KINDS)[number];
+const SIGNAL_ROLES = Object.values(LIVE_SIGNAL_ROLES);
+const SIGNAL_KINDS = Object.values(LIVE_SIGNAL_KINDS);
 
-function isSignalRole(value: unknown): value is SignalRole {
-  return typeof value === 'string' && SIGNAL_ROLES.includes(value as SignalRole);
+function isSignalRole(value: unknown): value is LiveSignalRole {
+  return typeof value === 'string' && SIGNAL_ROLES.includes(value as LiveSignalRole);
 }
 
-function isSignalKind(value: unknown): value is SignalKind {
-  return typeof value === 'string' && SIGNAL_KINDS.includes(value as SignalKind);
+function isSignalKind(value: unknown): value is LiveSignalKind {
+  return typeof value === 'string' && SIGNAL_KINDS.includes(value as LiveSignalKind);
 }
 
 function parseSince(value: string | null) {
@@ -42,8 +48,8 @@ function checkSellerOwner(saleSellerId: string, userId: string | null) {
   return { ok: true as const };
 }
 
-function requireRoleAccess(role: SignalRole, saleSellerId: string, userId: string | null) {
-  if (role === 'SELLER') {
+function requireRoleAccess(role: LiveSignalRole, saleSellerId: string, userId: string | null) {
+  if (role === LIVE_SIGNAL_ROLES.SELLER) {
     return checkSellerOwner(saleSellerId, userId);
   }
   return { ok: true as const };
@@ -64,6 +70,22 @@ async function getActiveViewerCount(saleId: string, liveStartedAt: Date | null) 
       AND sender = 'BUYER'
       AND kind = 'VIEWER_HEARTBEAT'
       AND "createdAt" >= ${activeSince}
+      AND COALESCE(payload->>'viewerId', '') <> ''
+  `);
+
+  const viewerCount = rows[0]?.viewerCount ?? 0;
+  return typeof viewerCount === 'bigint' ? Number(viewerCount) : viewerCount;
+}
+
+async function getReadyViewerCount(saleId: string, liveStartedAt: Date | null) {
+  if (!liveStartedAt) return 0;
+  const rows = await prisma.$queryRaw<Array<{ viewerCount: bigint | number }>>(Prisma.sql`
+    SELECT COUNT(DISTINCT payload->>'viewerId') AS "viewerCount"
+    FROM "GarageSaleLiveSignal"
+    WHERE "saleId" = ${saleId}
+      AND sender = 'BUYER'
+      AND kind = 'STREAM_READY'
+      AND "createdAt" >= ${liveStartedAt}
       AND COALESCE(payload->>'viewerId', '') <> ''
   `);
 
@@ -107,7 +129,15 @@ export async function GET(req: Request, { params }: Params) {
   if (!accessCheck.ok) return accessCheck.response;
 
   if (!sale.isLive) {
-    return NextResponse.json({ isLive: false, liveStartedAt: sale.liveStartedAt, viewerCount: 0, signals: [] });
+    return NextResponse.json({
+      isLive: false,
+      liveStartedAt: sale.liveStartedAt,
+      liveSessionId: getLiveSessionId(id, sale.liveStartedAt),
+      roomId: getLiveRoomId(id),
+      viewerCount: 0,
+      streamReadyCount: 0,
+      signals: [],
+    });
   }
 
   const sinceDate = parseSince(url.searchParams.get('since'));
@@ -135,8 +165,17 @@ export async function GET(req: Request, { params }: Params) {
   });
 
   const viewerCount = await getActiveViewerCount(id, sale.liveStartedAt);
+  const streamReadyCount = await getReadyViewerCount(id, sale.liveStartedAt);
 
-  return NextResponse.json({ isLive: true, liveStartedAt: sale.liveStartedAt, viewerCount, signals });
+  return NextResponse.json({
+    isLive: true,
+    liveStartedAt: sale.liveStartedAt,
+    liveSessionId: getLiveSessionId(id, sale.liveStartedAt),
+    roomId: getLiveRoomId(id),
+    viewerCount,
+    streamReadyCount,
+    signals,
+  });
 }
 
 /** POST /api/garage-sales/[id]/live/signaling */
@@ -158,17 +197,20 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: 'role must be BUYER or SELLER' }, { status: 400 });
   }
   if (!isSignalKind(kind)) {
-    return NextResponse.json({ error: 'kind must be OFFER, ANSWER, ICE, or VIEWER_HEARTBEAT' }, { status: 400 });
+    return NextResponse.json({ error: 'kind must be OFFER, ANSWER, ICE, VIEWER_HEARTBEAT, or STREAM_READY' }, { status: 400 });
   }
 
-  if (role === 'SELLER' && kind === 'ANSWER') {
+  if (role === LIVE_SIGNAL_ROLES.SELLER && kind === LIVE_SIGNAL_KINDS.ANSWER) {
     return NextResponse.json({ error: 'Seller cannot send ANSWER' }, { status: 400 });
   }
-  if (role === 'BUYER' && kind === 'OFFER') {
+  if (role === LIVE_SIGNAL_ROLES.BUYER && kind === LIVE_SIGNAL_KINDS.OFFER) {
     return NextResponse.json({ error: 'Buyer cannot send OFFER' }, { status: 400 });
   }
-  if (role === 'SELLER' && kind === 'VIEWER_HEARTBEAT') {
+  if (role === LIVE_SIGNAL_ROLES.SELLER && kind === LIVE_SIGNAL_KINDS.VIEWER_HEARTBEAT) {
     return NextResponse.json({ error: 'Seller cannot send VIEWER_HEARTBEAT' }, { status: 400 });
+  }
+  if (role === LIVE_SIGNAL_ROLES.SELLER && kind === LIVE_SIGNAL_KINDS.STREAM_READY) {
+    return NextResponse.json({ error: 'Seller cannot send STREAM_READY' }, { status: 400 });
   }
 
   if (payload == null || typeof payload !== 'object') {

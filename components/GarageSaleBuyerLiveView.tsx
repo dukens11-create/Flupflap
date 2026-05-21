@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { MessageCircle, Send, Radio, Eye, Heart } from 'lucide-react';
 import { RTC_CONFIG, HAS_TURN_CONFIG } from '@/lib/rtc-config';
 import { getIceCandidateType, type IceCandidateType } from '@/lib/rtc-diagnostics';
+import { LIVE_SIGNAL_EVENTS, LIVE_SIGNAL_KINDS, LIVE_SIGNAL_ROLES, getLiveRoomId } from '@/lib/live-signaling';
 import {
   MAX_RECONNECT_ATTEMPTS,
   RECONNECT_STEP_DELAY_MS,
@@ -90,6 +91,11 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
   const hasRemoteDescriptionRef = useRef(false);
   const pendingRemoteIceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const waitingForPublisherTimerRef = useRef<number | null>(null);
+  const liveRoomIdRef = useRef<string>(getLiveRoomId(saleId));
+  const liveSessionIdRef = useRef<string | null>(null);
+  const lastLoggedRoomRef = useRef<string | null>(null);
+  const lastLoggedSessionRef = useRef<string | null>(null);
+  const streamReadySentForOfferRef = useRef<string | null>(null);
   const liveDebugEnabled = process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_DEBUG_LIVE_STREAM === '1';
   const liveDebugOverlayEnabled = process.env.NEXT_PUBLIC_LIVE_DEBUG_OVERLAY === 'true';
 
@@ -270,8 +276,28 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     return false;
   }, [logLiveDebug]);
 
+  const logLiveRoomDetails = useCallback((roomId: string, liveSessionId: string | null, source: string) => {
+    if (roomId !== lastLoggedRoomRef.current) {
+      console.info('[GarageSaleBuyerLiveView] VIEWER ROOM ID', roomId);
+      console.info('[GarageSaleBuyerLiveView] SELLER ROOM ID', roomId);
+      lastLoggedRoomRef.current = roomId;
+    }
+    if (liveSessionId !== lastLoggedSessionRef.current) {
+      console.info('[GarageSaleBuyerLiveView] VIEWER LIVE SESSION ID', liveSessionId ?? 'none');
+      lastLoggedSessionRef.current = liveSessionId;
+    }
+    logLiveDebug(LIVE_SIGNAL_EVENTS.VIEWER_JOIN, {
+      source,
+      roomId,
+      liveSessionId,
+    });
+    if (roomId !== getLiveRoomId(saleId)) {
+      console.warn('[GarageSaleBuyerLiveView] ROOM MISMATCH', { viewerRoomId: roomId, expectedRoomId: getLiveRoomId(saleId) });
+    }
+  }, [logLiveDebug, saleId]);
+
   const postSignal = useCallback(async (
-    kind: 'ANSWER' | 'ICE',
+    kind: 'ANSWER' | 'ICE' | 'VIEWER_HEARTBEAT' | 'STREAM_READY',
     payload: Record<string, unknown>,
     options?: { critical?: boolean },
   ) => {
@@ -279,7 +305,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
       const res = await fetch(`/api/garage-sales/${saleId}/live/signaling`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: 'BUYER', kind, payload }),
+        body: JSON.stringify({ role: LIVE_SIGNAL_ROLES.BUYER, kind, payload }),
       });
 
       if (res.ok) return true;
@@ -328,24 +354,18 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
 
   const sendViewerHeartbeat = useCallback(async () => {
     if (!isLive) return;
-
-    try {
-      const res = await fetch(`/api/garage-sales/${saleId}/live/signaling`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          role: 'BUYER',
-          kind: 'VIEWER_HEARTBEAT',
-          payload: { viewerId: getViewerId() },
-        }),
-      });
-      if (!res.ok) {
-        console.warn('[GarageSaleBuyerLiveView] Viewer heartbeat failed', { status: res.status });
-      }
-    } catch {
-      console.warn('[GarageSaleBuyerLiveView] Network error posting viewer heartbeat');
+    const ok = await postSignal(
+      LIVE_SIGNAL_KINDS.VIEWER_HEARTBEAT,
+      {
+        viewerId: getViewerId(),
+        roomId: liveRoomIdRef.current,
+        liveSessionId: liveSessionIdRef.current,
+      },
+    );
+    if (!ok) {
+      console.warn('[GarageSaleBuyerLiveView] Viewer heartbeat failed');
     }
-  }, [getViewerId, isLive, saleId]);
+  }, [getViewerId, isLive, postSignal]);
 
   const scheduleConnectionRecovery = useCallback((reason: string) => {
     if (!isLive) return false;
@@ -392,10 +412,11 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
       hasRemoteDescriptionRef.current = false;
       pendingRemoteIceCandidatesRef.current = [];
       signalCursorRef.current = null;
+      void sendViewerHeartbeat();
       void pollSignalsRef.current?.();
     }, retryDelay);
     return true;
-  }, [clearConnectionRecoveryTimeout, closePeerConnection, isLive, logLiveDebug]);
+  }, [clearConnectionRecoveryTimeout, closePeerConnection, isLive, logLiveDebug, sendViewerHeartbeat]);
 
   const handleSellerOffer = useCallback(async (signalId: string, payload: { type?: string; sdp?: string }) => {
     const type = payload.type === 'offer' ? payload.type : null;
@@ -464,14 +485,32 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
       });
       setHasRemoteMedia(true);
       setStreamError(null);
-      void playRemoteStream();
+      void (async () => {
+        const played = await playRemoteStream();
+        logLiveDebug('remote-play-result', { played, signalId });
+        if (!played) return;
+        const activeOfferId = activeOfferSignalRef.current;
+        if (!activeOfferId || streamReadySentForOfferRef.current === activeOfferId) return;
+        const sent = await postSignal(LIVE_SIGNAL_KINDS.STREAM_READY, {
+          viewerId: getViewerId(),
+          offerSignalId: activeOfferId,
+          roomId: liveRoomIdRef.current,
+          liveSessionId: liveSessionIdRef.current,
+          remoteAudioTracks: remoteStream.getAudioTracks().length,
+          remoteVideoTracks: remoteStream.getVideoTracks().length,
+        });
+        if (sent) {
+          streamReadySentForOfferRef.current = activeOfferId;
+          logLiveDebug(LIVE_SIGNAL_EVENTS.STREAM_READY, { offerSignalId: activeOfferId });
+        }
+      })();
     };
 
     pc.onicecandidate = (event) => {
       if (!event.candidate) return;
       const candidateType = rememberCandidateType(event.candidate.candidate);
       logPeerStates('local-ice-candidate', { candidateType });
-      void postSignal('ICE', { candidate: event.candidate.toJSON() });
+      void postSignal(LIVE_SIGNAL_KINDS.ICE, { candidate: event.candidate.toJSON() });
     };
 
     pc.onconnectionstatechange = () => {
@@ -525,27 +564,33 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     };
 
     await pc.setRemoteDescription({ type, sdp: payload.sdp });
+    logLiveDebug('set-remote-description-success', { signalId, type });
     hasRemoteDescriptionRef.current = true;
     for (const candidate of pendingRemoteIceCandidatesRef.current) {
       if (peerRef.current !== pc) break;
       try {
         await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        logLiveDebug('add-ice-candidate-success', { source: 'buffered-before-remote-description' });
       } catch {
         // Ignore stale or incompatible candidates
+        logLiveDebug('add-ice-candidate-failed', { source: 'buffered-before-remote-description' });
       }
     }
     pendingRemoteIceCandidatesRef.current = [];
 
     const answer = await pc.createAnswer();
+    logLiveDebug('answer-created', { hasSdp: Boolean(answer.sdp), signalId });
     await pc.setLocalDescription(answer);
-    await postSignal('ANSWER', { type: answer.type, sdp: answer.sdp }, { critical: true });
+    logLiveDebug('set-local-description-success', { type: answer.type, signalId });
+    await postSignal(LIVE_SIGNAL_KINDS.ANSWER, { type: answer.type, sdp: answer.sdp }, { critical: true });
+    logLiveDebug(LIVE_SIGNAL_EVENTS.ANSWER, { signalId });
 
     // Attach srcObject early so the video element is ready when tracks arrive
     if (videoRef.current) {
       videoRef.current.srcObject = remoteStream;
       void playRemoteStream();
     }
-  }, [clearWaitingForPublisherTimer, closePeerConnection, logLiveDebug, playRemoteStream, postSignal, resetReconnectState, scheduleConnectionRecovery]);
+  }, [clearWaitingForPublisherTimer, closePeerConnection, getViewerId, logLiveDebug, playRemoteStream, postSignal, resetReconnectState, scheduleConnectionRecovery]);
 
   const pollSignals = useCallback(async () => {
     if (!isLive) return;
@@ -561,9 +606,20 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
 
       const data = await res.json() as {
         isLive: boolean;
+        roomId?: string;
+        liveSessionId?: string | null;
         viewerCount?: number;
+        streamReadyCount?: number;
         signals: Array<{ id: string; kind: string; payload: unknown; createdAt: string }>;
       };
+
+      if (typeof data.roomId === 'string') {
+        liveRoomIdRef.current = data.roomId;
+      }
+      if (typeof data.liveSessionId === 'string' || data.liveSessionId === null) {
+        liveSessionIdRef.current = data.liveSessionId ?? null;
+      }
+      logLiveRoomDetails(liveRoomIdRef.current, liveSessionIdRef.current, 'poll');
 
       if (!data.isLive) {
         setIsLive(false);
@@ -575,7 +631,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
       setViewerCount(data.viewerCount ?? 0);
 
       for (const signal of data.signals) {
-        if (signal.kind === 'OFFER') {
+        if (signal.kind === LIVE_SIGNAL_KINDS.OFFER) {
           logLiveDebug('signal-offer', { id: signal.id, createdAt: signal.createdAt });
           // Skip already-processed offers without losing the cursor position.
           if (activeOfferSignalRef.current === signal.id) {
@@ -603,7 +659,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
             // During active recovery we keep the cursor unchanged to retry this offer.
             break;
           }
-        } else if (signal.kind === 'ICE') {
+        } else if (signal.kind === LIVE_SIGNAL_KINDS.ICE) {
           const payload = signal.payload as { candidate?: RTCIceCandidateInit } | null;
           if (payload?.candidate) {
             const candidateType = rememberCandidateType(payload.candidate.candidate);
@@ -613,8 +669,10 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
             } else {
               try {
                 await peerRef.current.addIceCandidate(new RTCIceCandidate(payload.candidate));
+                logLiveDebug('add-ice-candidate-success', { source: 'poll' });
               } catch {
                 // Ignore stale candidates from a previous peer connection
+                logLiveDebug('add-ice-candidate-failed', { source: 'poll' });
               }
             }
           }
@@ -628,7 +686,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     } catch {
       console.warn('[GarageSaleBuyerLiveView] Network error while polling buyer signals');
     }
-  }, [clearConnectionRecoveryTimeout, handleSellerOffer, isLive, logLiveDebug, saleId, scheduleConnectionRecovery]);
+  }, [clearConnectionRecoveryTimeout, handleSellerOffer, isLive, logLiveDebug, logLiveRoomDetails, saleId, scheduleConnectionRecovery]);
 
   useEffect(() => {
     pollSignalsRef.current = pollSignals;
