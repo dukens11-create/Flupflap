@@ -189,7 +189,7 @@ export async function POST(req: Request, { params }: Params) {
       msg = await createChatMessage(true);
     } catch (chatInsertError) {
       if (!isMissingSellerIdColumnError(chatInsertError)) throw chatInsertError;
-      console.warn('[garage-sale-chat] retrying chat write without sellerId due to schema drift', {
+      console.warn('[garage-sale-chat] retrying chat write without sellerId column for backward compatibility', {
         operation: 'chat.write.retry_without_seller_id',
         saleId: id,
         userId,

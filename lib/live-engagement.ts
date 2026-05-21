@@ -21,12 +21,22 @@ type LiveEngagementContextInput = {
   streamId?: unknown;
 };
 
+/**
+ * Returns a string when the payload provided a concrete string value, null when
+ * the payload explicitly set null, and undefined when the key was missing or
+ * non-string. This lets callers preserve explicit nulls while still falling
+ * back to legacy aliases when the field is absent.
+ */
 function readStringOrNull(value: unknown) {
   if (typeof value === 'string') return value;
   if (value === null) return null;
   return undefined;
 }
 
+/**
+ * Picks the first non-empty canonical sale identifier from supported aliases in
+ * precedence order: saleId, liveSaleId, liveId, then streamId.
+ */
 function readCanonicalLiveSaleId(input?: LiveEngagementContextInput) {
   if (!input) return null;
   const candidates = [input.saleId, input.liveSaleId, input.liveId, input.streamId];
