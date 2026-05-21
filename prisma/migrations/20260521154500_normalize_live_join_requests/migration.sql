@@ -9,7 +9,7 @@ ALTER TABLE "live_join_requests"
 UPDATE "live_join_requests" AS ljr
 SET
   "sellerId" = gs."sellerId",
-  "viewerId" = COALESCE(NULLIF(ljr."guestId", ''), 'guest:anonymous')
+  "viewerId" = COALESCE(CONCAT('guest:', NULLIF(ljr."guestId", '')), 'guest:')
 FROM "GarageSale" AS gs
 WHERE gs."id" = ljr."liveSaleId";
 
