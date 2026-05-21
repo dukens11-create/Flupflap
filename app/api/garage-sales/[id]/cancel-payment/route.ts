@@ -172,7 +172,13 @@ export async function POST(_req: Request, { params }: Params) {
           resolvedAt: new Date(),
         }, tx);
       });
-    } catch {
+    } catch (error) {
+      console.error('[garage-sales/cancel-payment] Refund succeeded in Stripe but local state update failed.', {
+        saleId: sale.id,
+        paymentIntentId,
+        stripeRefundId: stripeRefund.id,
+        error,
+      });
       return NextResponse.json({
         error: 'Refund completed in Stripe, but listing state could not be updated. Please contact support.',
       }, { status: 500 });

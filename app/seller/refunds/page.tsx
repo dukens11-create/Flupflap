@@ -16,14 +16,13 @@ function formatRefundHistoryStatus(status: string): string {
     .join(' ');
 }
 
-const refundHistoryDateFormatter = new Intl.DateTimeFormat('en-US', {
-  dateStyle: 'medium',
-  timeStyle: 'short',
-  timeZone: 'UTC',
-});
-
 export default async function SellerRefundsPage() {
   const { sellerId } = await requireSeller();
+  const refundHistoryDateFormatter = new Intl.DateTimeFormat('en-US', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: 'UTC',
+  });
 
   const refundRequests = await prisma.refundRequest.findMany({
     where: { sellerId },
