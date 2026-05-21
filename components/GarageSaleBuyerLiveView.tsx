@@ -17,7 +17,8 @@ import {
   type ViewerConnectionStatus,
 } from '@/lib/live-stream-viewer-state';
 
-const FALLBACK_BUYER_DISPLAY_NAME = 'Anonymous Buyer';
+const DEFAULT_AUTHENTICATED_BUYER_NAME = 'Anonymous Buyer';
+const CHAT_LOGIN_REQUIRED_MESSAGE = 'Please log in to chat';
 const MEDIA_READY_TIMEOUT_MS = 1200;
 const PLAYBACK_RETRY_DELAY_MS = 250;
 const PLAYBACK_RECOVERY_THROTTLE_MS = 1200;
@@ -1070,7 +1071,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           guestId: guestIdRef.current,
-          guestName: buyerName || FALLBACK_BUYER_DISPLAY_NAME,
+          guestName: buyerName || DEFAULT_AUTHENTICATED_BUYER_NAME,
         }),
       });
       const data = await res.json() as { request?: { id: string; status: string }; error?: string; roomFull?: boolean };
@@ -1229,7 +1230,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     const trimmed = input.trim();
     if (!trimmed) return;
     if (!isAuthenticatedBuyer) {
-      setError('Please log in to chat');
+      setError(CHAT_LOGIN_REQUIRED_MESSAGE);
       return;
     }
     setSending(true);
@@ -1239,7 +1240,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
       const requestPayload = {
         liveId: saleId,
         message: trimmed,
-        displayName: buyerName || FALLBACK_BUYER_DISPLAY_NAME,
+        displayName: buyerName || DEFAULT_AUTHENTICATED_BUYER_NAME,
         userId: buyerId,
         roomId: liveContext.roomId,
         liveSessionId: liveContext.liveSessionId,
@@ -1672,7 +1673,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
         )}
         {!isAuthenticatedBuyer && (
           <p className="rounded-lg bg-amber-50 px-3 py-1.5 text-xs text-amber-800">
-            Please log in to chat
+            {CHAT_LOGIN_REQUIRED_MESSAGE}
           </p>
         )}
 
