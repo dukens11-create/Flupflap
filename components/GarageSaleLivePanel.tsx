@@ -80,8 +80,11 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   const lastLoggedRoomRef = useRef<string | null>(null);
   const lastLoggedSessionRef = useRef<string | null>(null);
 
+  const hardRestartLiveRef = useRef<(() => Promise<void>) | null>(null);
+
   const [isLive, setIsLive] = useState(initialIsLive);
   const [sellerPublished, setSellerPublished] = useState(false);
+  const [publishConnected, setPublishConnected] = useState(false);
   const [streamReadyCount, setStreamReadyCount] = useState(0);
   const [subscriberPathReady, setSubscriberPathReady] = useState(false);
   const [camOn, setCamOn] = useState(false);
@@ -432,6 +435,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       logPeerStates('peer-connection-state-change');
       if (pc.connectionState === 'connected') {
         setError(null);
+        setPublishConnected(true);
         resetReconnectState();
         if (reconnectTimeoutRef.current) {
           clearTimeout(reconnectTimeoutRef.current);
@@ -440,6 +444,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       }
 
       if (pc.connectionState === 'disconnected') {
+        setPublishConnected(false);
         // Give ICE 5 seconds to self-recover before scheduling a bounded reconnect.
         if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
         reconnectTimeoutRef.current = window.setTimeout(() => {
@@ -459,21 +464,14 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
           reconnectRetryTimeoutRef.current = window.setTimeout(() => {
             reconnectRetryTimeoutRef.current = null;
             if (!liveRef.current || peerRef.current !== pc) return;
-            closePeerConnection();
-            signalCursorRef.current = null;
             logLiveDebug('seller-reconnect', { reason: 'peer-disconnected', attempt, retryDelay });
-            void (async () => {
-              try {
-                await createAndSendOfferRef.current?.();
-              } catch {
-                startSignalPollingRef.current?.();
-              }
-            })();
+            void hardRestartLiveRef.current?.();
           }, retryDelay);
         }, 5000);
       }
 
       if (pc.connectionState === 'failed') {
+        setPublishConnected(false);
         setError('Connection lost. Attempting to reconnect…');
         const attempt = reconnectAttemptRef.current + 1;
         reconnectAttemptRef.current = attempt;
@@ -489,16 +487,8 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         reconnectRetryTimeoutRef.current = window.setTimeout(() => {
           reconnectRetryTimeoutRef.current = null;
           if (!liveRef.current || peerRef.current !== pc) return;
-          closePeerConnection();
-          signalCursorRef.current = null;
           logLiveDebug('seller-reconnect', { reason: 'peer-failed', attempt, retryDelay });
-          void (async () => {
-            try {
-              await createAndSendOfferRef.current?.();
-            } catch {
-              startSignalPollingRef.current?.();
-            }
-          })();
+          void hardRestartLiveRef.current?.();
         }, retryDelay);
       }
     };
@@ -540,6 +530,40 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   useEffect(() => {
     startSignalPollingRef.current = startSignalPolling;
   }, [startSignalPolling]);
+
+  // Hard restart: stops all polling/timers, closes old PC, resets signaling state,
+  // and re-runs the offer/publish flow without requiring the seller to end/restart the live.
+  const hardRestartLive = useCallback(async () => {
+    if (!liveRef.current) return;
+    setPublishConnected(false);
+    setSellerPublished(false);
+    setSubscriberPathReady(false);
+    setStreamReadyCount(0);
+    setError(null);
+    stopSignalPolling();
+    clearReconnectRetryTimeout();
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+    closePeerConnection();
+    signalCursorRef.current = null;
+    hasRemoteAnswerRef.current = false;
+    pendingIceCandidatesRef.current = [];
+    reconnectAttemptRef.current = 0;
+    logLiveDebug('seller-hard-restart', { roomId: liveRoomIdRef.current, liveSessionId: liveSessionIdRef.current });
+    try {
+      await createAndSendOfferRef.current?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to restart live connection');
+      startSignalPollingRef.current?.();
+    }
+  }, [clearReconnectRetryTimeout, closePeerConnection, logLiveDebug, stopSignalPolling]);
+
+  // Keep the ref current so connection-state handlers can call the latest version.
+  useEffect(() => {
+    hardRestartLiveRef.current = hardRestartLive;
+  }, [hardRestartLive]);
 
   // Sync liveRef so connection-state handlers have an up-to-date value without
   // capturing stale closure state.  This prevents zombie re-offer attempts after
@@ -927,6 +951,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       }
       setIsLive(false);
       setSellerPublished(false);
+      setPublishConnected(false);
       setSubscriberPathReady(false);
       setStreamReadyCount(0);
       resetReconnectState();
@@ -1080,7 +1105,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   const videoPreviewClassName = camOn
     ? `h-full w-full rounded-2xl object-cover transition-opacity duration-500 ${previewReady ? 'opacity-100' : 'opacity-0'}`
     : 'hidden';
-  const sellerLiveReady = isLive && sellerPublished && (subscriberPathReady || streamReadyCount > 0);
+  const sellerLiveReady = isLive && publishConnected && (subscriberPathReady || streamReadyCount > 0);
 
   return (
     <div className="card space-y-4 p-4 sm:space-y-5 sm:p-5 transition-all duration-300">
@@ -1237,15 +1262,27 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
           <Radio size={14} /> {loading ? 'Starting…' : 'Start Live'}
         </button>
       ) : (
-        <button
-          type="button"
-          onClick={handleEndLive}
-          disabled={loading}
-          className="w-full flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-50"
-        >
-          <span className="inline-flex h-2 w-2 animate-pulse rounded-full bg-white" />
-          <VideoOff size={14} /> {loading ? 'Ending…' : 'End Live'}
-        </button>
+        <div className="flex flex-col gap-2">
+          {(error || !publishConnected) && sellerPublished && !loading && (
+            <button
+              type="button"
+              onClick={() => void hardRestartLive()}
+              disabled={loading}
+              className="btn-outline w-full flex items-center justify-center gap-1.5 text-xs"
+            >
+              <RefreshCcw size={13} /> Restart Live Connection
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handleEndLive}
+            disabled={loading}
+            className="w-full flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+          >
+            <span className="inline-flex h-2 w-2 animate-pulse rounded-full bg-white" />
+            <VideoOff size={14} /> {loading ? 'Ending…' : 'End Live'}
+          </button>
+        </div>
       )}
 
       <p className="text-center text-[11px] text-slate-400">

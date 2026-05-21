@@ -249,6 +249,23 @@ export async function POST(req: Request, { params }: Params) {
   const accessCheck = requireRoleAccess(role, sale.sellerId, userId);
   if (!accessCheck.ok) return accessCheck.response;
 
+  // When the seller posts a new OFFER, clear stale signals from the previous
+  // broadcaster session so the new peer connection isn't confused by old ANSWER/ICE.
+  if (role === LIVE_SIGNAL_ROLES.SELLER && kind === LIVE_SIGNAL_KINDS.OFFER) {
+    await prisma.garageSaleLiveSignal.deleteMany({
+      where: {
+        saleId: id,
+        OR: [
+          // All previous seller signals (old OFFER and ICE candidates)
+          { sender: LIVE_SIGNAL_ROLES.SELLER },
+          // Stale buyer answer and ICE from the previous peer connection
+          { sender: LIVE_SIGNAL_ROLES.BUYER, kind: LIVE_SIGNAL_KINDS.ANSWER },
+          { sender: LIVE_SIGNAL_ROLES.BUYER, kind: LIVE_SIGNAL_KINDS.ICE },
+        ],
+      },
+    });
+  }
+
   const signal = await prisma.garageSaleLiveSignal.create({
     data: {
       saleId: id,
