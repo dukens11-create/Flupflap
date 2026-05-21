@@ -1526,7 +1526,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
             <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3 text-white">
               <div>
                 <p className="text-sm font-semibold">Seller live preview</p>
-                <p className="text-xs text-slate-300">Review your camera larger before or during the live sale.</p>
+                <p className="text-xs text-slate-300">Review your camera in a larger view before or during the live sale.</p>
               </div>
               <div className="flex items-center gap-2">
                 <button
