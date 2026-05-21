@@ -24,6 +24,13 @@ function getPrismaErrorCode(error: unknown) {
   return typeof code === 'string' ? code : null;
 }
 
+function isMissingSellerIdColumnError(error: unknown) {
+  if (!error || typeof error !== 'object') return false;
+  const prismaCode = getPrismaErrorCode(error);
+  const errorMessage = error instanceof Error ? error.message : '';
+  return prismaCode === 'P2022' && errorMessage.includes('sellerId');
+}
+
 /** GET /api/garage-sales/[id]/chat — fetch recent messages (public) */
 export async function GET(req: Request, { params }: Params) {
   const { id } = await params;
@@ -91,11 +98,16 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { message, liveSessionId, roomId } = body as {
-    message?: string;
-    liveSessionId?: string | null;
-    roomId?: string;
-  };
+  const parsedBody = body as Record<string, unknown>;
+  const message = typeof parsedBody.message === 'string' ? parsedBody.message : undefined;
+  const liveSessionId = (typeof parsedBody.liveSessionId === 'string' || parsedBody.liveSessionId === null
+    ? parsedBody.liveSessionId
+    : (typeof parsedBody.live_session_id === 'string' || parsedBody.live_session_id === null
+      ? parsedBody.live_session_id
+      : undefined)) as string | null | undefined;
+  const roomId = (typeof parsedBody.roomId === 'string'
+    ? parsedBody.roomId
+    : (typeof parsedBody.room_id === 'string' ? parsedBody.room_id : undefined)) as string | undefined;
   if (!message || typeof message !== 'string' || message.trim().length === 0) {
     return NextResponse.json({ error: 'Message is required' }, { status: 400 });
   }
@@ -111,7 +123,26 @@ export async function POST(req: Request, { params }: Params) {
   const resolvedDisplayName = sessionDisplayName
     ? sessionDisplayName.slice(0, 50)
     : DEFAULT_AUTHENTICATED_BUYER_NAME;
-  const liveContext = resolveLiveEngagementContext(id, sale.liveStartedAt ?? null, { liveSessionId, roomId });
+  const liveContext = resolveLiveEngagementContext(id, sale.liveStartedAt ?? null, {
+    roomId,
+    room_id: parsedBody.room_id,
+    liveSessionId,
+    live_session_id: parsedBody.live_session_id,
+    saleId: parsedBody.saleId,
+    liveId: parsedBody.liveId,
+    liveSaleId: parsedBody.liveSaleId,
+    streamId: parsedBody.streamId,
+  });
+  if (!liveContext.saleMatches) {
+    console.warn('[garage-sale-chat] sale identifier mismatch', {
+      operation: 'chat.write.validate',
+      saleId: id,
+      receivedCanonicalSaleId: liveContext.receivedCanonicalSaleId,
+      userId,
+      timestamp: new Date().toISOString(),
+    });
+    return NextResponse.json({ error: 'Live sale identifier mismatch' }, { status: 400 });
+  }
   const actorId = getLiveEngagementActorId(userId, null);
   const insertCreatedAt = new Date();
   const identifiers = buildLiveEngagementIdentifiers(id);
@@ -136,21 +167,38 @@ export async function POST(req: Request, { params }: Params) {
     roomMatches: liveContext.roomMatches,
     liveSessionMatches: liveContext.liveSessionMatches,
     actorId,
-    insertPayload,
+    operation: 'chat.write',
+    timestamp: insertCreatedAt.toISOString(),
   });
 
   try {
-    const msg = await prisma.garageSaleChat.create({
+    const createChatMessage = async (includeSellerId: boolean) => prisma.garageSaleChat.create({
       data: {
         saleId: id,
         userId,
-        sellerId: sale.sellerId,
+        ...(includeSellerId ? { sellerId: sale.sellerId } : {}),
         guestName: resolvedDisplayName,
         message: insertPayload.message,
         createdAt: insertCreatedAt,
       },
       select: { id: true, userId: true, guestName: true, message: true, createdAt: true },
     });
+
+    let msg;
+    try {
+      msg = await createChatMessage(true);
+    } catch (chatInsertError) {
+      if (!isMissingSellerIdColumnError(chatInsertError)) throw chatInsertError;
+      console.warn('[garage-sale-chat] retrying chat write without sellerId column for backward compatibility', {
+        operation: 'chat.write.retry_without_seller_id',
+        saleId: id,
+        userId,
+        prismaCode: getPrismaErrorCode(chatInsertError),
+        timestamp: new Date().toISOString(),
+      });
+      // TODO(garage-sale-chat): remove this fallback after all environments have the sellerId column.
+      msg = await createChatMessage(false);
+    }
 
     let signalEmitted = true;
     try {
@@ -183,7 +231,8 @@ export async function POST(req: Request, { params }: Params) {
         roomId: liveContext.roomId,
         actorId,
         messageId: msg.id,
-        error: signalError,
+        operation: 'chat.signal.emit',
+        timestamp: new Date().toISOString(),
         errorName: signalError instanceof Error ? signalError.name : 'unknown',
         errorMessage: signalError instanceof Error ? signalError.message : 'unknown',
         prismaCode: getPrismaErrorCode(signalError),
@@ -197,6 +246,8 @@ export async function POST(req: Request, { params }: Params) {
       roomId: liveContext.roomId,
       actorId,
       signalEmitted,
+      operation: 'chat.write.success',
+      timestamp: new Date().toISOString(),
     });
 
     return NextResponse.json({
@@ -212,11 +263,10 @@ export async function POST(req: Request, { params }: Params) {
       saleId: id,
       liveSessionId: liveContext.liveSessionId,
       actorId,
-      insertPayload,
-      error,
+      operation: 'chat.write.failed',
+      timestamp: new Date().toISOString(),
       errorName: error instanceof Error ? error.name : 'unknown',
       errorMessage: error instanceof Error ? error.message : 'unknown',
-      errorStack: error instanceof Error ? error.stack : null,
       prismaCode: getPrismaErrorCode(error),
     });
     return NextResponse.json({ error: 'Failed to save live chat message' }, { status: 500 });

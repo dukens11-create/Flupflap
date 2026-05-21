@@ -20,6 +20,12 @@ type ReactionDuplicateWhere =
   | { saleId: string; userId: string; createdAt?: { gte: Date } }
   | { saleId: string; guestId: string; createdAt?: { gte: Date } };
 
+function getPrismaErrorCode(error: unknown) {
+  if (!error || typeof error !== 'object') return null;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === 'string' ? code : null;
+}
+
 /** GET /api/garage-sales/[id]/reactions — get total like count + recent reactions */
 export async function GET(_req: Request, { params }: Params) {
   const { id } = await params;
@@ -84,17 +90,41 @@ export async function POST(req: Request, { params }: Params) {
     body = {};
   }
 
-  const { type, guestId, liveSessionId, roomId } = body as {
-    type?: string;
-    guestId?: string;
-    liveSessionId?: string | null;
-    roomId?: string;
-  };
+  const parsedBody = body as Record<string, unknown>;
+  const type = typeof parsedBody.type === 'string' ? parsedBody.type : undefined;
+  const guestId = typeof parsedBody.guestId === 'string' ? parsedBody.guestId : undefined;
+  const liveSessionId = (typeof parsedBody.liveSessionId === 'string' || parsedBody.liveSessionId === null
+    ? parsedBody.liveSessionId
+    : (typeof parsedBody.live_session_id === 'string' || parsedBody.live_session_id === null
+      ? parsedBody.live_session_id
+      : undefined)) as string | null | undefined;
+  const roomId = (typeof parsedBody.roomId === 'string'
+    ? parsedBody.roomId
+    : (typeof parsedBody.room_id === 'string' ? parsedBody.room_id : undefined)) as string | undefined;
   const reactionType = type === 'heart' ? 'heart' : 'like';
   const userId = session?.user?.id ?? null;
   const resolvedGuestId = !userId ? normalizeGuestId(guestId) : null;
   const actorId = getLiveEngagementActorId(userId, resolvedGuestId);
-  const liveContext = resolveLiveEngagementContext(id, sale.liveStartedAt ?? null, { liveSessionId, roomId });
+  const liveContext = resolveLiveEngagementContext(id, sale.liveStartedAt ?? null, {
+    roomId,
+    room_id: parsedBody.room_id,
+    liveSessionId,
+    live_session_id: parsedBody.live_session_id,
+    saleId: parsedBody.saleId,
+    liveId: parsedBody.liveId,
+    liveSaleId: parsedBody.liveSaleId,
+    streamId: parsedBody.streamId,
+  });
+  if (!liveContext.saleMatches) {
+    console.warn('[garage-sale-reactions] sale identifier mismatch', {
+      operation: 'reactions.write.validate',
+      saleId: id,
+      receivedCanonicalSaleId: liveContext.receivedCanonicalSaleId,
+      actorId,
+      timestamp: new Date().toISOString(),
+    });
+    return NextResponse.json({ error: 'Live sale identifier mismatch' }, { status: 400 });
+  }
   const identifiers = buildLiveEngagementIdentifiers(id);
 
   console.info('[garage-sale-reactions] like event received', {
@@ -106,6 +136,8 @@ export async function POST(req: Request, { params }: Params) {
     roomMatches: liveContext.roomMatches,
     liveSessionMatches: liveContext.liveSessionMatches,
     actorId,
+    operation: 'reactions.write',
+    timestamp: new Date().toISOString(),
   });
 
   try {
@@ -165,7 +197,11 @@ export async function POST(req: Request, { params }: Params) {
         roomId: liveContext.roomId,
         actorId,
         reactionId: reaction.id,
+        operation: 'reactions.signal.emit',
+        timestamp: new Date().toISOString(),
+        errorName: signalError instanceof Error ? signalError.name : 'unknown',
         errorMessage: signalError instanceof Error ? signalError.message : 'unknown',
+        prismaCode: getPrismaErrorCode(signalError),
       });
     }
 
@@ -177,6 +213,8 @@ export async function POST(req: Request, { params }: Params) {
       actorId,
       deduplicated: Boolean(existingReaction),
       signalEmitted,
+      operation: 'reactions.write.success',
+      timestamp: new Date().toISOString(),
     });
 
     return NextResponse.json({
@@ -194,7 +232,11 @@ export async function POST(req: Request, { params }: Params) {
       saleId: id,
       liveSessionId: liveContext.liveSessionId,
       actorId,
-      error: error instanceof Error ? error.message : 'unknown',
+      operation: 'reactions.write.failed',
+      timestamp: new Date().toISOString(),
+      errorName: error instanceof Error ? error.name : 'unknown',
+      errorMessage: error instanceof Error ? error.message : 'unknown',
+      prismaCode: getPrismaErrorCode(error),
     });
     return NextResponse.json({ error: 'Failed to save live reaction' }, { status: 500 });
   }

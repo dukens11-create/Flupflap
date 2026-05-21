@@ -184,6 +184,7 @@ test('session ID consistency: live engagement context resolves shared room and s
   assert.equal(context.liveSessionId, 'cuid-garage-sale-001:2026-05-21T04:05:47.162Z');
   assert.equal(context.roomMatches, true);
   assert.equal(context.liveSessionMatches, true);
+  assert.equal(context.saleMatches, true);
 });
 
 test('session ID consistency: likes and chat payloads use the same canonical sale identifiers', () => {
@@ -191,10 +192,36 @@ test('session ID consistency: likes and chat payloads use the same canonical sal
   const identifiers = buildLiveEngagementIdentifiers(saleId);
 
   assert.deepEqual(identifiers, {
+    saleId,
     liveSaleId: saleId,
     liveId: saleId,
     streamId: saleId,
   });
+});
+
+test('resolveLiveEngagementContext: accepts legacy snake_case payload keys and matching sale aliases', () => {
+  const saleId = 'cuid-garage-sale-001';
+  const liveStartedAt = new Date('2026-05-21T04:05:47.162Z');
+  const context = resolveLiveEngagementContext(saleId, liveStartedAt, {
+    room_id: 'garage-sale:cuid-garage-sale-001',
+    live_session_id: 'cuid-garage-sale-001:2026-05-21T04:05:47.162Z',
+    streamId: saleId,
+  });
+
+  assert.equal(context.roomMatches, true);
+  assert.equal(context.liveSessionMatches, true);
+  assert.equal(context.saleMatches, true);
+});
+
+test('resolveLiveEngagementContext: detects mismatched canonical sale identifier', () => {
+  const saleId = 'cuid-garage-sale-001';
+  const liveStartedAt = new Date('2026-05-21T04:05:47.162Z');
+  const context = resolveLiveEngagementContext(saleId, liveStartedAt, {
+    liveSaleId: 'other-sale-id',
+  });
+
+  assert.equal(context.saleMatches, false);
+  assert.equal(context.receivedCanonicalSaleId, 'other-sale-id');
 });
 
 // ── Optimistic like update ────────────────────────────────────────────────────
