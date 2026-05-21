@@ -212,8 +212,9 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   }, [clearReconnectRetryTimeout]);
 
   const logSellerRoomDetails = useCallback((roomId: string, liveSessionId: string | null, source: string) => {
-    const roomChanged = roomId !== lastLoggedRoomRef.current;
-    const sessionChanged = liveSessionId !== lastLoggedSessionRef.current;
+    if (roomId !== lastLoggedRoomRef.current || liveSessionId !== lastLoggedSessionRef.current) {
+      console.info('[GarageSaleLivePanel] room joined successfully', { roomId, liveSessionId, source });
+    }
     if (roomId !== lastLoggedRoomRef.current) {
       console.info('[GarageSaleLivePanel] SELLER ROOM ID', roomId);
       lastLoggedRoomRef.current = roomId;
@@ -221,9 +222,6 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     if (liveSessionId !== lastLoggedSessionRef.current) {
       console.info('[GarageSaleLivePanel] SELLER LIVE SESSION ID', liveSessionId ?? 'none');
       lastLoggedSessionRef.current = liveSessionId;
-    }
-    if (roomChanged || sessionChanged) {
-      console.info('[GarageSaleLivePanel] room joined successfully', { roomId, liveSessionId, source });
     }
     logLiveDebug(LIVE_SIGNAL_EVENTS.BROADCASTER_JOIN, { source, roomId, liveSessionId });
     if (roomId !== getLiveRoomId(saleId)) {

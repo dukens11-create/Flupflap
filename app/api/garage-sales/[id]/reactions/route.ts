@@ -105,11 +105,16 @@ export async function POST(req: Request, { params }: Params) {
 
   try {
     const liveSessionCreatedAtFilter = sale.liveStartedAt ? { gte: sale.liveStartedAt } : undefined;
-    const duplicateWhere = userId
-      ? { saleId: id, userId, createdAt: liveSessionCreatedAtFilter }
-      : resolvedGuestId
-        ? { saleId: id, guestId: resolvedGuestId, createdAt: liveSessionCreatedAtFilter }
-        : null;
+    let duplicateWhere:
+      | { saleId: string; userId: string; createdAt?: { gte: Date } }
+      | { saleId: string; guestId: string; createdAt?: { gte: Date } }
+      | null = null;
+
+    if (userId) {
+      duplicateWhere = { saleId: id, userId, createdAt: liveSessionCreatedAtFilter };
+    } else if (resolvedGuestId) {
+      duplicateWhere = { saleId: id, guestId: resolvedGuestId, createdAt: liveSessionCreatedAtFilter };
+    }
 
     const existingReaction = duplicateWhere
       ? await prisma.garageSaleReaction.findFirst({
