@@ -7,7 +7,7 @@ const DEFAULT_GUEST_NAME = 'Guest';
 const MEDIA_READY_TIMEOUT_MS = 1200;
 const PLAYBACK_RETRY_DELAY_MS = 250;
 const CONNECTION_RECOVERY_TIMEOUT_MS = 8000;
-const RECONNECT_BASE_DELAY_MS = 1200;
+const RECONNECT_STEP_DELAY_MS = 1200;
 const RECONNECT_MAX_DELAY_MS = 8000;
 const RECONNECT_JITTER_MS = 250;
 const MAX_RECONNECT_ATTEMPTS = 5;
@@ -132,6 +132,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     setHasRemoteMedia(false);
     setPlaybackBlocked(false);
     setAudioUnlockRequired(false);
+    setRecoveringConnection(false);
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
@@ -324,7 +325,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
 
     const retryDelay = Math.min(
       RECONNECT_MAX_DELAY_MS,
-      RECONNECT_BASE_DELAY_MS * attempt,
+      RECONNECT_STEP_DELAY_MS * attempt,
     ) + Math.floor(Math.random() * RECONNECT_JITTER_MS);
 
     setRecoveringConnection(true);
@@ -345,6 +346,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
       if (!isLive) return;
       logLiveDebug('reconnect-executing', { attempt });
       closePeerConnection();
+      setRecoveringConnection(true);
       activeOfferSignalRef.current = null;
       hasRemoteDescriptionRef.current = false;
       pendingRemoteIceCandidatesRef.current = [];
