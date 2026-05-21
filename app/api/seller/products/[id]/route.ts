@@ -919,11 +919,11 @@ export async function DELETE(
     if (!session?.user || (session.user.role !== 'SELLER' && session.user.role !== 'ADMIN')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+    const actorRole = session.user.role;
     const actorId = session.user.id;
     if (!actorId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
-    const actorRole = session.user.role;
 
     const { id } = await params;
     const { product: existing, forbidden } = await getOwnedSellerProduct(id, actorId, actorRole);
