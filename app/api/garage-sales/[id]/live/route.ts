@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
+import { buildGarageSaleLiveSessionId } from '@/lib/garage-sale-live-stream';
 import {
   getGarageSaleLiveControlsBlockMessage,
   getGarageSaleVisibilityBlockReason,
@@ -93,7 +94,10 @@ export async function POST(req: Request, { params }: Params) {
       select: { id: true, isLive: true, liveStartedAt: true },
     });
 
-  return NextResponse.json(updated);
+  return NextResponse.json({
+    ...updated,
+    liveSessionId: buildGarageSaleLiveSessionId(updated.id, updated.liveStartedAt),
+  });
 }
 
 /** GET /api/garage-sales/[id]/live — poll live status (public) */
@@ -107,5 +111,10 @@ export async function GET(_req: Request, { params }: Params) {
   if (!sale) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   if (!isGarageSalePubliclyVisible(sale)) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  return NextResponse.json({ id: sale.id, isLive: sale.isLive, liveStartedAt: sale.liveStartedAt });
+  return NextResponse.json({
+    id: sale.id,
+    isLive: sale.isLive,
+    liveStartedAt: sale.liveStartedAt,
+    liveSessionId: buildGarageSaleLiveSessionId(sale.id, sale.liveStartedAt),
+  });
 }

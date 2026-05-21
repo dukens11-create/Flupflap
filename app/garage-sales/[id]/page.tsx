@@ -20,6 +20,7 @@ import GarageSaleBuyerLiveView from '@/components/GarageSaleBuyerLiveView';
 import GarageSaleShareButton from '@/components/GarageSaleShareButton';
 import GarageSalePaymentStatusBanner from '@/components/GarageSalePaymentStatusBanner';
 import { deriveGarageSaleLifecycle } from '@/lib/garage-sale-lifecycle';
+import { buildGarageSaleLiveSessionId } from '@/lib/garage-sale-live-stream';
 import { createPageMetadata } from '@/lib/seo';
 import { syncGarageSaleCheckoutSessionForSeller } from '@/lib/garage-sale-payment-sync';
 import { logInfo, logWarn } from '@/lib/logger';
@@ -215,6 +216,7 @@ export default async function GarageSaleDetailPage({ params, searchParams }: Par
     listingIsPubliclyVisible,
   });
   const saleTypeLabel = SALE_TYPE_LABELS[sale.saleType] ?? sale.saleType;
+  const initialLiveSessionId = buildGarageSaleLiveSessionId(sale.id, sale.liveStartedAt);
   const priceRange = sale.priceRangeMin != null && sale.priceRangeMax != null
     ? `$${sale.priceRangeMin}–$${sale.priceRangeMax}`
     : sale.priceRangeMin != null
@@ -448,7 +450,11 @@ export default async function GarageSaleDetailPage({ params, searchParams }: Par
 
           {/* Live Preview — seller controls */}
           {isOwner && lifecycle.sellerCanGoLive && (
-            <GarageSaleLivePanel saleId={sale.id} initialIsLive={sale.isLive} />
+            <GarageSaleLivePanel
+              saleId={sale.id}
+              initialIsLive={sale.isLive}
+              initialLiveSessionId={initialLiveSessionId}
+            />
           )}
           {isOwner && !lifecycle.sellerCanGoLive && (
             <div className="card p-4 text-sm text-slate-600">
@@ -461,6 +467,7 @@ export default async function GarageSaleDetailPage({ params, searchParams }: Par
             <GarageSaleBuyerLiveView
               saleId={sale.id}
               initialIsLive={sale.isLive}
+              initialLiveSessionId={initialLiveSessionId}
               buyerName={session?.user?.name ?? null}
               buyerId={session?.user?.id ?? null}
             />
