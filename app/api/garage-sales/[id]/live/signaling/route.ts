@@ -256,9 +256,11 @@ export async function POST(req: Request, { params }: Params) {
       where: {
         saleId: id,
         OR: [
-          // All previous seller signals (old OFFER and ICE candidates)
+          // Drop every prior seller signal because the seller owns the current
+          // publishing session and any older OFFER/ICE payloads are always stale.
           { sender: LIVE_SIGNAL_ROLES.SELLER },
-          // Stale buyer answer and ICE from the previous peer connection
+          // Only buyer ANSWER/ICE are tied to the peer connection being reset;
+          // buyer readiness/heartbeat signals are session metadata we still keep.
           { sender: LIVE_SIGNAL_ROLES.BUYER, kind: LIVE_SIGNAL_KINDS.ANSWER },
           { sender: LIVE_SIGNAL_ROLES.BUYER, kind: LIVE_SIGNAL_KINDS.ICE },
         ],

@@ -34,7 +34,7 @@ const SELLER_RECONNECT_MAX_ATTEMPTS = 3;
 const SELLER_RECONNECT_STEP_DELAY_MS = 1200;
 const SELLER_RECONNECT_MAX_DELAY_MS = 8000;
 const SELLER_RECONNECT_JITTER_MS = 250;
-const LIVE_RECONNECTING_MESSAGE = 'Connection lost. Attempting to reconnect…';
+const LIVE_RECONNECTING_MESSAGE = 'Connection lost. Attempting to reconnect...';
 
 type CameraStatus = 'idle' | 'connecting' | 'ready' | 'awaitingInteraction' | 'blocked' | 'denied' | 'unsupported';
 
@@ -553,7 +553,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     try {
       await createAndSendOfferRef.current?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to restart live connection');
+      setError(err instanceof Error ? err.message : 'Failed to restart live connection. Please check your internet connection and try again.');
       startSignalPollingRef.current?.();
     }
   }, [clearReconnectRetryTimeout, closePeerConnection, logLiveDebug, stopSignalPolling]);
