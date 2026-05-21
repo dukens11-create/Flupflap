@@ -2,6 +2,7 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { Video, VideoOff, Mic, MicOff, Radio, AlertTriangle, Eye, RefreshCcw, MessageCircle, Heart, Trash2 } from 'lucide-react';
 import { RTC_CONFIG, HAS_TURN_CONFIG } from '@/lib/rtc-config';
+import { getIceCandidateType } from '@/lib/rtc-diagnostics';
 
 interface Props {
   saleId: string;
@@ -263,9 +264,10 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         }
 
         if (signal.kind === 'ICE') {
-          logLiveDebug('signal-ice', { createdAt: signal.createdAt });
           const payload = signal.payload as { candidate?: RTCIceCandidateInit } | null;
           if (!payload?.candidate) continue;
+          const candidateType = getIceCandidateType(payload.candidate.candidate);
+          logLiveDebug('signal-ice', { createdAt: signal.createdAt, candidateType });
           if (!hasRemoteAnswerRef.current) {
             // Buffer the candidate until setRemoteDescription(answer) completes.
             // Adding a candidate before the remote description is set throws and
@@ -321,6 +323,16 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
 
     const pc = new RTCPeerConnection(RTC_CONFIG);
     peerRef.current = pc;
+    const logPeerStates = (event: string, details?: Record<string, unknown>) => {
+      logLiveDebug(event, {
+        connectionState: pc.connectionState,
+        iceConnectionState: pc.iceConnectionState,
+        iceGatheringState: pc.iceGatheringState,
+        signalingState: pc.signalingState,
+        ...details,
+      });
+    };
+    logPeerStates('peer-created');
 
     stream.getTracks().forEach((track) => {
       pc.addTrack(track, stream);
@@ -329,11 +341,13 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
 
     pc.onicecandidate = (event) => {
       if (!event.candidate) return;
+      const candidateType = getIceCandidateType(event.candidate.candidate);
+      logPeerStates('local-ice-candidate', { candidateType });
       void postSignal('ICE', { candidate: event.candidate.toJSON() });
     };
 
     pc.onconnectionstatechange = () => {
-      logLiveDebug('peer-connection-state', { state: pc.connectionState });
+      logPeerStates('peer-connection-state-change');
       if (pc.connectionState === 'connected') {
         setError(null);
         if (reconnectTimeoutRef.current) {
@@ -378,7 +392,15 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     };
 
     pc.oniceconnectionstatechange = () => {
-      logLiveDebug('ice-connection-state', { state: pc.iceConnectionState });
+      logPeerStates('ice-connection-state-change');
+    };
+
+    pc.onicegatheringstatechange = () => {
+      logPeerStates('ice-gathering-state-change');
+    };
+
+    pc.onsignalingstatechange = () => {
+      logPeerStates('signaling-state-change');
     };
 
     const offer = await pc.createOffer();

@@ -1,7 +1,8 @@
 'use client';
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { MessageCircle, Send, Radio, Eye, Heart } from 'lucide-react';
 import { RTC_CONFIG, HAS_TURN_CONFIG } from '@/lib/rtc-config';
+import { getIceCandidateType, type IceCandidateType } from '@/lib/rtc-diagnostics';
 import {
   MAX_RECONNECT_ATTEMPTS,
   RECONNECT_STEP_DELAY_MS,
@@ -19,6 +20,7 @@ const MEDIA_READY_TIMEOUT_MS = 1200;
 const PLAYBACK_RETRY_DELAY_MS = 250;
 const PLAYBACK_RECOVERY_THROTTLE_MS = 1200;
 const CONNECTION_RECOVERY_TIMEOUT_MS = 8000;
+const RECENT_CANDIDATE_TYPES_LIMIT = 6;
 
 interface ChatMessage {
   id: string;
@@ -51,6 +53,10 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
   const [viewerCount, setViewerCount] = useState(0);
   const [debugPcState, setDebugPcState] = useState<string>('none');
   const [debugIceState, setDebugIceState] = useState<string>('none');
+  const [debugIceGatheringState, setDebugIceGatheringState] = useState<string>('none');
+  const [debugSignalingState, setDebugSignalingState] = useState<string>('none');
+  const [debugReconnectAttempts, setDebugReconnectAttempts] = useState(0);
+  const [debugRecentCandidateTypes, setDebugRecentCandidateTypes] = useState<IceCandidateType[]>([]);
   const [likeCount, setLikeCount] = useState(0);
   const [likeAnimating, setLikeAnimating] = useState(false);
   const [likeSending, setLikeSending] = useState(false);
@@ -85,6 +91,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
   const pendingRemoteIceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const waitingForPublisherTimerRef = useRef<number | null>(null);
   const liveDebugEnabled = process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_DEBUG_LIVE_STREAM === '1';
+  const liveDebugOverlayEnabled = process.env.NEXT_PUBLIC_LIVE_DEBUG_OVERLAY === 'true';
 
   const logLiveDebug = useCallback((event: string, details?: Record<string, unknown>) => {
     if (!liveDebugEnabled) return;
@@ -180,9 +187,16 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
 
   const resetReconnectState = useCallback(() => {
     reconnectAttemptRef.current = 0;
+    setDebugReconnectAttempts(0);
     clearConnectionRecoveryTimeout();
     clearReconnectRetryTimeout();
   }, [clearConnectionRecoveryTimeout, clearReconnectRetryTimeout]);
+
+  const rememberCandidateType = useCallback((candidate?: string) => {
+    const candidateType = getIceCandidateType(candidate);
+    setDebugRecentCandidateTypes((previous) => [candidateType, ...previous].slice(0, RECENT_CANDIDATE_TYPES_LIMIT));
+    return candidateType;
+  }, []);
 
   const playRemoteStream = useCallback(async (options?: { tryMutedFirst?: boolean }) => {
     const video = videoRef.current;
@@ -339,6 +353,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
 
     const attempt = reconnectAttemptRef.current + 1;
     reconnectAttemptRef.current = attempt;
+    setDebugReconnectAttempts(attempt);
 
     if (attempt > MAX_RECONNECT_ATTEMPTS) {
       setRecoveringConnection(false);
@@ -406,9 +421,22 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     setConnectionStatus('connecting');
     setRecoveringConnection(false);
     resetReconnectState();
-    setDebugPcState('new');
-    setDebugIceState('new');
+    setDebugRecentCandidateTypes([]);
+    setDebugPcState(pc.connectionState);
+    setDebugIceState(pc.iceConnectionState);
+    setDebugIceGatheringState(pc.iceGatheringState);
+    setDebugSignalingState(pc.signalingState);
     logLiveDebug('offer-received', { signalId });
+    const logPeerStates = (event: string, details?: Record<string, unknown>) => {
+      logLiveDebug(event, {
+        connectionState: pc.connectionState,
+        iceConnectionState: pc.iceConnectionState,
+        iceGatheringState: pc.iceGatheringState,
+        signalingState: pc.signalingState,
+        ...details,
+      });
+    };
+    logPeerStates('peer-created', { signalId });
 
     pc.ontrack = (event) => {
       const streamTracks = event.streams[0]?.getTracks() ?? [];
@@ -441,11 +469,13 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
 
     pc.onicecandidate = (event) => {
       if (!event.candidate) return;
+      const candidateType = rememberCandidateType(event.candidate.candidate);
+      logPeerStates('local-ice-candidate', { candidateType });
       void postSignal('ICE', { candidate: event.candidate.toJSON() });
     };
 
     pc.onconnectionstatechange = () => {
-      logLiveDebug('peer-connection-state', { state: pc.connectionState });
+      logPeerStates('peer-connection-state-change');
       setDebugPcState(pc.connectionState);
       if (pc.connectionState === 'connected') {
         resetReconnectState();
@@ -466,7 +496,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     };
 
     pc.oniceconnectionstatechange = () => {
-      logLiveDebug('ice-connection-state', { state: pc.iceConnectionState });
+      logPeerStates('ice-connection-state-change');
       setDebugIceState(pc.iceConnectionState);
       if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
         resetReconnectState();
@@ -482,6 +512,16 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
       if (pc.iceConnectionState === 'failed') {
         scheduleConnectionRecovery('ice-failed');
       }
+    };
+
+    pc.onicegatheringstatechange = () => {
+      logPeerStates('ice-gathering-state-change');
+      setDebugIceGatheringState(pc.iceGatheringState);
+    };
+
+    pc.onsignalingstatechange = () => {
+      logPeerStates('signaling-state-change');
+      setDebugSignalingState(pc.signalingState);
     };
 
     await pc.setRemoteDescription({ type, sdp: payload.sdp });
@@ -564,9 +604,10 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
             break;
           }
         } else if (signal.kind === 'ICE') {
-          logLiveDebug('signal-ice', { createdAt: signal.createdAt });
           const payload = signal.payload as { candidate?: RTCIceCandidateInit } | null;
           if (payload?.candidate) {
+            const candidateType = rememberCandidateType(payload.candidate.candidate);
+            logLiveDebug('signal-ice', { createdAt: signal.createdAt, candidateType });
             if (!peerRef.current || !hasRemoteDescriptionRef.current) {
               pendingRemoteIceCandidatesRef.current.push(payload.candidate);
             } else {
@@ -767,6 +808,11 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     );
   }
   const showRemoteVideo = streamConnected || hasRemoteMedia;
+  const recentCandidateTypesLabel = useMemo(() => (
+    debugRecentCandidateTypes.length > 0
+      ? debugRecentCandidateTypes.join(', ')
+      : 'none'
+  ), [debugRecentCandidateTypes]);
   const connectionStatusLabel = getConnectionStatusLabel(connectionStatus);
   const connectionStatusTone = (() => {
     switch (connectionStatus) {
@@ -858,6 +904,24 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
             <span className="rounded-full bg-black/75 px-3 py-1.5 text-xs font-medium text-white shadow">
               Reconnecting to live stream…
             </span>
+          </div>
+        )}
+        {liveDebugOverlayEnabled && (
+          <div className="pointer-events-none absolute bottom-2 left-2 max-w-[92%] rounded-lg bg-black/70 px-2.5 py-2 text-[10px] leading-tight text-white backdrop-blur-sm sm:max-w-sm">
+            <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 font-mono">
+              <span className="text-white/75">conn</span>
+              <span className="truncate">{debugPcState}</span>
+              <span className="text-white/75">ice</span>
+              <span className="truncate">{debugIceState}</span>
+              <span className="text-white/75">gather</span>
+              <span className="truncate">{debugIceGatheringState}</span>
+              <span className="text-white/75">signal</span>
+              <span className="truncate">{debugSignalingState}</span>
+              <span className="text-white/75">retries</span>
+              <span>{debugReconnectAttempts}</span>
+              <span className="text-white/75">candidates</span>
+              <span className="truncate">{recentCandidateTypesLabel}</span>
+            </div>
           </div>
         )}
       </div>
@@ -966,10 +1030,16 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
             <dd>{debugPcState}</dd>
             <dt className="font-semibold text-slate-500">ICE State</dt>
             <dd>{debugIceState}</dd>
+            <dt className="font-semibold text-slate-500">ICE Gather</dt>
+            <dd>{debugIceGatheringState}</dd>
+            <dt className="font-semibold text-slate-500">Signaling</dt>
+            <dd>{debugSignalingState}</dd>
             <dt className="font-semibold text-slate-500">Has Media</dt>
             <dd>{hasRemoteMedia ? 'yes' : 'no'}</dd>
             <dt className="font-semibold text-slate-500">Reconnects</dt>
-            <dd>{reconnectAttemptRef.current} / {MAX_RECONNECT_ATTEMPTS}</dd>
+            <dd>{debugReconnectAttempts} / {MAX_RECONNECT_ATTEMPTS}</dd>
+            <dt className="font-semibold text-slate-500">Candidates</dt>
+            <dd className="truncate">{recentCandidateTypesLabel}</dd>
             <dt className="font-semibold text-slate-500">TURN</dt>
             <dd>{HAS_TURN_CONFIG ? 'configured' : 'STUN only'}</dd>
             <dt className="font-semibold text-slate-500">Audio Unlock</dt>
