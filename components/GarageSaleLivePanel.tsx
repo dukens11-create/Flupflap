@@ -605,7 +605,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     startSignalPollingRef.current = startSignalPolling;
   }, [startSignalPolling]);
 
-  // Hard restart: stops all polling/timers, closes old PC, resets signaling state,
+  // Hard restart: stops all polling/timers, closes old PeerConnection (PC), resets signaling state,
   // and re-runs the offer/publish flow without requiring the seller to end/restart the live.
   const hardRestartLive = useCallback(async () => {
     if (!liveRef.current) return;
