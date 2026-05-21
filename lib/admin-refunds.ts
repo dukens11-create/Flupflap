@@ -320,7 +320,6 @@ async function performStripeBackedAdminRefund(
       orderId: refundRequest.orderId,
       refundType: 'admin_order_refund',
       sourceLabel: 'Admin order refund',
-      sourceKey: `admin_order_refund:${refundRequest.id}:${stripeRefund.id}`,
       stripePaymentIntentId: refundRequest.order.stripePaymentIntentId,
       stripeRefundId: stripeRefund.id,
       amountCents: stripeRefundAmount ?? approvedAmountCents,

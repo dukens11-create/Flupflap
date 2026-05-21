@@ -160,7 +160,6 @@ export async function POST(_req: Request, { params }: Params) {
           saleId: sale.id,
           refundType: 'garage_sale_cancel_payment_refund',
           sourceLabel: 'Garage sale cancel payment refund',
-          sourceKey: `garage_sale_cancel_payment_refund:${sale.id}:${stripeRefund.id}`,
           stripePaymentIntentId: paymentIntentId,
           stripeRefundId: stripeRefund.id,
           amountCents: Number.isFinite(stripeRefund.amount) ? stripeRefund.amount : null,

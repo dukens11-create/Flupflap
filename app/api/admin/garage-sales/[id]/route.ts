@@ -124,7 +124,6 @@ export async function PATCH(req: Request, { params }: Params) {
           saleId: sale.id,
           refundType: 'admin_garage_sale_refund',
           sourceLabel: 'Admin garage sale refund',
-          sourceKey: `admin_garage_sale_refund:${sale.id}:${stripeRefund.id}`,
           stripePaymentIntentId: latestPaid.stripePaymentId,
           stripeRefundId: stripeRefund.id,
           amountCents: Number.isFinite(stripeRefund.amount) ? stripeRefund.amount : latestPaid.amountCents,

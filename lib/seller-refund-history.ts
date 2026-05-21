@@ -40,6 +40,29 @@ export async function recordSellerRefundHistory(
   db: SellerRefundHistoryDbClient = prisma,
 ) {
   const sourceKey = normalizeSourceKey(input);
+  const upsertData = {
+    stripeRefundId: input.stripeRefundId ?? undefined,
+    amountCents: input.amountCents ?? undefined,
+    currency: input.currency?.toUpperCase() ?? undefined,
+    status: input.status,
+    reason: input.reason ?? undefined,
+    refundedAt: input.refundedAt ?? undefined,
+    resolvedAt: input.resolvedAt ?? undefined,
+  };
+
+  if (input.stripeRefundId) {
+    const existingByStripeRefundId = await db.sellerRefundHistory.findUnique({
+      where: { stripeRefundId: input.stripeRefundId },
+      select: { id: true },
+    });
+    if (existingByStripeRefundId) {
+      return db.sellerRefundHistory.update({
+        where: { id: existingByStripeRefundId.id },
+        data: upsertData,
+      });
+    }
+  }
+
   return db.sellerRefundHistory.upsert({
     where: { sourceKey },
     create: {
@@ -58,14 +81,6 @@ export async function recordSellerRefundHistory(
       refundedAt: input.refundedAt ?? null,
       resolvedAt: input.resolvedAt ?? null,
     },
-    update: {
-      stripeRefundId: input.stripeRefundId ?? undefined,
-      amountCents: input.amountCents ?? undefined,
-      currency: input.currency?.toUpperCase() ?? undefined,
-      status: input.status,
-      reason: input.reason ?? undefined,
-      refundedAt: input.refundedAt ?? undefined,
-      resolvedAt: input.resolvedAt ?? undefined,
-    },
+    update: upsertData,
   });
 }
