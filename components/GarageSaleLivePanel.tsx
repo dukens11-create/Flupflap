@@ -34,6 +34,7 @@ const SELLER_RECONNECT_MAX_ATTEMPTS = 3;
 const SELLER_RECONNECT_STEP_DELAY_MS = 1200;
 const SELLER_RECONNECT_MAX_DELAY_MS = 8000;
 const SELLER_RECONNECT_JITTER_MS = 250;
+const LIVE_RECONNECTING_MESSAGE = 'Connection lost. Attempting to reconnect…';
 
 type CameraStatus = 'idle' | 'connecting' | 'ready' | 'awaitingInteraction' | 'blocked' | 'denied' | 'unsupported';
 
@@ -83,7 +84,6 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   const hardRestartLiveRef = useRef<(() => Promise<void>) | null>(null);
 
   const [isLive, setIsLive] = useState(initialIsLive);
-  const [sellerPublished, setSellerPublished] = useState(false);
   const [publishConnected, setPublishConnected] = useState(false);
   const [streamReadyCount, setStreamReadyCount] = useState(0);
   const [subscriberPathReady, setSubscriberPathReady] = useState(false);
@@ -288,7 +288,6 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
 
       if (!data.isLive) {
         setIsLive(false);
-        setSellerPublished(false);
         setStreamReadyCount(0);
         setSubscriberPathReady(false);
         setViewerCount(0);
@@ -404,7 +403,6 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
 
     signalCursorRef.current = null;
     closePeerConnection();
-    setSellerPublished(false);
     setSubscriberPathReady(false);
     setStreamReadyCount(0);
 
@@ -475,8 +473,8 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
 
       if (pc.connectionState === 'failed') {
         setPublishConnected(false);
-        setError('Connection lost. Attempting to reconnect…');
-        setLiveConnectionWarning('Connection lost. Attempting to reconnect…');
+        setError(LIVE_RECONNECTING_MESSAGE);
+        setLiveConnectionWarning(LIVE_RECONNECTING_MESSAGE);
         const attempt = reconnectAttemptRef.current + 1;
         reconnectAttemptRef.current = attempt;
         if (attempt > SELLER_RECONNECT_MAX_ATTEMPTS) {
@@ -520,7 +518,6 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       liveSessionId: liveSessionIdRef.current,
     }, { critical: true });
     logLiveDebug(LIVE_SIGNAL_EVENTS.OFFER, { roomId: liveRoomIdRef.current, liveSessionId: liveSessionIdRef.current });
-    setSellerPublished(true);
 
     startSignalPolling();
   }, [clearReconnectRetryTimeout, closePeerConnection, logLiveDebug, postSignal, resetReconnectState, startSignalPolling]);
@@ -540,7 +537,6 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   const hardRestartLive = useCallback(async () => {
     if (!liveRef.current) return;
     setPublishConnected(false);
-    setSellerPublished(false);
     setSubscriberPathReady(false);
     setStreamReadyCount(0);
     setError(null);
@@ -916,7 +912,6 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       }
       const liveData = await res.json() as { liveStartedAt?: string | null };
       setIsLive(true);
-      setSellerPublished(false);
       setStreamReadyCount(0);
       setSubscriberPathReady(false);
       liveSessionIdRef.current = getLiveSessionId(saleId, liveData.liveStartedAt ? new Date(liveData.liveStartedAt) : null);
@@ -954,7 +949,6 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         throw new Error((data as { error?: string }).error ?? 'Failed to end live');
       }
       setIsLive(false);
-      setSellerPublished(false);
       setPublishConnected(false);
       setSubscriberPathReady(false);
       setStreamReadyCount(0);
