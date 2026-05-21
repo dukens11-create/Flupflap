@@ -76,6 +76,8 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   const [showWarning, setShowWarning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [isRestartingLive, setIsRestartingLive] = useState(false);
+  const [liveConnectionWarning, setLiveConnectionWarning] = useState<string | null>(null);
   const [cameraStatus, setCameraStatus] = useState<CameraStatus>('idle');
   const [viewerCount, setViewerCount] = useState(0);
   const [canSwitchCamera, setCanSwitchCamera] = useState(false);
@@ -350,6 +352,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       logPeerStates('peer-connection-state-change');
       if (pc.connectionState === 'connected') {
         setError(null);
+        setLiveConnectionWarning(null);
         if (reconnectTimeoutRef.current) {
           clearTimeout(reconnectTimeoutRef.current);
           reconnectTimeoutRef.current = null;
@@ -374,7 +377,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       }
 
       if (pc.connectionState === 'failed') {
-        setError('Connection lost. Attempting to reconnect…');
+        setLiveConnectionWarning('Connection lost. Attempting to reconnect…');
         if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
         reconnectTimeoutRef.current = window.setTimeout(() => {
           reconnectTimeoutRef.current = null;
@@ -784,6 +787,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       }
       setIsLive(false);
       setViewerCount(0);
+      setLiveConnectionWarning(null);
       stopSignalPolling();
       closePeerConnection();
       stopCamera();
@@ -793,6 +797,47 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       setLoading(false);
     }
   };
+
+  const restartLiveConnection = useCallback(async () => {
+    if (!liveRef.current) return;
+    setIsRestartingLive(true);
+    setLiveConnectionWarning(null);
+    setError(null);
+    try {
+      // Close old peer connection and stop signal polling
+      stopSignalPolling();
+      closePeerConnection();
+
+      // Reacquire camera/mic if the video tracks have ended
+      const stream = streamRef.current;
+      const videoTracks = stream?.getVideoTracks() ?? [];
+      if (!stream || videoTracks.length === 0 || videoTracks[0].readyState !== 'live') {
+        const cameraStarted = await startCamera();
+        if (!cameraStarted) {
+          throw new Error('Failed to reacquire camera. Please allow camera access and try again.');
+        }
+      }
+
+      // Reset liveStartedAt on the server and clear old signals so that stale
+      // ANSWER/ICE signals from the previous session are not applied to the new peer.
+      const res = await fetch(`/api/garage-sales/${saleId}/live`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'restart' }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error((data as { error?: string }).error ?? 'Failed to restart live connection');
+      }
+
+      // Send a fresh WebRTC offer to viewers
+      await createAndSendOffer();
+    } catch (err) {
+      setLiveConnectionWarning(err instanceof Error ? err.message : 'Failed to restart live connection');
+    } finally {
+      setIsRestartingLive(false);
+    }
+  }, [closePeerConnection, createAndSendOffer, saleId, startCamera, stopSignalPolling]);
 
   const endLiveOnPageLeave = useCallback(() => {
     if (!liveRef.current) return;
@@ -1088,15 +1133,31 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
           <Radio size={14} /> {loading ? 'Starting…' : 'Start Live'}
         </button>
       ) : (
-        <button
-          type="button"
-          onClick={handleEndLive}
-          disabled={loading}
-          className="w-full flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-50"
-        >
-          <span className="inline-flex h-2 w-2 animate-pulse rounded-full bg-white" />
-          <VideoOff size={14} /> {loading ? 'Ending…' : 'End Live'}
-        </button>
+        <div className="flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={() => void restartLiveConnection()}
+            disabled={loading || isRestartingLive}
+            className="w-full flex items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-amber-600 disabled:opacity-50"
+          >
+            <RefreshCcw size={14} /> {isRestartingLive ? 'Restarting…' : 'Restart Live Connection'}
+          </button>
+          <button
+            type="button"
+            onClick={handleEndLive}
+            disabled={loading || isRestartingLive}
+            className="w-full flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+          >
+            <span className="inline-flex h-2 w-2 animate-pulse rounded-full bg-white" />
+            <VideoOff size={14} /> {loading ? 'Ending…' : 'End Live'}
+          </button>
+        </div>
+      )}
+
+      {liveConnectionWarning && (
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+          {liveConnectionWarning}
+        </p>
       )}
 
       <p className="text-center text-[11px] text-slate-400">
