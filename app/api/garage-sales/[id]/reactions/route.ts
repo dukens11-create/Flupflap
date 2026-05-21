@@ -15,6 +15,9 @@ import { applyRateLimitAsync } from '@/lib/security';
 export const dynamic = 'force-dynamic';
 
 type Params = { params: Promise<{ id: string }> };
+type ReactionDuplicateWhere =
+  | { saleId: string; userId: string; createdAt?: { gte: Date } }
+  | { saleId: string; guestId: string; createdAt?: { gte: Date } };
 
 /** GET /api/garage-sales/[id]/reactions — get total like count + recent reactions */
 export async function GET(_req: Request, { params }: Params) {
@@ -105,10 +108,7 @@ export async function POST(req: Request, { params }: Params) {
 
   try {
     const liveSessionCreatedAtFilter = sale.liveStartedAt ? { gte: sale.liveStartedAt } : undefined;
-    let duplicateWhere:
-      | { saleId: string; userId: string; createdAt?: { gte: Date } }
-      | { saleId: string; guestId: string; createdAt?: { gte: Date } }
-      | null = null;
+    let duplicateWhere: ReactionDuplicateWhere | null = null;
 
     if (userId) {
       duplicateWhere = { saleId: id, userId, createdAt: liveSessionCreatedAtFilter };
@@ -169,7 +169,7 @@ export async function POST(req: Request, { params }: Params) {
       roomId: liveContext.roomId,
       liveSessionId: liveContext.liveSessionId,
       event: LIVE_ENGAGEMENT_EVENTS.LIKES_UPDATE,
-    }, { status: 201 });
+    }, { status: existingReaction ? 200 : 201 });
   } catch (error) {
     console.error('[garage-sale-reactions] like save error', {
       saleId: id,

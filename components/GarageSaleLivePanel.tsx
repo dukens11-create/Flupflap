@@ -1550,6 +1550,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
                 autoPlay
                 playsInline
                 muted
+                aria-label="Enlarged seller camera preview"
                 className={camOn ? 'h-full w-full rounded-2xl object-contain' : 'hidden'}
               />
               {!camOn && (
