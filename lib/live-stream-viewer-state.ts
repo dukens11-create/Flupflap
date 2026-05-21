@@ -45,12 +45,13 @@ export function getConnectionStatusLabel(status: ViewerConnectionStatus): string
 /**
  * Computes the reconnect retry delay (with exponential backoff + jitter).
  * Uses a seeded value for jitter in tests so results are deterministic.
+ * Jitter is factored in before capping so the total never exceeds RECONNECT_MAX_DELAY_MS.
  */
 export function computeReconnectDelay(attempt: number, jitter = 0): number {
   return Math.min(
     RECONNECT_MAX_DELAY_MS,
-    RECONNECT_STEP_DELAY_MS * (2 ** (attempt - 1)),
-  ) + jitter;
+    RECONNECT_STEP_DELAY_MS * (2 ** (attempt - 1)) + jitter,
+  );
 }
 
 /**

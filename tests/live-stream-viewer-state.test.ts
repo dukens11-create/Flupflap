@@ -65,10 +65,9 @@ test('computeReconnectDelay: high attempt is capped at RECONNECT_MAX_DELAY_MS', 
 });
 
 test('computeReconnectDelay: delay never exceeds ceiling even with jitter', () => {
-  // The jitter is added on top of the capped value, but must not exceed the
-  // physical ceiling when compared with a modest jitter value.
+  // Jitter is included before capping so the total never exceeds RECONNECT_MAX_DELAY_MS.
   const delay = computeReconnectDelay(20, 249);
-  assert.ok(delay <= RECONNECT_MAX_DELAY_MS + 249);
+  assert.ok(delay <= RECONNECT_MAX_DELAY_MS, `delay ${delay} exceeded ceiling ${RECONNECT_MAX_DELAY_MS}`);
 });
 
 // ── getConnectionStatusLabel ──────────────────────────────────────────────────

@@ -238,7 +238,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     });
 
     if (videoTracks.length === 0 || videoTracks[0].readyState !== 'live') {
-      throw new Error('No active video track available. Please enable your camera before going live.');
+      throw new Error('No active video track available. Please check your camera and try again.');
     }
 
     signalCursorRef.current = null;
