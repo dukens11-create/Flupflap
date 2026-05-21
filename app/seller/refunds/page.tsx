@@ -70,11 +70,16 @@ export default async function SellerRefundsPage() {
               <div key={entry.id} className="card p-4 space-y-2">
                 <div className="flex items-start justify-between gap-3">
                   <div className="text-sm text-slate-700">
-                    <p className="font-semibold">
-                      {entry.orderId ? `Order #${entry.orderId.slice(-8).toUpperCase()}` : null}
-                      {entry.orderId && entry.saleId ? ' · ' : null}
-                      {entry.saleId ? `Garage sale #${entry.saleId.slice(-8).toUpperCase()}` : null}
-                    </p>
+                    {(() => {
+                      const heading = entry.orderId
+                        ? `Order #${entry.orderId.slice(-8).toUpperCase()}`
+                        : entry.saleId
+                          ? `Garage sale #${entry.saleId.slice(-8).toUpperCase()}`
+                          : entry.sourceLabel
+                            ? entry.sourceLabel
+                            : 'Refund';
+                      return <p className="font-semibold">{heading}</p>;
+                    })()}
                     <p className="text-xs text-slate-500">
                       {entry.sourceLabel ?? entry.refundType}
                     </p>
@@ -84,7 +89,7 @@ export default async function SellerRefundsPage() {
                 <p className="text-sm text-slate-700">
                   <span className="font-semibold">Amount:</span>{' '}
                   {entry.amountCents !== null
-                    ? `${dollars(entry.amountCents)}${entry.currency ? ` ${entry.currency.toUpperCase()}` : ''}`
+                    ? `${dollars(entry.amountCents)}${entry.currency ? ` ${entry.currency}` : ''}`
                     : 'Unknown'}
                 </p>
                 <p className="text-xs text-slate-500">
