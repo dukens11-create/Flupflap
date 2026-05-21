@@ -26,7 +26,11 @@ test('live signaling constants: include normalized event names and stream-ready 
   assert.equal(LIVE_SIGNAL_EVENTS.VIEWER_JOIN, 'viewer_join');
   assert.equal(LIVE_SIGNAL_EVENTS.ICE_CANDIDATE, 'ice_candidate');
   assert.equal(LIVE_SIGNAL_EVENTS.STREAM_READY, 'stream_ready');
+  assert.equal(LIVE_SIGNAL_EVENTS.MESSAGE_SENT, 'live_message_sent');
+  assert.equal(LIVE_SIGNAL_EVENTS.LIKES_UPDATE, 'live_likes_update');
   assert.equal(LIVE_SIGNAL_KINDS.STREAM_READY, 'STREAM_READY');
+  assert.equal(LIVE_SIGNAL_KINDS.MESSAGE_SENT, 'LIVE_MESSAGE_SENT');
+  assert.equal(LIVE_SIGNAL_KINDS.LIKES_UPDATE, 'LIVE_LIKES_UPDATE');
   assert.equal(LIVE_SIGNAL_ROLES.SELLER, 'SELLER');
   assert.equal(LIVE_SIGNAL_ROLES.BUYER, 'BUYER');
 });

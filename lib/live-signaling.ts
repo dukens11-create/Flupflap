@@ -13,6 +13,9 @@ export const LIVE_SIGNAL_KINDS = {
   GUEST_OFFER: 'GUEST_OFFER',
   GUEST_ANSWER: 'GUEST_ANSWER',
   GUEST_ICE: 'GUEST_ICE',
+  // Backward-compatible engagement signal kinds
+  MESSAGE_SENT: 'LIVE_MESSAGE_SENT',
+  LIKES_UPDATE: 'LIVE_LIKES_UPDATE',
 } as const;
 
 export const LIVE_SIGNAL_EVENTS = {
@@ -31,6 +34,9 @@ export const LIVE_SIGNAL_EVENTS = {
   GUEST_LEFT_LIVE: 'guest_left_live',
   GUEST_REMOVED: 'guest_removed',
   GUEST_MUTED: 'guest_muted',
+  // Backward-compatible engagement events
+  MESSAGE_SENT: 'live_message_sent',
+  LIKES_UPDATE: 'live_likes_update',
 } as const;
 
 /** Maximum number of simultaneous video guests the seller allows. */
