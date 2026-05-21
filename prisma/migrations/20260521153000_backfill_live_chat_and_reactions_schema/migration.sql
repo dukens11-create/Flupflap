@@ -1,4 +1,4 @@
--- Ensure live-stream columns exist on GarageSale
+-- Ensure livestream columns exist on GarageSale
 ALTER TABLE "GarageSale"
   ADD COLUMN IF NOT EXISTS "isLive" BOOLEAN NOT NULL DEFAULT false,
   ADD COLUMN IF NOT EXISTS "liveStartedAt" TIMESTAMP(3);
