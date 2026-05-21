@@ -152,7 +152,7 @@ export async function POST(req: Request, { params }: Params) {
       select: { id: true, userId: true, guestName: true, message: true, createdAt: true },
     });
 
-    let signalEmitted = false;
+    let signalEmitted = true;
     try {
       await prisma.garageSaleLiveSignal.create({
         data: {
@@ -175,9 +175,9 @@ export async function POST(req: Request, { params }: Params) {
           },
         },
       });
-      signalEmitted = true;
     } catch (signalError) {
-      console.error('[garage-sale-chat] live_message_sent signal emit error', {
+      signalEmitted = false;
+      console.error('[garage-sale-chat] live_message_sent emit failed', {
         saleId: id,
         liveSessionId: liveContext.liveSessionId,
         roomId: liveContext.roomId,
@@ -205,6 +205,7 @@ export async function POST(req: Request, { params }: Params) {
       roomId: liveContext.roomId,
       liveSessionId: liveContext.liveSessionId,
       event: LIVE_ENGAGEMENT_EVENTS.MESSAGE_SENT,
+      signalEmitted,
     }, { status: 201 });
   } catch (error) {
     console.error('[garage-sale-chat] message save error', {

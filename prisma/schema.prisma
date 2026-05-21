@@ -1175,22 +1175,26 @@ model GarageSaleLiveSignal {
 }
 
 /// Tracks buyer requests to join the seller live as a video guest.
-/// Status flow: PENDING → APPROVED / DECLINED
-///              APPROVED → ACTIVE (guest WebRTC connected)
-///              ACTIVE → ENDED (guest left) | REMOVED (seller removed) | ENDED
+/// Status flow: pending → accepted / declined / removed
 model GarageSaleGuestRequest {
   id        String     @id @default(cuid())
-  saleId    String
+  saleId    String     @map("liveSaleId")
   sale      GarageSale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  sellerId  String
+  viewerId  String
   /// Stable anonymous identifier generated in the buyer's browser.
   guestId   String
   guestName String?
-  /// PENDING | APPROVED | DECLINED | ACTIVE | REMOVED | ENDED
-  status    String     @default("PENDING")
+  viewerAvatar String? @map("viewerAvatar")
+  /// pending | accepted | declined | removed
+  status    String     @default("pending")
   isMuted   Boolean    @default(false)
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 
   @@index([saleId, status])
   @@index([saleId, guestId])
+  @@index([saleId, viewerId])
+  @@index([sellerId, status])
+  @@map("live_join_requests")
 }

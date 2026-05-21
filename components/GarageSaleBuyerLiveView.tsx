@@ -39,6 +39,7 @@ interface Props {
   initialLiveSessionId?: string | null;
   buyerName?: string | null;
   buyerId?: string | null;
+  buyerAvatar?: string | null;
 }
 
 type GuestJoinStatus =
@@ -49,10 +50,10 @@ type GuestJoinStatus =
   | 'approved'
   | 'active'
   | 'declined'
-  | 'full'
-  | 'ended';
+  | 'removed'
+  | 'full';
 
-export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initialLiveSessionId, buyerName, buyerId }: Props) {
+export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initialLiveSessionId, buyerName, buyerId, buyerAvatar }: Props) {
   const [isLive, setIsLive] = useState(initialIsLive);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -1073,6 +1074,8 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
         body: JSON.stringify({
           guestId: guestIdRef.current,
           guestName: buyerName || DEFAULT_AUTHENTICATED_BUYER_NAME,
+          viewerId: buyerId ?? guestIdRef.current,
+          viewerAvatar: buyerAvatar ?? null,
         }),
       });
       const data = await res.json() as { request?: { id: string; status: string }; error?: string; roomFull?: boolean };
@@ -1099,12 +1102,12 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
       setGuestJoinStatus('idle');
       guestJoinStatusRef.current = 'idle';
     }
-  }, [buyerName, isLive, logLiveDebug, saleId]);
+  }, [buyerAvatar, buyerId, buyerName, isLive, logLiveDebug, saleId]);
 
   const handleEndGuestCall = useCallback(async () => {
     const reqId = guestRequestIdRef.current;
-    setGuestJoinStatus('ended');
-    guestJoinStatusRef.current = 'ended';
+    setGuestJoinStatus('removed');
+    guestJoinStatusRef.current = 'removed';
     stopGuestPeer();
     logLiveDebug(LIVE_SIGNAL_EVENTS.GUEST_LEFT_LIVE, { requestId: reqId });
     if (reqId) {
@@ -1129,7 +1132,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
   // Poll for guest request status (approval, decline, mute, remove)
   const pollGuestStatus = useCallback(async () => {
     const currentStatus = guestJoinStatusRef.current;
-    if (currentStatus === 'idle' || currentStatus === 'requesting-media' || currentStatus === 'ended') return;
+    if (currentStatus === 'idle' || currentStatus === 'requesting-media' || currentStatus === 'removed') return;
 
     try {
       const res = await fetch(`/api/garage-sales/${saleId}/guest-requests?guestId=${encodeURIComponent(guestIdRef.current)}`);
@@ -1143,15 +1146,15 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
 
       if (!data.isLive) {
         stopGuestPeer();
-        setGuestJoinStatus('ended');
-        guestJoinStatusRef.current = 'ended';
+        setGuestJoinStatus('removed');
+        guestJoinStatusRef.current = 'removed';
         return;
       }
 
       const req = data.request;
       if (!req) return;
 
-      if (req.status === 'DECLINED') {
+      if (req.status === 'declined') {
         logLiveDebug(LIVE_SIGNAL_EVENTS.DECLINE_JOIN_REQUEST, { requestId: req.id });
         stopGuestPeer();
         setGuestJoinStatus('declined');
@@ -1159,22 +1162,16 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
         return;
       }
 
-      if (req.status === 'REMOVED') {
+      if (req.status === 'removed') {
         logLiveDebug(LIVE_SIGNAL_EVENTS.GUEST_REMOVED, { requestId: req.id });
         stopGuestPeer();
-        setGuestJoinStatus('ended');
-        guestJoinStatusRef.current = 'ended';
+        setGuestJoinStatus('removed');
+        guestJoinStatusRef.current = 'removed';
         setTimeout(() => { setGuestJoinStatus('idle'); guestJoinStatusRef.current = 'idle'; }, 2000);
         return;
       }
 
-      if (req.status === 'ENDED') {
-        setGuestJoinStatus('idle');
-        guestJoinStatusRef.current = 'idle';
-        return;
-      }
-
-      if (req.status === 'APPROVED' && (currentStatus === 'pending' || currentStatus === 'waiting')) {
+      if (req.status === 'accepted' && (currentStatus === 'pending' || currentStatus === 'waiting')) {
         logLiveDebug(LIVE_SIGNAL_EVENTS.APPROVE_JOIN_REQUEST, { requestId: req.id });
         setGuestJoinStatus('approved');
         guestJoinStatusRef.current = 'approved';
@@ -1544,7 +1541,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
         {guestJoinStatus === 'approved' && (
           <div className="space-y-2">
             <p className="text-center text-sm text-emerald-700 font-medium">
-              ✅ Approved — connecting…
+              ✅ Accepted — connecting…
             </p>
             <div className="relative aspect-video overflow-hidden rounded-xl bg-slate-900">
               <video
@@ -1607,10 +1604,9 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
           </div>
         )}
 
-        {guestJoinStatus === 'ended' && (
-          <p className="text-center text-sm text-slate-600 py-1">
-            <VideoOff size={14} className="inline mr-1" />
-            Guest call ended
+        {guestJoinStatus === 'removed' && (
+          <p className="text-center text-sm text-amber-700 font-medium rounded-lg bg-amber-50 px-3 py-2">
+            ⚠️ You were removed from co-host video
           </p>
         )}
 

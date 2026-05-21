@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 
 type Params = { params: Promise<{ id: string; reqId: string }> };
 
-const ACTIVE_STATUSES = ['APPROVED', 'ACTIVE'];
+const ACTIVE_STATUSES = ['accepted'];
 
 type SellerAction = 'approve' | 'decline' | 'remove' | 'mute' | 'unmute';
 type BuyerAction = 'end';
@@ -70,8 +70,8 @@ export async function PATCH(req: Request, { params }: Params) {
     }
 
     if (action === 'approve') {
-      if (!['PENDING'].includes(guestRequest.status)) {
-        return NextResponse.json({ error: 'Request is not in PENDING state' }, { status: 422 });
+      if (guestRequest.status !== 'pending') {
+        return NextResponse.json({ error: 'Request is not in pending state' }, { status: 422 });
       }
       // Enforce max guest limit
       const activeCount = await prisma.garageSaleGuestRequest.count({
@@ -82,7 +82,7 @@ export async function PATCH(req: Request, { params }: Params) {
       }
       const updated = await prisma.garageSaleGuestRequest.update({
         where: { id: reqId },
-        data: { status: 'APPROVED', updatedAt: new Date() },
+        data: { status: 'accepted', updatedAt: new Date() },
         select: { id: true, guestId: true, guestName: true, status: true, isMuted: true },
       });
       console.info(`[GuestRequest] ${LIVE_SIGNAL_EVENTS.APPROVE_JOIN_REQUEST}`, { saleId: id, requestId: reqId });
@@ -92,7 +92,7 @@ export async function PATCH(req: Request, { params }: Params) {
     if (action === 'decline') {
       const updated = await prisma.garageSaleGuestRequest.update({
         where: { id: reqId },
-        data: { status: 'DECLINED', updatedAt: new Date() },
+        data: { status: 'declined', updatedAt: new Date() },
         select: { id: true, status: true },
       });
       console.info(`[GuestRequest] ${LIVE_SIGNAL_EVENTS.DECLINE_JOIN_REQUEST}`, { saleId: id, requestId: reqId });
@@ -102,7 +102,7 @@ export async function PATCH(req: Request, { params }: Params) {
     if (action === 'remove') {
       const updated = await prisma.garageSaleGuestRequest.update({
         where: { id: reqId },
-        data: { status: 'REMOVED', updatedAt: new Date() },
+        data: { status: 'removed', updatedAt: new Date() },
         select: { id: true, status: true },
       });
       console.info(`[GuestRequest] ${LIVE_SIGNAL_EVENTS.GUEST_REMOVED}`, { saleId: id, requestId: reqId });
@@ -139,7 +139,7 @@ export async function PATCH(req: Request, { params }: Params) {
     }
     const updated = await prisma.garageSaleGuestRequest.update({
       where: { id: reqId },
-      data: { status: 'ENDED', updatedAt: new Date() },
+      data: { status: 'removed', updatedAt: new Date() },
       select: { id: true, status: true },
     });
     console.info(`[GuestRequest] ${LIVE_SIGNAL_EVENTS.GUEST_LEFT_LIVE}`, { saleId: id, requestId: reqId });

@@ -24,6 +24,8 @@ interface GuestRequest {
   id: string;
   guestId: string;
   guestName: string | null;
+  viewerId?: string | null;
+  viewerAvatar?: string | null;
   status: string;
   isMuted: boolean;
   createdAt: string;
@@ -67,6 +69,16 @@ function getCameraMessageStyles(cameraStatus: CameraStatus, hasError: boolean) {
 
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(' ');
+}
+
+function isSafeViewerAvatar(value: string | null | undefined) {
+  if (!value) return false;
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+  } catch {
+    return false;
+  }
 }
 
 export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLiveSessionId }: Props) {
@@ -259,12 +271,12 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
       if (listRes.ok) {
         const listData = await listRes.json() as { requests: GuestRequest[] };
         const req = listData.requests.find((r) => r.id === requestId);
-        isApproved = Boolean(req && ['APPROVED', 'ACTIVE'].includes(req.status));
+        isApproved = Boolean(req && req.status === 'accepted');
       }
     } catch {
       // On network error, check local state as fallback
       const local = guestRequests.find((r) => r.id === requestId);
-      isApproved = Boolean(local && ['APPROVED', 'ACTIVE'].includes(local.status));
+      isApproved = Boolean(local && local.status === 'accepted');
     }
 
     if (!isApproved) {
@@ -374,7 +386,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
       // Close peer connections for guests that are no longer active
       for (const [reqId, peerState] of guestPeersRef.current.entries()) {
         const req = data.requests.find((r) => r.id === reqId);
-        if (!req || ['DECLINED', 'REMOVED', 'ENDED'].includes(req.status)) {
+        if (!req || ['declined', 'removed'].includes(req.status)) {
           peerState.pc.close();
           guestPeersRef.current.delete(reqId);
           const el = guestVideoElsRef.current.get(reqId);
@@ -1799,9 +1811,9 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
           <div className="space-y-3 rounded-xl border border-indigo-100 bg-indigo-50/50 p-3">
             <h3 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-indigo-700">
               <Users size={13} /> Live Guest Requests
-              {guestRequests.filter((r) => ['APPROVED', 'ACTIVE'].includes(r.status)).length > 0 && (
+              {guestRequests.filter((r) => r.status === 'accepted').length > 0 && (
                 <span className="ml-auto inline-flex items-center rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">
-                  {guestRequests.filter((r) => ['APPROVED', 'ACTIVE'].includes(r.status)).length} / {MAX_LIVE_GUESTS} live
+                  {guestRequests.filter((r) => r.status === 'accepted').length} / {MAX_LIVE_GUESTS} live
                 </span>
               )}
             </h3>
@@ -1811,20 +1823,31 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
             )}
 
             {/* Pending requests */}
-            {guestRequests.filter((r) => r.status === 'PENDING').map((req) => (
+            {guestRequests.filter((r) => r.status === 'pending').map((req) => (
               <div key={req.id} className="flex items-center gap-2 rounded-lg bg-white border border-indigo-100 px-3 py-2 shadow-sm">
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-700">
-                  {(req.guestName ?? 'G').charAt(0).toUpperCase()}
-                </div>
+                {isSafeViewerAvatar(req.viewerAvatar) ? (
+                  <img
+                    src={req.viewerAvatar as string}
+                    alt={req.guestName ?? 'Guest avatar'}
+                    className="h-7 w-7 shrink-0 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-700">
+                    {(req.guestName ?? 'G').charAt(0).toUpperCase()}
+                  </div>
+                )}
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-semibold text-slate-800 truncate">{req.guestName ?? 'Guest'}</p>
                   <p className="text-[10px] text-slate-400">Wants to join live on video</p>
+                  {req.viewerId && (
+                    <p className="text-[10px] text-slate-400 truncate">ID: {req.viewerId}</p>
+                  )}
                 </div>
                 <div className="flex gap-1.5 shrink-0">
                   <button
                     type="button"
                     onClick={() => void handleAcceptGuest(req.id)}
-                    disabled={guestRequests.filter((r) => ['APPROVED', 'ACTIVE'].includes(r.status)).length >= MAX_LIVE_GUESTS}
+                    disabled={guestRequests.filter((r) => r.status === 'accepted').length >= MAX_LIVE_GUESTS}
                     className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     Accept
@@ -1841,17 +1864,30 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
             ))}
 
             {/* Active/approved guests */}
-            {guestRequests.filter((r) => ['APPROVED', 'ACTIVE'].includes(r.status)).map((req) => (
+            {guestRequests.filter((r) => r.status === 'accepted').map((req) => {
+              const isGuestLive = Boolean(guestPeersRef.current.get(req.id)?.stream);
+              return (
               <div key={req.id} className="space-y-2">
                 <div className="flex items-center gap-2 rounded-lg bg-white border border-emerald-200 px-3 py-2 shadow-sm">
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-700">
-                    {(req.guestName ?? 'G').charAt(0).toUpperCase()}
-                  </div>
+                  {isSafeViewerAvatar(req.viewerAvatar) ? (
+                    <img
+                      src={req.viewerAvatar as string}
+                      alt={req.guestName ?? 'Guest avatar'}
+                      className="h-7 w-7 shrink-0 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-700">
+                      {(req.guestName ?? 'G').charAt(0).toUpperCase()}
+                    </div>
+                  )}
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold text-slate-800 truncate">{req.guestName ?? 'Guest'}</p>
                     <p className="text-[10px] text-emerald-600 font-medium">
-                      {req.status === 'ACTIVE' ? '🟢 Live on video' : '⏳ Connecting…'}
+                      {isGuestLive ? '🟢 Live on video' : '⏳ Accepted — connecting…'}
                     </p>
+                    {req.viewerId && (
+                      <p className="text-[10px] text-slate-400 truncate">ID: {req.viewerId}</p>
+                    )}
                   </div>
                   <div className="flex gap-1.5 shrink-0">
                     <button
@@ -1891,7 +1927,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
                   </div>
                 </div>
               </div>
-            ))}
+            );})}
           </div>
 
           {/* Live Questions / Chat */}

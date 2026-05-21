@@ -138,23 +138,36 @@ export async function POST(req: Request, { params }: Params) {
 
     const totalLikes = await prisma.garageSaleReaction.count({ where: { saleId: id } });
 
-    await prisma.garageSaleLiveSignal.create({
-      data: {
-        saleId: id,
-        sender: 'BUYER',
-        kind: LIVE_ENGAGEMENT_SIGNAL_KINDS.LIKES_UPDATE,
-        payload: {
-          event: LIVE_ENGAGEMENT_EVENTS.LIKES_UPDATE,
-          ...identifiers,
-          roomId: liveContext.roomId,
-          liveSessionId: liveContext.liveSessionId,
-          actorId,
-          totalLikes,
-          reactionId: reaction.id,
-          deduplicated: Boolean(existingReaction),
+    let signalEmitted = true;
+    try {
+      await prisma.garageSaleLiveSignal.create({
+        data: {
+          saleId: id,
+          sender: 'BUYER',
+          kind: LIVE_ENGAGEMENT_SIGNAL_KINDS.LIKES_UPDATE,
+          payload: {
+            event: LIVE_ENGAGEMENT_EVENTS.LIKES_UPDATE,
+            ...identifiers,
+            roomId: liveContext.roomId,
+            liveSessionId: liveContext.liveSessionId,
+            actorId,
+            totalLikes,
+            reactionId: reaction.id,
+            deduplicated: Boolean(existingReaction),
+          },
         },
-      },
-    });
+      });
+    } catch (signalError) {
+      signalEmitted = false;
+      console.error('[garage-sale-reactions] live_likes_update emit failed', {
+        saleId: id,
+        liveSessionId: liveContext.liveSessionId,
+        roomId: liveContext.roomId,
+        actorId,
+        reactionId: reaction.id,
+        errorMessage: signalError instanceof Error ? signalError.message : 'unknown',
+      });
+    }
 
     console.info('[garage-sale-reactions] live_likes_update emitted', {
       saleId: id,
@@ -163,12 +176,14 @@ export async function POST(req: Request, { params }: Params) {
       totalLikes,
       actorId,
       deduplicated: Boolean(existingReaction),
+      signalEmitted,
     });
 
     return NextResponse.json({
       reaction,
       totalLikes,
       deduplicated: Boolean(existingReaction),
+      signalEmitted,
       ...identifiers,
       roomId: liveContext.roomId,
       liveSessionId: liveContext.liveSessionId,

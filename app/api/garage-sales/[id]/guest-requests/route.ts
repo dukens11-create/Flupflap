@@ -10,10 +10,25 @@ export const dynamic = 'force-dynamic';
 
 type Params = { params: Promise<{ id: string }> };
 
-const ACTIVE_STATUSES = ['APPROVED', 'ACTIVE'];
+const ACTIVE_STATUSES = ['accepted'];
+const MAX_VIEWER_ID_LENGTH = 191;
+const MAX_VIEWER_AVATAR_URL_LENGTH = 500;
 
 function isValidGuestId(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0 && value.length <= 64 && GUEST_ID_PATTERN.test(value);
+}
+
+function sanitizeViewerAvatar(value: unknown) {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return null;
+    return parsed.toString().slice(0, MAX_VIEWER_AVATAR_URL_LENGTH);
+  } catch {
+    return null;
+  }
 }
 
 /** GET /api/garage-sales/[id]/guest-requests
@@ -41,10 +56,19 @@ export async function GET(req: Request, { params }: Params) {
     const requests = await prisma.garageSaleGuestRequest.findMany({
       where: {
         saleId: id,
-        status: { in: ['PENDING', 'APPROVED', 'ACTIVE'] },
+        status: { in: ['pending', 'accepted'] },
       },
       orderBy: { createdAt: 'asc' },
-      select: { id: true, guestId: true, guestName: true, status: true, isMuted: true, createdAt: true },
+      select: {
+        id: true,
+        guestId: true,
+        guestName: true,
+        viewerId: true,
+        viewerAvatar: true,
+        status: true,
+        isMuted: true,
+        createdAt: true,
+      },
     });
     const activeCount = requests.filter((r) => ACTIVE_STATUSES.includes(r.status)).length;
     return NextResponse.json({ requests, activeCount, maxGuests: MAX_LIVE_GUESTS, isLive: sale.isLive });
@@ -111,7 +135,12 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { guestId, guestName } = body as { guestId?: unknown; guestName?: unknown };
+  const { guestId, guestName, viewerId, viewerAvatar } = body as {
+    guestId?: unknown;
+    guestName?: unknown;
+    viewerId?: unknown;
+    viewerAvatar?: unknown;
+  };
 
   if (!isValidGuestId(guestId)) {
     return NextResponse.json({ error: 'guestId must be a non-empty alphanumeric string (max 64 chars)' }, { status: 400 });
@@ -119,7 +148,7 @@ export async function POST(req: Request, { params }: Params) {
 
   // Check if there's already an active or pending request from this guest
   const existing = await prisma.garageSaleGuestRequest.findFirst({
-    where: { saleId: id, guestId, status: { in: ['PENDING', 'APPROVED', 'ACTIVE'] } },
+    where: { saleId: id, guestId, status: { in: ['pending', 'accepted'] } },
     select: { id: true, status: true },
   });
   if (existing) {
@@ -138,15 +167,23 @@ export async function POST(req: Request, { params }: Params) {
     typeof guestName === 'string' && guestName.trim().length > 0
       ? guestName.trim().slice(0, 50)
       : null;
+  const resolvedViewerAvatar = sanitizeViewerAvatar(viewerAvatar);
+  const resolvedViewerId =
+    typeof viewerId === 'string' && viewerId.trim().length > 0
+      ? viewerId.trim().slice(0, MAX_VIEWER_ID_LENGTH)
+      : (session?.user?.id ?? `guest:${guestId as string}`);
 
   const request = await prisma.garageSaleGuestRequest.create({
     data: {
       saleId: id,
       guestId: guestId as string,
       guestName: resolvedGuestName,
-      status: 'PENDING',
+      sellerId: sale.sellerId,
+      viewerId: resolvedViewerId,
+      viewerAvatar: resolvedViewerAvatar,
+      status: 'pending',
     },
-    select: { id: true, guestId: true, guestName: true, status: true, createdAt: true },
+    select: { id: true, guestId: true, guestName: true, viewerId: true, viewerAvatar: true, status: true, createdAt: true },
   });
 
   console.info(`[GuestRequest] ${LIVE_SIGNAL_EVENTS.REQUEST_JOIN_LIVE}`, {
