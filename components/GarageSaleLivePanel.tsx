@@ -2,6 +2,7 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { Video, VideoOff, Mic, MicOff, Radio, AlertTriangle, Eye, RefreshCcw, MessageCircle, Heart, Trash2 } from 'lucide-react';
 import { RTC_CONFIG, HAS_TURN_CONFIG } from '@/lib/rtc-config';
+import { getIceCandidateType } from '@/lib/rtc-diagnostics';
 
 interface Props {
   saleId: string;
@@ -28,7 +29,6 @@ const MOBILE_CAMERA_LOG_PREFIX = '[GarageSaleLivePanel][mobile-camera]';
 const MEDIA_READY_TIMEOUT_MS = 1500;
 // Retry once shortly after the first play() rejection for iOS/Safari startup timing quirks.
 const PLAYBACK_RETRY_DELAY_MS = 120;
-type IceCandidateType = 'host' | 'srflx' | 'relay' | 'prflx' | 'unknown';
 
 type CameraStatus = 'idle' | 'connecting' | 'ready' | 'awaitingInteraction' | 'blocked' | 'denied' | 'unsupported';
 
@@ -44,20 +44,6 @@ function getCameraMessageStyles(cameraStatus: CameraStatus, hasError: boolean) {
 
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(' ');
-}
-
-function getIceCandidateType(candidate?: string): IceCandidateType {
-  if (!candidate) return 'unknown';
-  const rawType = candidate.match(/\btyp\s+([a-z0-9]+)/i)?.[1]?.toLowerCase();
-  switch (rawType) {
-    case 'host':
-    case 'srflx':
-    case 'relay':
-    case 'prflx':
-      return rawType;
-    default:
-      return 'unknown';
-  }
 }
 
 export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {

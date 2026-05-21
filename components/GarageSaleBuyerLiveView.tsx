@@ -1,7 +1,8 @@
 'use client';
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { MessageCircle, Send, Radio, Eye, Heart } from 'lucide-react';
 import { RTC_CONFIG, HAS_TURN_CONFIG } from '@/lib/rtc-config';
+import { getIceCandidateType, type IceCandidateType } from '@/lib/rtc-diagnostics';
 import {
   MAX_RECONNECT_ATTEMPTS,
   RECONNECT_STEP_DELAY_MS,
@@ -20,7 +21,6 @@ const PLAYBACK_RETRY_DELAY_MS = 250;
 const PLAYBACK_RECOVERY_THROTTLE_MS = 1200;
 const CONNECTION_RECOVERY_TIMEOUT_MS = 8000;
 const RECENT_CANDIDATE_TYPES_LIMIT = 6;
-type IceCandidateType = 'host' | 'srflx' | 'relay' | 'prflx' | 'unknown';
 
 interface ChatMessage {
   id: string;
@@ -34,20 +34,6 @@ interface Props {
   saleId: string;
   initialIsLive: boolean;
   buyerName?: string | null;
-}
-
-function getIceCandidateType(candidate?: string): IceCandidateType {
-  if (!candidate) return 'unknown';
-  const rawType = candidate.match(/\btyp\s+([a-z0-9]+)/i)?.[1]?.toLowerCase();
-  switch (rawType) {
-    case 'host':
-    case 'srflx':
-    case 'relay':
-    case 'prflx':
-      return rawType;
-    default:
-      return 'unknown';
-  }
 }
 
 export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerName }: Props) {
@@ -822,6 +808,11 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     );
   }
   const showRemoteVideo = streamConnected || hasRemoteMedia;
+  const recentCandidateTypesLabel = useMemo(() => (
+    debugRecentCandidateTypes.length > 0
+      ? debugRecentCandidateTypes.join(', ')
+      : 'none'
+  ), [debugRecentCandidateTypes]);
   const connectionStatusLabel = getConnectionStatusLabel(connectionStatus);
   const connectionStatusTone = (() => {
     switch (connectionStatus) {
@@ -929,7 +920,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
               <span className="text-white/75">retries</span>
               <span>{debugReconnectAttempts}</span>
               <span className="text-white/75">candidates</span>
-              <span className="truncate">{debugRecentCandidateTypes.length > 0 ? debugRecentCandidateTypes.join(', ') : 'none'}</span>
+              <span className="truncate">{recentCandidateTypesLabel}</span>
             </div>
           </div>
         )}
@@ -1048,7 +1039,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
             <dt className="font-semibold text-slate-500">Reconnects</dt>
             <dd>{debugReconnectAttempts} / {MAX_RECONNECT_ATTEMPTS}</dd>
             <dt className="font-semibold text-slate-500">Candidates</dt>
-            <dd className="truncate">{debugRecentCandidateTypes.length > 0 ? debugRecentCandidateTypes.join(', ') : 'none'}</dd>
+            <dd className="truncate">{recentCandidateTypesLabel}</dd>
             <dt className="font-semibold text-slate-500">TURN</dt>
             <dd>{HAS_TURN_CONFIG ? 'configured' : 'STUN only'}</dd>
             <dt className="font-semibold text-slate-500">Audio Unlock</dt>
