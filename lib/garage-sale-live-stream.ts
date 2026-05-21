@@ -1,4 +1,10 @@
-export type LiveConnectionStatus = 'connecting' | 'live' | 'reconnecting' | 'failed' | 'ended';
+export type LiveConnectionStatus =
+  | 'connecting'
+  | 'waitingForPublisher'
+  | 'live'
+  | 'reconnecting'
+  | 'failed'
+  | 'ended';
 
 export function buildGarageSaleLiveSessionId(
   saleId: string,
@@ -102,6 +108,16 @@ export function getBuyerPlaybackState({
       statusTone: 'bg-amber-100 text-amber-800',
       waitingTitle: 'Reconnecting to seller stream…',
       waitingDetail: 'Trying to restore the live video feed.',
+    };
+  }
+
+  if (connectionStatus === 'waitingForPublisher') {
+    return {
+      showLiveBadge: false,
+      statusLabel: 'Waiting for stream…',
+      statusTone: 'bg-slate-100 text-slate-600',
+      waitingTitle: 'Waiting for seller stream…',
+      waitingDetail: "The seller has started a session but hasn't sent a video stream yet. Please wait.",
     };
   }
 

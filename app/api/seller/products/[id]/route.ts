@@ -25,6 +25,7 @@ import {
 import { getSiteUrl } from '@/lib/seo';
 import { toSellerLifecycleStatus } from '@/lib/listing-status';
 import { getSchedulingDisabledError } from '@/lib/listing-scheduling';
+import { canEditProductForSeller, getProductEditSuccessPath } from '@/lib/product-edit-access';
 
 const optionalInputString = z.preprocess((value) => {
   if (value === undefined || value === null) return undefined;
@@ -120,13 +121,13 @@ const SELLER_PRODUCT_SAFE_SELECT = {
 
 type ExistingProduct = NonNullable<Awaited<ReturnType<typeof getOwnedSellerProduct>>['product']>;
 
-async function getOwnedSellerProduct(id: string, sellerId: string) {
+async function getOwnedSellerProduct(id: string, actorId: string, actorRole: 'SELLER' | 'ADMIN') {
   const product = await prisma.product.findUnique({
     where: { id },
     select: SELLER_PRODUCT_SAFE_SELECT,
   });
   if (!product) return { product: null, forbidden: false };
-  if (product.sellerId !== sellerId) return { product: null, forbidden: true };
+  if (!canEditProductForSeller(actorRole, actorId, product.sellerId)) return { product: null, forbidden: true };
   return { product, forbidden: false };
 }
 
@@ -416,41 +417,44 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   let id = '';
-  let sellerId: string | undefined;
+  let actorId: string | undefined;
+  let actorRole: 'SELLER' | 'ADMIN' | undefined;
   const acceptsJson = (req.headers.get('Accept') ?? '').includes('application/json');
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== 'SELLER') {
+    if (!session?.user || (session.user.role !== 'SELLER' && session.user.role !== 'ADMIN')) {
       if (acceptsJson) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
       return NextResponse.redirect(new URL('/login', getSiteUrl()), 303);
     }
-    sellerId = session.user.id;
-    if (!sellerId) {
+    actorRole = session.user.role;
+    actorId = session.user.id;
+    if (!actorId) {
       if (acceptsJson) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
       return NextResponse.redirect(new URL('/login', getSiteUrl()), 303);
     }
     ({ id } = await params);
 
-    // Block restricted sellers from editing or deleting listings
-    const dbUser = await prisma.user.findUnique({ where: { id: sellerId } });
-    if (dbUser?.sellerStatus === 'SUSPENDED' || dbUser?.sellerStatus === 'BANNED' || dbUser?.sellerStatus === 'RESTRICTED') {
-      return respondWithError(id, 'Your seller account is currently restricted.', acceptsJson, 403);
+    if (actorRole === 'SELLER') {
+      const dbUser = await prisma.user.findUnique({ where: { id: actorId } });
+      if (dbUser?.sellerStatus === 'SUSPENDED' || dbUser?.sellerStatus === 'BANNED' || dbUser?.sellerStatus === 'RESTRICTED') {
+        return respondWithError(id, 'Your seller account is currently restricted.', acceptsJson, 403);
+      }
+
+      const verification = await prisma.sellerVerification.findUnique({
+        where: { sellerId: actorId },
+        select: { status: true },
+      });
+      if (!isSellerVerificationApproved(verification?.status)) {
+        return respondWithError(
+          id,
+          'Submit and pass seller verification before listing products.',
+          acceptsJson,
+          403,
+        );
+      }
     }
 
-    const verification = await prisma.sellerVerification.findUnique({
-      where: { sellerId },
-      select: { status: true },
-    });
-    if (!isSellerVerificationApproved(verification?.status)) {
-      return respondWithError(
-        id,
-        'Submit and pass seller verification before listing products.',
-        acceptsJson,
-        403,
-      );
-    }
-
-    const { product: existing, forbidden } = await getOwnedSellerProduct(id, sellerId);
+    const { product: existing, forbidden } = await getOwnedSellerProduct(id, actorId, actorRole);
     if (forbidden) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -538,7 +542,7 @@ export async function POST(
         : existing.imageThumbnails ?? [];
 
     const riskAssessment = await getListingRiskAssessmentForCandidate(
-      buildListingRiskCandidate(sellerId, existing, data, resolvedImages),
+      buildListingRiskCandidate(existing.sellerId, existing, data, resolvedImages),
       id,
     );
     const nextProductAttributes = setShippingClass(
@@ -621,15 +625,18 @@ export async function POST(
       });
     } catch (dbError) {
       const message = getErrorMessage(dbError);
-      console.error('[seller/products/[id] POST] database update error', { productId: id, sellerId, message });
+      console.error('[seller/products/[id] POST] database update error', { productId: id, actorId, message });
       if (dbError instanceof Error && dbError.stack) {
         console.error('[seller/products/[id] POST] stack trace', dbError.stack);
       }
       return respondWithError(id, 'Unable to save listing changes. Please review the form and try again.', acceptsJson, 500);
     }
 
-    const fraudQuery = shouldRecommendFraudReview(riskAssessment) ? '&fraud=review' : '';
-    const redirectTo = `/seller/listings/drafts?updated=${updated.id}${fraudQuery}`;
+    const redirectTo = getProductEditSuccessPath(
+      actorRole,
+      updated.id,
+      shouldRecommendFraudReview(riskAssessment),
+    );
 
     if (acceptsJson) {
       return NextResponse.json({ success: true, redirectTo });
@@ -641,7 +648,7 @@ export async function POST(
       return respondWithError(id, zodMessage, acceptsJson);
     }
     const message = getErrorMessage(err);
-    console.error('[seller/products/[id] POST] request handling error', { productId: id, sellerId, message });
+    console.error('[seller/products/[id] POST] request handling error', { productId: id, actorId, message });
     if (err instanceof Error && err.stack) {
       console.error('[seller/products/[id] POST] stack trace', err.stack);
     }
@@ -655,33 +662,35 @@ export async function PATCH(
 ) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== 'SELLER') {
+    if (!session?.user || (session.user.role !== 'SELLER' && session.user.role !== 'ADMIN')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
-    const sellerId = session.user.id;
-    if (!sellerId) {
+    const actorRole = session.user.role;
+    const actorId = session.user.id;
+    if (!actorId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Block restricted sellers from editing or deleting listings
-    const dbUser = await prisma.user.findUnique({ where: { id: sellerId } });
-    if (dbUser?.sellerStatus === 'SUSPENDED' || dbUser?.sellerStatus === 'BANNED' || dbUser?.sellerStatus === 'RESTRICTED') {
-      return NextResponse.json({ error: 'Your seller account is currently restricted.' }, { status: 403 });
-    }
+    if (actorRole === 'SELLER') {
+      const dbUser = await prisma.user.findUnique({ where: { id: actorId } });
+      if (dbUser?.sellerStatus === 'SUSPENDED' || dbUser?.sellerStatus === 'BANNED' || dbUser?.sellerStatus === 'RESTRICTED') {
+        return NextResponse.json({ error: 'Your seller account is currently restricted.' }, { status: 403 });
+      }
 
-    const verification = await prisma.sellerVerification.findUnique({
-      where: { sellerId },
-      select: { status: true },
-    });
-    if (!isSellerVerificationApproved(verification?.status)) {
-      return NextResponse.json(
-        { error: 'Submit and pass seller verification before listing products.' },
-        { status: 403 },
-      );
+      const verification = await prisma.sellerVerification.findUnique({
+        where: { sellerId: actorId },
+        select: { status: true },
+      });
+      if (!isSellerVerificationApproved(verification?.status)) {
+        return NextResponse.json(
+          { error: 'Submit and pass seller verification before listing products.' },
+          { status: 403 },
+        );
+      }
     }
 
     const { id } = await params;
-    const { product: existing, forbidden } = await getOwnedSellerProduct(id, sellerId);
+    const { product: existing, forbidden } = await getOwnedSellerProduct(id, actorId, actorRole);
     if (forbidden) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -791,7 +800,7 @@ export async function PATCH(
     );
 
     const riskAssessment = await getListingRiskAssessmentForCandidate(
-      buildListingRiskCandidate(sellerId, existing, data, resolvedImages),
+      buildListingRiskCandidate(existing.sellerId, existing, data, resolvedImages),
       id,
     );
     const parsedAttributes = data.productAttributes === undefined
@@ -877,7 +886,7 @@ export async function PATCH(
       });
     } catch (dbError) {
       const message = getErrorMessage(dbError);
-      console.error('[seller/products/[id] PATCH] database update error', { productId: id, sellerId, message });
+      console.error('[seller/products/[id] PATCH] database update error', { productId: id, actorId, message });
       if (dbError instanceof Error && dbError.stack) {
         console.error('[seller/products/[id] PATCH] stack trace', dbError.stack);
       }
@@ -907,16 +916,17 @@ export async function DELETE(
 ) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== 'SELLER') {
+    if (!session?.user || (session.user.role !== 'SELLER' && session.user.role !== 'ADMIN')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
-    const sellerId = session.user.id;
-    if (!sellerId) {
+    const actorRole = session.user.role;
+    const actorId = session.user.id;
+    if (!actorId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const { id } = await params;
-    const { product: existing, forbidden } = await getOwnedSellerProduct(id, sellerId);
+    const { product: existing, forbidden } = await getOwnedSellerProduct(id, actorId, actorRole);
     if (forbidden) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }

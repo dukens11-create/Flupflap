@@ -11,6 +11,13 @@ import {
   getShippingClass,
   hasStoredPackageDetails,
 } from '@/lib/product-package';
+import {
+  canDeleteProductFromEdit,
+  canEditProductForSeller,
+  getProductEditCancelPath,
+  getProductEditDraftPath,
+  getProductEditSuccessPath,
+} from '@/lib/product-edit-access';
 import EditListingForm from './EditListingForm';
 
 export const metadata: Metadata = { title: 'Edit Listing' };
@@ -22,22 +29,24 @@ export default async function SellerEditPage({
 }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect('/login');
-  if (session.user.role !== 'SELLER') redirect('/');
-  const sellerId = session.user.id;
-  if (!sellerId) redirect('/login');
+  if (session.user.role !== 'SELLER' && session.user.role !== 'ADMIN') redirect('/');
+  const actorRole = session.user.role;
+  const actorId = session.user.id;
+  if (!actorId) redirect('/login');
 
-  // Block restricted sellers from editing listings
-  const dbUser = await prisma.user.findUnique({ where: { id: sellerId } });
-  if (dbUser?.sellerStatus === 'SUSPENDED' || dbUser?.sellerStatus === 'BANNED' || dbUser?.sellerStatus === 'RESTRICTED') {
-    redirect('/seller');
-  }
+  if (actorRole === 'SELLER') {
+    const dbUser = await prisma.user.findUnique({ where: { id: actorId } });
+    if (dbUser?.sellerStatus === 'SUSPENDED' || dbUser?.sellerStatus === 'BANNED' || dbUser?.sellerStatus === 'RESTRICTED') {
+      redirect('/seller');
+    }
 
-  const verification = await prisma.sellerVerification.findUnique({
-    where: { sellerId },
-    select: { status: true },
-  });
-  if (!isSellerVerificationApproved(verification?.status)) {
-    redirect('/seller?verification=required');
+    const verification = await prisma.sellerVerification.findUnique({
+      where: { sellerId: actorId },
+      select: { status: true },
+    });
+    if (!isSellerVerificationApproved(verification?.status)) {
+      redirect('/seller?verification=required');
+    }
   }
 
   const { id } = await params;
@@ -77,7 +86,7 @@ export default async function SellerEditPage({
   });
 
   if (!product) notFound();
-  if (product.sellerId !== sellerId) forbidden();
+  if (!canEditProductForSeller(actorRole, actorId, product.sellerId)) forbidden();
 
   const categories = await loadCategoryHierarchyNodes(prisma);
   const normalizedCategory = resolveLegacyCategorySelection(categories, {
@@ -105,11 +114,16 @@ export default async function SellerEditPage({
     <main className="max-w-xl mx-auto">
       <h1 className="text-3xl font-black mb-2">Edit listing</h1>
       <p className="text-sm text-slate-500 mb-6">
-        Changes will require re-approval by an admin before going live.
+        {actorRole === 'ADMIN'
+          ? 'Review and update this listing directly.'
+          : 'Changes will require re-approval by an admin before going live.'}
       </p>
       <EditListingForm
         id={id}
-        canDelete={product.status !== 'SOLD'}
+        canDelete={canDeleteProductFromEdit(actorRole, product.status)}
+        cancelHref={getProductEditCancelPath(actorRole)}
+        draftRedirectPath={getProductEditDraftPath(actorRole)}
+        defaultSuccessPath={getProductEditSuccessPath(actorRole, id)}
         defaultTitle={product.title}
         defaultDescription={product.description}
         defaultPriceDollars={priceDollars}

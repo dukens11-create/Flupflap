@@ -193,6 +193,19 @@ export default function GarageSaleLivePanel({
       throw new Error('Live streaming is not supported in this browser.');
     }
 
+    const videoTracks = stream.getVideoTracks();
+    const audioTracks = stream.getAudioTracks();
+    logLiveDebug('offer-tracks', {
+      liveSessionId: sessionId,
+      viewerId,
+      videoTracks: videoTracks.length,
+      audioTracks: audioTracks.length,
+      videoEnabled: videoTracks[0]?.enabled ?? false,
+      audioEnabled: audioTracks[0]?.enabled ?? false,
+      videoReadyState: videoTracks[0]?.readyState ?? 'none',
+      audioReadyState: audioTracks[0]?.readyState ?? 'none',
+    });
+
     closeViewerConnection(viewerId);
 
     const pc = new RTCPeerConnection(RTC_CONFIG);
@@ -208,6 +221,7 @@ export default function GarageSaleLivePanel({
 
     stream.getTracks().forEach((track) => {
       pc.addTrack(track, stream);
+      logLiveDebug('offer-track-added', { kind: track.kind, enabled: track.enabled, readyState: track.readyState });
     });
 
     pc.onicecandidate = (event) => {
