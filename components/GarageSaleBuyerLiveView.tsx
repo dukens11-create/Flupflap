@@ -9,6 +9,7 @@ const PLAYBACK_RETRY_DELAY_MS = 250;
 const CONNECTION_RECOVERY_TIMEOUT_MS = 8000;
 const RECONNECT_BASE_DELAY_MS = 1200;
 const RECONNECT_MAX_DELAY_MS = 8000;
+const RECONNECT_JITTER_MS = 250;
 const MAX_RECONNECT_ATTEMPTS = 5;
 const STREAM_RECONNECTING_MESSAGE = 'Live stream connection was interrupted. Trying to reconnect…';
 const STREAM_TERMINAL_FAILURE_MESSAGE = 'Unable to connect to this live stream right now. Please try again in a moment.';
@@ -323,7 +324,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     const retryDelay = Math.min(
       RECONNECT_MAX_DELAY_MS,
       RECONNECT_BASE_DELAY_MS * (2 ** (attempt - 1)),
-    ) + Math.floor(Math.random() * 250);
+    ) + Math.floor(Math.random() * RECONNECT_JITTER_MS);
 
     setRecoveringConnection(true);
     setConnectionStatus('reconnecting');
@@ -624,9 +625,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     const handleStalled = () => {
       if (!isLive) return;
       logLiveDebug('remote-video-stalled');
-      if (connectionStatus === 'live') {
-        setConnectionStatus('reconnecting');
-      }
+      void playRemoteStream({ preferMuted: video.muted });
     };
 
     video.addEventListener('loadedmetadata', handleLoadedMetadata);
@@ -640,7 +639,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
       video.removeEventListener('stalled', handleStalled);
       video.removeEventListener('waiting', handleStalled);
     };
-  }, [connectionStatus, hasRemoteMedia, isLive, logLiveDebug, playRemoteStream]);
+  }, [hasRemoteMedia, isLive, logLiveDebug, playRemoteStream]);
 
   const handleSend = async () => {
     const trimmed = input.trim();
