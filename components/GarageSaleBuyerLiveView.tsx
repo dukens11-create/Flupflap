@@ -6,6 +6,7 @@ import { RTC_CONFIG, HAS_TURN_CONFIG } from '@/lib/rtc-config';
 const DEFAULT_GUEST_NAME = 'Guest';
 const MEDIA_READY_TIMEOUT_MS = 1200;
 const PLAYBACK_RETRY_DELAY_MS = 250;
+const PLAYBACK_RECOVERY_THROTTLE_MS = 1200;
 const CONNECTION_RECOVERY_TIMEOUT_MS = 8000;
 const RECONNECT_STEP_DELAY_MS = 1200;
 const RECONNECT_MAX_DELAY_MS = 8000;
@@ -63,6 +64,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
   const connectionRecoveryTimeoutRef = useRef<number | null>(null);
   const reconnectRetryTimeoutRef = useRef<number | null>(null);
   const reconnectAttemptRef = useRef(0);
+  const playbackRecoveryAtRef = useRef(0);
   const hasRemoteDescriptionRef = useRef(false);
   const pendingRemoteIceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const liveDebugEnabled = process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_DEBUG_LIVE_STREAM === '1';
@@ -621,26 +623,32 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
 
     const handlePause = () => {
       if (!isLive || !hasRemoteMedia) return;
+      const now = Date.now();
+      if (now - playbackRecoveryAtRef.current < PLAYBACK_RECOVERY_THROTTLE_MS) return;
+      playbackRecoveryAtRef.current = now;
       logLiveDebug('remote-video-paused-retrying');
       void playRemoteStream();
     };
 
-    const handleStalled = () => {
+    const handleBuffering = (event: Event) => {
       if (!isLive) return;
-      logLiveDebug('remote-video-stalled');
+      const now = Date.now();
+      if (now - playbackRecoveryAtRef.current < PLAYBACK_RECOVERY_THROTTLE_MS) return;
+      playbackRecoveryAtRef.current = now;
+      logLiveDebug('remote-video-buffering', { type: event.type });
       void playRemoteStream({ tryMutedFirst: false });
     };
 
     video.addEventListener('loadedmetadata', handleLoadedMetadata);
     video.addEventListener('pause', handlePause);
-    video.addEventListener('stalled', handleStalled);
-    video.addEventListener('waiting', handleStalled);
+    video.addEventListener('stalled', handleBuffering);
+    video.addEventListener('waiting', handleBuffering);
 
     return () => {
       video.removeEventListener('loadedmetadata', handleLoadedMetadata);
       video.removeEventListener('pause', handlePause);
-      video.removeEventListener('stalled', handleStalled);
-      video.removeEventListener('waiting', handleStalled);
+      video.removeEventListener('stalled', handleBuffering);
+      video.removeEventListener('waiting', handleBuffering);
     };
   }, [hasRemoteMedia, isLive, logLiveDebug, playRemoteStream]);
 
