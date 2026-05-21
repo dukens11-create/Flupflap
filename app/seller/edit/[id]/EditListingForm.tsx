@@ -10,6 +10,9 @@ import { readApiMessage } from '@/lib/read-api-message';
 interface EditListingFormProps {
   id: string;
   canDelete: boolean;
+  cancelHref: string;
+  draftRedirectPath: string;
+  defaultSuccessPath: string;
   // Basic fields
   defaultTitle: string;
   defaultDescription: string;
@@ -59,6 +62,9 @@ const EMPTY_SELECTED_CATEGORY: SelectedCategoryState = {
 export default function EditListingForm({
   id,
   canDelete,
+  cancelHref,
+  draftRedirectPath,
+  defaultSuccessPath,
   defaultTitle,
   defaultDescription,
   defaultPriceDollars,
@@ -224,7 +230,7 @@ export default function EditListingForm({
       }
       const data = await res.json();
 
-      const redirectTo = data?.redirectTo ?? `/seller/listings/drafts?updated=${id}`;
+      const redirectTo = data?.redirectTo ?? defaultSuccessPath;
       router.push(redirectTo);
     } catch (err) {
       console.error('[EditListingForm] network error:', err);
@@ -281,7 +287,7 @@ export default function EditListingForm({
         setSubmitting(false);
         return;
       }
-      router.push('/seller?updated=1');
+      router.push(draftRedirectPath);
     } catch {
       setSubmitError('Network error. Please check your connection and try again.');
       setSubmitting(false);
@@ -537,7 +543,7 @@ export default function EditListingForm({
         </p>
       )}
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-        <a href="/seller" className="btn-outline flex-1 text-center">
+        <a href={cancelHref} className="btn-outline flex-1 text-center">
           Cancel
         </a>
         <button
