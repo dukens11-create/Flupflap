@@ -364,10 +364,19 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   }
   const incompleteShippingProducts = products.filter((product) => !hasStoredPackageDetails(product));
   const shippingReadyCount = products.length - incompleteShippingProducts.length;
-  const activeListings = products.filter((p) => p.status === 'APPROVED' && p.inventory > 0);
-  const soldListings = products.filter((p) => p.status === 'SOLD' || (p.status === 'APPROVED' && p.inventory === 0));
-  const archivedListings = products.filter((p) => p.status === 'HIDDEN');
-  const draftListings = products.filter((p) => p.status === 'PENDING' || p.status === 'REJECTED');
+  const activeListings = products.filter(
+    (p) => toSellerLifecycleStatus(p.status) === 'ACTIVE' && p.inventory > 0,
+  );
+  const soldListings = products.filter((p) => toSellerLifecycleStatus(p.status) === 'SOLD');
+  const archivedListings = products.filter(
+    (p) =>
+      toSellerLifecycleStatus(p.status) === 'ARCHIVED'
+      || (toSellerLifecycleStatus(p.status) === 'ACTIVE' && p.inventory === 0),
+  );
+  const draftListings = products.filter((p) => {
+    const lifecycle = toSellerLifecycleStatus(p.status);
+    return lifecycle === 'DRAFT' || lifecycle === 'SCHEDULED';
+  });
   const listingsByState: Record<ListingsState, typeof products> = {
     drafts: draftListings,
     active: activeListings,

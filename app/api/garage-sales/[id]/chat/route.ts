@@ -3,11 +3,17 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { isGarageSalePubliclyVisible } from '@/lib/garage-sale-visibility';
+import {
+  LIVE_ENGAGEMENT_EVENTS,
+  LIVE_ENGAGEMENT_SIGNAL_KINDS,
+  getLiveEngagementActorId,
+  resolveLiveEngagementContext,
+} from '@/lib/live-engagement';
 import { applyRateLimitAsync } from '@/lib/security';
 
 export const dynamic = 'force-dynamic';
 
-const DEFAULT_GUEST_NAME = 'Guest';
+const DEFAULT_BUYER_DISPLAY_NAME = 'Buyer';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -16,18 +22,21 @@ export async function GET(req: Request, { params }: Params) {
   const { id } = await params;
   const url = new URL(req.url);
   const since = url.searchParams.get('since');
+  const session = await getServerSession(authOptions);
+  const userId = session?.user?.id ?? null;
 
   const sale = await prisma.garageSale.findUnique({
     where: { id },
-    select: { status: true, paymentStatus: true, isArchived: true, isSpam: true, isLive: true, startDate: true, endDate: true },
+    select: { status: true, paymentStatus: true, isArchived: true, isSpam: true, isLive: true, startDate: true, endDate: true, sellerId: true },
   });
-  if (!sale || !isGarageSalePubliclyVisible(sale)) {
+  if (!sale || (!isGarageSalePubliclyVisible(sale) && sale.sellerId !== userId)) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
   const messages = await prisma.garageSaleChat.findMany({
     where: {
       saleId: id,
+      isHidden: false,
       ...(since ? { createdAt: { gt: new Date(since) } } : {}),
     },
     orderBy: { createdAt: 'asc' },
@@ -44,7 +53,7 @@ export async function POST(req: Request, { params }: Params) {
 
   const sale = await prisma.garageSale.findUnique({
     where: { id },
-    select: { status: true, paymentStatus: true, isArchived: true, isSpam: true, isLive: true, startDate: true, endDate: true },
+    select: { status: true, paymentStatus: true, isArchived: true, isSpam: true, isLive: true, startDate: true, endDate: true, liveStartedAt: true },
   });
   if (!sale || !isGarageSalePubliclyVisible(sale)) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -75,7 +84,11 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { message, guestName } = body as { message?: string; guestName?: string };
+  const { message, liveSessionId, roomId } = body as {
+    message?: string;
+    liveSessionId?: string | null;
+    roomId?: string;
+  };
   if (!message || typeof message !== 'string' || message.trim().length === 0) {
     return NextResponse.json({ error: 'Message is required' }, { status: 400 });
   }
@@ -84,21 +97,103 @@ export async function POST(req: Request, { params }: Params) {
   }
 
   const userId = session?.user?.id ?? null;
-  let resolvedGuestName: string | null = null;
   if (!userId) {
-    const trimmedName = typeof guestName === 'string' ? guestName.trim() : '';
-    resolvedGuestName = trimmedName ? trimmedName.slice(0, 50) : DEFAULT_GUEST_NAME;
+    return NextResponse.json({ error: 'Please log in to chat' }, { status: 401 });
   }
+  const sessionDisplayName = typeof session?.user?.name === 'string' ? session.user.name.trim() : '';
+  const resolvedDisplayName = sessionDisplayName
+    ? sessionDisplayName.slice(0, 50)
+    : DEFAULT_BUYER_DISPLAY_NAME;
+  const liveContext = resolveLiveEngagementContext(id, sale.liveStartedAt ?? null, { liveSessionId, roomId });
+  const actorId = getLiveEngagementActorId(userId, null);
+  const insertCreatedAt = new Date();
+  const insertPayload = {
+    liveId: id,
+    streamId: id,
+    roomId: liveContext.roomId,
+    liveSessionId: liveContext.liveSessionId,
+    userId,
+    guestId: null,
+    displayName: resolvedDisplayName,
+    message: message.trim(),
+    createdAt: insertCreatedAt.toISOString(),
+  };
 
-  const msg = await prisma.garageSaleChat.create({
-    data: {
-      saleId: id,
-      userId,
-      guestName: resolvedGuestName,
-      message: message.trim(),
-    },
-    select: { id: true, userId: true, guestName: true, message: true, createdAt: true },
+  console.info('[garage-sale-chat] message send attempt', {
+    saleId: id,
+    liveSessionId: liveContext.liveSessionId,
+    receivedLiveSessionId: liveContext.receivedLiveSessionId,
+    roomId: liveContext.roomId,
+    receivedRoomId: liveContext.receivedRoomId,
+    roomMatches: liveContext.roomMatches,
+    liveSessionMatches: liveContext.liveSessionMatches,
+    actorId,
+    insertPayload,
   });
 
-  return NextResponse.json(msg, { status: 201 });
+  try {
+    const msg = await prisma.$transaction(async (tx) => {
+      const createdMessage = await tx.garageSaleChat.create({
+        data: {
+          saleId: id,
+          userId,
+          guestName: resolvedDisplayName,
+          message: insertPayload.message,
+          createdAt: insertCreatedAt,
+        },
+        select: { id: true, userId: true, guestName: true, message: true, createdAt: true },
+      });
+
+      await tx.garageSaleLiveSignal.create({
+        data: {
+          saleId: id,
+          sender: 'BUYER',
+          kind: LIVE_ENGAGEMENT_SIGNAL_KINDS.MESSAGE_SENT,
+          payload: {
+            event: LIVE_ENGAGEMENT_EVENTS.MESSAGE_SENT,
+            liveId: id,
+            roomId: liveContext.roomId,
+            liveSessionId: liveContext.liveSessionId,
+            actorId,
+            message: {
+              id: createdMessage.id,
+              userId: createdMessage.userId,
+              guestName: createdMessage.guestName,
+              message: createdMessage.message,
+              createdAt: createdMessage.createdAt.toISOString(),
+            },
+          },
+        },
+      });
+
+      return createdMessage;
+    });
+
+    console.info('[garage-sale-chat] live_message_sent emitted', {
+      saleId: id,
+      messageId: msg.id,
+      liveSessionId: liveContext.liveSessionId,
+      roomId: liveContext.roomId,
+      actorId,
+    });
+
+    return NextResponse.json({
+      ...msg,
+      liveId: id,
+      roomId: liveContext.roomId,
+      liveSessionId: liveContext.liveSessionId,
+      event: LIVE_ENGAGEMENT_EVENTS.MESSAGE_SENT,
+    }, { status: 201 });
+  } catch (error) {
+    console.error('[garage-sale-chat] message save error', {
+      saleId: id,
+      liveSessionId: liveContext.liveSessionId,
+      actorId,
+      insertPayload,
+      error,
+      errorMessage: error instanceof Error ? error.message : 'unknown',
+      prismaCode: (error as { code?: string } | null)?.code ?? null,
+    });
+    return NextResponse.json({ error: 'Failed to save live chat message' }, { status: 500 });
+  }
 }

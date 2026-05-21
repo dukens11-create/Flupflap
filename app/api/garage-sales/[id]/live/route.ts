@@ -50,8 +50,8 @@ export async function POST(req: Request, { params }: Params) {
   }
 
   const action = (body as { action?: string })?.action;
-  if (action !== 'start' && action !== 'end') {
-    return NextResponse.json({ error: 'action must be "start" or "end"' }, { status: 400 });
+  if (action !== 'start' && action !== 'end' && action !== 'restart') {
+    return NextResponse.json({ error: 'action must be "start", "end", or "restart"' }, { status: 400 });
   }
 
   const visibilityBlockReason = getGarageSaleVisibilityBlockReason(sale);
@@ -61,6 +61,24 @@ export async function POST(req: Request, { params }: Params) {
   }
 
   const now = new Date();
+
+  if (action === 'restart') {
+    if (!sale.isLive) {
+      return NextResponse.json({ error: 'Live session is not active' }, { status: 422 });
+    }
+    // Clear all stale signals and reset liveStartedAt so buyer signal polling
+    // starts fresh and old ANSWER/ICE signals are not applied to the new peer.
+    const restarted = (await prisma.$transaction([
+      prisma.garageSaleLiveSignal.deleteMany({ where: { saleId: id } }),
+      prisma.garageSale.update({
+        where: { id },
+        data: { liveStartedAt: now },
+        select: { id: true, isLive: true, liveStartedAt: true },
+      }),
+    ]))[1];
+    return NextResponse.json(restarted);
+  }
+
   const updated = action === 'start'
     ? (await prisma.$transaction([
       prisma.garageSaleLiveSignal.deleteMany({ where: { saleId: id } }),

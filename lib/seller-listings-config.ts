@@ -1,4 +1,5 @@
 import type { SellerListingItem } from '@/components/SellerListingsGrid';
+import { toSellerLifecycleStatus } from '@/lib/listing-status';
 
 export type SellerListingsSection = 'drafts' | 'active' | 'sold' | 'archived';
 
@@ -60,15 +61,22 @@ export function filterSellerListingsBySection(
   section: SellerListingsSection,
 ): SellerListingItem[] {
   if (section === 'drafts') {
-    return listings.filter((item) => item.status === 'PENDING' || item.status === 'REJECTED');
+    return listings.filter((item) => {
+      const lifecycle = toSellerLifecycleStatus(item.status);
+      return lifecycle === 'DRAFT' || lifecycle === 'SCHEDULED';
+    });
   }
   if (section === 'active') {
-    return listings.filter((item) => item.status === 'APPROVED' && item.inventory > 0);
+    return listings.filter(
+      (item) => toSellerLifecycleStatus(item.status) === 'ACTIVE' && item.inventory > 0,
+    );
   }
   if (section === 'sold') {
-    return listings.filter((item) => item.status === 'SOLD');
+    return listings.filter((item) => toSellerLifecycleStatus(item.status) === 'SOLD');
   }
   return listings.filter(
-    (item) => item.status === 'HIDDEN' || (item.status === 'APPROVED' && item.inventory === 0),
+    (item) =>
+      toSellerLifecycleStatus(item.status) === 'ARCHIVED'
+      || (toSellerLifecycleStatus(item.status) === 'ACTIVE' && item.inventory === 0),
   );
 }

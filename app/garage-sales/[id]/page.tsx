@@ -469,6 +469,7 @@ export default async function GarageSaleDetailPage({ params, searchParams }: Par
               initialIsLive={sale.isLive}
               initialLiveSessionId={initialLiveSessionId}
               buyerName={session?.user?.name ?? null}
+              buyerId={session?.user?.id ?? null}
             />
           )}
 

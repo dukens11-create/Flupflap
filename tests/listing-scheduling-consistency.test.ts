@@ -49,13 +49,16 @@ test('non-scheduled listing sections still filter correctly', () => {
     makeListing('PENDING', 1),
     makeListing('REJECTED', 1),
     makeListing('APPROVED', 2),
+    makeListing('ACTIVE', 3),
     makeListing('APPROVED', 0),
+    makeListing('ACTIVE', 0),
     makeListing('SOLD', 0),
     makeListing('HIDDEN', 0),
+    makeListing('SCHEDULED', 1),
   ];
 
-  assert.equal(filterSellerListingsBySection(listings, 'drafts').length, 2);
-  assert.equal(filterSellerListingsBySection(listings, 'active').length, 1);
+  assert.equal(filterSellerListingsBySection(listings, 'drafts').length, 3);
+  assert.equal(filterSellerListingsBySection(listings, 'active').length, 2);
   assert.equal(filterSellerListingsBySection(listings, 'sold').length, 1);
-  assert.equal(filterSellerListingsBySection(listings, 'archived').length, 2);
+  assert.equal(filterSellerListingsBySection(listings, 'archived').length, 3);
 });
