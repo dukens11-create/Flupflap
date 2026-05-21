@@ -110,10 +110,53 @@ Set these in **Environment → Environment Variables** in the Render dashboard:
 | `STRIPE_PUBLISHABLE_KEY` | Stripe publishable key |
 | `STRIPE_WEBHOOK_SECRET` | Secret from your Stripe webhook endpoint |
 | `SHIPPO_API_TOKEN` | Shippo API token for shipping rates + label purchase |
+| `CJ_API_KEY` | CJ Dropshipping API key (server only) |
+| `CJ_API_SECRET` | CJ Dropshipping API secret (server only) |
+| `FAIRE_API_KEY` | Faire API key (server only) |
+| `ALIBABA_APP_KEY` | Alibaba app key (server only) |
+| `ALIBABA_APP_SECRET` | Alibaba app secret (server only) |
+| `SPOCKET_API_KEY` | Spocket API key (server only; scaffolded integration) |
 | `NEXT_PUBLIC_MAPBOX_TOKEN` | Public Mapbox token used for map experiences (checkout address autocomplete and garage sale map view) |
 | `PLATFORM_FEE_PERCENT` | Legacy bootstrap env var (the app normalizes commission snapshots to `7`) |
 
 URL precedence for app redirects/absolute links: `NEXT_PUBLIC_SITE_URL` → `NEXT_PUBLIC_APP_URL` → `NEXTAUTH_URL`.
+
+## Wholesale supplier integrations
+
+FlupFlap now includes a server-only supplier integration layer for CJ, Faire, and Alibaba (plus Spocket scaffolding):
+
+- `GET /api/suppliers/cj/products`
+- `POST /api/suppliers/cj/orders`
+- `GET /api/suppliers/faire/products`
+- `GET /api/suppliers/alibaba/products`
+
+### Architecture notes
+
+- Provider adapters are isolated in `lib/suppliers/providers/*`.
+- Normalization mappers convert external payloads into shared DTOs in `lib/suppliers/mappers/*`.
+- Product + inventory sync orchestration runs via `lib/suppliers/sync.ts`.
+- Order routing records (platform order ↔ supplier order linkage) run via `lib/suppliers/order-routing.ts`.
+- Structured supplier failures are persisted in `SupplierIntegrationErrorLog` with safe request context redaction.
+- Supplier credentials are loaded through `lib/suppliers/config.ts` (`server-only`) and never exposed to client bundles.
+
+### Manual verification
+
+1. **Configure env vars** (`CJ_API_KEY`, `CJ_API_SECRET`, `FAIRE_API_KEY`, `ALIBABA_APP_KEY`, `ALIBABA_APP_SECRET`, `SPOCKET_API_KEY`) in `.env`.
+2. **Run migrations** and start the app:
+   - `npm run prisma:generate`
+   - `npm run prisma:push`
+   - `npm run dev`
+3. As an **ADMIN** session, call:
+   - `GET /api/suppliers/cj/products`
+   - `GET /api/suppliers/faire/products`
+   - `GET /api/suppliers/alibaba/products`
+   Verify structured JSON response (`ok`, `provider`, `operation`, `data`) and new sync/catalog rows.
+4. For CJ order routing, call:
+   - `POST /api/suppliers/cj/orders` with JSON body `{ "orderId": "<platform-order-id>", "submitToSupplier": false }`
+   Verify supplier routing rows are created and linked to order items where supplier mappings exist.
+5. Trigger a failed supplier call (e.g., missing credentials) and verify:
+   - structured non-secret error response,
+   - persisted `SupplierIntegrationErrorLog` row with provider + operation + safe context.
 
 ### Legacy scheduled-listing publisher job
 

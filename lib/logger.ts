@@ -120,8 +120,14 @@ export function redactSecrets(
   keys: string[],
 ): Record<string, unknown> {
   const result = { ...ctx };
+  const normalizedKeys = new Set(keys.map((key) => key.toLowerCase()));
   for (const key of keys) {
     if (key in result) {
+      result[key] = '[REDACTED]';
+    }
+  }
+  for (const [key] of Object.entries(result)) {
+    if (normalizedKeys.has(key.toLowerCase())) {
       result[key] = '[REDACTED]';
     }
   }
