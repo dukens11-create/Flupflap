@@ -104,10 +104,11 @@ export async function POST(req: Request, { params }: Params) {
   });
 
   try {
+    const liveSessionCreatedAtFilter = sale.liveStartedAt ? { gte: sale.liveStartedAt } : undefined;
     const duplicateWhere = userId
-      ? { saleId: id, userId, createdAt: sale.liveStartedAt ? { gte: sale.liveStartedAt } : undefined }
+      ? { saleId: id, userId, createdAt: liveSessionCreatedAtFilter }
       : resolvedGuestId
-        ? { saleId: id, guestId: resolvedGuestId, createdAt: sale.liveStartedAt ? { gte: sale.liveStartedAt } : undefined }
+        ? { saleId: id, guestId: resolvedGuestId, createdAt: liveSessionCreatedAtFilter }
         : null;
 
     const existingReaction = duplicateWhere
