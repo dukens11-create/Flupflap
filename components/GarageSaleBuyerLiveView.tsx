@@ -205,7 +205,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
       });
     }
 
-    const initialMuted = options?.tryMutedFirst ?? false;
+    const initialMuted = options?.tryMutedFirst ?? true;
     const attempts = initialMuted ? [true, false] : [false, true];
 
     for (const muted of attempts) {
@@ -325,7 +325,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
 
     const retryDelay = Math.min(
       RECONNECT_MAX_DELAY_MS,
-      RECONNECT_STEP_DELAY_MS * attempt,
+      RECONNECT_STEP_DELAY_MS * (2 ** (attempt - 1)),
     ) + Math.floor(Math.random() * RECONNECT_JITTER_MS);
 
     setRecoveringConnection(true);
@@ -523,10 +523,10 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
           } catch {
             const willRetry = scheduleConnectionRecovery('offer-processing-failed');
             if (!willRetry) {
+              // After terminal failure, consume the current offer and wait for a newer one.
               signalCursorRef.current = signal.createdAt;
             }
-            // During active recovery we keep the cursor to retry this offer.
-            // After terminal failure, consume the offer and wait for a newer one.
+            // During active recovery we keep the cursor unchanged to retry this offer.
             break;
           }
         } else if (signal.kind === 'ICE') {
