@@ -1136,12 +1136,14 @@ model GarageSaleChat {
   saleId    String
   sale      GarageSale @relation(fields: [saleId], references: [id], onDelete: Cascade)
   userId    String?
+  sellerId  String?
   guestName String?
   message   String     @db.VarChar(500)
   isHidden  Boolean    @default(false)
   createdAt DateTime   @default(now())
 
   @@index([saleId])
+  @@index([saleId, sellerId])
   @@index([saleId, isHidden])
   @@index([createdAt])
 }

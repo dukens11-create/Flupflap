@@ -38,6 +38,14 @@ export function resolveLiveEngagementContext(
   };
 }
 
+export function buildLiveEngagementIdentifiers(saleId: string) {
+  return {
+    liveSaleId: saleId,
+    liveId: saleId,
+    streamId: saleId,
+  };
+}
+
 export function normalizeGuestId(value: unknown) {
   const trimmedGuestId = typeof value === 'string' ? value.trim() : '';
   if (!trimmedGuestId) return null;
