@@ -51,8 +51,7 @@ type GuestJoinStatus =
   | 'active'
   | 'declined'
   | 'removed'
-  | 'full'
-  | 'ended';
+  | 'full';
 
 export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initialLiveSessionId, buyerName, buyerId, buyerAvatar }: Props) {
   const [isLive, setIsLive] = useState(initialIsLive);
@@ -1107,8 +1106,8 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
 
   const handleEndGuestCall = useCallback(async () => {
     const reqId = guestRequestIdRef.current;
-    setGuestJoinStatus('ended');
-    guestJoinStatusRef.current = 'ended';
+    setGuestJoinStatus('removed');
+    guestJoinStatusRef.current = 'removed';
     stopGuestPeer();
     logLiveDebug(LIVE_SIGNAL_EVENTS.GUEST_LEFT_LIVE, { requestId: reqId });
     if (reqId) {
@@ -1133,7 +1132,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
   // Poll for guest request status (approval, decline, mute, remove)
   const pollGuestStatus = useCallback(async () => {
     const currentStatus = guestJoinStatusRef.current;
-    if (currentStatus === 'idle' || currentStatus === 'requesting-media' || currentStatus === 'ended') return;
+    if (currentStatus === 'idle' || currentStatus === 'requesting-media' || currentStatus === 'removed') return;
 
     try {
       const res = await fetch(`/api/garage-sales/${saleId}/guest-requests?guestId=${encodeURIComponent(guestIdRef.current)}`);
@@ -1147,8 +1146,8 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
 
       if (!data.isLive) {
         stopGuestPeer();
-        setGuestJoinStatus('ended');
-        guestJoinStatusRef.current = 'ended';
+        setGuestJoinStatus('removed');
+        guestJoinStatusRef.current = 'removed';
         return;
       }
 
@@ -1607,13 +1606,6 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
         {guestJoinStatus === 'removed' && (
           <p className="text-center text-sm text-amber-700 font-medium rounded-lg bg-amber-50 px-3 py-2">
             ⚠️ You were removed from co-host video
-          </p>
-        )}
-
-        {guestJoinStatus === 'ended' && (
-          <p className="text-center text-sm text-slate-600 py-1">
-            <VideoOff size={14} className="inline mr-1" />
-            Guest call ended
           </p>
         )}
 
