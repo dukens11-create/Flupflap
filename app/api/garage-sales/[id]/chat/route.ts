@@ -13,7 +13,7 @@ import { applyRateLimitAsync } from '@/lib/security';
 
 export const dynamic = 'force-dynamic';
 
-const DEFAULT_BUYER_DISPLAY_NAME = 'Buyer';
+const DEFAULT_AUTHENTICATED_BUYER_NAME = 'Anonymous Buyer';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -103,7 +103,7 @@ export async function POST(req: Request, { params }: Params) {
   const sessionDisplayName = typeof session?.user?.name === 'string' ? session.user.name.trim() : '';
   const resolvedDisplayName = sessionDisplayName
     ? sessionDisplayName.slice(0, 50)
-    : DEFAULT_BUYER_DISPLAY_NAME;
+    : DEFAULT_AUTHENTICATED_BUYER_NAME;
   const liveContext = resolveLiveEngagementContext(id, sale.liveStartedAt ?? null, { liveSessionId, roomId });
   const actorId = getLiveEngagementActorId(userId, null);
   const insertCreatedAt = new Date();
@@ -149,12 +149,12 @@ export async function POST(req: Request, { params }: Params) {
           saleId: id,
           sender: 'BUYER',
           kind: LIVE_ENGAGEMENT_SIGNAL_KINDS.MESSAGE_SENT,
-        payload: {
-          event: LIVE_ENGAGEMENT_EVENTS.MESSAGE_SENT,
-          liveId: id,
-          roomId: liveContext.roomId,
-          liveSessionId: liveContext.liveSessionId,
-          actorId,
+          payload: {
+            event: LIVE_ENGAGEMENT_EVENTS.MESSAGE_SENT,
+            liveId: id,
+            roomId: liveContext.roomId,
+            liveSessionId: liveContext.liveSessionId,
+            actorId,
             message: {
               id: createdMessage.id,
               userId: createdMessage.userId,

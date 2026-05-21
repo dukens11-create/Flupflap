@@ -387,7 +387,7 @@ export default function GarageSaleBrowseClient({
             ) : (
               <div className="text-center text-slate-500">
                 <MapPin size={32} className="mx-auto mb-2 opacity-40" />
-                <p className="text-sm font-medium">Loading map…</p>
+                <p className="text-sm font-medium">Map is enabled for this view.</p>
               </div>
             )}
           </div>

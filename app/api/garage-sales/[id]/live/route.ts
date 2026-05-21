@@ -68,30 +68,46 @@ export async function POST(req: Request, { params }: Params) {
     }
     // Clear all stale signals and reset liveStartedAt so buyer signal polling
     // starts fresh and old ANSWER/ICE signals are not applied to the new peer.
-    const restarted = (await prisma.$transaction([
+    // Also end any active guest requests since the stream is restarting.
+    const [, , restarted] = await prisma.$transaction([
       prisma.garageSaleLiveSignal.deleteMany({ where: { saleId: id } }),
+      prisma.garageSaleGuestRequest.updateMany({
+        where: { saleId: id, status: { in: ['PENDING', 'APPROVED', 'ACTIVE'] } },
+        data: { status: 'ENDED', updatedAt: now },
+      }),
       prisma.garageSale.update({
         where: { id },
         data: { liveStartedAt: now },
         select: { id: true, isLive: true, liveStartedAt: true },
       }),
-    ]))[1];
+    ]);
     return NextResponse.json(restarted);
   }
 
   const updated = action === 'start'
-    ? (await prisma.$transaction([
-      prisma.garageSaleLiveSignal.deleteMany({ where: { saleId: id } }),
-      prisma.garageSale.update({
+    ? await (async () => {
+      const [, , started] = await prisma.$transaction([
+        prisma.garageSaleLiveSignal.deleteMany({ where: { saleId: id } }),
+        prisma.garageSaleGuestRequest.deleteMany({ where: { saleId: id } }),
+        prisma.garageSale.update({
+          where: { id },
+          data: { isLive: true, liveStartedAt: now },
+          select: { id: true, isLive: true, liveStartedAt: true },
+        }),
+      ]);
+      return started;
+    })()
+    : await prisma.$transaction(async (tx) => {
+      await tx.garageSaleLiveSignal.deleteMany({ where: { saleId: id } });
+      await tx.garageSaleGuestRequest.updateMany({
+        where: { saleId: id, status: { in: ['PENDING', 'APPROVED', 'ACTIVE'] } },
+        data: { status: 'ENDED', updatedAt: now },
+      });
+      return tx.garageSale.update({
         where: { id },
-        data: { isLive: true, liveStartedAt: now },
+        data: { isLive: false, liveStartedAt: null },
         select: { id: true, isLive: true, liveStartedAt: true },
-      }),
-    ]))[1]
-    : await prisma.garageSale.update({
-      where: { id },
-      data: { isLive: false, liveStartedAt: null },
-      select: { id: true, isLive: true, liveStartedAt: true },
+      });
     });
 
   return NextResponse.json({

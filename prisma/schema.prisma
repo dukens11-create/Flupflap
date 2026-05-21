@@ -1040,6 +1040,7 @@ model GarageSale {
   chatMessages     GarageSaleChat[]
   reactions        GarageSaleReaction[]
   liveSignals      GarageSaleLiveSignal[]
+  guestRequests    GarageSaleGuestRequest[]
   // Live preview
   isLive           Boolean              @default(false)
   liveStartedAt    DateTime?
@@ -1144,4 +1145,25 @@ model GarageSaleLiveSignal {
 
   @@index([saleId, createdAt])
   @@index([saleId, sender, kind])
+}
+
+/// Tracks buyer requests to join the seller live as a video guest.
+/// Status flow: PENDING → APPROVED / DECLINED
+///              APPROVED → ACTIVE (guest WebRTC connected)
+///              ACTIVE → ENDED (guest left) | REMOVED (seller removed) | ENDED
+model GarageSaleGuestRequest {
+  id        String     @id @default(cuid())
+  saleId    String
+  sale      GarageSale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  /// Stable anonymous identifier generated in the buyer's browser.
+  guestId   String
+  guestName String?
+  /// PENDING | APPROVED | DECLINED | ACTIVE | REMOVED | ENDED
+  status    String     @default("PENDING")
+  isMuted   Boolean    @default(false)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([saleId, status])
+  @@index([saleId, guestId])
 }
