@@ -9,7 +9,7 @@ export const LIVE_SIGNAL_KINDS = {
   ICE: 'ICE',
   VIEWER_HEARTBEAT: 'VIEWER_HEARTBEAT',
   STREAM_READY: 'STREAM_READY',
-  // Guest video call signaling (P2P between approved buyer-guest and seller)
+  // Guest video call signaling (P2P negotiation after seller approval between buyer-guest and seller)
   GUEST_OFFER: 'GUEST_OFFER',
   GUEST_ANSWER: 'GUEST_ANSWER',
   GUEST_ICE: 'GUEST_ICE',

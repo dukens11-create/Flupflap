@@ -326,7 +326,11 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       peerState.hasRemoteDesc = true;
 
       for (const candidate of peerState.pendingIce) {
-        try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); } catch { /* ignore */ }
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch {
+          logLiveDebug('guest-add-ice-candidate-failed', { requestId });
+        }
       }
       peerState.pendingIce = [];
 
