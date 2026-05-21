@@ -1263,7 +1263,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         </button>
       ) : (
         <div className="flex flex-col gap-2">
-          {(error || !publishConnected) && sellerPublished && !loading && (
+          {error && !loading && (
             <button
               type="button"
               onClick={() => void hardRestartLive()}
