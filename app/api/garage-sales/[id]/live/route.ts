@@ -72,8 +72,8 @@ export async function POST(req: Request, { params }: Params) {
     const [, , restarted] = await prisma.$transaction([
       prisma.garageSaleLiveSignal.deleteMany({ where: { saleId: id } }),
       prisma.garageSaleGuestRequest.updateMany({
-        where: { saleId: id, status: { in: ['PENDING', 'APPROVED', 'ACTIVE'] } },
-        data: { status: 'ENDED', updatedAt: now },
+        where: { saleId: id, status: { in: ['pending', 'accepted'] } },
+        data: { status: 'removed', updatedAt: now },
       }),
       prisma.garageSale.update({
         where: { id },
@@ -100,8 +100,8 @@ export async function POST(req: Request, { params }: Params) {
     : await prisma.$transaction(async (tx) => {
       await tx.garageSaleLiveSignal.deleteMany({ where: { saleId: id } });
       await tx.garageSaleGuestRequest.updateMany({
-        where: { saleId: id, status: { in: ['PENDING', 'APPROVED', 'ACTIVE'] } },
-        data: { status: 'ENDED', updatedAt: now },
+        where: { saleId: id, status: { in: ['pending', 'accepted'] } },
+        data: { status: 'removed', updatedAt: now },
       });
       return tx.garageSale.update({
         where: { id },

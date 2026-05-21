@@ -132,19 +132,20 @@ export async function POST(req: Request, { params }: Params) {
   });
 
   try {
-    const msg = await prisma.$transaction(async (tx) => {
-      const createdMessage = await tx.garageSaleChat.create({
-        data: {
-          saleId: id,
-          userId,
-          guestName: resolvedDisplayName,
-          message: insertPayload.message,
-          createdAt: insertCreatedAt,
-        },
-        select: { id: true, userId: true, guestName: true, message: true, createdAt: true },
-      });
+    const msg = await prisma.garageSaleChat.create({
+      data: {
+        saleId: id,
+        userId,
+        guestName: resolvedDisplayName,
+        message: insertPayload.message,
+        createdAt: insertCreatedAt,
+      },
+      select: { id: true, userId: true, guestName: true, message: true, createdAt: true },
+    });
 
-      await tx.garageSaleLiveSignal.create({
+    let signalEmitted = true;
+    try {
+      await prisma.garageSaleLiveSignal.create({
         data: {
           saleId: id,
           sender: 'BUYER',
@@ -156,18 +157,26 @@ export async function POST(req: Request, { params }: Params) {
             liveSessionId: liveContext.liveSessionId,
             actorId,
             message: {
-              id: createdMessage.id,
-              userId: createdMessage.userId,
-              guestName: createdMessage.guestName,
-              message: createdMessage.message,
-              createdAt: createdMessage.createdAt.toISOString(),
+              id: msg.id,
+              userId: msg.userId,
+              guestName: msg.guestName,
+              message: msg.message,
+              createdAt: msg.createdAt.toISOString(),
             },
           },
         },
       });
-
-      return createdMessage;
-    });
+    } catch (signalError) {
+      signalEmitted = false;
+      console.error('[garage-sale-chat] live_message_sent emit failed', {
+        saleId: id,
+        liveSessionId: liveContext.liveSessionId,
+        roomId: liveContext.roomId,
+        actorId,
+        messageId: msg.id,
+        errorMessage: signalError instanceof Error ? signalError.message : 'unknown',
+      });
+    }
 
     console.info('[garage-sale-chat] live_message_sent emitted', {
       saleId: id,
@@ -175,6 +184,7 @@ export async function POST(req: Request, { params }: Params) {
       liveSessionId: liveContext.liveSessionId,
       roomId: liveContext.roomId,
       actorId,
+      signalEmitted,
     });
 
     return NextResponse.json({
@@ -183,6 +193,7 @@ export async function POST(req: Request, { params }: Params) {
       roomId: liveContext.roomId,
       liveSessionId: liveContext.liveSessionId,
       event: LIVE_ENGAGEMENT_EVENTS.MESSAGE_SENT,
+      signalEmitted,
     }, { status: 201 });
   } catch (error) {
     console.error('[garage-sale-chat] message save error', {
