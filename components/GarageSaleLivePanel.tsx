@@ -271,12 +271,12 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
       if (listRes.ok) {
         const listData = await listRes.json() as { requests: GuestRequest[] };
         const req = listData.requests.find((r) => r.id === requestId);
-        isApproved = Boolean(req && req.status === 'accepted');
+        isApproved = Boolean(req && ['accepted', 'active'].includes(req.status));
       }
     } catch {
       // On network error, check local state as fallback
       const local = guestRequests.find((r) => r.id === requestId);
-      isApproved = Boolean(local && local.status === 'accepted');
+      isApproved = Boolean(local && ['accepted', 'active'].includes(local.status));
     }
 
     if (!isApproved) {
@@ -318,6 +318,9 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
         videoEl.srcObject = stream;
         void videoEl.play().catch(() => undefined);
       }
+      setGuestRequests((prev) => prev.map((request) => (
+        request.id === requestId ? { ...request, status: 'active' } : request
+      )));
       logLiveDebug(LIVE_SIGNAL_EVENTS.GUEST_JOINED_LIVE, { requestId, guestId });
       console.info('[GuestCall] Seller received guest track', { requestId, guestId });
     };
@@ -381,7 +384,17 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
       const res = await fetch(`/api/garage-sales/${saleId}/guest-requests`);
       if (!res.ok) return;
       const data = await res.json() as { requests: GuestRequest[]; activeCount: number; isLive: boolean };
-      setGuestRequests(data.requests);
+      setGuestRequests((prev) => {
+        const previousById = new Map(prev.map((request) => [request.id, request]));
+        return data.requests.map((request) => {
+          if (request.status !== 'accepted') return request;
+          const previous = previousById.get(request.id);
+          const hasLiveStream = Boolean(guestPeersRef.current.get(request.id)?.stream);
+          return (previous?.status === 'active' || hasLiveStream)
+            ? { ...request, status: 'active' }
+            : request;
+        });
+      });
 
       // Close peer connections for guests that are no longer active
       for (const [reqId, peerState] of guestPeersRef.current.entries()) {
@@ -1811,9 +1824,9 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
           <div className="space-y-3 rounded-xl border border-indigo-100 bg-indigo-50/50 p-3">
             <h3 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-indigo-700">
               <Users size={13} /> Live Guest Requests
-              {guestRequests.filter((r) => r.status === 'accepted').length > 0 && (
+              {guestRequests.filter((r) => ['accepted', 'active'].includes(r.status)).length > 0 && (
                 <span className="ml-auto inline-flex items-center rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">
-                  {guestRequests.filter((r) => r.status === 'accepted').length} / {MAX_LIVE_GUESTS} live
+                  {guestRequests.filter((r) => ['accepted', 'active'].includes(r.status)).length} / {MAX_LIVE_GUESTS} live
                 </span>
               )}
             </h3>
@@ -1847,7 +1860,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
                   <button
                     type="button"
                     onClick={() => void handleAcceptGuest(req.id)}
-                    disabled={guestRequests.filter((r) => r.status === 'accepted').length >= MAX_LIVE_GUESTS}
+                    disabled={guestRequests.filter((r) => ['accepted', 'active'].includes(r.status)).length >= MAX_LIVE_GUESTS}
                     className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     Accept
@@ -1864,7 +1877,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
             ))}
 
             {/* Active/approved guests */}
-            {guestRequests.filter((r) => r.status === 'accepted').map((req) => (
+            {guestRequests.filter((r) => ['accepted', 'active'].includes(r.status)).map((req) => (
               <div key={req.id} className="space-y-2">
                 <div className="flex items-center gap-2 rounded-lg bg-white border border-emerald-200 px-3 py-2 shadow-sm">
                   {isSafeViewerAvatar(req.viewerAvatar) ? (
@@ -1880,7 +1893,9 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
                   )}
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold text-slate-800 truncate">{req.guestName ?? 'Guest'}</p>
-                    <p className="text-[10px] text-emerald-600 font-medium">🟢 Accepted</p>
+                    <p className="text-[10px] text-emerald-600 font-medium">
+                      {req.status === 'active' ? '🟢 Live on video' : '⏳ Accepted — connecting…'}
+                    </p>
                     {req.viewerId && (
                       <p className="text-[10px] text-slate-400 truncate">ID: {req.viewerId}</p>
                     )}
