@@ -81,6 +81,15 @@ function isSafeViewerAvatar(value: string | null | undefined) {
   }
 }
 
+function getPayloadSaleId(payload: {
+  saleId?: string;
+  liveSaleId?: string;
+  liveId?: string;
+  streamId?: string;
+} | null | undefined) {
+  return payload?.saleId ?? payload?.liveSaleId ?? payload?.liveId ?? payload?.streamId ?? null;
+}
+
 export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLiveSessionId }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const expandedVideoRef = useRef<HTMLVideoElement>(null);
@@ -685,7 +694,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
             totalLikes?: number;
             reactionId?: string;
           } | null;
-          const payloadSaleId = payload?.saleId ?? payload?.liveSaleId ?? payload?.liveId ?? payload?.streamId ?? null;
+          const payloadSaleId = getPayloadSaleId(payload);
           if (payloadSaleId && payloadSaleId !== saleId) {
             console.warn('[GarageSaleLivePanel] Ignoring live_likes_update for different sale', {
               operation: 'seller.subscription.likes',
@@ -737,7 +746,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
             liveSessionId?: string | null;
             message?: SellerChatMessage;
           } | null;
-          const payloadSaleId = payload?.saleId ?? payload?.liveSaleId ?? payload?.liveId ?? payload?.streamId ?? null;
+          const payloadSaleId = getPayloadSaleId(payload);
           if (payloadSaleId && payloadSaleId !== saleId) {
             console.warn('[GarageSaleLivePanel] Ignoring live_message_sent for different sale', {
               operation: 'seller.subscription.chat',

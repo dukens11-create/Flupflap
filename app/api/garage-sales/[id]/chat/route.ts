@@ -172,7 +172,7 @@ export async function POST(req: Request, { params }: Params) {
   });
 
   try {
-    const createMessage = async (includeSellerId: boolean) => prisma.garageSaleChat.create({
+    const createChatMessage = async (includeSellerId: boolean) => prisma.garageSaleChat.create({
       data: {
         saleId: id,
         userId,
@@ -186,7 +186,7 @@ export async function POST(req: Request, { params }: Params) {
 
     let msg;
     try {
-      msg = await createMessage(true);
+      msg = await createChatMessage(true);
     } catch (chatInsertError) {
       if (!isMissingSellerIdColumnError(chatInsertError)) throw chatInsertError;
       console.warn('[garage-sale-chat] retrying chat write without sellerId due to schema drift', {
@@ -196,7 +196,7 @@ export async function POST(req: Request, { params }: Params) {
         prismaCode: getPrismaErrorCode(chatInsertError),
         timestamp: new Date().toISOString(),
       });
-      msg = await createMessage(false);
+      msg = await createChatMessage(false);
     }
 
     let signalEmitted = true;

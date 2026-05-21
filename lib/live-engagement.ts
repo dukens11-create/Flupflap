@@ -55,7 +55,7 @@ export function resolveLiveEngagementContext(
     receivedRoomId,
     receivedLiveSessionId,
     receivedCanonicalSaleId,
-    saleMatches: receivedCanonicalSaleId == null || receivedCanonicalSaleId === saleId,
+    saleMatches: receivedCanonicalSaleId === null || receivedCanonicalSaleId === saleId,
     roomMatches: receivedRoomId == null || receivedRoomId === roomId,
     liveSessionMatches: receivedLiveSessionId == null || receivedLiveSessionId === liveSessionId,
   };
