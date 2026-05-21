@@ -3,6 +3,7 @@ import { useRef, useState, useCallback, useEffect } from 'react';
 import { Video, VideoOff, Mic, MicOff, Radio, AlertTriangle, Eye, RefreshCcw, MessageCircle, Heart, Trash2 } from 'lucide-react';
 import { RTC_CONFIG, HAS_TURN_CONFIG } from '@/lib/rtc-config';
 import { getIceCandidateType } from '@/lib/rtc-diagnostics';
+import { LIVE_SIGNAL_EVENTS, LIVE_SIGNAL_KINDS, LIVE_SIGNAL_ROLES, getLiveRoomId, getLiveSessionId } from '@/lib/live-signaling';
 
 interface Props {
   saleId: string;
@@ -29,6 +30,10 @@ const MOBILE_CAMERA_LOG_PREFIX = '[GarageSaleLivePanel][mobile-camera]';
 const MEDIA_READY_TIMEOUT_MS = 1500;
 // Retry once shortly after the first play() rejection for iOS/Safari startup timing quirks.
 const PLAYBACK_RETRY_DELAY_MS = 120;
+const SELLER_RECONNECT_MAX_ATTEMPTS = 3;
+const SELLER_RECONNECT_STEP_DELAY_MS = 1200;
+const SELLER_RECONNECT_MAX_DELAY_MS = 8000;
+const SELLER_RECONNECT_JITTER_MS = 250;
 
 type CameraStatus = 'idle' | 'connecting' | 'ready' | 'awaitingInteraction' | 'blocked' | 'denied' | 'unsupported';
 
@@ -68,8 +73,17 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   // ICE candidates received before the remote answer is applied are buffered here
   // and drained once setRemoteDescription(answer) completes.
   const pendingIceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
+  const reconnectRetryTimeoutRef = useRef<number | null>(null);
+  const reconnectAttemptRef = useRef(0);
+  const liveRoomIdRef = useRef<string>(getLiveRoomId(saleId));
+  const liveSessionIdRef = useRef<string | null>(null);
+  const lastLoggedRoomRef = useRef<string | null>(null);
+  const lastLoggedSessionRef = useRef<string | null>(null);
 
   const [isLive, setIsLive] = useState(initialIsLive);
+  const [sellerPublished, setSellerPublished] = useState(false);
+  const [streamReadyCount, setStreamReadyCount] = useState(0);
+  const [subscriberPathReady, setSubscriberPathReady] = useState(false);
   const [camOn, setCamOn] = useState(false);
   const [previewReady, setPreviewReady] = useState(false);
   const [micOn, setMicOn] = useState(true);
@@ -181,6 +195,33 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     peerRef.current = null;
   }, []);
 
+  const clearReconnectRetryTimeout = useCallback(() => {
+    if (reconnectRetryTimeoutRef.current != null) {
+      clearTimeout(reconnectRetryTimeoutRef.current);
+      reconnectRetryTimeoutRef.current = null;
+    }
+  }, []);
+
+  const resetReconnectState = useCallback(() => {
+    reconnectAttemptRef.current = 0;
+    clearReconnectRetryTimeout();
+  }, [clearReconnectRetryTimeout]);
+
+  const logSellerRoomDetails = useCallback((roomId: string, liveSessionId: string | null, source: string) => {
+    if (roomId !== lastLoggedRoomRef.current) {
+      console.info('[GarageSaleLivePanel] SELLER ROOM ID', roomId);
+      lastLoggedRoomRef.current = roomId;
+    }
+    if (liveSessionId !== lastLoggedSessionRef.current) {
+      console.info('[GarageSaleLivePanel] SELLER LIVE SESSION ID', liveSessionId ?? 'none');
+      lastLoggedSessionRef.current = liveSessionId;
+    }
+    logLiveDebug(LIVE_SIGNAL_EVENTS.BROADCASTER_JOIN, { source, roomId, liveSessionId });
+    if (roomId !== getLiveRoomId(saleId)) {
+      console.warn('[GarageSaleLivePanel] ROOM MISMATCH', { sellerRoomId: roomId, expectedRoomId: getLiveRoomId(saleId) });
+    }
+  }, [logLiveDebug, saleId]);
+
   const postSignal = useCallback(async (
     kind: 'OFFER' | 'ICE',
     payload: Record<string, unknown>,
@@ -190,7 +231,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       const res = await fetch(`/api/garage-sales/${saleId}/live/signaling`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: 'SELLER', kind, payload }),
+        body: JSON.stringify({ role: LIVE_SIGNAL_ROLES.SELLER, kind, payload }),
       });
       if (res.ok) return true;
 
@@ -227,23 +268,41 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
 
       const data = await res.json() as {
         isLive: boolean;
+        roomId?: string;
+        liveSessionId?: string | null;
         viewerCount?: number;
+        streamReadyCount?: number;
         signals: Array<{ kind: string; payload: unknown; createdAt: string }>;
       };
 
+      if (typeof data.roomId === 'string') {
+        liveRoomIdRef.current = data.roomId;
+      }
+      if (typeof data.liveSessionId === 'string' || data.liveSessionId === null) {
+        liveSessionIdRef.current = data.liveSessionId ?? null;
+      }
+      logSellerRoomDetails(liveRoomIdRef.current, liveSessionIdRef.current, 'poll');
+
       if (!data.isLive) {
         setIsLive(false);
+        setSellerPublished(false);
+        setStreamReadyCount(0);
+        setSubscriberPathReady(false);
         setViewerCount(0);
         stopSignalPolling();
         return;
       }
 
       setViewerCount(data.viewerCount ?? 0);
+      setStreamReadyCount(data.streamReadyCount ?? 0);
+      if ((data.streamReadyCount ?? 0) > 0) {
+        setSubscriberPathReady(true);
+      }
 
       for (const signal of data.signals) {
         signalCursorRef.current = signal.createdAt;
 
-        if (signal.kind === 'ANSWER' && !hasRemoteAnswerRef.current) {
+        if (signal.kind === LIVE_SIGNAL_KINDS.ANSWER && !hasRemoteAnswerRef.current) {
           logLiveDebug('signal-answer', { createdAt: signal.createdAt });
           const payload = signal.payload as { type?: string; sdp?: string } | null;
           if (!payload) continue;
@@ -252,6 +311,8 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
 
           await peerRef.current.setRemoteDescription({ type, sdp: payload.sdp });
           hasRemoteAnswerRef.current = true;
+          setSubscriberPathReady(true);
+          logLiveDebug(LIVE_SIGNAL_EVENTS.ANSWER, { createdAt: signal.createdAt });
 
           // Drain ICE candidates that arrived before the answer was applied.
           for (const candidate of pendingIceCandidatesRef.current) {
@@ -265,7 +326,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
           pendingIceCandidatesRef.current = [];
         }
 
-        if (signal.kind === 'ICE') {
+        if (signal.kind === LIVE_SIGNAL_KINDS.ICE) {
           const payload = signal.payload as { candidate?: RTCIceCandidateInit } | null;
           if (!payload?.candidate) continue;
           const candidateType = getIceCandidateType(payload.candidate.candidate);
@@ -284,11 +345,29 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
             // Ignore stale candidates from a previous peer connection
           }
         }
+
+        if (signal.kind === LIVE_SIGNAL_KINDS.STREAM_READY) {
+          const payload = signal.payload as { roomId?: string } | null;
+          if (payload?.roomId) {
+            console.info('[GarageSaleLivePanel] VIEWER ROOM ID', payload.roomId);
+            if (payload.roomId !== liveRoomIdRef.current) {
+              console.warn('[GarageSaleLivePanel] ROOM MISMATCH', {
+                sellerRoomId: liveRoomIdRef.current,
+                viewerRoomId: payload.roomId,
+              });
+            }
+          }
+          setSubscriberPathReady(true);
+          logLiveDebug(LIVE_SIGNAL_EVENTS.STREAM_READY, {
+            createdAt: signal.createdAt,
+            payload: signal.payload,
+          });
+        }
       }
     } catch {
       console.warn('[GarageSaleLivePanel] Network error while polling seller signals');
     }
-  }, [logLiveDebug, saleId, stopSignalPolling]);
+  }, [logLiveDebug, logSellerRoomDetails, saleId, stopSignalPolling]);
 
   const startSignalPolling = useCallback(() => {
     stopSignalPolling();
@@ -322,6 +401,9 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
 
     signalCursorRef.current = null;
     closePeerConnection();
+    setSellerPublished(false);
+    setSubscriberPathReady(false);
+    setStreamReadyCount(0);
 
     const pc = new RTCPeerConnection(RTC_CONFIG);
     peerRef.current = pc;
@@ -345,7 +427,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       if (!event.candidate) return;
       const candidateType = getIceCandidateType(event.candidate.candidate);
       logPeerStates('local-ice-candidate', { candidateType });
-      void postSignal('ICE', { candidate: event.candidate.toJSON() });
+      void postSignal(LIVE_SIGNAL_KINDS.ICE, { candidate: event.candidate.toJSON() });
     };
 
     pc.onconnectionstatechange = () => {
@@ -353,6 +435,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       if (pc.connectionState === 'connected') {
         setError(null);
         setLiveConnectionWarning(null);
+        resetReconnectState();
         if (reconnectTimeoutRef.current) {
           clearTimeout(reconnectTimeoutRef.current);
           reconnectTimeoutRef.current = null;
@@ -360,37 +443,66 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       }
 
       if (pc.connectionState === 'disconnected') {
-        // Give ICE 5 seconds to self-recover before re-offering
+        // Give ICE 5 seconds to self-recover before scheduling a bounded reconnect.
         if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
         reconnectTimeoutRef.current = window.setTimeout(() => {
           reconnectTimeoutRef.current = null;
           if (!liveRef.current || peerRef.current !== pc) return;
-          void (async () => {
-            try {
-              await createAndSendOfferRef.current?.();
-            } catch {
-              // If re-offer fails, restart polling so buyer signals are not lost
-              startSignalPollingRef.current?.();
-            }
-          })();
+          const attempt = reconnectAttemptRef.current + 1;
+          reconnectAttemptRef.current = attempt;
+          if (attempt > SELLER_RECONNECT_MAX_ATTEMPTS) {
+            setLiveConnectionWarning('Connection lost. Could not reconnect the live stream.');
+            return;
+          }
+          const retryDelay = Math.min(
+            SELLER_RECONNECT_MAX_DELAY_MS,
+            SELLER_RECONNECT_STEP_DELAY_MS * (2 ** (attempt - 1)),
+          ) + Math.floor(Math.random() * SELLER_RECONNECT_JITTER_MS);
+          clearReconnectRetryTimeout();
+          reconnectRetryTimeoutRef.current = window.setTimeout(() => {
+            reconnectRetryTimeoutRef.current = null;
+            if (!liveRef.current || peerRef.current !== pc) return;
+            closePeerConnection();
+            signalCursorRef.current = null;
+            logLiveDebug('seller-reconnect', { reason: 'peer-disconnected', attempt, retryDelay });
+            void (async () => {
+              try {
+                await createAndSendOfferRef.current?.();
+              } catch {
+                startSignalPollingRef.current?.();
+              }
+            })();
+          }, retryDelay);
         }, 5000);
       }
 
       if (pc.connectionState === 'failed') {
         setLiveConnectionWarning('Connection lost. Attempting to reconnect…');
-        if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
-        reconnectTimeoutRef.current = window.setTimeout(() => {
-          reconnectTimeoutRef.current = null;
+        const attempt = reconnectAttemptRef.current + 1;
+        reconnectAttemptRef.current = attempt;
+        if (attempt > SELLER_RECONNECT_MAX_ATTEMPTS) {
+          setLiveConnectionWarning('Connection lost. Could not reconnect the live stream.');
+          return;
+        }
+        const retryDelay = Math.min(
+          SELLER_RECONNECT_MAX_DELAY_MS,
+          SELLER_RECONNECT_STEP_DELAY_MS * (2 ** (attempt - 1)),
+        ) + Math.floor(Math.random() * SELLER_RECONNECT_JITTER_MS);
+        clearReconnectRetryTimeout();
+        reconnectRetryTimeoutRef.current = window.setTimeout(() => {
+          reconnectRetryTimeoutRef.current = null;
           if (!liveRef.current || peerRef.current !== pc) return;
+          closePeerConnection();
+          signalCursorRef.current = null;
+          logLiveDebug('seller-reconnect', { reason: 'peer-failed', attempt, retryDelay });
           void (async () => {
             try {
               await createAndSendOfferRef.current?.();
             } catch {
-              // If re-offer fails, restart polling so buyer signals are not lost
               startSignalPollingRef.current?.();
             }
           })();
-        }, 2000);
+        }, retryDelay);
       }
     };
 
@@ -407,12 +519,20 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     };
 
     const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
     logLiveDebug('offer-created', { hasSdp: Boolean(offer.sdp) });
-    await postSignal('OFFER', { type: offer.type, sdp: offer.sdp }, { critical: true });
+    await pc.setLocalDescription(offer);
+    logLiveDebug('offer-local-description-set', { type: offer.type });
+    await postSignal(LIVE_SIGNAL_KINDS.OFFER, {
+      type: offer.type,
+      sdp: offer.sdp,
+      roomId: liveRoomIdRef.current,
+      liveSessionId: liveSessionIdRef.current,
+    }, { critical: true });
+    logLiveDebug(LIVE_SIGNAL_EVENTS.OFFER, { roomId: liveRoomIdRef.current, liveSessionId: liveSessionIdRef.current });
+    setSellerPublished(true);
 
     startSignalPolling();
-  }, [closePeerConnection, logLiveDebug, postSignal, startSignalPolling]);
+  }, [clearReconnectRetryTimeout, closePeerConnection, logLiveDebug, postSignal, resetReconnectState, startSignalPolling]);
 
   // Keep the ref current so connection-state handlers can always call the latest version.
   useEffect(() => {
@@ -561,6 +681,16 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       }
       setCamOn(true);
       setCurrentCamera(nextFacingMode === 'user' ? 'front' : 'back');
+      logLiveDebug('local-stream-created', {
+        roomId: liveRoomIdRef.current,
+        tracks: stream.getTracks().map((track) => ({
+          id: track.id,
+          kind: track.kind,
+          enabled: track.enabled,
+          readyState: track.readyState,
+          muted: 'muted' in track ? track.muted : undefined,
+        })),
+      });
       const previewStarted = await ensurePreviewPlayback();
       if (!previewStarted) {
         logMobileCameraIssue('stream initialization failure', { reason: 'preview playback blocked' });
@@ -759,7 +889,20 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         const data = await res.json().catch(() => ({}));
         throw new Error((data as { error?: string }).error ?? 'Failed to start live');
       }
+      const liveData = await res.json() as { liveStartedAt?: string | null };
       setIsLive(true);
+      setSellerPublished(false);
+      setStreamReadyCount(0);
+      setSubscriberPathReady(false);
+      liveSessionIdRef.current = getLiveSessionId(saleId, liveData.liveStartedAt ? new Date(liveData.liveStartedAt) : null);
+      logSellerRoomDetails(liveRoomIdRef.current, liveSessionIdRef.current, 'start-live');
+      logLiveDebug('seller-publish-start', {
+        roomId: liveRoomIdRef.current,
+        liveSessionId: liveSessionIdRef.current,
+        hasStream: Boolean(streamRef.current),
+        videoTracks: streamRef.current?.getVideoTracks().length ?? 0,
+        audioTracks: streamRef.current?.getAudioTracks().length ?? 0,
+      });
       // Keep liveRef in sync immediately so the pollSignals closure running
       // inside the setInterval (started by createAndSendOffer below) sees the
       // correct live state before the React re-render has a chance to flush.
@@ -786,6 +929,10 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         throw new Error((data as { error?: string }).error ?? 'Failed to end live');
       }
       setIsLive(false);
+      setSellerPublished(false);
+      setSubscriberPathReady(false);
+      setStreamReadyCount(0);
+      resetReconnectState();
       setViewerCount(0);
       setLiveConnectionWarning(null);
       stopSignalPolling();
@@ -866,6 +1013,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         clearTimeout(reconnectTimeoutRef.current);
         reconnectTimeoutRef.current = null;
       }
+      clearReconnectRetryTimeout();
       endLiveOnPageLeave();
       stopSignalPolling();
       stopChatPolling();
@@ -873,7 +1021,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       closePeerConnection();
       streamRef.current?.getTracks().forEach((t) => t.stop());
     };
-  }, [closePeerConnection, endLiveOnPageLeave, stopChatPolling, stopReactionPolling, stopSignalPolling]);
+  }, [clearReconnectRetryTimeout, closePeerConnection, endLiveOnPageLeave, stopChatPolling, stopReactionPolling, stopSignalPolling]);
 
   // Start/stop chat + reaction polling when live state changes
   useEffect(() => {
@@ -977,6 +1125,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   const videoPreviewClassName = camOn
     ? `h-full w-full rounded-2xl object-cover transition-opacity duration-500 ${previewReady ? 'opacity-100' : 'opacity-0'}`
     : 'hidden';
+  const sellerLiveReady = isLive && sellerPublished && (subscriberPathReady || streamReadyCount > 0);
 
   return (
     <div className="card space-y-4 p-4 sm:space-y-5 sm:p-5 transition-all duration-300">
@@ -1003,11 +1152,11 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
           </span>
           {isLive && (
             <>
-              <span className="inline-flex items-center gap-1 rounded-full bg-red-500 px-3 py-1 text-xs font-bold text-white animate-pulse">
-                🔴 LIVE NOW
+              <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold text-white ${sellerLiveReady ? 'animate-pulse bg-red-500' : 'bg-amber-500'}`}>
+                {sellerLiveReady ? '🔴 LIVE NOW' : '🟠 Starting live…'}
               </span>
               <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                <Eye size={12} /> {viewerCount} watching
+                <Eye size={12} /> {viewerCount} watching • {streamReadyCount} ready
               </span>
             </>
           )}
@@ -1028,7 +1177,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
             <p className="text-sm font-medium">{CAMERA_PREVIEW_PLACEHOLDER}</p>
           </div>
         )}
-        {isLive && (
+        {sellerLiveReady && (
           <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-red-500 px-2.5 py-1 text-[11px] font-bold text-white animate-pulse shadow-lg" aria-live="polite">
             <span aria-hidden="true" className="inline-flex items-center gap-1.5">
               <span>🔴</span> LIVE <Eye size={11} /> {viewerCount}
