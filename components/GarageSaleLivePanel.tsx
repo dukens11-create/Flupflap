@@ -804,9 +804,9 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     if (isLive) {
       chatLastSeenRef.current = null;
       void fetchSellerChat();
-      chatPollRef.current = setInterval(() => { void fetchSellerChat(); }, 5000);
+      chatPollRef.current = setInterval(fetchSellerChat, 5000);
       void fetchReactionCount();
-      reactionPollRef.current = setInterval(() => { void fetchReactionCount(); }, 10000);
+      reactionPollRef.current = setInterval(fetchReactionCount, 10000);
     } else {
       stopChatPolling();
       stopReactionPolling();

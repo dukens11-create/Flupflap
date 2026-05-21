@@ -75,7 +75,8 @@ export async function POST(req: Request, { params }: Params) {
   const reactionType = type === 'heart' ? 'heart' : 'like';
 
   const userId = session?.user?.id ?? null;
-  const resolvedGuestId = !userId && typeof guestId === 'string' && guestId.trim() ? guestId.trim().slice(0, 64) : null;
+  const trimmedGuestId = typeof guestId === 'string' ? guestId.trim() : '';
+  const resolvedGuestId = !userId && trimmedGuestId ? trimmedGuestId.slice(0, 64) : null;
 
   const reaction = await prisma.garageSaleReaction.create({
     data: {

@@ -58,25 +58,25 @@ test('filterVisibleMessages: empty input returns empty output', () => {
 
 // ── Seller moderation — hide message ─────────────────────────────────────────
 
-function hideMessage(messages: ChatMessage[], msgId: string): ChatMessage[] {
+function removeMessageFromList(messages: ChatMessage[], msgId: string): ChatMessage[] {
   return messages.filter((m) => m.id !== msgId);
 }
 
-test('hideMessage: removes the target message from the local list', () => {
+test('removeMessageFromList: removes the target message from the local list', () => {
   const messages: ChatMessage[] = [
     { id: 'm1', userId: null, guestName: 'Alice', message: 'Hello', createdAt: '2024-01-01T00:00:00Z', isHidden: false },
     { id: 'm2', userId: null, guestName: 'Bob', message: 'Hi', createdAt: '2024-01-01T00:01:00Z', isHidden: false },
   ];
-  const after = hideMessage(messages, 'm1');
+  const after = removeMessageFromList(messages, 'm1');
   assert.equal(after.length, 1);
   assert.equal(after[0].id, 'm2');
 });
 
-test('hideMessage: no-op when message id does not exist', () => {
+test('removeMessageFromList: no-op when message id does not exist', () => {
   const messages: ChatMessage[] = [
     { id: 'm1', userId: null, guestName: 'Alice', message: 'Hello', createdAt: '2024-01-01T00:00:00Z', isHidden: false },
   ];
-  const after = hideMessage(messages, 'non-existent');
+  const after = removeMessageFromList(messages, 'non-existent');
   assert.equal(after.length, 1);
 });
 
@@ -96,7 +96,11 @@ function countReactions(reactions: Reaction[]): number {
 }
 
 function getRecentReactions(reactions: Reaction[], n = 10): Reaction[] {
-  return [...reactions].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, n);
+  return [...reactions].sort((a, b) => {
+    const ta = new Date(a.createdAt).getTime();
+    const tb = new Date(b.createdAt).getTime();
+    return tb - ta;
+  }).slice(0, n);
 }
 
 test('countReactions: returns 0 for empty list', () => {
