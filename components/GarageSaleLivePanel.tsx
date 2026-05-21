@@ -1300,33 +1300,31 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
           <Radio size={14} /> {loading ? 'Starting…' : 'Start Live'}
         </button>
       ) : (
-        <>
-          <div className="flex flex-col gap-2">
-            <button
-              type="button"
-              onClick={() => void restartLiveConnection()}
-              disabled={loading || isRestartingLive}
-              className="w-full flex items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-amber-600 disabled:opacity-50"
-            >
-              <RefreshCcw size={14} /> {isRestartingLive ? 'Restarting…' : 'Restart Live Connection'}
-            </button>
-            <button
-              type="button"
-              onClick={handleEndLive}
-              disabled={loading || isRestartingLive}
-              className="w-full flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-50"
-            >
-              <span className="inline-flex h-2 w-2 animate-pulse rounded-full bg-white" />
-              <VideoOff size={14} /> {loading ? 'Ending…' : 'End Live'}
-            </button>
-          </div>
+        <div className="flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={() => void restartLiveConnection()}
+            disabled={loading || isRestartingLive}
+            className="w-full flex items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-amber-600 disabled:opacity-50"
+          >
+            <RefreshCcw size={14} /> {isRestartingLive ? 'Restarting…' : 'Restart Live Connection'}
+          </button>
+          <button
+            type="button"
+            onClick={handleEndLive}
+            disabled={loading || isRestartingLive}
+            className="w-full flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+          >
+            <span className="inline-flex h-2 w-2 animate-pulse rounded-full bg-white" />
+            <VideoOff size={14} /> {loading ? 'Ending…' : 'End Live'}
+          </button>
+        </div>
+      )}
 
-          {liveConnectionWarning && (
-            <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
-              {liveConnectionWarning}
-            </p>
-          )}
-        </>
+      {liveConnectionWarning && (
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+          {liveConnectionWarning}
+        </p>
       )}
 
       <p className="text-center text-[11px] text-slate-400">
