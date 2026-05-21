@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { isGarageSalePubliclyVisible } from '@/lib/garage-sale-visibility';
-import { MAX_LIVE_GUESTS, LIVE_SIGNAL_EVENTS } from '@/lib/live-signaling';
+import { MAX_LIVE_GUESTS, LIVE_SIGNAL_EVENTS, GUEST_ID_PATTERN } from '@/lib/live-signaling';
 
 export const dynamic = 'force-dynamic';
 
@@ -133,7 +133,6 @@ export async function PATCH(req: Request, { params }: Params) {
   // Buyer action: end
   if (action === 'end') {
     // Validate guestId matches the request (no auth required — use guestId as ownership proof)
-    const GUEST_ID_PATTERN = /^[a-zA-Z0-9_\-\.]+$/;
     const guestIdStr = typeof guestId === 'string' ? guestId : '';
     if (!guestIdStr || !GUEST_ID_PATTERN.test(guestIdStr) || guestRequest.guestId !== guestIdStr) {
       return NextResponse.json({ error: 'Invalid guestId' }, { status: 403 });

@@ -4,13 +4,12 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { isGarageSalePubliclyVisible } from '@/lib/garage-sale-visibility';
 import { applyRateLimitAsync } from '@/lib/security';
-import { MAX_LIVE_GUESTS, LIVE_SIGNAL_EVENTS } from '@/lib/live-signaling';
+import { MAX_LIVE_GUESTS, LIVE_SIGNAL_EVENTS, GUEST_ID_PATTERN } from '@/lib/live-signaling';
 
 export const dynamic = 'force-dynamic';
 
 type Params = { params: Promise<{ id: string }> };
 
-const GUEST_ID_PATTERN = /^[a-zA-Z0-9_\-\.]+$/;
 const ACTIVE_STATUSES = ['APPROVED', 'ACTIVE'];
 
 function isValidGuestId(value: unknown): value is string {

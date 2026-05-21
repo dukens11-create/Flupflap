@@ -36,6 +36,9 @@ export const LIVE_SIGNAL_EVENTS = {
 /** Maximum number of simultaneous video guests the seller allows. */
 export const MAX_LIVE_GUESTS = 4;
 
+/** Pattern for valid guest ID values (stable anonymous identifier from the buyer's browser). */
+export const GUEST_ID_PATTERN = /^[a-zA-Z0-9_\-\.]+$/;
+
 export type LiveSignalRole = (typeof LIVE_SIGNAL_ROLES)[keyof typeof LIVE_SIGNAL_ROLES];
 export type LiveSignalKind = (typeof LIVE_SIGNAL_KINDS)[keyof typeof LIVE_SIGNAL_KINDS];
 
