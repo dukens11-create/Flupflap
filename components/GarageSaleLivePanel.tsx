@@ -206,7 +206,12 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   }, [saleId]);
 
   const pollSignals = useCallback(async () => {
-    if (!isLive) return;
+    // Read live state from the ref so this callback works correctly even when
+    // captured in a setInterval closure before the React state update flushes.
+    // Without this, the interval started by createAndSendOffer() would always
+    // see isLive=false and return early, preventing the seller from ever
+    // processing the buyer's ANSWER signal.
+    if (!liveRef.current) return;
 
     try {
       const params = new URLSearchParams({ role: 'SELLER' });
@@ -279,7 +284,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
     } catch {
       console.warn('[GarageSaleLivePanel] Network error while polling seller signals');
     }
-  }, [isLive, logLiveDebug, saleId, stopSignalPolling]);
+  }, [logLiveDebug, saleId, stopSignalPolling]);
 
   const startSignalPolling = useCallback(() => {
     stopSignalPolling();
@@ -730,6 +735,10 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         throw new Error((data as { error?: string }).error ?? 'Failed to start live');
       }
       setIsLive(true);
+      // Keep liveRef in sync immediately so the pollSignals closure running
+      // inside the setInterval (started by createAndSendOffer below) sees the
+      // correct live state before the React re-render has a chance to flush.
+      liveRef.current = true;
       await createAndSendOffer();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start live session');
