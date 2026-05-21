@@ -23,6 +23,7 @@ import {
 } from '@/lib/smart-search';
 
 import { isSchemaNotInitializedError } from '@/lib/db-errors';
+import { supplierPublicVisibilityWhere } from '@/lib/wholesaler';
 
 export const dynamic = 'force-dynamic';
 
@@ -209,6 +210,7 @@ function productMatchesSearch(product: SearchableProduct, query?: string, useFuz
 
 async function ProductGrid({ sp, t }: { sp: SearchParams; t: (key: string, vars?: Record<string, string | number>) => string }) {
   const where: any = { status: { in: ['APPROVED', 'ACTIVE'] }, inventory: { gt: 0 } };
+  where.AND = [supplierPublicVisibilityWhere()];
 
   // Category filtering: prefer structured category IDs and keep legacy string fallback
   // so older listings (without categoryId/subcategoryId) are still discoverable.

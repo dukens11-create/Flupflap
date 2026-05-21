@@ -29,6 +29,12 @@ export async function GET(
           pickupState: true,
           status: true,
           inventory: true,
+          sourceSupplierProduct: {
+            select: {
+              quantity: true,
+              supplier: { select: { status: true } },
+            },
+          },
         },
       },
     },
@@ -50,7 +56,9 @@ export async function GET(
     return NextResponse.json({ error: validated.message }, { status: 400 });
   }
 
-  if (!offer?.product || !['APPROVED', 'ACTIVE'].includes(offer.product.status) || offer.product.inventory <= 0) {
+  const sourceSupplier = offer?.product?.sourceSupplierProduct;
+  const supplierEligible = !sourceSupplier || (sourceSupplier.quantity > 0 && sourceSupplier.supplier.status === 'APPROVED');
+  if (!offer?.product || !['APPROVED', 'ACTIVE'].includes(offer.product.status) || offer.product.inventory <= 0 || !supplierEligible) {
     return NextResponse.json(
       { error: 'This accepted offer can no longer be checked out because the listing is unavailable.' },
       { status: 400 },

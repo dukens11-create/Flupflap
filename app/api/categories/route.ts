@@ -3,6 +3,7 @@ import { DEFAULT_CATEGORY_TREE, type DefaultCategoryNode } from '@/lib/default-c
 import { normalizePerfumeAttributeSchema } from '@/lib/category-attribute-schema';
 import { isDatabaseConfigured, prisma } from '@/lib/db';
 import { ensureFashionCategoryHierarchy } from '@/lib/ensure-fashion-category-hierarchy';
+import { supplierPublicVisibilityWhere } from '@/lib/wholesaler';
 
 export const dynamic = 'force-dynamic';
 
@@ -79,7 +80,11 @@ export async function GET() {
         select: { id: true, name: true, slug: true, aliases: true, parentId: true, level: true, icon: true, sortOrder: true, attributeSchema: true },
       }),
       prisma.product.findMany({
-        where: { status: { in: ['APPROVED', 'ACTIVE'] }, inventory: { gt: 0 } },
+        where: {
+          status: { in: ['APPROVED', 'ACTIVE'] },
+          inventory: { gt: 0 },
+          AND: [supplierPublicVisibilityWhere()],
+        },
         select: { categoryId: true, subcategoryId: true },
       }),
     ]);

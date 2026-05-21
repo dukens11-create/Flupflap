@@ -60,7 +60,14 @@ export async function PATCH(
 
     const updated = await prisma.product.update({
       where: { id },
-      data: { inventory },
+      data: {
+        inventory,
+        ...(inventory <= 0
+          ? { status: 'HIDDEN', delistedAt: new Date() }
+          : existing.status === 'HIDDEN'
+            ? { status: 'APPROVED', delistedAt: null }
+            : {}),
+      },
       select: { id: true, inventory: true, status: true },
     });
 

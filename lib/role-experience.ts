@@ -66,6 +66,8 @@ const sellerNav: RoleNavItem[] = [
   { label: 'Orders to Ship', href: '/seller/orders-to-ship' },
   { label: 'Refunds', href: '/seller/refunds' },
   { label: 'Payouts', href: '/seller/payouts' },
+  { label: 'Wholesaler Catalog', href: '/seller/wholesaler', matchPrefixes: ['/seller/wholesaler'] },
+  { label: 'Supplier Dashboard', href: '/supplier', matchPrefixes: ['/supplier'] },
   { label: 'Verification Status', href: '/seller/verification-status' },
 ];
 
@@ -81,6 +83,7 @@ const adminNav: RoleNavItem[] = [
   { label: 'Reports', href: '/admin/reports' },
   { label: 'Fraud', href: '/admin/fraud' },
   { label: 'Promotions', href: '/admin/promotions' },
+  { label: 'Wholesalers', href: '/admin/wholesalers' },
   { label: 'KYC', href: '/admin/sellers#kyc-verification' },
   { label: 'Settings', href: '/admin#site-settings' },
 ];

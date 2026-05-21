@@ -21,6 +21,46 @@ enum SellerStatus {
   BANNED
 }
 
+enum SupplierStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum SupplierRunStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum SupplierRunType {
+  CSV_IMPORT
+  API_SYNC
+}
+
+enum SupplierSyncTrigger {
+  MANUAL
+  SCHEDULED
+}
+
+enum SupplierRoutingStatus {
+  PENDING
+  ACCEPTED
+  IN_FULFILLMENT
+  FULFILLED
+  CANCELLED
+  FAILED
+}
+
+enum SupplierPayoutStatus {
+  PENDING
+  PAYABLE
+  PAID
+  FAILED
+}
+
 enum KycStatus {
   NOT_SUBMITTED
   PENDING_REVIEW
@@ -269,6 +309,13 @@ model User {
   garageSales                   GarageSale[]  @relation("GarageSaleSeller")
   garageSalePayments            GarageSalePayment[] @relation("GarageSalePaymentSeller")
   orderShipments                OrderShipment[]     @relation("OrderShipmentSeller")
+  supplierProfile               SupplierProfile?
+  approvedSupplierProfiles      SupplierProfile[]   @relation("SupplierProfileApprovedBy")
+  supplierOrderRoutings         SupplierOrderRouting[] @relation("SupplierOrderRoutingSupplier")
+  sellerSupplierOrderRoutings   SupplierOrderRouting[] @relation("SupplierOrderRoutingSeller")
+  buyerSupplierOrderRoutings    SupplierOrderRouting[] @relation("SupplierOrderRoutingBuyer")
+  wholesalerProducts            Product[]           @relation("WholesalerSourceListingSeller")
+  approvedSupplierOrderRoutings SupplierOrderRouting[] @relation("SupplierOrderRoutingApprovedBy")
 }
 
 model SellerOtp {
@@ -367,11 +414,17 @@ model Product {
   packageType       String?         // 'PACKAGE' | 'LETTER' | 'FLAT_RATE_ENVELOPE' etc.
   /// Shipping mode: 'FLAT' uses shippingCents, 'FREE' = no cost, 'CALCULATED' = live rates
   shippingMode      String?         // 'FLAT' | 'FREE' | 'CALCULATED'
+  sourceSupplierProductId String?
+  sourceSupplierProduct SupplierProduct? @relation("SellerSupplierProductListings", fields: [sourceSupplierProductId], references: [id], onDelete: SetNull)
+  wholesalerSupplierId String?
+  wholesalerSupplier   User?        @relation("WholesalerSourceListingSeller", fields: [wholesalerSupplierId], references: [id], onDelete: SetNull)
 
   @@index([status, category, condition])
   @@index([title])
   @@index([categoryId])
   @@index([subcategoryId])
+  @@index([sourceSupplierProductId])
+  @@index([wholesalerSupplierId])
 }
 
 model Address {
@@ -440,6 +493,7 @@ model Order {
   items                 OrderItem[]
   refundRequest         RefundRequest?
   shipments             OrderShipment[]
+  supplierRoutings      SupplierOrderRouting[]
 }
 
 model RefundRequest {
@@ -516,6 +570,172 @@ model OrderItem {
   sellerNetCents     Int     @default(0)
   commissionSource   String  @default("DEFAULT")
   commissionPlanCode String?
+  supplierRoutingItems SupplierOrderRoutingItem[]
+}
+
+model SupplierProfile {
+  id               String         @id @default(cuid())
+  userId            String         @unique
+  user              User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  displayName       String
+  companyName       String?
+  status            SupplierStatus @default(PENDING)
+  statusReason      String?
+  approvedAt        DateTime?
+  approvedById      String?
+  approvedBy        User?          @relation("SupplierProfileApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  supplierProducts  SupplierProduct[]
+  importRuns        SupplierImportRun[]
+  syncRuns          SupplierSyncRun[]
+  operationLogs     SupplierOperationLog[]
+
+  @@index([status])
+}
+
+model SupplierProduct {
+  id                    String         @id @default(cuid())
+  supplierId            String
+  supplier              SupplierProfile @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  sku                   String
+  title                 String
+  description           String
+  wholesalePriceCents   Int
+  retailPriceCents      Int
+  quantity              Int            @default(0)
+  images                String[]       @default([])
+  shippingWeightOz      Float?
+  dimensionLengthIn     Float?
+  dimensionWidthIn      Float?
+  dimensionHeightIn     Float?
+  brand                 String?
+  category              String?
+  isAvailable           Boolean        @default(true)
+  metadata              Json?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+  lastSyncedAt          DateTime?
+  sellerListings        Product[]      @relation("SellerSupplierProductListings")
+  routingItems          SupplierOrderRoutingItem[]
+
+  @@unique([supplierId, sku])
+  @@index([supplierId, isAvailable])
+}
+
+model SupplierImportRun {
+  id             String             @id @default(cuid())
+  supplierId     String
+  supplier       SupplierProfile    @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  status         SupplierRunStatus  @default(PENDING)
+  sourceType     SupplierRunType    @default(CSV_IMPORT)
+  fileName       String?
+  startedAt      DateTime           @default(now())
+  completedAt    DateTime?
+  createdCount   Int                @default(0)
+  updatedCount   Int                @default(0)
+  failedCount    Int                @default(0)
+  totalRows      Int                @default(0)
+  errorMessage   String?
+  rowErrors      Json?
+  operationLogs  SupplierOperationLog[]
+}
+
+model SupplierSyncRun {
+  id             String               @id @default(cuid())
+  supplierId     String
+  supplier       SupplierProfile      @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  provider       String
+  trigger        SupplierSyncTrigger  @default(MANUAL)
+  status         SupplierRunStatus    @default(PENDING)
+  createdAt      DateTime             @default(now())
+  startedAt      DateTime             @default(now())
+  completedAt    DateTime?
+  createdCount   Int                  @default(0)
+  updatedCount   Int                  @default(0)
+  failedCount    Int                  @default(0)
+  errorMessage   String?
+  operationLogs  SupplierOperationLog[]
+
+  @@index([supplierId, createdAt])
+}
+
+model SupplierOperationLog {
+  id            String           @id @default(cuid())
+  supplierId    String
+  supplier      SupplierProfile  @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  importRunId   String?
+  importRun     SupplierImportRun? @relation(fields: [importRunId], references: [id], onDelete: SetNull)
+  syncRunId     String?
+  syncRun       SupplierSyncRun? @relation(fields: [syncRunId], references: [id], onDelete: SetNull)
+  sku           String?
+  rowNumber     Int?
+  errorCode     String
+  errorMessage  String
+  context       Json?
+  createdAt     DateTime         @default(now())
+
+  @@index([supplierId, createdAt])
+  @@index([importRunId])
+  @@index([syncRunId])
+}
+
+model SupplierOrderRouting {
+  id                    String               @id @default(cuid())
+  orderId               String
+  order                 Order                @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  supplierUserId        String
+  supplierUser          User                 @relation("SupplierOrderRoutingSupplier", fields: [supplierUserId], references: [id], onDelete: Cascade)
+  sellerId              String
+  seller                User                 @relation("SupplierOrderRoutingSeller", fields: [sellerId], references: [id], onDelete: Cascade)
+  buyerId               String
+  buyer                 User                 @relation("SupplierOrderRoutingBuyer", fields: [buyerId], references: [id], onDelete: Cascade)
+  status                SupplierRoutingStatus @default(PENDING)
+  approvedById          String?
+  approvedBy            User?                @relation("SupplierOrderRoutingApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  approvedAt            DateTime?
+  fulfilledAt           DateTime?
+  cancelledAt           DateTime?
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  items                 SupplierOrderRoutingItem[]
+  payout                SupplierPayout?
+
+  @@index([orderId])
+  @@index([supplierUserId, status])
+  @@index([sellerId, status])
+}
+
+model SupplierOrderRoutingItem {
+  id               String               @id @default(cuid())
+  routingId        String
+  routing          SupplierOrderRouting @relation(fields: [routingId], references: [id], onDelete: Cascade)
+  supplierProductId String
+  supplierProduct  SupplierProduct      @relation(fields: [supplierProductId], references: [id], onDelete: Cascade)
+  orderItemId      String?
+  orderItem        OrderItem?           @relation(fields: [orderItemId], references: [id], onDelete: SetNull)
+  quantity         Int
+  createdAt        DateTime             @default(now())
+
+  @@index([routingId])
+  @@index([supplierProductId])
+}
+
+model SupplierPayout {
+  id                      String             @id @default(cuid())
+  routingId               String             @unique
+  routing                 SupplierOrderRouting @relation(fields: [routingId], references: [id], onDelete: Cascade)
+  supplierAmountCents     Int
+  platformCommissionCents Int               @default(0)
+  sellerCommissionCents   Int               @default(0)
+  status                  SupplierPayoutStatus @default(PENDING)
+  payableAt               DateTime?
+  paidAt                  DateTime?
+  reference               String?
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
+
+  @@index([status, payableAt])
 }
 
 /// Per-seller shipment/tracking record for an order. Multi-seller orders store
