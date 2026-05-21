@@ -11,6 +11,8 @@ export const dynamic = 'force-dynamic';
 type Params = { params: Promise<{ id: string }> };
 
 const ACTIVE_STATUSES = ['accepted'];
+const MAX_VIEWER_ID_LENGTH = 191;
+const MAX_VIEWER_AVATAR_URL_LENGTH = 500;
 
 function isValidGuestId(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0 && value.length <= 64 && GUEST_ID_PATTERN.test(value);
@@ -23,7 +25,7 @@ function sanitizeViewerAvatar(value: unknown) {
   try {
     const parsed = new URL(trimmed);
     if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return null;
-    return parsed.toString().slice(0, 500);
+    return parsed.toString().slice(0, MAX_VIEWER_AVATAR_URL_LENGTH);
   } catch {
     return null;
   }
@@ -168,7 +170,7 @@ export async function POST(req: Request, { params }: Params) {
   const resolvedViewerAvatar = sanitizeViewerAvatar(viewerAvatar);
   const resolvedViewerId =
     typeof viewerId === 'string' && viewerId.trim().length > 0
-      ? viewerId.trim().slice(0, 191)
+      ? viewerId.trim().slice(0, MAX_VIEWER_ID_LENGTH)
       : (session?.user?.id ?? `guest:${guestId as string}`);
 
   const request = await prisma.garageSaleGuestRequest.create({

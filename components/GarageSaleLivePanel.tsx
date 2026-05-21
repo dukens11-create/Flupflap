@@ -71,6 +71,16 @@ function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(' ');
 }
 
+function isSafeViewerAvatar(value: string | null | undefined) {
+  if (!value) return false;
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
 export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLiveSessionId }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const expandedVideoRef = useRef<HTMLVideoElement>(null);
@@ -1815,9 +1825,9 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
             {/* Pending requests */}
             {guestRequests.filter((r) => r.status === 'pending').map((req) => (
               <div key={req.id} className="flex items-center gap-2 rounded-lg bg-white border border-indigo-100 px-3 py-2 shadow-sm">
-                {req.viewerAvatar ? (
+                {isSafeViewerAvatar(req.viewerAvatar) ? (
                   <img
-                    src={req.viewerAvatar}
+                    src={req.viewerAvatar as string}
                     alt={req.guestName ?? 'Guest avatar'}
                     className="h-7 w-7 shrink-0 rounded-full object-cover"
                   />
@@ -1857,9 +1867,9 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
             {guestRequests.filter((r) => r.status === 'accepted').map((req) => (
               <div key={req.id} className="space-y-2">
                 <div className="flex items-center gap-2 rounded-lg bg-white border border-emerald-200 px-3 py-2 shadow-sm">
-                  {req.viewerAvatar ? (
+                  {isSafeViewerAvatar(req.viewerAvatar) ? (
                     <img
-                      src={req.viewerAvatar}
+                      src={req.viewerAvatar as string}
                       alt={req.guestName ?? 'Guest avatar'}
                       className="h-7 w-7 shrink-0 rounded-full object-cover"
                     />
