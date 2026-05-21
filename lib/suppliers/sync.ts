@@ -10,10 +10,10 @@ type InventorySyncStats = {
 };
 
 function deriveSupplierBackedStatus(inventory: number | null, currentStatus: ProductStatus) {
-  if (inventory === null) return { status: currentStatus, delistedAt: undefined as Date | null | undefined };
-  if (inventory <= 0) return { status: 'SOLD' as ProductStatus, delistedAt: new Date() };
-  if (currentStatus === 'SOLD') return { status: 'APPROVED' as ProductStatus, delistedAt: null };
-  return { status: currentStatus, delistedAt: null };
+  if (inventory === null) return currentStatus;
+  if (inventory <= 0) return 'SOLD';
+  if (currentStatus === 'SOLD') return 'APPROVED';
+  return currentStatus;
 }
 
 async function syncMappedInventory(products: SupplierProductDTO[]): Promise<InventorySyncStats> {
@@ -41,14 +41,20 @@ async function syncMappedInventory(products: SupplierProductDTO[]): Promise<Inve
     });
     if (!local) continue;
 
-    const availability = deriveSupplierBackedStatus(product.inventory, local.status);
+    const status = deriveSupplierBackedStatus(product.inventory, local.status);
+    const updateData: {
+      status: ProductStatus;
+      inventory?: number;
+    } = {
+      status,
+    };
+    if (product.inventory !== null) {
+      updateData.inventory = product.inventory;
+    }
+
     await prisma.product.update({
       where: { id: local.id },
-      data: {
-        inventory: product.inventory ?? undefined,
-        status: availability.status,
-        delistedAt: availability.delistedAt,
-      },
+      data: updateData,
     });
 
     updatedProducts += 1;
