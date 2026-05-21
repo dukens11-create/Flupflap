@@ -7,15 +7,11 @@ import { applyRateLimitAsync } from '@/lib/security';
 
 export const dynamic = 'force-dynamic';
 
-const DEFAULT_GUEST_NAME = 'Guest';
-
 type Params = { params: Promise<{ id: string }> };
 
-/** GET /api/garage-sales/[id]/chat — fetch recent messages (public) */
-export async function GET(req: Request, { params }: Params) {
+/** GET /api/garage-sales/[id]/reactions — get total like count + recent reactions */
+export async function GET(_req: Request, { params }: Params) {
   const { id } = await params;
-  const url = new URL(req.url);
-  const since = url.searchParams.get('since');
 
   const sale = await prisma.garageSale.findUnique({
     where: { id },
@@ -25,21 +21,20 @@ export async function GET(req: Request, { params }: Params) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  const messages = await prisma.garageSaleChat.findMany({
-    where: {
-      saleId: id,
-      isHidden: false,
-      ...(since ? { createdAt: { gt: new Date(since) } } : {}),
-    },
-    orderBy: { createdAt: 'asc' },
-    take: 100,
-    select: { id: true, userId: true, guestName: true, message: true, createdAt: true },
-  });
+  const [totalLikes, recentReactions] = await Promise.all([
+    prisma.garageSaleReaction.count({ where: { saleId: id } }),
+    prisma.garageSaleReaction.findMany({
+      where: { saleId: id },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+      select: { id: true, type: true, createdAt: true },
+    }),
+  ]);
 
-  return NextResponse.json({ messages, isLive: sale.isLive });
+  return NextResponse.json({ totalLikes, recentReactions, isLive: sale.isLive });
 }
 
-/** POST /api/garage-sales/[id]/chat — post a chat message */
+/** POST /api/garage-sales/[id]/reactions — buyer sends a like/heart reaction */
 export async function POST(req: Request, { params }: Params) {
   const { id } = await params;
 
@@ -57,14 +52,14 @@ export async function POST(req: Request, { params }: Params) {
   const session = await getServerSession(authOptions);
   const limit = await applyRateLimitAsync({
     request: req,
-    key: 'garage-sales:chat',
+    key: 'garage-sales:reactions',
     windowMs: 60 * 1000,
-    max: 30,
+    max: 60,
     userId: session?.user?.id,
   });
   if (limit.limited) {
     return NextResponse.json(
-      { error: 'Too many messages. Please wait before sending another.' },
+      { error: 'Too many reactions. Please wait before sending another.' },
       { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } },
     );
   }
@@ -73,33 +68,33 @@ export async function POST(req: Request, { params }: Params) {
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+    body = {};
   }
 
-  const { message, guestName } = body as { message?: string; guestName?: string };
-  if (!message || typeof message !== 'string' || message.trim().length === 0) {
-    return NextResponse.json({ error: 'Message is required' }, { status: 400 });
-  }
-  if (message.trim().length > 500) {
-    return NextResponse.json({ error: 'Message too long (max 500 chars)' }, { status: 400 });
-  }
+  const { type, guestId } = body as { type?: string; guestId?: string };
+  const reactionType = type === 'heart' ? 'heart' : 'like';
 
+  // Only accept guestId values that contain safe characters (alphanumeric, dash, underscore, dot).
+  // This prevents injection of arbitrary strings into the database.
+  const GUEST_ID_PATTERN = /^[a-zA-Z0-9_\-\.]+$/;
   const userId = session?.user?.id ?? null;
-  let resolvedGuestName: string | null = null;
-  if (!userId) {
-    const trimmedName = typeof guestName === 'string' ? guestName.trim() : '';
-    resolvedGuestName = trimmedName ? trimmedName.slice(0, 50) : DEFAULT_GUEST_NAME;
-  }
+  const trimmedGuestId = typeof guestId === 'string' ? guestId.trim() : '';
+  const resolvedGuestId =
+    !userId && trimmedGuestId && GUEST_ID_PATTERN.test(trimmedGuestId)
+      ? trimmedGuestId.slice(0, 64)
+      : null;
 
-  const msg = await prisma.garageSaleChat.create({
+  const reaction = await prisma.garageSaleReaction.create({
     data: {
       saleId: id,
       userId,
-      guestName: resolvedGuestName,
-      message: message.trim(),
+      guestId: resolvedGuestId,
+      type: reactionType,
     },
-    select: { id: true, userId: true, guestName: true, message: true, createdAt: true },
+    select: { id: true, type: true, createdAt: true },
   });
 
-  return NextResponse.json(msg, { status: 201 });
+  const totalLikes = await prisma.garageSaleReaction.count({ where: { saleId: id } });
+
+  return NextResponse.json({ reaction, totalLikes }, { status: 201 });
 }

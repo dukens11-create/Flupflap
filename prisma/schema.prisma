@@ -1038,6 +1038,7 @@ model GarageSale {
   // Favorites
   favorites        GarageSaleFavorite[]
   chatMessages     GarageSaleChat[]
+  reactions        GarageSaleReaction[]
   liveSignals      GarageSaleLiveSignal[]
   // Live preview
   isLive           Boolean              @default(false)
@@ -1111,10 +1112,25 @@ model GarageSaleChat {
   userId    String?
   guestName String?
   message   String     @db.VarChar(500)
+  isHidden  Boolean    @default(false)
   createdAt DateTime   @default(now())
 
   @@index([saleId])
+  @@index([saleId, isHidden])
   @@index([createdAt])
+}
+
+model GarageSaleReaction {
+  id        String     @id @default(cuid())
+  saleId    String
+  sale      GarageSale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  userId    String?
+  guestId   String?
+  type      String     @default("like") // like | heart
+  createdAt DateTime   @default(now())
+
+  @@index([saleId, createdAt])
+  @@index([saleId, type])
 }
 
 model GarageSaleLiveSignal {

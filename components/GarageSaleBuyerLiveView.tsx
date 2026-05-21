@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { MessageCircle, Send, Radio, Eye } from 'lucide-react';
+import { MessageCircle, Send, Radio, Eye, Heart } from 'lucide-react';
 import { RTC_CONFIG, HAS_TURN_CONFIG } from '@/lib/rtc-config';
 import {
   MAX_RECONNECT_ATTEMPTS,
@@ -51,10 +51,21 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
   const [viewerCount, setViewerCount] = useState(0);
   const [debugPcState, setDebugPcState] = useState<string>('none');
   const [debugIceState, setDebugIceState] = useState<string>('none');
+  const [likeCount, setLikeCount] = useState(0);
+  const [likeAnimating, setLikeAnimating] = useState(false);
+  const [likeSending, setLikeSending] = useState(false);
 
   const lastSeenRef = useRef<string | null>(null);
   const chatBottomRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Stable anonymous guest ID for like/reaction tracking across multiple taps.
+  // Uses crypto.randomUUID when available; falls back to combining timestamp and
+  // two random segments to reduce collision probability.
+  const guestIdRef = useRef<string>(
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`,
+  );
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const remoteStreamRef = useRef<MediaStream | null>(null);
@@ -716,6 +727,30 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
     }
   };
 
+  const handleLike = async () => {
+    if (likeSending) return;
+    setLikeSending(true);
+    // Optimistic update + animation
+    setLikeCount((c) => c + 1);
+    setLikeAnimating(true);
+    setTimeout(() => setLikeAnimating(false), 700);
+    try {
+      const res = await fetch(`/api/garage-sales/${saleId}/reactions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'heart', guestId: guestIdRef.current }),
+      });
+      if (res.ok) {
+        const data = await res.json() as { totalLikes: number };
+        setLikeCount(data.totalLikes);
+      }
+    } catch {
+      // Optimistic — no rollback needed for likes
+    } finally {
+      setLikeSending(false);
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -835,6 +870,27 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
           TURN relay is not configured. Some mobile viewers may fail to connect.
         </p>
       )}
+
+      {/* Like / heart button */}
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => void handleLike()}
+          disabled={likeSending}
+          aria-label="Like this live"
+          className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-semibold transition-all duration-150 select-none
+            ${likeAnimating
+              ? 'scale-125 bg-red-100 text-red-600'
+              : 'bg-slate-100 text-slate-600 hover:bg-red-50 hover:text-red-500'
+            } disabled:opacity-60`}
+        >
+          <Heart
+            size={16}
+            className={`transition-all duration-150 ${likeAnimating ? 'fill-red-500 text-red-500 scale-110' : ''}`}
+          />
+          {likeCount > 0 ? likeCount : 'Like'}
+        </button>
+      </div>
 
       <div className="space-y-2">
         <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500 flex items-center gap-1.5">
