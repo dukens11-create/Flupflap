@@ -143,6 +143,7 @@ export async function POST(req: Request, { params }: Params) {
         kind: LIVE_ENGAGEMENT_SIGNAL_KINDS.LIKES_UPDATE,
         payload: {
           event: LIVE_ENGAGEMENT_EVENTS.LIKES_UPDATE,
+          liveId: id,
           roomId: liveContext.roomId,
           liveSessionId: liveContext.liveSessionId,
           actorId,
@@ -166,6 +167,7 @@ export async function POST(req: Request, { params }: Params) {
       reaction,
       totalLikes,
       deduplicated: Boolean(existingReaction),
+      liveId: id,
       roomId: liveContext.roomId,
       liveSessionId: liveContext.liveSessionId,
       event: LIVE_ENGAGEMENT_EVENTS.LIKES_UPDATE,

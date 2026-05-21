@@ -13,6 +13,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   getLiveEngagementActorId,
+  isSameLiveSession,
   normalizeGuestId,
   resolveLiveEngagementContext,
 } from '@/lib/live-engagement';
@@ -260,4 +261,14 @@ test('getLiveEngagementActorId: prefers authenticated users and falls back to gu
   assert.equal(getLiveEngagementActorId('user-1', 'guest-1'), 'user:user-1');
   assert.equal(getLiveEngagementActorId(null, 'guest-1'), 'guest:guest-1');
   assert.equal(getLiveEngagementActorId(null, null), null);
+});
+
+test('isSameLiveSession: treats missing active/incoming sessions as same session', () => {
+  assert.equal(isSameLiveSession(null, 'sale-1:2026-05-21T04:05:47.162Z'), true);
+  assert.equal(isSameLiveSession('sale-1:2026-05-21T04:05:47.162Z', null), true);
+});
+
+test('isSameLiveSession: detects matching and mismatched session IDs', () => {
+  assert.equal(isSameLiveSession('sale-1:2026-05-21T04:05:47.162Z', 'sale-1:2026-05-21T04:05:47.162Z'), true);
+  assert.equal(isSameLiveSession('sale-1:2026-05-21T04:05:47.162Z', 'sale-1:2026-05-21T05:05:47.162Z'), false);
 });

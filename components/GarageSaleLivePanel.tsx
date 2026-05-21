@@ -1,7 +1,7 @@
 'use client';
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { Video, VideoOff, Mic, MicOff, Radio, AlertTriangle, Eye, RefreshCcw, MessageCircle, Heart, Trash2, Users, PhoneOff, VolumeX, Volume2, Maximize2, X } from 'lucide-react';
-import { LIVE_ENGAGEMENT_EVENTS, LIVE_ENGAGEMENT_SIGNAL_KINDS } from '@/lib/live-engagement';
+import { LIVE_ENGAGEMENT_EVENTS, LIVE_ENGAGEMENT_SIGNAL_KINDS, isSameLiveSession } from '@/lib/live-engagement';
 import { RTC_CONFIG, HAS_TURN_CONFIG } from '@/lib/rtc-config';
 import { getIceCandidateType } from '@/lib/rtc-diagnostics';
 import { LIVE_SIGNAL_EVENTS, LIVE_SIGNAL_KINDS, LIVE_SIGNAL_ROLES, getLiveRoomId, getLiveSessionId, MAX_LIVE_GUESTS } from '@/lib/live-signaling';
@@ -653,7 +653,6 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
           });
         }
 
-
         // Handle guest video call signals from buyer
         if (signal.kind === LIVE_SIGNAL_KINDS.GUEST_OFFER) {
           await handleGuestOffer(signal);
@@ -662,7 +661,6 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
         if (signal.kind === LIVE_SIGNAL_KINDS.GUEST_ICE) {
           await handleGuestIce(signal);
         }
-
         if (signal.kind === LIVE_ENGAGEMENT_SIGNAL_KINDS.LIKES_UPDATE) {
           const payload = signal.payload as {
             roomId?: string;
@@ -670,7 +668,10 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
             totalLikes?: number;
             reactionId?: string;
           } | null;
-          const sameSession = !payload?.liveSessionId || payload.liveSessionId === liveSessionIdRef.current;
+          if (!liveSessionIdRef.current && payload?.liveSessionId) {
+            liveSessionIdRef.current = payload.liveSessionId;
+          }
+          const sameSession = isSameLiveSession(liveSessionIdRef.current, payload?.liveSessionId);
           if (payload?.roomId && payload.roomId !== liveRoomIdRef.current) {
             console.warn('[GarageSaleLivePanel] live_likes_update room mismatch', {
               sellerRoomId: liveRoomIdRef.current,
@@ -701,7 +702,10 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
             liveSessionId?: string | null;
             message?: SellerChatMessage;
           } | null;
-          const sameSession = !payload?.liveSessionId || payload.liveSessionId === liveSessionIdRef.current;
+          if (!liveSessionIdRef.current && payload?.liveSessionId) {
+            liveSessionIdRef.current = payload.liveSessionId;
+          }
+          const sameSession = isSameLiveSession(liveSessionIdRef.current, payload?.liveSessionId);
           if (payload?.roomId && payload.roomId !== liveRoomIdRef.current) {
             console.warn('[GarageSaleLivePanel] live_message_sent room mismatch', {
               sellerRoomId: liveRoomIdRef.current,
@@ -1423,6 +1427,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
   // Start/stop chat + reaction polling when live state changes
   useEffect(() => {
     if (isLive) {
+      startSignalPolling();
       console.info('[GarageSaleLivePanel] seller subscription connected', {
         roomId: liveRoomIdRef.current,
         liveSessionId: liveSessionIdRef.current,
@@ -1434,14 +1439,16 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       void fetchReactionCount();
       reactionPollRef.current = setInterval(fetchReactionCount, 10000);
     } else {
+      stopSignalPolling();
       stopChatPolling();
       stopReactionPolling();
     }
     return () => {
+      stopSignalPolling();
       stopChatPolling();
       stopReactionPolling();
     };
-  }, [isLive, fetchSellerChat, fetchReactionCount, stopChatPolling, stopReactionPolling]);
+  }, [isLive, fetchSellerChat, fetchReactionCount, startSignalPolling, stopChatPolling, stopReactionPolling, stopSignalPolling]);
 
   // Auto-scroll chat to newest message
   useEffect(() => {

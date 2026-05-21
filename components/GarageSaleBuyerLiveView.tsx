@@ -17,7 +17,7 @@ import {
   type ViewerConnectionStatus,
 } from '@/lib/live-stream-viewer-state';
 
-const DEFAULT_GUEST_NAME = 'Guest';
+const DEFAULT_BUYER_DISPLAY_NAME = 'Buyer';
 const MEDIA_READY_TIMEOUT_MS = 1200;
 const PLAYBACK_RETRY_DELAY_MS = 250;
 const PLAYBACK_RECOVERY_THROTTLE_MS = 1200;
@@ -36,6 +36,7 @@ interface Props {
   saleId: string;
   initialIsLive: boolean;
   buyerName?: string | null;
+  buyerId?: string | null;
 }
 
 type GuestJoinStatus =
@@ -49,11 +50,10 @@ type GuestJoinStatus =
   | 'full'
   | 'ended';
 
-export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerName }: Props) {
+export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerName, buyerId }: Props) {
   const [isLive, setIsLive] = useState(initialIsLive);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
-  const [guestName, setGuestName] = useState(buyerName ?? '');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [streamError, setStreamError] = useState<string | null>(null);
@@ -73,6 +73,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
   const [likeCount, setLikeCount] = useState(0);
   const [likeAnimating, setLikeAnimating] = useState(false);
   const [likeSending, setLikeSending] = useState(false);
+  const isAuthenticatedBuyer = Boolean(buyerId);
 
   // Guest video call state
   const [guestJoinStatus, setGuestJoinStatus] = useState<GuestJoinStatus>('idle');
@@ -1069,7 +1070,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           guestId: guestIdRef.current,
-          guestName: guestName || DEFAULT_GUEST_NAME,
+          guestName: buyerName || DEFAULT_BUYER_DISPLAY_NAME,
         }),
       });
       const data = await res.json() as { request?: { id: string; status: string }; error?: string; roomFull?: boolean };
@@ -1096,7 +1097,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
       setGuestJoinStatus('idle');
       guestJoinStatusRef.current = 'idle';
     }
-  }, [guestName, isLive, logLiveDebug, saleId]);
+  }, [buyerName, isLive, logLiveDebug, saleId]);
 
   const handleEndGuestCall = useCallback(async () => {
     const reqId = guestRequestIdRef.current;
@@ -1227,20 +1228,26 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
   const handleSend = async () => {
     const trimmed = input.trim();
     if (!trimmed) return;
+    if (!isAuthenticatedBuyer) {
+      setError('Please log in to chat');
+      return;
+    }
     setSending(true);
     setError(null);
     try {
       const liveContext = await ensureLiveEngagementContext();
+      const requestPayload = {
+        liveId: saleId,
+        message: trimmed,
+        displayName: buyerName || DEFAULT_BUYER_DISPLAY_NAME,
+        userId: buyerId,
+        roomId: liveContext.roomId,
+        liveSessionId: liveContext.liveSessionId,
+      };
       const res = await fetch(`/api/garage-sales/${saleId}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: trimmed,
-          guestName: guestName || DEFAULT_GUEST_NAME,
-          guestId: guestIdRef.current,
-          roomId: liveContext.roomId,
-          liveSessionId: liveContext.liveSessionId,
-        }),
+        body: JSON.stringify(requestPayload),
       });
       const data = await res.json().catch(() => ({}));
       console.info('[GarageSaleBuyerLiveView] chat api response', {
@@ -1252,6 +1259,11 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
         responseEvent: (data as { event?: string }).event,
       });
       if (!res.ok) {
+        console.error('[GarageSaleBuyerLiveView] chat api error', {
+          status: res.status,
+          requestPayload,
+          response: data,
+        });
         throw new Error((data as { error?: string }).error ?? 'Failed to send');
       }
       const msg = data as ChatMessage & { event?: string };
@@ -1273,7 +1285,8 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
       console.error('[GarageSaleBuyerLiveView] message save error', {
         saleId,
         liveSessionId: liveSessionIdRef.current,
-        error: err instanceof Error ? err.message : 'unknown',
+        buyerId: buyerId ?? null,
+        error: err,
       });
       setError(err instanceof Error ? err.message : 'Failed to send message');
     } finally {
@@ -1657,16 +1670,10 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
         {error && (
           <p className="rounded-lg bg-red-50 px-3 py-1.5 text-xs text-red-700">{error}</p>
         )}
-
-        {!buyerName && (
-          <input
-            type="text"
-            value={guestName}
-            onChange={(e) => setGuestName(e.target.value)}
-            placeholder="Your name (optional)"
-            maxLength={50}
-            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-[var(--ff-primary-navy)]"
-          />
+        {!isAuthenticatedBuyer && (
+          <p className="rounded-lg bg-amber-50 px-3 py-1.5 text-xs text-amber-800">
+            Please log in to chat
+          </p>
         )}
 
         <div className="flex flex-col gap-2 sm:flex-row">
@@ -1675,14 +1682,15 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask a question…"
+            placeholder={isAuthenticatedBuyer ? 'Ask a question…' : 'Log in to send messages'}
             maxLength={500}
+            disabled={!isAuthenticatedBuyer}
             className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--ff-primary-navy)]"
           />
           <button
             type="button"
             onClick={handleSend}
-            disabled={sending || !input.trim()}
+            disabled={!isAuthenticatedBuyer || sending || !input.trim()}
             className="btn-brand flex items-center gap-1.5 px-4 disabled:opacity-50"
           >
             <Send size={13} /> {sending ? '…' : 'Send'}
