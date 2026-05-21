@@ -209,7 +209,8 @@ export default function GarageSaleLivePanel({
     closeViewerConnection(viewerId);
 
     const pc = new RTCPeerConnection(RTC_CONFIG);
-    const offerToken = window.crypto?.randomUUID?.() ?? `${viewerId}-${Date.now().toString(36)}`;
+    const fallbackRandom = Math.random().toString(36).slice(2);
+    const offerToken = window.crypto?.randomUUID?.() ?? `${viewerId}-${Date.now().toString(36)}-${fallbackRandom}`;
     const connection: ViewerPeerConnection = {
       peer: pc,
       hasRemoteAnswer: false,
