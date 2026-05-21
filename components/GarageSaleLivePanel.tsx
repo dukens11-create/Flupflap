@@ -226,6 +226,21 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
       throw new Error('Live streaming is not supported in this browser.');
     }
 
+    const videoTracks = stream.getVideoTracks();
+    const audioTracks = stream.getAudioTracks();
+    logLiveDebug('offer-tracks', {
+      videoTracks: videoTracks.length,
+      audioTracks: audioTracks.length,
+      videoEnabled: videoTracks[0]?.enabled ?? false,
+      audioEnabled: audioTracks[0]?.enabled ?? false,
+      videoReadyState: videoTracks[0]?.readyState ?? 'none',
+      audioReadyState: audioTracks[0]?.readyState ?? 'none',
+    });
+
+    if (videoTracks.length === 0 || videoTracks[0].readyState !== 'live') {
+      throw new Error('Video track is not ready. Please try starting the stream again.');
+    }
+
     signalCursorRef.current = null;
     closePeerConnection();
 
@@ -234,6 +249,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive }: Props) {
 
     stream.getTracks().forEach((track) => {
       pc.addTrack(track, stream);
+      logLiveDebug('offer-track-added', { kind: track.kind, enabled: track.enabled, readyState: track.readyState });
     });
 
     pc.onicecandidate = (event) => {
