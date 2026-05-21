@@ -22,7 +22,7 @@ interface SellerChatMessage {
 const PREVIEW_REQUIRED_MESSAGE = 'Preview your camera before starting your live garage sale.';
 const CAMERA_BLOCKED_MESSAGE = 'Camera access blocked';
 const CAMERA_READY_MESSAGE = 'Camera ready';
-const CAMERA_CONNECTING_MESSAGE = 'Connecting camera...';
+const CAMERA_CONNECTING_MESSAGE = 'Connecting camera…';
 const CAMERA_PREVIEW_PLACEHOLDER = 'Camera preview will appear here.';
 const CAMERA_STATUS_UNKNOWN_MESSAGE = 'Camera status unknown.';
 const INSECURE_CAMERA_CONTEXT_MESSAGE = 'Camera requires HTTPS in this browser.';
