@@ -496,7 +496,7 @@ function recordsToRows(records: Array<Record<string, string | number | null | un
   return { headers, rows };
 }
 
-export function supplierPublicVisibilityWhere() {
+export function supplierPublicVisibilityWhere(): Prisma.ProductWhereInput {
   return {
     OR: [
       { sourceSupplierProductId: null },
@@ -505,7 +505,7 @@ export function supplierPublicVisibilityWhere() {
           is: {
             quantity: { gt: 0 },
             supplier: {
-              status: 'APPROVED',
+              status: 'APPROVED' as const,
             },
           },
         },
@@ -514,7 +514,7 @@ export function supplierPublicVisibilityWhere() {
   };
 }
 
-export function supplierCanBeListedWhere() {
+export function supplierCanBeListedWhere(): Prisma.SupplierProductWhereInput {
   return {
     quantity: { gt: 0 },
     isAvailable: true,
