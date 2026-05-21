@@ -17,7 +17,7 @@ import {
   type ViewerConnectionStatus,
 } from '@/lib/live-stream-viewer-state';
 
-const DEFAULT_GUEST_NAME = 'Guest';
+const DEFAULT_DISPLAY_NAME = 'Buyer';
 const MEDIA_READY_TIMEOUT_MS = 1200;
 const PLAYBACK_RETRY_DELAY_MS = 250;
 const PLAYBACK_RECOVERY_THROTTLE_MS = 1200;
@@ -43,7 +43,6 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
   const [isLive, setIsLive] = useState(initialIsLive);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
-  const [guestName, setGuestName] = useState(buyerName ?? '');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [streamError, setStreamError] = useState<string | null>(null);
@@ -873,9 +872,8 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
       const requestPayload = {
         liveId: saleId,
         message: trimmed,
-        displayName: buyerName || guestName || DEFAULT_GUEST_NAME,
-        guestName: guestName || DEFAULT_GUEST_NAME,
-        guestId: guestIdRef.current,
+        displayName: buyerName || DEFAULT_DISPLAY_NAME,
+        userId: buyerId,
         roomId: liveContext.roomId,
         liveSessionId: liveContext.liveSessionId,
       };
@@ -1172,17 +1170,6 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, buyerNa
           <p className="rounded-lg bg-amber-50 px-3 py-1.5 text-xs text-amber-800">
             Please log in to chat
           </p>
-        )}
-
-        {!buyerName && (
-          <input
-            type="text"
-            value={guestName}
-            onChange={(e) => setGuestName(e.target.value)}
-            placeholder="Your name (optional)"
-            maxLength={50}
-            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-[var(--ff-primary-navy)]"
-          />
         )}
 
         <div className="flex flex-col gap-2 sm:flex-row">

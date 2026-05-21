@@ -13,7 +13,7 @@ import { applyRateLimitAsync } from '@/lib/security';
 
 export const dynamic = 'force-dynamic';
 
-const DEFAULT_GUEST_NAME = 'Guest';
+const DEFAULT_DISPLAY_NAME = 'Buyer';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -84,9 +84,8 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { message, guestName, liveSessionId, roomId } = body as {
+  const { message, liveSessionId, roomId } = body as {
     message?: string;
-    guestName?: string;
     liveSessionId?: string | null;
     roomId?: string;
   };
@@ -105,7 +104,7 @@ export async function POST(req: Request, { params }: Params) {
   const sessionDisplayName = typeof session?.user?.name === 'string' ? session.user.name.trim() : '';
   const resolvedDisplayName = sessionDisplayName
     ? sessionDisplayName.slice(0, 50)
-    : (typeof guestName === 'string' && guestName.trim() ? guestName.trim().slice(0, 50) : DEFAULT_GUEST_NAME);
+    : DEFAULT_DISPLAY_NAME;
   const liveContext = resolveLiveEngagementContext(id, sale.liveStartedAt ?? null, { liveSessionId, roomId });
   const actorId = getLiveEngagementActorId(userId, resolvedGuestId);
   const insertCreatedAt = new Date();
