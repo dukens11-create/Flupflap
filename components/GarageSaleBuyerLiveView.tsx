@@ -984,13 +984,35 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
     const pc = new RTCPeerConnection(RTC_CONFIG);
     guestPeerRef.current = pc;
 
-    guestLocalStreamRef.current.getTracks().forEach((track) => {
-      pc.addTrack(track, guestLocalStreamRef.current!);
+    const localStream = guestLocalStreamRef.current;
+    logLiveDebug('guest-local-stream-created', {
+      requestId,
+      tracks: localStream.getTracks().map((t) => ({ kind: t.kind, enabled: t.enabled, readyState: t.readyState })),
     });
+
+    localStream.getTracks().forEach((track) => {
+      pc.addTrack(track, localStream);
+    });
+
+    pc.ontrack = (event) => {
+      // Guest peer may receive tracks from seller in future bidirectional scenarios.
+      // TODO: wire received tracks to a remoteVideoRef when bidirectional guest-call is implemented.
+      logLiveDebug('guest-remote-track-received', { kind: event.track.kind, requestId });
+    };
 
     pc.onicecandidate = (event) => {
       if (!event.candidate) return;
+      const candidateType = getIceCandidateType(event.candidate.candidate);
+      logLiveDebug('guest-ice-candidate-gathered', { requestId, type: candidateType });
       void postGuestSignal(LIVE_SIGNAL_KINDS.GUEST_ICE, { candidate: event.candidate.toJSON(), requestId });
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      logLiveDebug('guest-ice-connection-state', { state: pc.iceConnectionState, requestId });
+    };
+
+    pc.onicegatheringstatechange = () => {
+      logLiveDebug('guest-ice-gathering-state', { state: pc.iceGatheringState, requestId });
     };
 
     pc.onconnectionstatechange = () => {
@@ -1007,6 +1029,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
     guestSignalOfferSentRef.current = true;
+    logLiveDebug('guest-offer-created', { requestId, type: offer.type });
     await postGuestSignal(LIVE_SIGNAL_KINDS.GUEST_OFFER, {
       type: offer.type,
       sdp: offer.sdp,

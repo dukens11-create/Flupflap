@@ -138,9 +138,23 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
 
   // Guest video call state
   const [guestRequests, setGuestRequests] = useState<GuestRequest[]>([]);
+  // Tracks which guests' audio has been explicitly unlocked by the seller.
+  // Guest video elements always start muted so mobile browsers can autoplay them
+  // (mobile autoplay policies block unmuted video). The seller taps "Tap to hear"
+  // to unmute a specific guest's audio via a user-gesture interaction.
+  const [guestAudioUnlocked, setGuestAudioUnlocked] = useState<Set<string>>(new Set());
   const guestPeersRef = useRef<Map<string, GuestPeerState>>(new Map());
   const guestVideoElsRef = useRef<Map<string, HTMLVideoElement>>(new Map());
   const guestPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  /** Remove one or more guest IDs from the per-guest audio-unlock state. */
+  const clearGuestAudioUnlocked = useCallback((...reqIds: string[]) => {
+    setGuestAudioUnlocked((prev) => {
+      const next = new Set(prev);
+      for (const id of reqIds) next.delete(id);
+      return next;
+    });
+  }, []);
 
   const liveDebugEnabled = process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_DEBUG_LIVE_STREAM === '1';
 
@@ -311,27 +325,65 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
     guestPeersRef.current.set(requestId, peerState);
 
     pc.ontrack = (event) => {
-      const stream = event.streams[0] ?? new MediaStream([event.track]);
-      peerState.stream = stream;
-      const videoEl = guestVideoElsRef.current.get(requestId);
-      if (videoEl) {
-        videoEl.srcObject = stream;
-        void videoEl.play().catch(() => undefined);
+      // Accumulate tracks into a shared stream (mirrors buyer-side handleSellerOffer pattern).
+      // Using event.streams[0] when available so all tracks share the same MediaStream object.
+      // Fallback: accumulate into peerState.stream to avoid replacing the whole stream per-track.
+      const incomingStream = event.streams?.[0];
+      if (incomingStream) {
+        peerState.stream = incomingStream;
+      } else {
+        if (!peerState.stream) {
+          peerState.stream = new MediaStream();
+        }
+        const alreadyAdded = peerState.stream.getTracks().some((t) => t.id === event.track.id);
+        if (!alreadyAdded) {
+          peerState.stream.addTrack(event.track);
+        }
       }
+
+      console.info('[GuestCall] Seller received guest track', { requestId, guestId, kind: event.track.kind });
+      logLiveDebug('guest-track-received', { requestId, kind: event.track.kind, hasStream: Boolean(incomingStream) });
+
+      const videoEl = guestVideoElsRef.current.get(requestId);
+      if (videoEl && peerState.stream) {
+        if (videoEl.srcObject !== peerState.stream) {
+          videoEl.srcObject = peerState.stream;
+        }
+        // Always play muted initially for mobile autoplay policy compliance.
+        // The seller can unlock audio via the "Tap to hear" overlay.
+        videoEl.muted = true;
+        void videoEl.play().catch((err) => {
+          console.warn('[GuestCall] Seller guest video play failed after track', {
+            requestId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
+      }
+
       logLiveDebug(LIVE_SIGNAL_EVENTS.GUEST_JOINED_LIVE, { requestId, guestId });
-      console.info('[GuestCall] Seller received guest track', { requestId, guestId });
     };
 
     pc.onicecandidate = (event) => {
       if (!event.candidate) return;
+      logLiveDebug('guest-ice-candidate-sent', { requestId, type: getIceCandidateType(event.candidate.candidate) });
       void postGuestSignal(LIVE_SIGNAL_KINDS.GUEST_ICE, { candidate: event.candidate.toJSON(), requestId });
     };
 
     pc.onconnectionstatechange = () => {
       logLiveDebug('guest-peer-state', { state: pc.connectionState, requestId });
-      if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
-        console.warn('[GuestCall] Guest peer disconnected/failed', { requestId });
+      if (pc.connectionState === 'connected') {
+        console.info('[GuestCall] Guest peer connected', { requestId });
+      } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+        console.warn('[GuestCall] Guest peer disconnected/failed', { requestId, state: pc.connectionState });
       }
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      logLiveDebug('guest-ice-connection-state', { state: pc.iceConnectionState, requestId });
+    };
+
+    pc.onicegatheringstatechange = () => {
+      logLiveDebug('guest-ice-gathering-state', { state: pc.iceGatheringState, requestId });
     };
 
     try {
@@ -384,6 +436,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
       setGuestRequests(data.requests);
 
       // Close peer connections for guests that are no longer active
+      const removedIds: string[] = [];
       for (const [reqId, peerState] of guestPeersRef.current.entries()) {
         const req = data.requests.find((r) => r.id === reqId);
         if (!req || ['declined', 'removed'].includes(req.status)) {
@@ -391,12 +444,16 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
           guestPeersRef.current.delete(reqId);
           const el = guestVideoElsRef.current.get(reqId);
           if (el) el.srcObject = null;
+          removedIds.push(reqId);
         }
+      }
+      if (removedIds.length > 0) {
+        clearGuestAudioUnlocked(...removedIds);
       }
     } catch {
       // Silent fail — polling will retry
     }
-  }, [saleId]);
+  }, [clearGuestAudioUnlocked, saleId]);
 
   const handleAcceptGuest = useCallback(async (reqId: string) => {
     try {
@@ -440,6 +497,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
       });
       if (res.ok) {
         setGuestRequests((prev) => prev.filter((r) => r.id !== reqId));
+        clearGuestAudioUnlocked(reqId);
         const peerState = guestPeersRef.current.get(reqId);
         if (peerState) {
           peerState.pc.close();
@@ -450,7 +508,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
     } catch {
       // Silent fail
     }
-  }, [logLiveDebug, saleId]);
+  }, [clearGuestAudioUnlocked, logLiveDebug, saleId]);
 
   const handleToggleMuteGuest = useCallback(async (reqId: string, currentlyMuted: boolean) => {
     const action = currentlyMuted ? 'unmute' : 'mute';
@@ -476,7 +534,14 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
       const peerState = guestPeersRef.current.get(reqId);
       if (peerState?.stream) {
         el.srcObject = peerState.stream;
-        void el.play().catch(() => undefined);
+        // Always start muted for mobile autoplay compliance; seller unlocks audio via overlay.
+        el.muted = true;
+        void el.play().catch((err) => {
+          console.warn('[GuestCall] Seller guest video ref play failed', {
+            reqId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
       }
     } else {
       guestVideoElsRef.current.delete(reqId);
@@ -1959,9 +2024,23 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
                     ref={(el) => setGuestVideoRef(req.id, el)}
                     autoPlay
                     playsInline
-                    muted={req.isMuted}
+                    muted
                     className="h-full w-full object-cover"
                   />
+                  {/* Audio unlock overlay — tap to hear guest after autoplay starts muted */}
+                  {isGuestLive && !req.isMuted && !guestAudioUnlocked.has(req.id) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const el = guestVideoElsRef.current.get(req.id);
+                        if (el) el.muted = false;
+                        setGuestAudioUnlocked((prev) => new Set([...prev, req.id]));
+                      }}
+                      className="absolute inset-x-0 top-2 mx-auto w-fit rounded-full bg-black/75 px-2.5 py-1 text-[10px] font-semibold text-white hover:bg-black/90 transition-colors"
+                    >
+                      🔊 Tap to hear guest
+                    </button>
+                  )}
                   <div className="absolute bottom-0 left-0 right-0 flex items-center justify-between p-1.5 bg-gradient-to-t from-black/60 to-transparent">
                     <span className="text-[10px] font-semibold text-white">{req.guestName ?? 'Guest'}</span>
                     {req.isMuted && (
