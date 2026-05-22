@@ -7,6 +7,8 @@
 -- 3) Keep all operations non-destructive.
 
 -- live_sessions equivalent in this codebase is GarageSale live state.
+-- These columns represent the same live-session status that the failed
+-- backfill migration attempted to converge.
 ALTER TABLE "GarageSale"
   ADD COLUMN IF NOT EXISTS "isLive" BOOLEAN,
   ADD COLUMN IF NOT EXISTS "liveStartedAt" TIMESTAMP(3);
@@ -75,6 +77,8 @@ BEGIN
       AND table_name = 'GarageSaleChat'
       AND column_name = 'message'
   ) THEN
+    -- Empty-string fallback preserves row integrity for legacy partial rows
+    -- without inventing user-visible placeholder text.
     UPDATE "GarageSaleChat"
     SET "message" = ''
     WHERE "message" IS NULL;
