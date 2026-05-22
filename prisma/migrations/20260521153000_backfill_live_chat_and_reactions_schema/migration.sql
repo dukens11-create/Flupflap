@@ -18,7 +18,16 @@ CREATE TABLE IF NOT EXISTS "GarageSaleChat" (
 );
 
 ALTER TABLE "GarageSaleChat"
-  ADD COLUMN IF NOT EXISTS "sellerId" TEXT;
+  ADD COLUMN IF NOT EXISTS "sellerId" TEXT,
+  ADD COLUMN IF NOT EXISTS "isHidden" BOOLEAN;
+
+UPDATE "GarageSaleChat"
+SET "isHidden" = false
+WHERE "isHidden" IS NULL;
+
+ALTER TABLE "GarageSaleChat"
+  ALTER COLUMN "isHidden" SET DEFAULT false,
+  ALTER COLUMN "isHidden" SET NOT NULL;
 
 CREATE INDEX IF NOT EXISTS "GarageSaleChat_saleId_idx" ON "GarageSaleChat"("saleId");
 CREATE INDEX IF NOT EXISTS "GarageSaleChat_saleId_sellerId_idx" ON "GarageSaleChat"("saleId", "sellerId");
