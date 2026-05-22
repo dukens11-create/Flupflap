@@ -30,7 +30,7 @@ ALTER TABLE "GarageSaleChat"
   ADD COLUMN IF NOT EXISTS "userId" TEXT,
   ADD COLUMN IF NOT EXISTS "sellerId" TEXT,
   ADD COLUMN IF NOT EXISTS "guestName" TEXT,
-  ADD COLUMN IF NOT EXISTS "message" VARCHAR(500),
+  ADD COLUMN IF NOT EXISTS "message" VARCHAR(500) DEFAULT '',
   ADD COLUMN IF NOT EXISTS "isHidden" BOOLEAN,
   ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP;
 
@@ -59,6 +59,18 @@ BEGIN
     ) THEN
       ALTER TABLE "GarageSaleChat"
         ALTER COLUMN "message" SET NOT NULL;
+    END IF;
+
+    IF EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'GarageSaleChat'
+        AND column_name = 'message'
+        AND column_default IS NOT NULL
+    ) THEN
+      ALTER TABLE "GarageSaleChat"
+        ALTER COLUMN "message" DROP DEFAULT;
     END IF;
   END IF;
 
