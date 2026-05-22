@@ -11,10 +11,17 @@
  *   NEXT_PUBLIC_TURN_USERNAME   Metered TURN username
  *   NEXT_PUBLIC_TURN_CREDENTIAL Metered TURN credential
  *
- * When Metered is not configured, the app falls back to Google's public STUN
- * server so local/LAN testing still works in development.
+ * When Metered is not configured, the app falls back to multiple public STUN
+ * servers so local/LAN testing still works in development.  Multiple STUN
+ * servers improve reliability on mobile carriers that block specific IPs.
  */
-const STUN_FALLBACK_URL = 'stun:stun.l.google.com:19302';
+
+// Multiple STUN servers for mobile carrier NAT resilience.
+// Some mobile carriers block specific STUN server IPs, so redundancy helps.
+const STUN_FALLBACK_URLS = [
+  'stun:stun.l.google.com:19302',
+  'stun:stun1.l.google.com:19302',
+];
 
 function parseTurnUrls(value: string | undefined): string[] {
   return (value ?? '')
@@ -49,7 +56,7 @@ if (forceRelay) {
 
 function buildIceServers(): RTCIceServer[] {
   const servers: RTCIceServer[] = [
-    { urls: [STUN_FALLBACK_URL] },
+    { urls: STUN_FALLBACK_URLS },
   ];
 
   if (turnUrls.length > 0 && turnUsername && turnCredential) {
@@ -63,5 +70,8 @@ export const HAS_TURN_CONFIG = turnUrls.length > 0 && Boolean(turnUsername && tu
 export const RTC_CONFIG: RTCConfiguration = {
   iceServers: buildIceServers(),
   iceCandidatePoolSize: 10,
+  // Consolidate all media onto a single ICE transport — required for TURN relay
+  // paths to work correctly on mobile carrier NATs.
+  bundlePolicy: 'max-bundle',
   ...(forceRelay ? { iceTransportPolicy: 'relay' as const } : {}),
 };
