@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { dollars } from '@/lib/money';
 import Image from 'next/image';
+import { formatVariantSelectionLabel } from '@/lib/product-variants';
 
 type Item = {
   id: string;
@@ -13,6 +14,11 @@ type Item = {
   shippingMode?: string;
   quantity: number;
   inventoryQty?: number;
+  productVariantId?: string;
+  sizeType?: string;
+  sizeLabel?: string;
+  waist?: string;
+  length?: string;
 };
 const DEFAULT_CART_IMAGE_PATH = '/flupflap_logo_brand.png';
 
@@ -85,6 +91,11 @@ export default function CartClient() {
             <p className={`text-sm ${i.shippingMode === 'FREE' ? 'text-green-700' : 'text-slate-500'}`}>
               {dollars(i.priceCents)} · {shippingLabel(i)}
             </p>
+            {i.productVariantId && (
+              <p className="text-xs text-slate-500">
+                {formatVariantSelectionLabel({ sizeLabel: i.sizeLabel, waist: i.waist, length: i.length })}
+              </p>
+            )}
           </div>
           <div className="flex gap-2 items-center flex-shrink-0">
             <button

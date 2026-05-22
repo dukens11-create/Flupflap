@@ -19,6 +19,7 @@ import {
   getProductEditSuccessPath,
 } from '@/lib/product-edit-access';
 import EditListingForm from './EditListingForm';
+import { type ProductSizeType } from '@/lib/product-variants';
 
 export const metadata: Metadata = { title: 'Edit Listing' };
 
@@ -82,6 +83,17 @@ export default async function SellerEditPage({
       pickupCity: true,
       pickupState: true,
       pickupPostalCode: true,
+      productVariants: {
+        select: {
+          id: true,
+          sizeType: true,
+          sizeLabel: true,
+          waist: true,
+          length: true,
+          quantity: true,
+          isAvailable: true,
+        },
+      },
     },
   });
 
@@ -151,6 +163,11 @@ export default async function SellerEditPage({
         defaultPickupCity={product.pickupCity}
         defaultPickupState={product.pickupState}
         defaultPickupPostalCode={product.pickupPostalCode}
+        defaultSizeType={(product.productVariants[0]?.sizeType?.toLowerCase() as ProductSizeType | undefined) ?? null}
+        defaultVariants={product.productVariants.map((variant) => ({
+          ...variant,
+          sizeType: variant.sizeType.toLowerCase() as ProductSizeType,
+        }))}
       />
     </main>
   );

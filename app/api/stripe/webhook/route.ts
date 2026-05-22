@@ -622,7 +622,7 @@ export async function POST(req: Request) {
     const metadataBuyerId = cs.metadata?.buyerId;
     const metadataOfferId = cs.metadata?.offerId;
     const rawItems: string = cs.metadata?.items ?? '[]';
-    const metadataItems: { productId: string; quantity: number }[] = JSON.parse(rawItems);
+    const metadataItems: { productId: string; quantity: number; productVariantId?: string }[] = JSON.parse(rawItems);
     const rawPickupIds: string = cs.metadata?.pickupItemIds ?? '[]';
     const metadataPickupItemIds: string[] = JSON.parse(rawPickupIds);
 
@@ -634,7 +634,7 @@ export async function POST(req: Request) {
       where: { stripeCheckoutId: cs.id },
     });
     const buyerId = snapshot?.buyerId ?? metadataBuyerId;
-    const items = (snapshot?.items as { productId: string; quantity: number }[] | null) ?? metadataItems;
+    const items = (snapshot?.items as { productId: string; quantity: number; productVariantId?: string }[] | null) ?? metadataItems;
     const pickupItemIds = (snapshot?.pickupItemIds as string[] | null) ?? metadataPickupItemIds;
     // An order is only treated as a pure-pickup order when every item in the
     // cart was designated for pickup.  Mixed carts (some pickup, some shipped)
@@ -652,6 +652,17 @@ export async function POST(req: Request) {
       prisma.product.findMany({
         where: { id: { in: items.map(i => i.productId) } },
         include: {
+          productVariants: {
+            select: {
+              id: true,
+              sizeType: true,
+              sizeLabel: true,
+              waist: true,
+              length: true,
+              quantity: true,
+              isAvailable: true,
+            },
+          },
           seller: {
             select: {
               id: true,
@@ -692,6 +703,9 @@ export async function POST(req: Request) {
       });
       const snapshotCommission = commissionItemsByProductId.get(product.id);
       const quantity = snapshotCommission?.quantity ?? item.quantity;
+      const selectedVariant = item.productVariantId
+        ? product.productVariants.find((variant) => variant.id === item.productVariantId)
+        : null;
       const priceCents = snapshotCommission?.priceCents ?? product.priceCents;
       const shippingCents = snapshotCommission?.shippingCents ?? (pickupSet.has(product.id) ? 0 : product.shippingCents);
       const lineSubtotalCents = snapshotCommission?.lineSubtotalCents ?? (priceCents * quantity);
@@ -709,6 +723,11 @@ export async function POST(req: Request) {
         sellerNetCents: snapshotCommission?.sellerNetCents ?? calculateSellerNetCents(lineSubtotalCents, commissionRateBps),
         commissionSource: snapshotCommission?.commissionSource ?? fallbackCommission.commissionSource,
         commissionPlanCode: snapshotCommission?.commissionPlanCode ?? fallbackCommission.commissionPlanCode,
+        productVariantId: selectedVariant?.id ?? null,
+        sizeType: selectedVariant?.sizeType ?? null,
+        sizeLabel: selectedVariant?.sizeLabel ?? null,
+        waist: selectedVariant?.waist ?? null,
+        length: selectedVariant?.length ?? null,
       };
     });
 
@@ -799,6 +818,11 @@ export async function POST(req: Request) {
             sellerNetCents: item.sellerNetCents,
             commissionSource: item.commissionSource,
             commissionPlanCode: item.commissionPlanCode,
+            productVariantId: item.productVariantId,
+            sizeType: item.sizeType,
+            sizeLabel: item.sizeLabel,
+            waist: item.waist,
+            length: item.length,
           })),
         },
       },
@@ -973,15 +997,45 @@ export async function POST(req: Request) {
           },
         });
       }
-      const newInventory = Math.max(0, item.product.inventory - item.quantity);
-      await prisma.product.update({
-        where: { id: item.product.id },
-        data: {
-          inventory: newInventory,
-          soldQty: { increment: item.quantity },
-          ...(newInventory <= 0 ? { delistedAt: new Date() } : {}),
-        },
-      });
+      if (item.productVariantId) {
+        const currentVariant = await prisma.productVariant.findUnique({
+          where: { id: item.productVariantId },
+          select: { id: true, productId: true, quantity: true, isAvailable: true },
+        });
+        if (currentVariant && currentVariant.productId === item.product.id) {
+          const nextVariantQty = Math.max(0, currentVariant.quantity - item.quantity);
+          await prisma.productVariant.update({
+            where: { id: currentVariant.id },
+            data: {
+              quantity: nextVariantQty,
+              isAvailable: nextVariantQty > 0 && currentVariant.isAvailable,
+            },
+          });
+        }
+        const variantInventory = await prisma.productVariant.aggregate({
+          where: { productId: item.product.id, isAvailable: true },
+          _sum: { quantity: true },
+        });
+        const newInventory = variantInventory._sum.quantity ?? 0;
+        await prisma.product.update({
+          where: { id: item.product.id },
+          data: {
+            inventory: newInventory,
+            soldQty: { increment: item.quantity },
+            ...(newInventory <= 0 ? { delistedAt: new Date() } : {}),
+          },
+        });
+      } else {
+        const newInventory = Math.max(0, item.product.inventory - item.quantity);
+        await prisma.product.update({
+          where: { id: item.product.id },
+          data: {
+            inventory: newInventory,
+            soldQty: { increment: item.quantity },
+            ...(newInventory <= 0 ? { delistedAt: new Date() } : {}),
+          },
+        });
+      }
     }
 
     if (snapshot) {

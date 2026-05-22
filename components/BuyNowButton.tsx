@@ -15,12 +15,18 @@ type BuyNowCartItem = {
   pickupAvailable?: boolean;
   pickupCity?: string;
   pickupState?: string;
+  productVariantId?: string;
+  sizeType?: string;
+  sizeLabel?: string;
+  waist?: string;
+  length?: string;
 };
 
 interface Props {
   productId: string;
   checkoutItem?: Omit<BuyNowCartItem, 'quantity'>;
   isPickup?: boolean;
+  requireVariantSelection?: boolean;
 }
 type CheckoutResponse = { url?: string; error?: string };
 
@@ -30,7 +36,7 @@ function requiresLiveShipping(item?: Omit<BuyNowCartItem, 'quantity'>, isPickup?
   return item.shippingMode === 'CALCULATED' || (!item.shippingMode && item.shippingCents === 0);
 }
 
-export default function BuyNowButton({ productId, checkoutItem, isPickup = false }: Props) {
+export default function BuyNowButton({ productId, checkoutItem, isPickup = false, requireVariantSelection = false }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const router = useRouter();
@@ -38,6 +44,10 @@ export default function BuyNowButton({ productId, checkoutItem, isPickup = false
   async function handle() {
     if (loading) return;
     setError('');
+    if (requireVariantSelection && !checkoutItem?.productVariantId) {
+      setError('Please choose a size before continuing.');
+      return;
+    }
     if (requiresLiveShipping(checkoutItem, isPickup) && checkoutItem) {
       const checkoutCart: BuyNowCartItem[] = [{ ...checkoutItem, quantity: 1 }];
       localStorage.setItem('flupflap_cart', JSON.stringify(checkoutCart));
@@ -51,7 +61,7 @@ export default function BuyNowButton({ productId, checkoutItem, isPickup = false
       const res = await fetch('/api/checkout/buynow', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ productId, isPickup }),
+        body: JSON.stringify({ productId, isPickup, productVariantId: checkoutItem?.productVariantId }),
       });
       let data: CheckoutResponse = {};
       try {

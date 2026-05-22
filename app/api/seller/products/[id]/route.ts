@@ -26,6 +26,7 @@ import { getSiteUrl } from '@/lib/seo';
 import { toSellerLifecycleStatus } from '@/lib/listing-status';
 import { getSchedulingDisabledError } from '@/lib/listing-scheduling';
 import { canEditProductForSeller, getProductEditSuccessPath } from '@/lib/product-edit-access';
+import { getAvailableVariantInventory, normalizeProductVariantsInput } from '@/lib/product-variants';
 
 const optionalInputString = z.preprocess((value) => {
   if (value === undefined || value === null) return undefined;
@@ -77,6 +78,7 @@ const updateSchema = z.object({
   parentCategoryId: z.string().optional(),
   categoryStale: z.string().optional(),
   productAttributes: z.string().optional(), // JSON string
+  productVariants: z.string().optional(),
 });
 
 type ProductUpdateInput = z.infer<typeof updateSchema>;
@@ -115,6 +117,17 @@ const SELLER_PRODUCT_SAFE_SELECT = {
   widthIn: true,
   heightIn: true,
   packageType: true,
+  productVariants: {
+    select: {
+      id: true,
+      sizeType: true,
+      sizeLabel: true,
+      waist: true,
+      length: true,
+      quantity: true,
+      isAvailable: true,
+    },
+  },
   createdAt: true,
   publishedAt: true,
 } as const;
@@ -507,6 +520,12 @@ export async function POST(
       packageType: data.packageType,
       weightUnit: data.weightUnit,
     });
+    const normalizedVariantsResult = normalizeProductVariantsInput(data.productVariants);
+    if (normalizedVariantsResult.error) {
+      return respondWithError(id, normalizedVariantsResult.error, acceptsJson, 400);
+    }
+    const shouldUpdateVariants = data.productVariants !== undefined;
+    const variantInventoryQty = getAvailableVariantInventory(normalizedVariantsResult.variants);
 
     const packageDetails = resolveSubmittedPackageDetails(data);
     if (!packageDetails) {
@@ -593,7 +612,9 @@ export async function POST(
           ...(data.shippingMode && (SHIPPING_MODES as readonly string[]).includes(data.shippingMode) && { shippingMode: data.shippingMode }),
           ...(resolvedCategorySelection.submitted && nextCategoryName && { category: nextCategoryName }),
           ...(data.condition && { condition: data.condition }),
-          ...(data.inventory && { inventory: Number(data.inventory) }),
+          ...(shouldUpdateVariants
+            ? { inventory: variantInventoryQty }
+            : (data.inventory ? { inventory: Number(data.inventory) } : {})),
           pickupAvailable: data.pickupAvailable === 'true',
           pickupCity: data.pickupCity || null,
           pickupState: data.pickupState || null,
@@ -609,6 +630,19 @@ export async function POST(
           ...(resolvedCategorySelection.submitted && {
             categoryId: resolvedCategorySelection.categoryId,
             subcategoryId: resolvedCategorySelection.subcategoryId,
+          }),
+          ...(shouldUpdateVariants && {
+            productVariants: {
+              deleteMany: {},
+              create: normalizedVariantsResult.variants.map((variant) => ({
+                sizeType: variant.sizeType.toUpperCase() as 'BABY' | 'CLOTHING' | 'SHOES' | 'PANTS' | 'DRESS' | 'CUSTOM',
+                sizeLabel: variant.sizeLabel ?? null,
+                waist: variant.waist ?? null,
+                length: variant.length ?? null,
+                quantity: variant.quantity,
+                isAvailable: variant.isAvailable,
+              })),
+            },
           }),
           productAttributes: nextProductAttributesValue,
           imageUrl: mainImage,
@@ -758,6 +792,12 @@ export async function PATCH(
       packageType: data.packageType,
       weightUnit: data.weightUnit,
     });
+    const normalizedVariantsResult = normalizeProductVariantsInput(data.productVariants);
+    if (normalizedVariantsResult.error) {
+      return NextResponse.json({ error: normalizedVariantsResult.error }, { status: 400 });
+    }
+    const shouldUpdateVariants = data.productVariants !== undefined;
+    const variantInventoryQty = getAvailableVariantInventory(normalizedVariantsResult.variants);
 
     const packageDetails = resolveSubmittedPackageDetails(data);
     if (!packageDetails) {
@@ -861,7 +901,9 @@ export async function PATCH(
           originalImages: resolvedOriginalImages,
           enhancedImages: resolvedEnhancedImages,
           imageThumbnails: resolvedImageThumbnails,
-          ...(data.inventory && { inventory: Number(data.inventory) }),
+          ...(shouldUpdateVariants
+            ? { inventory: variantInventoryQty }
+            : (data.inventory ? { inventory: Number(data.inventory) } : {})),
           ...(data.pickupAvailable !== undefined && { pickupAvailable: data.pickupAvailable === 'true' }),
           ...(data.pickupCity !== undefined && { pickupCity: data.pickupCity || null }),
           ...(data.pickupState !== undefined && { pickupState: data.pickupState || null }),
@@ -877,6 +919,19 @@ export async function PATCH(
           ...(resolvedCategorySelection.submitted && {
             categoryId: resolvedCategorySelection.categoryId,
             subcategoryId: resolvedCategorySelection.subcategoryId,
+          }),
+          ...(shouldUpdateVariants && {
+            productVariants: {
+              deleteMany: {},
+              create: normalizedVariantsResult.variants.map((variant) => ({
+                sizeType: variant.sizeType.toUpperCase() as 'BABY' | 'CLOTHING' | 'SHOES' | 'PANTS' | 'DRESS' | 'CUSTOM',
+                sizeLabel: variant.sizeLabel ?? null,
+                waist: variant.waist ?? null,
+                length: variant.length ?? null,
+                quantity: variant.quantity,
+                isAvailable: variant.isAvailable,
+              })),
+            },
           }),
           productAttributes: nextProductAttributesValue,
           status: nextStatus,

@@ -6,6 +6,7 @@ import { dollars } from '@/lib/money';
 import { buildTrackingUrl } from '@/lib/shipping';
 import type { Metadata } from 'next';
 import { ORDER_STATUS_LABELS, getOrderStatusBadgeClass } from '@/lib/order-status';
+import { formatVariantSelectionLabel } from '@/lib/product-variants';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,6 +60,11 @@ export default async function OrdersPage() {
                       <div>
                         <a href={`/products/${item.product.id}`} className="text-sm font-medium hover:text-blue-600">{item.product.title}</a>
                         <p className="text-xs text-slate-500">Qty: {item.quantity} · {dollars(item.priceCents)}</p>
+                        {item.productVariantId && (
+                          <p className="text-xs text-slate-500">
+                            {formatVariantSelectionLabel({ sizeLabel: item.sizeLabel, waist: item.waist, length: item.length })}
+                          </p>
+                        )}
                       </div>
                     </div>
                   ))}
