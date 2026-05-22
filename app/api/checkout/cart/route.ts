@@ -8,6 +8,7 @@ import { checkoutErrorResponse } from '@/lib/checkout-errors';
 import { isSellerVerificationApproved } from '@/lib/seller-verification';
 import { getMissingPackageProductTitles } from '@/lib/product-package';
 import { logError } from '@/lib/logger';
+import { formatVariantSelectionLabel } from '@/lib/product-variants';
 import {
   verifySelectedShippingRates,
   type ShippingRateInfoInput,
@@ -27,6 +28,18 @@ const SHIPPING_LINE_ITEM_NAME = 'Shipping';
  */
 function isCalculatedShippingProduct(product: { shippingMode?: string | null; shippingCents: number }) {
   return product.shippingMode === 'CALCULATED' || (!product.shippingMode && product.shippingCents === 0);
+}
+
+function formatVariantErrorLabel(variant: {
+  sizeLabel: string | null;
+  waist: string | null;
+  length: string | null;
+}) {
+  return formatVariantSelectionLabel({
+    sizeLabel: variant.sizeLabel,
+    waist: variant.waist,
+    length: variant.length,
+  });
 }
 
 function extractStripeErrorField(err: unknown, key: 'code' | 'type') {
@@ -213,7 +226,7 @@ export async function POST(req: Request) {
         }
         if (reqItem.quantity > selectedVariant.quantity) {
           return NextResponse.json(
-            { error: `Only ${selectedVariant.quantity} unit${selectedVariant.quantity === 1 ? '' : 's'} of size ${selectedVariant.waist && selectedVariant.length ? `${selectedVariant.waist}/${selectedVariant.length}` : selectedVariant.sizeLabel} for "${product.title}" available.` },
+            { error: `Only ${selectedVariant.quantity} unit${selectedVariant.quantity === 1 ? '' : 's'} of size ${formatVariantErrorLabel(selectedVariant)} for "${product.title}" available.` },
             { status: 400 },
           );
         }
