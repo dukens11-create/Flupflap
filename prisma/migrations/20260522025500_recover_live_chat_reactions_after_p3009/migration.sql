@@ -32,7 +32,11 @@ ALTER TABLE "GarageSaleChat"
   ADD COLUMN IF NOT EXISTS "guestName" TEXT,
   ADD COLUMN IF NOT EXISTS "message" VARCHAR(500),
   ADD COLUMN IF NOT EXISTS "isHidden" BOOLEAN,
-  ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+  ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP;
+
+UPDATE "GarageSaleChat"
+SET "message" = ''
+WHERE "message" IS NULL;
 
 UPDATE "GarageSaleChat"
 SET "isHidden" = false
@@ -40,6 +44,24 @@ WHERE "isHidden" IS NULL;
 
 DO $$
 BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'GarageSaleChat'
+      AND column_name = 'message'
+  ) THEN
+    IF NOT EXISTS (
+      SELECT 1
+      FROM "GarageSaleChat"
+      WHERE "message" IS NULL
+      LIMIT 1
+    ) THEN
+      ALTER TABLE "GarageSaleChat"
+        ALTER COLUMN "message" SET NOT NULL;
+    END IF;
+  END IF;
+
   IF EXISTS (
     SELECT 1
     FROM information_schema.columns
@@ -58,6 +80,31 @@ BEGIN
     ) THEN
       ALTER TABLE "GarageSaleChat"
         ALTER COLUMN "isHidden" SET NOT NULL;
+    END IF;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'GarageSaleChat'
+      AND column_name = 'createdAt'
+  ) THEN
+    UPDATE "GarageSaleChat"
+    SET "createdAt" = CURRENT_TIMESTAMP
+    WHERE "createdAt" IS NULL;
+
+    ALTER TABLE "GarageSaleChat"
+      ALTER COLUMN "createdAt" SET DEFAULT CURRENT_TIMESTAMP;
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM "GarageSaleChat"
+      WHERE "createdAt" IS NULL
+      LIMIT 1
+    ) THEN
+      ALTER TABLE "GarageSaleChat"
+        ALTER COLUMN "createdAt" SET NOT NULL;
     END IF;
   END IF;
 END $$;
@@ -131,7 +178,7 @@ ALTER TABLE "GarageSaleReaction"
   ADD COLUMN IF NOT EXISTS "userId" TEXT,
   ADD COLUMN IF NOT EXISTS "guestId" TEXT,
   ADD COLUMN IF NOT EXISTS "type" TEXT,
-  ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+  ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP;
 
 UPDATE "GarageSaleReaction"
 SET "type" = 'like'
@@ -157,6 +204,31 @@ BEGIN
     ) THEN
       ALTER TABLE "GarageSaleReaction"
         ALTER COLUMN "type" SET NOT NULL;
+    END IF;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'GarageSaleReaction'
+      AND column_name = 'createdAt'
+  ) THEN
+    UPDATE "GarageSaleReaction"
+    SET "createdAt" = CURRENT_TIMESTAMP
+    WHERE "createdAt" IS NULL;
+
+    ALTER TABLE "GarageSaleReaction"
+      ALTER COLUMN "createdAt" SET DEFAULT CURRENT_TIMESTAMP;
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM "GarageSaleReaction"
+      WHERE "createdAt" IS NULL
+      LIMIT 1
+    ) THEN
+      ALTER TABLE "GarageSaleReaction"
+        ALTER COLUMN "createdAt" SET NOT NULL;
     END IF;
   END IF;
 END $$;
