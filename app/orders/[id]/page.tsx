@@ -10,6 +10,7 @@ import type { Metadata } from 'next';
 import OrderRefundRequestCard from '@/components/OrderRefundRequestCard';
 import MarkDeliveredButton from '@/components/MarkDeliveredButton';
 import { ORDER_STATUS_LABELS, getOrderStatusBadgeClass } from '@/lib/order-status';
+import { formatVariantSelectionLabel } from '@/lib/product-variants';
 
 export const metadata: Metadata = { title: 'Order Details' };
 
@@ -109,6 +110,11 @@ export default async function OrderDetailPage({
                 <p className="text-xs text-slate-500">
                   Sold by {item.product.seller.name} · {dollars(item.priceCents)} each · Qty: {item.quantity}
                 </p>
+                {item.productVariantId && (
+                  <p className="text-xs text-slate-500">
+                    {formatVariantSelectionLabel({ sizeLabel: item.sizeLabel, waist: item.waist, length: item.length })}
+                  </p>
+                )}
               </div>
               <p className="font-semibold flex-shrink-0">{dollars(getStoredLineSubtotalCents(item))}</p>
             </div>

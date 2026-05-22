@@ -5,8 +5,6 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { dollars } from '@/lib/money';
-import AddToCartButton from '@/components/AddToCartButton';
-import BuyNowButton from '@/components/BuyNowButton';
 import PickupDistance from '@/components/PickupDistance';
 import ContactSellerButton from '@/components/ContactSellerButton';
 import MakeOfferButton from '@/components/MakeOfferButton';
@@ -21,6 +19,7 @@ import { getSellerResponseStats, SELLER_RESPONSE_WINDOW_HOURS } from '@/lib/mess
 import { conditionBadgeClass } from '@/lib/condition-badge';
 import { absoluteUrl, BRAND_LOGO_PATH, DEFAULT_SEO_DESCRIPTION, MARKETPLACE_CURRENCY } from '@/lib/seo';
 import UserAvatar from '@/components/UserAvatar';
+import ProductPurchasePanel from '@/components/ProductPurchasePanel';
 
 export const dynamic = 'force-dynamic';
 
@@ -128,6 +127,9 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
           where: { status: 'ACTIVE', expiresAt: { gt: new Date() } },
           orderBy: { expiresAt: 'desc' },
           take: 1,
+        },
+        productVariants: {
+          orderBy: [{ waist: 'asc' }, { length: 'asc' }, { sizeLabel: 'asc' }],
         },
       },
     }),
@@ -277,64 +279,23 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             </div>
           )}
 
-          {product.inventory <= 0 ? (
-            <p className="text-red-600 font-semibold">Out of stock</p>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {product.inventory === 1 ? (
-                <p className="text-orange-600 text-sm font-medium">Only 1 left!</p>
-              ) : product.inventory <= 5 ? (
-                <p className="text-orange-600 text-sm font-medium">Only {product.inventory} left!</p>
-              ) : (
-                <p className="text-green-700 text-sm font-medium">In stock: {product.inventory} available</p>
-              )}
-              <AddToCartButton item={{
-                id: product.id,
-                title: product.title,
-                priceCents: product.priceCents,
-                imageUrl: product.imageUrl,
-                shippingCents: product.shippingCents,
-                shippingMode: product.shippingMode ?? undefined,
-                pickupAvailable: product.pickupAvailable,
-                pickupCity: product.pickupCity ?? undefined,
-                pickupState: product.pickupState ?? undefined,
-                inventoryQty: product.inventory,
-              }} />
-              <BuyNowButton
-                productId={product.id}
-                checkoutItem={{
-                  id: product.id,
-                  title: product.title,
-                  priceCents: product.priceCents,
-                  imageUrl: product.imageUrl,
-                  shippingCents: product.shippingCents,
-                  shippingMode: product.shippingMode ?? undefined,
-                  inventoryQty: product.inventory,
-                  pickupAvailable: product.pickupAvailable,
-                  pickupCity: product.pickupCity ?? undefined,
-                  pickupState: product.pickupState ?? undefined,
-                }}
+          <div className="flex flex-col gap-2">
+            {product.inventory <= 0 ? (
+              <p className="text-red-600 font-semibold">Out of stock</p>
+            ) : product.inventory === 1 ? (
+              <p className="text-orange-600 text-sm font-medium">Only 1 left!</p>
+            ) : product.inventory <= 5 ? (
+              <p className="text-orange-600 text-sm font-medium">Only {product.inventory} left!</p>
+            ) : (
+              <p className="text-green-700 text-sm font-medium">In stock: {product.inventory} available</p>
+            )}
+            {(product.inventory > 0 || product.productVariants.length > 0) && (
+              <ProductPurchasePanel
+                product={product}
+                variants={product.productVariants}
               />
-              {product.pickupAvailable && (
-                <BuyNowButton
-                  productId={product.id}
-                  isPickup
-                  checkoutItem={{
-                    id: product.id,
-                    title: product.title,
-                    priceCents: product.priceCents,
-                    imageUrl: product.imageUrl,
-                    shippingCents: product.shippingCents,
-                    shippingMode: product.shippingMode ?? undefined,
-                    inventoryQty: product.inventory,
-                    pickupAvailable: product.pickupAvailable,
-                    pickupCity: product.pickupCity ?? undefined,
-                    pickupState: product.pickupState ?? undefined,
-                  }}
-                />
-              )}
-            </div>
-          )}
+            )}
+          </div>
           {/* Contact seller — hidden for the seller's own listing */}
           {!isOwnListing && (
             <div className="space-y-2">

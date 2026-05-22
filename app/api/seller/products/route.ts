@@ -24,6 +24,7 @@ import {
 import { buildProductSearchableText } from '@/lib/smart-search';
 import { applyRateLimitAsync } from '@/lib/security';
 import { getSchedulingDisabledError } from '@/lib/listing-scheduling';
+import { getAvailableVariantInventory, normalizeProductVariantsInput } from '@/lib/product-variants';
 
 import { SHIPPING_MODES, type ShippingMode } from '@/lib/product-constants';
 const schema = z.object({
@@ -79,6 +80,7 @@ const schema = z.object({
   categoryStale: z.string().trim().optional(),
   productAttributes: z.string().optional(), // JSON string
   mediaEnhancements: z.string().optional(),
+  productVariants: z.string().optional(),
 });
 
 const INVALID_CATEGORY_SUBMIT_MESSAGE = 'Please select a valid category before submitting.';
@@ -311,8 +313,19 @@ export async function POST(req: Request) {
 
     const inventoryRaw = data.inventoryQty || data.inventory || '';
     const inventoryQty = Number(inventoryRaw);
-    if (!isDraftAction && (!inventoryRaw || Number.isNaN(inventoryQty) || !Number.isInteger(inventoryQty) || inventoryQty < 1 || inventoryQty > 9999)) {
+    const normalizedVariantsResult = normalizeProductVariantsInput(data.productVariants);
+    if (normalizedVariantsResult.error) {
+      return jsonError(normalizedVariantsResult.error, 400);
+    }
+    const hasSubmittedVariants = normalizedVariantsResult.variants.length > 0;
+    const variantInventoryQty = getAvailableVariantInventory(normalizedVariantsResult.variants);
+    const resolvedInventoryQty = hasSubmittedVariants ? variantInventoryQty : inventoryQty;
+
+    if (!isDraftAction && !hasSubmittedVariants && (!inventoryRaw || Number.isNaN(inventoryQty) || !Number.isInteger(inventoryQty) || inventoryQty < 1 || inventoryQty > 9999)) {
       return jsonError('Please enter an inventory quantity between 1 and 9999.', 400);
+    }
+    if (!isDraftAction && hasSubmittedVariants && resolvedInventoryQty < 1) {
+      return jsonError('Please enable at least one in-stock size before publishing.', 400);
     }
 
     if (!isDraftAction && !data.condition) {
@@ -506,7 +519,7 @@ export async function POST(req: Request) {
           sellerId,
           shippingCents: Number.isNaN(shippingValue) || shippingValue < 0 ? 0 : (resolvedShippingMode === 'FREE' ? 0 : cents(shippingRaw)),
           shippingMode: resolvedShippingMode,
-          inventory: Number.isInteger(inventoryQty) && inventoryQty >= 0 ? inventoryQty : 0,
+          inventory: Number.isInteger(resolvedInventoryQty) && resolvedInventoryQty >= 0 ? resolvedInventoryQty : 0,
           status: isDraftAction ? 'DRAFT' : isPublishNowAction ? 'ACTIVE' : 'PENDING',
           publishedAt: isPublishNowAction ? new Date() : null,
           pickupAvailable,
@@ -522,6 +535,18 @@ export async function POST(req: Request) {
           widthIn: packageDetails?.widthIn ?? null,
           heightIn: packageDetails?.heightIn ?? null,
           packageType: packageDetails?.packageType ?? null,
+          ...(hasSubmittedVariants && {
+            productVariants: {
+              create: normalizedVariantsResult.variants.map((variant) => ({
+                sizeType: variant.sizeType.toUpperCase() as 'BABY' | 'CLOTHING' | 'SHOES' | 'PANTS' | 'DRESS' | 'CUSTOM',
+                sizeLabel: variant.sizeLabel ?? null,
+                waist: variant.waist ?? null,
+                length: variant.length ?? null,
+                quantity: variant.quantity,
+                isAvailable: variant.isAvailable,
+              })),
+            },
+          }),
         },
         select: {
           id: true,

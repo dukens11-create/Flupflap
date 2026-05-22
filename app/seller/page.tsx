@@ -36,6 +36,7 @@ import { toSellerLifecycleStatus } from '@/lib/listing-status';
 import { normalizeOrderStatus, getOrderStatusBadgeClass } from '@/lib/order-status';
 import { getRoleNavigation } from '@/lib/role-experience';
 import { isSchemaNotInitializedError } from '@/lib/db-errors';
+import { formatVariantSelectionLabel } from '@/lib/product-variants';
 
 export const dynamic = 'force-dynamic';
 
@@ -905,7 +906,14 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
               <tbody>
                 {soldItems.map(item => (
                   <tr key={item.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
-                    <td className="px-4 py-3 font-medium text-slate-800 truncate max-w-[160px]">{item.product.title}</td>
+                    <td className="px-4 py-3 font-medium text-slate-800 truncate max-w-[160px]">
+                      {item.product.title}
+                      {item.productVariantId && (
+                        <p className="text-xs font-normal text-slate-500">
+                          {formatVariantSelectionLabel({ sizeLabel: item.sizeLabel, waist: item.waist, length: item.length })}
+                        </p>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-slate-500 hidden sm:table-cell">
                       {item.order.createdAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                     </td>
@@ -1158,7 +1166,14 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
                     </span>
                   </div>
                   {o.items.map(i => (
-                    <p key={i.id} className="text-sm text-slate-700">{i.product.title} × {i.quantity}</p>
+                    <div key={i.id}>
+                      <p className="text-sm text-slate-700">{i.product.title} × {i.quantity}</p>
+                      {i.productVariantId && (
+                        <p className="text-xs text-slate-500">
+                          {formatVariantSelectionLabel({ sizeLabel: i.sizeLabel, waist: i.waist, length: i.length })}
+                        </p>
+                      )}
+                    </div>
                   ))}
                   <p className="text-sm font-bold mt-2">{dollars(o.items.reduce((s, i) => s + i.lineSubtotalCents + i.shippingCents * i.quantity, 0))}</p>
                   {/* Shipping label fulfillment for non-pickup orders */}

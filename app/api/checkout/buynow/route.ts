@@ -52,13 +52,25 @@ export async function POST(req: Request) {
       productId: string;
       isPickup?: boolean;
       shippingRateInfo?: ShippingRateInfoInput;
+      productVariantId?: string;
     };
-    const { productId, isPickup = false, shippingRateInfo } = body;
+    const { productId, isPickup = false, shippingRateInfo, productVariantId } = body;
     const [settings, product] = await Promise.all([
       getMarketplaceSettings(),
       prisma.product.findUnique({
       where: { id: productId },
       include: {
+        productVariants: {
+          select: {
+            id: true,
+            sizeType: true,
+            sizeLabel: true,
+            waist: true,
+            length: true,
+            quantity: true,
+            isAvailable: true,
+          },
+        },
         seller: {
           select: {
             id: true,
@@ -90,10 +102,19 @@ export async function POST(req: Request) {
     if (!product || (product.status !== 'APPROVED' && product.status !== 'ACTIVE') || product.inventory <= 0) {
       return NextResponse.json({ error: 'Product not available.' }, { status: 400 });
     }
+    if (product.productVariants.length > 0) {
+      if (!productVariantId) {
+        return NextResponse.json({ error: 'Please choose a size before purchasing.' }, { status: 400 });
+      }
+      const selectedVariant = product.productVariants.find((variant) => variant.id === productVariantId);
+      if (!selectedVariant || !selectedVariant.isAvailable || selectedVariant.quantity < 1) {
+        return NextResponse.json({ error: 'Selected size is out of stock.' }, { status: 400 });
+      }
+    }
 
     // Validate pickup is actually available if requested
     const actualPickup = isPickup && product.pickupAvailable;
-    const items = [{ productId: product.id, quantity: 1 }];
+    const items = [{ productId: product.id, quantity: 1, productVariantId }];
     const pickupItemIds = actualPickup ? [product.id] : [];
 
     // Handle calculated shipping

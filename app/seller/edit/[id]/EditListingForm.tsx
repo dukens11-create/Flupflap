@@ -6,6 +6,8 @@ import CategoryPicker, { type SelectedCategoryState } from '@/components/Categor
 import ConditionPicker from '@/components/ConditionPicker';
 import MediaUpload, { type MediaUploadState } from '@/components/MediaUpload';
 import { readApiMessage } from '@/lib/read-api-message';
+import SizeVariantEditor from '@/components/SizeVariantEditor';
+import type { ProductSizeType, ProductVariantDraft } from '@/lib/product-variants';
 
 interface EditListingFormProps {
   id: string;
@@ -45,6 +47,8 @@ interface EditListingFormProps {
   defaultPickupCity?: string | null;
   defaultPickupState?: string | null;
   defaultPickupPostalCode?: string | null;
+  defaultSizeType?: ProductSizeType | null;
+  defaultVariants?: ProductVariantDraft[];
 }
 
 const INVALID_CATEGORY_MESSAGE = 'Please select a valid category before submitting.';
@@ -92,6 +96,8 @@ export default function EditListingForm({
   defaultPickupCity,
   defaultPickupState,
   defaultPickupPostalCode,
+  defaultSizeType,
+  defaultVariants = [],
 }: EditListingFormProps) {
   const router = useRouter();
   const [submitError, setSubmitError] = useState('');
@@ -384,6 +390,8 @@ export default function EditListingForm({
           defaultValue={defaultInventory}
         />
       </div>
+
+      <SizeVariantEditor defaultSizeType={defaultSizeType} defaultVariants={defaultVariants} />
 
       <fieldset
         className={`border rounded-xl p-4 space-y-3 ${

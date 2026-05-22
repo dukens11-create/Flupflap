@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { readApiMessage } from '@/lib/read-api-message';
+import { formatVariantSelectionLabel } from '@/lib/product-variants';
 
 interface CartItem {
   id: string;
@@ -16,6 +17,11 @@ interface CartItem {
   pickupAvailable?: boolean;
   pickupCity?: string;
   pickupState?: string;
+  productVariantId?: string;
+  sizeType?: string;
+  sizeLabel?: string;
+  waist?: string;
+  length?: string;
 }
 
 type RateQuote = {
@@ -592,7 +598,7 @@ export default function CheckoutPage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            items: items.map(i => ({ productId: i.id, quantity: i.quantity })),
+            items: items.map(i => ({ productId: i.id, quantity: i.quantity, productVariantId: i.productVariantId })),
             pickupItemIds,
             ...(sourceOfferId ? { offerId: sourceOfferId } : {}),
             shippingRateInfo: {
@@ -735,7 +741,7 @@ export default function CheckoutPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          items: items.map(i => ({ productId: i.id, quantity: i.quantity })),
+          items: items.map(i => ({ productId: i.id, quantity: i.quantity, productVariantId: i.productVariantId })),
           pickupItemIds,
           ...(sourceOfferId ? { offerId: sourceOfferId } : {}),
           shippingRateInfo,
@@ -814,6 +820,11 @@ export default function CheckoutPage() {
                   {dollars(item.priceCents)} × {item.quantity}
                   {itemShippingLabel(item, isPickup(item.id))}
                 </p>
+                {item.productVariantId && (
+                  <p className="text-xs text-slate-500">
+                    {formatVariantSelectionLabel({ sizeLabel: item.sizeLabel, waist: item.waist, length: item.length })}
+                  </p>
+                )}
               </div>
               <p className="font-semibold flex-shrink-0">
                 {dollars(item.priceCents * item.quantity)}

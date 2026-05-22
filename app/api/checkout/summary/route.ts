@@ -28,7 +28,7 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json() as {
-      items: { productId: string; quantity: number }[];
+      items: { productId: string; quantity: number; productVariantId?: string }[];
       pickupItemIds?: string[];
       shippingRateInfo?: ShippingRateInfoInput;
       offerId?: string;
@@ -48,6 +48,17 @@ export async function POST(req: Request) {
           inventory: { gt: 0 },
         },
         include: {
+          productVariants: {
+            select: {
+              id: true,
+              sizeType: true,
+              sizeLabel: true,
+              waist: true,
+              length: true,
+              quantity: true,
+              isAvailable: true,
+            },
+          },
           seller: {
             select: {
               id: true,
@@ -112,7 +123,28 @@ export async function POST(req: Request) {
 
     for (const product of products) {
       const reqItem = items.find(item => item.productId === product.id);
-      if (reqItem && reqItem.quantity > product.inventory) {
+      if (!reqItem) continue;
+      if (product.productVariants.length > 0) {
+        if (!reqItem.productVariantId) {
+          return NextResponse.json(
+            { error: `Please select a size for "${product.title}" before checkout.` },
+            { status: 400 },
+          );
+        }
+        const selectedVariant = product.productVariants.find((variant) => variant.id === reqItem.productVariantId);
+        if (!selectedVariant || !selectedVariant.isAvailable || selectedVariant.quantity < 1) {
+          return NextResponse.json(
+            { error: `The selected size for "${product.title}" is out of stock.` },
+            { status: 400 },
+          );
+        }
+        if (reqItem.quantity > selectedVariant.quantity) {
+          return NextResponse.json(
+            { error: `Only ${selectedVariant.quantity} unit${selectedVariant.quantity === 1 ? '' : 's'} of the selected size for "${product.title}" available.` },
+            { status: 400 },
+          );
+        }
+      } else if (reqItem.quantity > product.inventory) {
         return NextResponse.json(
           { error: `Only ${product.inventory} unit${product.inventory === 1 ? '' : 's'} of "${product.title}" available.` },
           { status: 400 },

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import CategoryPicker, { type SelectedCategoryState } from '@/components/CategoryPicker';
 import ConditionPicker from '@/components/ConditionPicker';
 import MediaUpload, { type MediaUploadState } from '@/components/MediaUpload';
+import SizeVariantEditor from '@/components/SizeVariantEditor';
 import { readApiMessage } from '@/lib/read-api-message';
 import type { AiListingResponse } from '@/app/api/ai/generate-listing/route';
 
@@ -477,6 +478,8 @@ export default function NewListingForm() {
         <input name="inventoryQty" type="number" min="1" max="9999" defaultValue="1" className={`input ${errors.inventoryQty ? 'border-red-500 ring-1 ring-red-100' : ''}`} />
         {errors.inventoryQty && <p className="mt-1 text-xs text-red-600">{errors.inventoryQty}</p>}
       </div>
+
+      <SizeVariantEditor />
 
       {/* Package Info for shipping calculation */}
       <fieldset className={`border rounded-xl p-4 space-y-3 ${errors.shippingPackage ? 'border-red-300 bg-red-50/40' : 'border-slate-200'}`}>

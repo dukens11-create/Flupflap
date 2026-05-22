@@ -13,15 +13,32 @@ type Item = {
   pickupAvailable?: boolean;
   pickupCity?: string;
   pickupState?: string;
+  productVariantId?: string;
+  sizeType?: string;
+  sizeLabel?: string;
+  waist?: string;
+  length?: string;
 };
 
-export default function AddToCartButton({ item }: { item: Omit<Item, 'quantity'> }) {
+export default function AddToCartButton({
+  item,
+  requireVariantSelection = false,
+}: {
+  item: Omit<Item, 'quantity'>;
+  requireVariantSelection?: boolean;
+}) {
   const [done, setDone] = useState(false);
   const [capped, setCapped] = useState(false);
   const [qty, setQty] = useState(1);
+  const [error, setError] = useState('');
   const maxQty = Math.min(item.inventoryQty, 99);
 
   function add() {
+    if (requireVariantSelection && !item.productVariantId) {
+      setError('Please choose a size before adding this item.');
+      return;
+    }
+    setError('');
     const raw = localStorage.getItem('flupflap_cart');
     let cart: Item[] = [];
     if (raw) {
@@ -40,6 +57,11 @@ export default function AddToCartButton({ item }: { item: Omit<Item, 'quantity'>
       existing.quantity = clamped;
       existing.inventoryQty = item.inventoryQty;
       existing.shippingMode = item.shippingMode;
+      existing.productVariantId = item.productVariantId;
+      existing.sizeType = item.sizeType;
+      existing.sizeLabel = item.sizeLabel;
+      existing.waist = item.waist;
+      existing.length = item.length;
       if (wasCapped) setCapped(true);
     } else {
       cart.push({ ...item, quantity: qty });
@@ -59,6 +81,11 @@ export default function AddToCartButton({ item }: { item: Omit<Item, 'quantity'>
 
   return (
     <div className="flex flex-col gap-2">
+      {error && (
+        <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          ⚠ {error}
+        </p>
+      )}
       <div className="flex items-center gap-2">
         <label htmlFor={`qty-${item.id}`} className="text-sm font-medium text-slate-700 flex-shrink-0">Qty:</label>
         <div className="flex items-center border border-slate-300 rounded-lg overflow-hidden">
