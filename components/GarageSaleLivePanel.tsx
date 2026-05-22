@@ -138,11 +138,23 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
 
   // Guest video call state
   const [guestRequests, setGuestRequests] = useState<GuestRequest[]>([]);
-  // Tracks which guests' audio has been unlocked by the seller (started muted for mobile autoplay).
+  // Tracks which guests' audio has been explicitly unlocked by the seller.
+  // Guest video elements always start muted so mobile browsers can autoplay them
+  // (mobile autoplay policies block unmuted video). The seller taps "Tap to hear"
+  // to unmute a specific guest's audio via a user-gesture interaction.
   const [guestAudioUnlocked, setGuestAudioUnlocked] = useState<Set<string>>(new Set());
   const guestPeersRef = useRef<Map<string, GuestPeerState>>(new Map());
   const guestVideoElsRef = useRef<Map<string, HTMLVideoElement>>(new Map());
   const guestPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  /** Remove one or more guest IDs from the per-guest audio-unlock state. */
+  const clearGuestAudioUnlocked = useCallback((...reqIds: string[]) => {
+    setGuestAudioUnlocked((prev) => {
+      const next = new Set(prev);
+      for (const id of reqIds) next.delete(id);
+      return next;
+    });
+  }, []);
 
   const liveDebugEnabled = process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_DEBUG_LIVE_STREAM === '1';
 
@@ -436,16 +448,12 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
         }
       }
       if (removedIds.length > 0) {
-        setGuestAudioUnlocked((prev) => {
-          const next = new Set(prev);
-          for (const id of removedIds) next.delete(id);
-          return next;
-        });
+        clearGuestAudioUnlocked(...removedIds);
       }
     } catch {
       // Silent fail — polling will retry
     }
-  }, [saleId]);
+  }, [clearGuestAudioUnlocked, saleId]);
 
   const handleAcceptGuest = useCallback(async (reqId: string) => {
     try {
@@ -489,7 +497,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
       });
       if (res.ok) {
         setGuestRequests((prev) => prev.filter((r) => r.id !== reqId));
-        setGuestAudioUnlocked((prev) => { const next = new Set(prev); next.delete(reqId); return next; });
+        clearGuestAudioUnlocked(reqId);
         const peerState = guestPeersRef.current.get(reqId);
         if (peerState) {
           peerState.pc.close();
@@ -500,7 +508,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
     } catch {
       // Silent fail
     }
-  }, [logLiveDebug, saleId]);
+  }, [clearGuestAudioUnlocked, logLiveDebug, saleId]);
 
   const handleToggleMuteGuest = useCallback(async (reqId: string, currentlyMuted: boolean) => {
     const action = currentlyMuted ? 'unmute' : 'mute';

@@ -996,6 +996,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
 
     pc.ontrack = (event) => {
       // Guest peer may receive tracks from seller in future bidirectional scenarios.
+      // TODO: wire received tracks to a remoteVideoRef when bidirectional guest-call is implemented.
       logLiveDebug('guest-remote-track-received', { kind: event.track.kind, requestId });
     };
 
