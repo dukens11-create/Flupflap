@@ -5,6 +5,12 @@ import { getCanonicalLiveSaleId, LIVE_ENGAGEMENT_EVENTS, LIVE_ENGAGEMENT_SIGNAL_
 import { RTC_CONFIG, HAS_TURN_CONFIG } from '@/lib/rtc-config';
 import { getIceCandidateType } from '@/lib/rtc-diagnostics';
 import { LIVE_SIGNAL_EVENTS, LIVE_SIGNAL_KINDS, LIVE_SIGNAL_ROLES, getLiveRoomId, getLiveSessionId, MAX_LIVE_GUESTS } from '@/lib/live-signaling';
+import {
+  SELLER_RECONNECT_MAX_ATTEMPTS,
+  SELLER_RECONNECT_MAX_DELAY_MS,
+  SELLER_RECONNECT_JITTER_MS,
+  computeReconnectDelay,
+} from '@/lib/live-stream-viewer-state';
 
 interface Props {
   saleId: string;
@@ -50,10 +56,8 @@ const MOBILE_CAMERA_LOG_PREFIX = '[GarageSaleLivePanel][mobile-camera]';
 const MEDIA_READY_TIMEOUT_MS = 1500;
 // Retry once shortly after the first play() rejection for iOS/Safari startup timing quirks.
 const PLAYBACK_RETRY_DELAY_MS = 120;
-const SELLER_RECONNECT_MAX_ATTEMPTS = 3;
-const SELLER_RECONNECT_STEP_DELAY_MS = 1200;
-const SELLER_RECONNECT_MAX_DELAY_MS = 8000;
-const SELLER_RECONNECT_JITTER_MS = 250;
+// Seller reconnect constants are imported from lib/live-stream-viewer-state to share
+// the same bounds as the buyer viewer reconnect path.
 
 type CameraStatus = 'idle' | 'connecting' | 'ready' | 'awaitingInteraction' | 'blocked' | 'denied' | 'unsupported';
 
@@ -879,10 +883,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
             setLiveConnectionWarning('Connection lost. Could not reconnect the live stream.');
             return;
           }
-          const retryDelay = Math.min(
-            SELLER_RECONNECT_MAX_DELAY_MS,
-            SELLER_RECONNECT_STEP_DELAY_MS * (2 ** (attempt - 1)),
-          ) + Math.floor(Math.random() * SELLER_RECONNECT_JITTER_MS);
+          const retryDelay = computeReconnectDelay(attempt, Math.floor(Math.random() * SELLER_RECONNECT_JITTER_MS));
           clearReconnectRetryTimeout();
           reconnectRetryTimeoutRef.current = window.setTimeout(() => {
             reconnectRetryTimeoutRef.current = null;
@@ -909,10 +910,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
           setLiveConnectionWarning('Connection lost. Could not reconnect the live stream.');
           return;
         }
-        const retryDelay = Math.min(
-          SELLER_RECONNECT_MAX_DELAY_MS,
-          SELLER_RECONNECT_STEP_DELAY_MS * (2 ** (attempt - 1)),
-        ) + Math.floor(Math.random() * SELLER_RECONNECT_JITTER_MS);
+        const retryDelay = computeReconnectDelay(attempt, Math.floor(Math.random() * SELLER_RECONNECT_JITTER_MS));
         clearReconnectRetryTimeout();
         reconnectRetryTimeoutRef.current = window.setTimeout(() => {
           reconnectRetryTimeoutRef.current = null;
@@ -1547,6 +1545,70 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
       window.removeEventListener('beforeunload', endLiveOnPageLeave);
     };
   }, [endLiveOnPageLeave]);
+
+  // Mobile lifecycle resilience: recover seller stream after returning from
+  // background/screen-lock.  Without this, the peer connection can remain in
+  // 'disconnected' or 'failed' silently after the browser suspends the tab.
+  useEffect(() => {
+    if (!isLive) return;
+
+    const handleVisibilityChange = () => {
+      logLiveDebug('lifecycle-visibility-change', {
+        hidden: document.hidden,
+        visibilityState: document.visibilityState,
+      });
+
+      if (document.hidden) return;
+
+      // Page is visible again while live — check if the peer needs recovery.
+      const pc = peerRef.current;
+      const pcState = pc?.connectionState;
+      const iceState = pc?.iceConnectionState;
+      logLiveDebug('lifecycle-resume', { pcState: pcState ?? 'none', iceState: iceState ?? 'none' });
+
+      if (!pc || pcState === 'failed' || pcState === 'closed') {
+        // Connection is gone — attempt a full re-offer immediately (if no attempt
+        // already in flight from the connection-state handler).
+        if (!reconnectRetryTimeoutRef.current) {
+          logLiveDebug('seller-reconnect', { reason: 'visibility-resume-failed', pcState: pcState ?? 'none' });
+          void (async () => {
+            try {
+              await createAndSendOfferRef.current?.();
+            } catch {
+              startSignalPollingRef.current?.();
+            }
+          })();
+        }
+      } else if (
+        (pcState === 'disconnected' || iceState === 'disconnected') &&
+        !reconnectRetryTimeoutRef.current
+      ) {
+        // Disconnected and no recovery already scheduled — kick off a bounded retry.
+        const attempt = reconnectAttemptRef.current + 1;
+        if (attempt <= SELLER_RECONNECT_MAX_ATTEMPTS) {
+          reconnectAttemptRef.current = attempt;
+          const retryDelay = computeReconnectDelay(attempt, Math.floor(Math.random() * SELLER_RECONNECT_JITTER_MS));
+          logLiveDebug('seller-reconnect', { reason: 'visibility-resume-disconnected', attempt, retryDelay });
+          reconnectRetryTimeoutRef.current = window.setTimeout(() => {
+            reconnectRetryTimeoutRef.current = null;
+            if (!liveRef.current) return;
+            closePeerConnection();
+            signalCursorRef.current = null;
+            void (async () => {
+              try {
+                await createAndSendOfferRef.current?.();
+              } catch {
+                startSignalPollingRef.current?.();
+              }
+            })();
+          }, retryDelay);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [isLive, logLiveDebug, closePeerConnection]);
 
   const cameraStatusLabel = (() => {
     switch (cameraStatus) {

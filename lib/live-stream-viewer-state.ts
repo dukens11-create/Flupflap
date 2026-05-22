@@ -9,6 +9,14 @@ export const RECONNECT_MAX_DELAY_MS = 8000;
 export const RECONNECT_JITTER_MS = 250;
 export const WAITING_FOR_PUBLISHER_TIMEOUT_MS = 15000;
 
+// Seller reconnect uses the same bounds as the buyer to keep behaviour consistent.
+// Re-exported under the SELLER_ prefix so the seller component can import them
+// by a name that makes context obvious, without duplicating the values.
+export const SELLER_RECONNECT_MAX_ATTEMPTS = MAX_RECONNECT_ATTEMPTS;
+export const SELLER_RECONNECT_STEP_DELAY_MS = RECONNECT_STEP_DELAY_MS;
+export const SELLER_RECONNECT_MAX_DELAY_MS = RECONNECT_MAX_DELAY_MS;
+export const SELLER_RECONNECT_JITTER_MS = RECONNECT_JITTER_MS;
+
 export const STREAM_RECONNECTING_MESSAGE =
   'Live stream connection was interrupted. Trying to reconnect…';
 export const STREAM_TERMINAL_FAILURE_MESSAGE =

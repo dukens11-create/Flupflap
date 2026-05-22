@@ -894,6 +894,54 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
     };
   }, [clearConnectionRecoveryTimeout, clearReconnectRetryTimeout, clearWaitingForPublisherTimer, closePeerConnection, stopSignalPolling]);
 
+  // Mobile lifecycle resilience: recover remote stream after returning from
+  // background/screen-lock/app-switch.  On mobile browsers the peer connection
+  // can silently enter 'disconnected' or 'failed' while the page is hidden.
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      logLiveDebug('lifecycle-visibility-change', {
+        hidden: document.hidden,
+        visibilityState: document.visibilityState,
+      });
+
+      if (document.hidden) return;
+
+      // Page is visible again — recover if the connection is degraded.
+      const pc = peerRef.current;
+      if (
+        !pc ||
+        pc.connectionState === 'failed' ||
+        pc.connectionState === 'disconnected' ||
+        pc.connectionState === 'closed' ||
+        pc.iceConnectionState === 'failed' ||
+        pc.iceConnectionState === 'disconnected'
+      ) {
+        logLiveDebug('lifecycle-resume-reconnect-trigger', {
+          pcState: pc?.connectionState ?? 'none',
+          iceState: pc?.iceConnectionState ?? 'none',
+        });
+        scheduleConnectionRecovery('visibility-resume');
+      }
+    };
+
+    // iOS Safari may restore pages from bfcache; all WebRTC connections are
+    // stale after a persisted pageshow, so force a reconnect attempt.
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        logLiveDebug('lifecycle-pageshow-persisted');
+        reconnectAttemptRef.current = 0;
+        scheduleConnectionRecovery('pageshow-bfcache');
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pageshow', handlePageShow);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pageshow', handlePageShow);
+    };
+  }, [isLive, logLiveDebug, scheduleConnectionRecovery]);
+
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;

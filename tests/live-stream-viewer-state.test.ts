@@ -6,6 +6,8 @@
  *  - exponential backoff stays within the maximum ceiling.
  *  - all connection status labels are defined and non-empty.
  *  - waiting-for-publisher state is a valid status with its own label.
+ *  - seller reconnect constants are consistent with buyer reconnect constants.
+ *  - buyer playback state transitions during reconnect/visibility-resume.
  */
 
 import test from 'node:test';
@@ -17,11 +19,16 @@ import {
   WAITING_FOR_PUBLISHER_TIMEOUT_MS,
   STREAM_RECONNECTING_MESSAGE,
   STREAM_TERMINAL_FAILURE_MESSAGE,
+  SELLER_RECONNECT_MAX_ATTEMPTS,
+  SELLER_RECONNECT_MAX_DELAY_MS,
+  SELLER_RECONNECT_STEP_DELAY_MS,
+  SELLER_RECONNECT_JITTER_MS,
   computeReconnectDelay,
   shouldAttemptReconnect,
   getConnectionStatusLabel,
   type ViewerConnectionStatus,
 } from '@/lib/live-stream-viewer-state';
+import { getBuyerPlaybackState } from '@/lib/garage-sale-live-stream';
 
 // ── MAX_RECONNECT_ATTEMPTS ────────────────────────────────────────────────────
 
@@ -141,4 +148,75 @@ test('STREAM_TERMINAL_FAILURE_MESSAGE is defined and non-empty', () => {
 
 test('STREAM_RECONNECTING_MESSAGE and STREAM_TERMINAL_FAILURE_MESSAGE are different', () => {
   assert.notEqual(STREAM_RECONNECTING_MESSAGE, STREAM_TERMINAL_FAILURE_MESSAGE);
+});
+
+// ── Seller reconnect constants ────────────────────────────────────────────────
+
+test('SELLER_RECONNECT_MAX_ATTEMPTS matches buyer MAX_RECONNECT_ATTEMPTS', () => {
+  assert.equal(SELLER_RECONNECT_MAX_ATTEMPTS, MAX_RECONNECT_ATTEMPTS);
+});
+
+test('SELLER_RECONNECT_MAX_DELAY_MS matches buyer RECONNECT_MAX_DELAY_MS', () => {
+  assert.equal(SELLER_RECONNECT_MAX_DELAY_MS, RECONNECT_MAX_DELAY_MS);
+});
+
+test('SELLER_RECONNECT_STEP_DELAY_MS matches buyer RECONNECT_STEP_DELAY_MS', () => {
+  assert.equal(SELLER_RECONNECT_STEP_DELAY_MS, RECONNECT_STEP_DELAY_MS);
+});
+
+test('SELLER_RECONNECT_JITTER_MS is positive', () => {
+  assert.ok(SELLER_RECONNECT_JITTER_MS > 0);
+});
+
+// ── getBuyerPlaybackState: reconnecting / visibility-resume scenarios ──────────
+
+test('getBuyerPlaybackState: reconnecting state shows reconnect badge and title', () => {
+  const state = getBuyerPlaybackState({
+    isServerLive: true,
+    hasRemoteMedia: false,
+    connectionStatus: 'reconnecting',
+    recoveringConnection: true,
+  });
+  assert.equal(state.showLiveBadge, false);
+  assert.ok(state.statusLabel.toLowerCase().includes('reconnect'));
+  assert.ok(state.waitingTitle.toLowerCase().includes('reconnect'));
+});
+
+test('getBuyerPlaybackState: failed state shows error title without live badge', () => {
+  const state = getBuyerPlaybackState({
+    isServerLive: true,
+    hasRemoteMedia: false,
+    connectionStatus: 'failed',
+    recoveringConnection: false,
+  });
+  assert.equal(state.showLiveBadge, false);
+  assert.ok(
+    state.statusLabel.toLowerCase().includes('unable') || state.statusLabel.toLowerCase().includes('fail'),
+  );
+  assert.ok(state.waitingTitle.length > 0);
+});
+
+test('getBuyerPlaybackState: recovering from visibility-resume (recoveringConnection=true) shows reconnect state', () => {
+  // Simulates the state during a visibility-resume reconnect triggered by
+  // the visibilitychange mobile lifecycle handler.
+  const state = getBuyerPlaybackState({
+    isServerLive: true,
+    hasRemoteMedia: false,
+    connectionStatus: 'connecting',
+    recoveringConnection: true,
+  });
+  assert.equal(state.showLiveBadge, false);
+  assert.ok(state.statusLabel.toLowerCase().includes('reconnect'));
+});
+
+test('getBuyerPlaybackState: live resumes to full live state after successful reconnect', () => {
+  const state = getBuyerPlaybackState({
+    isServerLive: true,
+    hasRemoteMedia: true,
+    connectionStatus: 'live',
+    recoveringConnection: false,
+  });
+  assert.equal(state.showLiveBadge, true);
+  assert.equal(state.statusLabel, 'Live');
+  assert.equal(state.waitingTitle, '');
 });
