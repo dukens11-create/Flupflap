@@ -30,13 +30,9 @@ ALTER TABLE "GarageSaleChat"
   ADD COLUMN IF NOT EXISTS "userId" TEXT,
   ADD COLUMN IF NOT EXISTS "sellerId" TEXT,
   ADD COLUMN IF NOT EXISTS "guestName" TEXT,
-  ADD COLUMN IF NOT EXISTS "message" VARCHAR(500) DEFAULT '',
-  ADD COLUMN IF NOT EXISTS "isHidden" BOOLEAN,
+  ADD COLUMN IF NOT EXISTS "message" VARCHAR(500),
+  ADD COLUMN IF NOT EXISTS "isHidden" BOOLEAN DEFAULT false,
   ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP;
-
-UPDATE "GarageSaleChat"
-SET "message" = ''
-WHERE "message" IS NULL;
 
 UPDATE "GarageSaleChat"
 SET "isHidden" = false
@@ -51,6 +47,13 @@ BEGIN
       AND table_name = 'GarageSaleChat'
       AND column_name = 'message'
   ) THEN
+    ALTER TABLE "GarageSaleChat"
+      ALTER COLUMN "message" SET DEFAULT '';
+
+    UPDATE "GarageSaleChat"
+    SET "message" = ''
+    WHERE "message" IS NULL;
+
     IF NOT EXISTS (
       SELECT 1
       FROM "GarageSaleChat"
@@ -189,7 +192,7 @@ CREATE TABLE IF NOT EXISTS "GarageSaleReaction" (
 ALTER TABLE "GarageSaleReaction"
   ADD COLUMN IF NOT EXISTS "userId" TEXT,
   ADD COLUMN IF NOT EXISTS "guestId" TEXT,
-  ADD COLUMN IF NOT EXISTS "type" TEXT,
+  ADD COLUMN IF NOT EXISTS "type" TEXT DEFAULT 'like',
   ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP;
 
 UPDATE "GarageSaleReaction"
