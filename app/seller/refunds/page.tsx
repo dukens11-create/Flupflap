@@ -1,9 +1,9 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { prisma } from '@/lib/db';
 import { requireSeller } from '@/lib/require-seller';
 import SellerRefundReviewList from '@/components/SellerRefundReviewList';
 import { dollars } from '@/lib/money';
+import { getSellerRefundsData } from '@/lib/seller-refunds';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Seller Refunds' };
@@ -24,46 +24,18 @@ export default async function SellerRefundsPage() {
     timeZone: 'UTC',
   });
 
-  const refundRequests = await prisma.refundRequest.findMany({
-    where: { sellerId },
-    include: {
-      order: {
-        select: {
-          id: true,
-          status: true,
-          totalCents: true,
-          buyer: {
-            select: {
-              name: true,
-              email: true,
-            },
-          },
-        },
-      },
-    },
-    orderBy: { createdAt: 'desc' },
-  });
+  const {
+    refundRequests,
+    refundHistory,
+    refundRequestsFetchFailed,
+    refundHistoryFetchFailed,
+    refundHistorySchemaNotInitialized,
+  } = await getSellerRefundsData(sellerId);
 
   const serializableRefundRequests = refundRequests.map((request) => ({
     ...request,
     createdAt: request.createdAt.toISOString(),
   }));
-
-  let refundHistory: Awaited<ReturnType<typeof prisma.sellerRefundHistory.findMany>> = [];
-  let refundHistoryUnavailable = false;
-  try {
-    refundHistory = await prisma.sellerRefundHistory.findMany({
-      where: { sellerId },
-      orderBy: { createdAt: 'desc' },
-      take: 100,
-    });
-  } catch (error) {
-    refundHistoryUnavailable = true;
-    console.error('[seller/refunds] Failed to load seller refund history', {
-      sellerId,
-      error,
-    });
-  }
 
   return (
     <main className="mx-auto max-w-4xl space-y-6">
@@ -77,9 +49,11 @@ export default async function SellerRefundsPage() {
 
       <section className="space-y-3">
         <h2 className="text-xl font-semibold">Refund history</h2>
-        {refundHistoryUnavailable ? (
+        {refundHistoryFetchFailed ? (
           <div className="card p-6 text-sm text-amber-700">
-            Refund history is temporarily unavailable. Please try again shortly.
+            {refundHistorySchemaNotInitialized
+              ? 'Refund history setup is still in progress. Please reload once migrations have been applied.'
+              : 'Refund history could not be loaded right now. You can still review active refund requests below.'}
           </div>
         ) : refundHistory.length === 0 ? (
           <div className="card p-6 text-sm text-slate-500">No refund history yet.</div>
@@ -127,7 +101,13 @@ export default async function SellerRefundsPage() {
         <p className="text-sm text-slate-500">
           Review buyer refund requests and provide your response for admin review.
         </p>
-        <SellerRefundReviewList initialRefundRequests={serializableRefundRequests} />
+        {refundRequestsFetchFailed ? (
+          <div className="card p-6 text-sm text-amber-700">
+            Refund requests could not be loaded right now. Please refresh the page to try again.
+          </div>
+        ) : (
+          <SellerRefundReviewList initialRefundRequests={serializableRefundRequests} />
+        )}
       </section>
     </main>
   );
