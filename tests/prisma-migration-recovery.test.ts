@@ -21,14 +21,22 @@ test('corrective P3009 migration uses idempotent guard patterns', () => {
 
 test('P3009 runbook includes required production recovery commands', () => {
   const runbook = readFileSync(runbookPath, 'utf8');
+  const rolledBackCommand =
+    'prisma migrate resolve --rolled-back 20260521153000_backfill_live_chat_and_reactions_schema';
+  const deployCommand = 'prisma migrate deploy';
+  const appliedCommand =
+    'prisma migrate resolve --applied 20260521153000_backfill_live_chat_and_reactions_schema';
 
-  assert.match(
-    runbook,
-    /prisma migrate resolve --rolled-back 20260521153000_backfill_live_chat_and_reactions_schema/
-  );
-  assert.match(runbook, /prisma migrate deploy/);
-  assert.match(
-    runbook,
-    /prisma migrate resolve --applied 20260521153000_backfill_live_chat_and_reactions_schema/
-  );
+  assert.ok(runbook.includes(rolledBackCommand));
+  assert.ok(runbook.includes(deployCommand));
+  assert.ok(runbook.includes(appliedCommand));
+
+  const rolledBackIndex = runbook.indexOf(rolledBackCommand);
+  const deployIndex = runbook.indexOf(deployCommand);
+  const appliedIndex = runbook.indexOf(appliedCommand);
+
+  assert.ok(rolledBackIndex >= 0);
+  assert.ok(deployIndex > rolledBackIndex);
+  assert.ok(appliedIndex > deployIndex);
+  assert.match(runbook, /Do \*\*not\*\* use `--applied` as the default recovery action/);
 });
