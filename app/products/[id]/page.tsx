@@ -280,7 +280,11 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
           )}
 
           <div className="flex flex-col gap-2">
-            {product.inventory <= 0 ? (
+            {product.productVariants.length > 0 ? (
+              product.inventory <= 0 && (
+                <p className="text-red-600 font-semibold">All sizes sold out</p>
+              )
+            ) : product.inventory <= 0 ? (
               <p className="text-red-600 font-semibold">Out of stock</p>
             ) : product.inventory === 1 ? (
               <p className="text-orange-600 text-sm font-medium">Only 1 left!</p>
