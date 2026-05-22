@@ -8,8 +8,36 @@
 
 -- live_sessions equivalent in this codebase is GarageSale live state.
 ALTER TABLE "GarageSale"
-  ADD COLUMN IF NOT EXISTS "isLive" BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS "isLive" BOOLEAN,
   ADD COLUMN IF NOT EXISTS "liveStartedAt" TIMESTAMP(3);
+
+UPDATE "GarageSale"
+SET "isLive" = false
+WHERE "isLive" IS NULL;
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'GarageSale'
+      AND column_name = 'isLive'
+  ) THEN
+    ALTER TABLE "GarageSale"
+      ALTER COLUMN "isLive" SET DEFAULT false;
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM "GarageSale"
+      WHERE "isLive" IS NULL
+      LIMIT 1
+    ) THEN
+      ALTER TABLE "GarageSale"
+        ALTER COLUMN "isLive" SET NOT NULL;
+    END IF;
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS "GarageSale_isLive_idx" ON "GarageSale"("isLive");
 
@@ -47,9 +75,6 @@ BEGIN
       AND table_name = 'GarageSaleChat'
       AND column_name = 'message'
   ) THEN
-    ALTER TABLE "GarageSaleChat"
-      ALTER COLUMN "message" SET DEFAULT '';
-
     UPDATE "GarageSaleChat"
     SET "message" = ''
     WHERE "message" IS NULL;
@@ -62,18 +87,6 @@ BEGIN
     ) THEN
       ALTER TABLE "GarageSaleChat"
         ALTER COLUMN "message" SET NOT NULL;
-    END IF;
-
-    IF EXISTS (
-      SELECT 1
-      FROM information_schema.columns
-      WHERE table_schema = 'public'
-        AND table_name = 'GarageSaleChat'
-        AND column_name = 'message'
-        AND column_default IS NOT NULL
-    ) THEN
-      ALTER TABLE "GarageSaleChat"
-        ALTER COLUMN "message" DROP DEFAULT;
     END IF;
   END IF;
 
