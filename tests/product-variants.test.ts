@@ -4,6 +4,7 @@ import {
   formatVariantSelectionLabel,
   getAvailableVariantInventory,
   normalizeProductVariantsInput,
+  PRESET_SIZE_OPTIONS,
 } from '../lib/product-variants';
 
 test('normalizeProductVariantsInput parses valid clothing variants', () => {
@@ -45,7 +46,7 @@ test('formatVariantSelectionLabel formats pants and single-size labels', () => {
   );
 });
 
-test('normalizeProductVariantsInput rejects empty array', () => {
+test('normalizeProductVariantsInput handles empty array', () => {
   const result = normalizeProductVariantsInput(JSON.stringify([]));
   assert.equal(result.error, null);
   assert.equal(result.sizeType, null);
@@ -60,10 +61,10 @@ test('normalizeProductVariantsInput rejects mixed size types', () => {
   assert.equal(result.error, 'All size variants must use the same size format.');
 });
 
-test('normalizeProductVariantsInput handles all size types', () => {
-  for (const sizeType of ['baby', 'clothing', 'shoes', 'dress'] as const) {
+test('normalizeProductVariantsInput handles all non-pants preset size types', () => {
+  for (const sizeType of Object.keys(PRESET_SIZE_OPTIONS) as (keyof typeof PRESET_SIZE_OPTIONS)[]) {
     const result = normalizeProductVariantsInput(JSON.stringify([
-      { sizeType, sizeLabel: 'test', quantity: 2, isAvailable: true },
+      { sizeType, sizeLabel: PRESET_SIZE_OPTIONS[sizeType][0], quantity: 2, isAvailable: true },
     ]));
     assert.equal(result.error, null, `expected no error for ${sizeType}`);
     assert.equal(result.sizeType, sizeType);
@@ -111,7 +112,7 @@ test('normalizeProductVariantsInput marks variant unavailable when quantity is 0
   assert.equal(result.variants[0]?.isAvailable, false);
 });
 
-test('normalizeProductVariantsInput returns null for no input', () => {
+test('normalizeProductVariantsInput returns empty result for no input', () => {
   assert.deepEqual(normalizeProductVariantsInput(null), { variants: [], sizeType: null, error: null });
   assert.deepEqual(normalizeProductVariantsInput(undefined), { variants: [], sizeType: null, error: null });
   assert.deepEqual(normalizeProductVariantsInput(''), { variants: [], sizeType: null, error: null });
