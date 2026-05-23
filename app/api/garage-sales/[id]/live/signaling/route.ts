@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { isGarageSalePubliclyVisible } from '@/lib/garage-sale-visibility';
+import { getCanonicalLiveSaleId } from '@/lib/live-engagement';
 import {
   LIVE_SIGNAL_KINDS,
   LIVE_SIGNAL_ROLES,
@@ -11,6 +12,8 @@ import {
   type LiveSignalRole,
   getLiveRoomId,
   getLiveSessionId,
+  getSignalLiveSessionId,
+  getSignalRoomId,
 } from '@/lib/live-signaling';
 
 export const dynamic = 'force-dynamic';
@@ -32,6 +35,20 @@ const BUYER_VIEWER_ID_REQUIRED_KINDS = new Set<LiveSignalKind>([
 const SELLER_VIEWER_ID_REQUIRED_KINDS = new Set<LiveSignalKind>([
   LIVE_SIGNAL_KINDS.OFFER,
   LIVE_SIGNAL_KINDS.ICE,
+]);
+const ROOM_SCOPED_KINDS = new Set<LiveSignalKind>([
+  LIVE_SIGNAL_KINDS.OFFER,
+  LIVE_SIGNAL_KINDS.ANSWER,
+  LIVE_SIGNAL_KINDS.ICE,
+  LIVE_SIGNAL_KINDS.VIEWER_HEARTBEAT,
+  LIVE_SIGNAL_KINDS.STREAM_READY,
+]);
+const SESSION_SCOPED_KINDS = new Set<LiveSignalKind>([
+  LIVE_SIGNAL_KINDS.OFFER,
+  LIVE_SIGNAL_KINDS.ANSWER,
+  LIVE_SIGNAL_KINDS.ICE,
+  LIVE_SIGNAL_KINDS.VIEWER_HEARTBEAT,
+  LIVE_SIGNAL_KINDS.STREAM_READY,
 ]);
 
 function isSignalRole(value: unknown): value is LiveSignalRole {
@@ -184,6 +201,17 @@ export async function GET(req: Request, { params }: Params) {
 
   const viewerCount = await getActiveViewerCount(id, sale.liveStartedAt);
   const streamReadyCount = await getReadyViewerCount(id, sale.liveStartedAt);
+  console.info('[garage-sale-live-signaling] room poll snapshot', {
+    saleId: id,
+    roomId: getLiveRoomId(id),
+    liveSessionId: getLiveSessionId(id, sale.liveStartedAt),
+    role: roleParam,
+    viewerCount,
+    streamReadyCount,
+    signalCount: signals.length,
+    operation: 'live.signaling.poll',
+    timestamp: new Date().toISOString(),
+  });
 
   return NextResponse.json({
     isLive: true,
@@ -258,6 +286,21 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: 'viewerId is required for seller offer/ice payloads' }, { status: 400 });
   }
 
+  const payloadRoomId = getSignalRoomId(payload);
+  const payloadLiveSessionId = getSignalLiveSessionId(payload);
+  const payloadSaleId = getCanonicalLiveSaleId(payload as Record<string, unknown>);
+  if (payloadSaleId && payloadSaleId !== id) {
+    console.warn('[garage-sale-live-signaling] sale identifier mismatch', {
+      saleId: id,
+      receivedCanonicalSaleId: payloadSaleId,
+      role,
+      kind,
+      operation: 'live.signaling.write.validate',
+      timestamp: new Date().toISOString(),
+    });
+    return NextResponse.json({ error: 'Live sale identifier mismatch' }, { status: 400 });
+  }
+
   const payloadRaw = JSON.stringify(payload);
   if (Buffer.byteLength(payloadRaw, 'utf8') > 20000) {
     return NextResponse.json({ error: 'Payload exceeds maximum size of 20000 bytes' }, { status: 413 });
@@ -275,6 +318,7 @@ export async function POST(req: Request, { params }: Params) {
       endDate: true,
       isLive: true,
       sellerId: true,
+      liveStartedAt: true,
     },
   });
   if (!sale) {
@@ -283,6 +327,58 @@ export async function POST(req: Request, { params }: Params) {
   if (!isGarageSalePubliclyVisible(sale)) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   if (!sale.isLive) {
     return NextResponse.json({ error: 'Live session is not active' }, { status: 422 });
+  }
+  const expectedRoomId = getLiveRoomId(id);
+  const expectedLiveSessionId = getLiveSessionId(id, sale.liveStartedAt ?? null);
+  if (ROOM_SCOPED_KINDS.has(kind) && !payloadRoomId) {
+    console.warn('[garage-sale-live-signaling] missing room scope', {
+      saleId: id,
+      role,
+      kind,
+      expectedRoomId,
+      operation: 'live.signaling.write.validate',
+      timestamp: new Date().toISOString(),
+    });
+    return NextResponse.json({ error: 'roomId is required for this signal kind' }, { status: 400 });
+  }
+  if (payloadRoomId && payloadRoomId !== expectedRoomId) {
+    console.warn('[garage-sale-live-signaling] room scope mismatch', {
+      saleId: id,
+      role,
+      kind,
+      expectedRoomId,
+      receivedRoomId: payloadRoomId,
+      operation: 'live.signaling.write.validate',
+      timestamp: new Date().toISOString(),
+    });
+    return NextResponse.json({ error: 'roomId does not match the active live room' }, { status: 400 });
+  }
+  if (expectedLiveSessionId && SESSION_SCOPED_KINDS.has(kind)) {
+    if (!payloadLiveSessionId) {
+      console.warn('[garage-sale-live-signaling] missing live session scope', {
+        saleId: id,
+        role,
+        kind,
+        roomId: expectedRoomId,
+        expectedLiveSessionId,
+        operation: 'live.signaling.write.validate',
+        timestamp: new Date().toISOString(),
+      });
+      return NextResponse.json({ error: 'liveSessionId is required for this signal kind' }, { status: 400 });
+    }
+    if (payloadLiveSessionId !== expectedLiveSessionId) {
+      console.warn('[garage-sale-live-signaling] stale live session signal rejected', {
+        saleId: id,
+        role,
+        kind,
+        roomId: expectedRoomId,
+        expectedLiveSessionId,
+        receivedLiveSessionId: payloadLiveSessionId,
+        operation: 'live.signaling.write.validate',
+        timestamp: new Date().toISOString(),
+      });
+      return NextResponse.json({ error: 'liveSessionId does not match the active live session' }, { status: 409 });
+    }
   }
   const session = await getServerSession(authOptions);
   const userId = session?.user?.id ?? null;
@@ -299,6 +395,19 @@ export async function POST(req: Request, { params }: Params) {
     },
     select: { id: true, sender: true, kind: true, createdAt: true },
   });
+
+  if (kind === LIVE_SIGNAL_KINDS.VIEWER_HEARTBEAT) {
+    const viewerCount = await getActiveViewerCount(id, sale.liveStartedAt ?? null);
+    console.info('[garage-sale-live-signaling] viewer heartbeat accepted', {
+      saleId: id,
+      roomId: expectedRoomId,
+      liveSessionId: expectedLiveSessionId,
+      viewerId: getPayloadViewerId(payload),
+      viewerCount,
+      operation: 'live.signaling.viewer_heartbeat',
+      timestamp: new Date().toISOString(),
+    });
+  }
 
   return NextResponse.json(signal, { status: 201 });
 }

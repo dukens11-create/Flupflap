@@ -405,20 +405,65 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
     return nextId;
   }, [saleId]);
 
+  const ensureLiveEngagementContext = useCallback(async () => {
+    if (liveSessionIdRef.current) {
+      return {
+        roomId: liveRoomIdRef.current,
+        liveSessionId: liveSessionIdRef.current,
+      };
+    }
+
+    try {
+      const res = await fetch(`/api/garage-sales/${saleId}/live/signaling?role=BUYER`);
+      if (!res.ok) {
+        console.warn('[GarageSaleBuyerLiveView] Failed to refresh live engagement context', { status: res.status });
+        return {
+          roomId: liveRoomIdRef.current,
+          liveSessionId: liveSessionIdRef.current,
+        };
+      }
+
+      const data = await res.json() as {
+        roomId?: string;
+        liveSessionId?: string | null;
+      };
+
+      if (typeof data.roomId === 'string') {
+        liveRoomIdRef.current = data.roomId;
+      }
+      if (typeof data.liveSessionId === 'string' || data.liveSessionId === null) {
+        liveSessionIdRef.current = data.liveSessionId ?? null;
+      }
+      logLiveRoomDetails(liveRoomIdRef.current, liveSessionIdRef.current, 'engagement-refresh');
+    } catch {
+      console.warn('[GarageSaleBuyerLiveView] Network error refreshing live engagement context');
+    }
+
+    return {
+      roomId: liveRoomIdRef.current,
+      liveSessionId: liveSessionIdRef.current,
+    };
+  }, [logLiveRoomDetails, saleId]);
+
   const sendViewerHeartbeat = useCallback(async () => {
     if (!isLive) return;
+    const liveContext = await ensureLiveEngagementContext();
+    if (!liveContext.liveSessionId) {
+      console.warn('[GarageSaleBuyerLiveView] Skipping viewer heartbeat without an active live session');
+      return;
+    }
     const ok = await postSignal(
       LIVE_SIGNAL_KINDS.VIEWER_HEARTBEAT,
       {
         viewerId: getViewerId(),
-        roomId: liveRoomIdRef.current,
-        liveSessionId: liveSessionIdRef.current,
+        roomId: liveContext.roomId,
+        liveSessionId: liveContext.liveSessionId,
       },
     );
     if (!ok) {
       console.warn('[GarageSaleBuyerLiveView] Viewer heartbeat failed');
     }
-  }, [getViewerId, isLive, postSignal]);
+  }, [ensureLiveEngagementContext, getViewerId, isLive, postSignal]);
 
   const scheduleConnectionRecovery = useCallback((reason: string) => {
     if (!isLive) return false;
@@ -471,46 +516,6 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
     return true;
   }, [clearConnectionRecoveryTimeout, closePeerConnection, isLive, logLiveDebug, sendViewerHeartbeat]);
 
-  const ensureLiveEngagementContext = useCallback(async () => {
-    if (liveSessionIdRef.current) {
-      return {
-        roomId: liveRoomIdRef.current,
-        liveSessionId: liveSessionIdRef.current,
-      };
-    }
-
-    try {
-      const res = await fetch(`/api/garage-sales/${saleId}/live/signaling?role=BUYER`);
-      if (!res.ok) {
-        console.warn('[GarageSaleBuyerLiveView] Failed to refresh live engagement context', { status: res.status });
-        return {
-          roomId: liveRoomIdRef.current,
-          liveSessionId: liveSessionIdRef.current,
-        };
-      }
-
-      const data = await res.json() as {
-        roomId?: string;
-        liveSessionId?: string | null;
-      };
-
-      if (typeof data.roomId === 'string') {
-        liveRoomIdRef.current = data.roomId;
-      }
-      if (typeof data.liveSessionId === 'string' || data.liveSessionId === null) {
-        liveSessionIdRef.current = data.liveSessionId ?? null;
-      }
-      logLiveRoomDetails(liveRoomIdRef.current, liveSessionIdRef.current, 'engagement-refresh');
-    } catch {
-      console.warn('[GarageSaleBuyerLiveView] Network error refreshing live engagement context');
-    }
-
-    return {
-      roomId: liveRoomIdRef.current,
-      liveSessionId: liveSessionIdRef.current,
-    };
-  }, [logLiveRoomDetails, saleId]);
-
   const handleSellerOffer = useCallback(async (
     signalId: string,
     payload: { type?: string; sdp?: string; viewerId?: string },
@@ -518,6 +523,11 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
     const type = payload.type === 'offer' ? payload.type : null;
     if (!type || !payload.sdp) return;
     const viewerId = getViewerId();
+    const liveContext = await ensureLiveEngagementContext();
+    if (!liveContext.liveSessionId) {
+      console.warn('[GarageSaleBuyerLiveView] Missing live session context for seller offer', { signalId });
+      return;
+    }
     if (typeof RTCPeerConnection === 'undefined') {
       setStreamError('Live streaming is not supported in this browser.');
       return;
@@ -605,9 +615,19 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
 
     pc.onicecandidate = (event) => {
       if (!event.candidate) return;
+      const candidate = event.candidate.toJSON();
       const candidateType = rememberCandidateType(event.candidate.candidate);
       logPeerStates('local-ice-candidate', { candidateType });
-      void postSignal(LIVE_SIGNAL_KINDS.ICE, { candidate: event.candidate.toJSON(), viewerId });
+      void (async () => {
+        const scopedContext = await ensureLiveEngagementContext();
+        if (!scopedContext.liveSessionId) return;
+        await postSignal(LIVE_SIGNAL_KINDS.ICE, {
+          candidate,
+          viewerId,
+          roomId: scopedContext.roomId,
+          liveSessionId: scopedContext.liveSessionId,
+        });
+      })();
     };
 
     pc.onconnectionstatechange = () => {
@@ -679,7 +699,13 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
     logLiveDebug('answer-created', { hasSdp: Boolean(answer.sdp), signalId });
     await pc.setLocalDescription(answer);
     logLiveDebug('set-local-description-success', { type: answer.type, signalId });
-    await postSignal(LIVE_SIGNAL_KINDS.ANSWER, { type: answer.type, sdp: answer.sdp, viewerId }, { critical: true });
+    await postSignal(LIVE_SIGNAL_KINDS.ANSWER, {
+      type: answer.type,
+      sdp: answer.sdp,
+      viewerId,
+      roomId: liveContext.roomId,
+      liveSessionId: liveContext.liveSessionId,
+    }, { critical: true });
     logLiveDebug(LIVE_SIGNAL_EVENTS.ANSWER, { signalId });
 
     // Attach srcObject early so the video element is ready when tracks arrive
@@ -687,7 +713,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
       videoRef.current.srcObject = remoteStream;
       void playRemoteStream();
     }
-  }, [clearWaitingForPublisherTimer, closePeerConnection, getViewerId, logLiveDebug, playRemoteStream, postSignal, resetReconnectState, scheduleConnectionRecovery]);
+  }, [clearWaitingForPublisherTimer, closePeerConnection, ensureLiveEngagementContext, getViewerId, logLiveDebug, playRemoteStream, postSignal, rememberCandidateType, resetReconnectState, scheduleConnectionRecovery]);
 
   const pollSignals = useCallback(async () => {
     if (!isLive) return;

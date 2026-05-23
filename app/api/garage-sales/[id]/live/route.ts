@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { buildGarageSaleLiveSessionId } from '@/lib/garage-sale-live-stream';
+import { getLiveRoomId } from '@/lib/live-signaling';
 import {
   getGarageSaleLiveControlsBlockMessage,
   getGarageSaleVisibilityBlockReason,
@@ -69,7 +70,7 @@ export async function POST(req: Request, { params }: Params) {
     // Clear all stale signals and reset liveStartedAt so buyer signal polling
     // starts fresh and old ANSWER/ICE signals are not applied to the new peer.
     // Also end any active guest requests since the stream is restarting.
-    const [, , restarted] = await prisma.$transaction([
+    const [deletedSignals, resetGuestRequests, restarted] = await prisma.$transaction([
       prisma.garageSaleLiveSignal.deleteMany({ where: { saleId: id } }),
       prisma.garageSaleGuestRequest.updateMany({
         where: { saleId: id, status: { in: ['pending', 'accepted'] } },
@@ -81,12 +82,23 @@ export async function POST(req: Request, { params }: Params) {
         select: { id: true, isLive: true, liveStartedAt: true },
       }),
     ]);
+    const roomId = getLiveRoomId(id);
+    const liveSessionId = buildGarageSaleLiveSessionId(restarted.id, restarted.liveStartedAt);
+    console.info('[garage-sale-live] room restarted', {
+      saleId: id,
+      roomId,
+      liveSessionId,
+      clearedSignalCount: deletedSignals.count,
+      resetGuestRequestCount: resetGuestRequests.count,
+      operation: 'live.room.restart',
+      timestamp: new Date().toISOString(),
+    });
     return NextResponse.json(restarted);
   }
 
   const updated = action === 'start'
     ? await (async () => {
-      const [, , started] = await prisma.$transaction([
+      const [deletedSignals, deletedGuestRequests, started] = await prisma.$transaction([
         prisma.garageSaleLiveSignal.deleteMany({ where: { saleId: id } }),
         prisma.garageSaleGuestRequest.deleteMany({ where: { saleId: id } }),
         prisma.garageSale.update({
@@ -95,19 +107,39 @@ export async function POST(req: Request, { params }: Params) {
           select: { id: true, isLive: true, liveStartedAt: true },
         }),
       ]);
+      const roomId = getLiveRoomId(id);
+      const liveSessionId = buildGarageSaleLiveSessionId(started.id, started.liveStartedAt);
+      console.info('[garage-sale-live] room created', {
+        saleId: id,
+        roomId,
+        liveSessionId,
+        clearedSignalCount: deletedSignals.count,
+        clearedGuestRequestCount: deletedGuestRequests.count,
+        operation: 'live.room.start',
+        timestamp: new Date().toISOString(),
+      });
       return started;
     })()
     : await prisma.$transaction(async (tx) => {
-      await tx.garageSaleLiveSignal.deleteMany({ where: { saleId: id } });
-      await tx.garageSaleGuestRequest.updateMany({
+      const deletedSignals = await tx.garageSaleLiveSignal.deleteMany({ where: { saleId: id } });
+      const resetGuestRequests = await tx.garageSaleGuestRequest.updateMany({
         where: { saleId: id, status: { in: ['pending', 'accepted'] } },
         data: { status: 'removed', updatedAt: now },
       });
-      return tx.garageSale.update({
+      const ended = await tx.garageSale.update({
         where: { id },
         data: { isLive: false, liveStartedAt: null },
         select: { id: true, isLive: true, liveStartedAt: true },
       });
+      console.info('[garage-sale-live] room ended', {
+        saleId: id,
+        roomId: getLiveRoomId(id),
+        clearedSignalCount: deletedSignals.count,
+        resetGuestRequestCount: resetGuestRequests.count,
+        operation: 'live.room.end',
+        timestamp: new Date().toISOString(),
+      });
+      return ended;
     });
 
   return NextResponse.json({
