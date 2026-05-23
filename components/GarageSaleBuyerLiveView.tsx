@@ -728,6 +728,12 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
       setViewerCount(data.viewerCount ?? 0);
 
       for (const signal of data.signals) {
+        let viewerIdForSignal: string | null = null;
+        const resolveViewerId = () => {
+          if (!viewerIdForSignal) viewerIdForSignal = getViewerId();
+          return viewerIdForSignal;
+        };
+
         if (signal.kind === LIVE_SIGNAL_KINDS.OFFER) {
           logLiveDebug('signal-offer', { id: signal.id, createdAt: signal.createdAt });
           // Skip already-processed offers without losing the cursor position.
@@ -740,7 +746,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
             signalCursorRef.current = signal.createdAt;
             continue;
           }
-          const viewerId = getViewerId();
+          const viewerId = resolveViewerId();
           if (!payloadTargetsViewer(payload, viewerId)) {
             signalCursorRef.current = signal.createdAt;
             continue;
@@ -764,7 +770,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
         } else if (signal.kind === LIVE_SIGNAL_KINDS.ICE) {
           const payload = signal.payload as { candidate?: RTCIceCandidateInit } | null;
           if (payload?.candidate) {
-            const viewerId = getViewerId();
+            const viewerId = resolveViewerId();
             if (!payloadTargetsViewer(payload, viewerId)) {
               signalCursorRef.current = signal.createdAt;
               continue;

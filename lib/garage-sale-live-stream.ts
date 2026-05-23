@@ -33,10 +33,10 @@ export function getSignalViewerId(payload: unknown) {
   return typeof viewerId === 'string' && viewerId.trim() ? viewerId : null;
 }
 
-export function payloadTargetsViewer(payload: unknown, viewerId: string) {
+export function payloadTargetsViewer(payload: unknown, currentViewerId: string) {
   const targetViewerId = getSignalViewerId(payload);
   if (!targetViewerId) return true;
-  return targetViewerId === viewerId;
+  return targetViewerId === currentViewerId;
 }
 
 type SellerLiveReadyInput = {
