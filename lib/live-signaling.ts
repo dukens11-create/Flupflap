@@ -56,3 +56,21 @@ export function getLiveSessionId(saleId: string, liveStartedAt: Date | null) {
   if (!liveStartedAt) return null;
   return `${saleId}:${liveStartedAt.toISOString()}`;
 }
+
+function readSignalString(value: unknown) {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+export function getSignalRoomId(payload: unknown) {
+  if (!payload || typeof payload !== 'object') return null;
+  const data = payload as { roomId?: unknown; room_id?: unknown };
+  return readSignalString(data.roomId) ?? readSignalString(data.room_id);
+}
+
+export function getSignalLiveSessionId(payload: unknown) {
+  if (!payload || typeof payload !== 'object') return null;
+  const data = payload as { liveSessionId?: unknown; live_session_id?: unknown };
+  return readSignalString(data.liveSessionId) ?? readSignalString(data.live_session_id);
+}

@@ -4,6 +4,8 @@ import {
   LIVE_SIGNAL_EVENTS,
   LIVE_SIGNAL_KINDS,
   LIVE_SIGNAL_ROLES,
+  getSignalLiveSessionId,
+  getSignalRoomId,
   getLiveRoomId,
   getLiveSessionId,
 } from '@/lib/live-signaling';
@@ -19,6 +21,36 @@ test('getLiveSessionId: includes sale id and session timestamp', () => {
 
 test('getLiveSessionId: returns null when live has not started', () => {
   assert.equal(getLiveSessionId('sale-123', null), null);
+});
+
+test('getLiveRoomId: returns room ids isolated per sale', () => {
+  assert.notEqual(getLiveRoomId('sale-a'), getLiveRoomId('sale-b'));
+});
+
+test('signal payload scope readers: support camelCase and snake_case aliases', () => {
+  assert.equal(
+    getSignalRoomId({ roomId: 'garage-sale:sale-123', room_id: 'garage-sale:other' }),
+    'garage-sale:sale-123',
+  );
+  assert.equal(
+    getSignalRoomId({ room_id: 'garage-sale:sale-123' }),
+    'garage-sale:sale-123',
+  );
+  assert.equal(
+    getSignalLiveSessionId({ liveSessionId: 'sale-123:2026-05-23T00:00:00.000Z' }),
+    'sale-123:2026-05-23T00:00:00.000Z',
+  );
+  assert.equal(
+    getSignalLiveSessionId({ live_session_id: 'sale-123:2026-05-23T00:00:00.000Z' }),
+    'sale-123:2026-05-23T00:00:00.000Z',
+  );
+});
+
+test('signal payload scope readers: return null for missing or empty scope fields', () => {
+  assert.equal(getSignalRoomId({ roomId: '   ' }), null);
+  assert.equal(getSignalRoomId({}), null);
+  assert.equal(getSignalLiveSessionId({ liveSessionId: '' }), null);
+  assert.equal(getSignalLiveSessionId(null), null);
 });
 
 test('live signaling constants: include normalized event names and stream-ready kind', () => {
