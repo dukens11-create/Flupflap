@@ -23,6 +23,16 @@ const ACTIVE_VIEWER_WINDOW_MS = 35_000;
 
 const SIGNAL_ROLES = Object.values(LIVE_SIGNAL_ROLES);
 const SIGNAL_KINDS = Object.values(LIVE_SIGNAL_KINDS);
+const BUYER_VIEWER_ID_REQUIRED_KINDS = new Set<LiveSignalKind>([
+  LIVE_SIGNAL_KINDS.ANSWER,
+  LIVE_SIGNAL_KINDS.ICE,
+  LIVE_SIGNAL_KINDS.VIEWER_HEARTBEAT,
+  LIVE_SIGNAL_KINDS.STREAM_READY,
+]);
+const SELLER_VIEWER_ID_REQUIRED_KINDS = new Set<LiveSignalKind>([
+  LIVE_SIGNAL_KINDS.OFFER,
+  LIVE_SIGNAL_KINDS.ICE,
+]);
 
 function isSignalRole(value: unknown): value is LiveSignalRole {
   return typeof value === 'string' && SIGNAL_ROLES.includes(value as LiveSignalRole);
@@ -36,6 +46,14 @@ function parseSince(value: string | null) {
   if (!value) return null;
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function getPayloadViewerId(payload: unknown) {
+  if (!payload || typeof payload !== 'object') return null;
+  const viewerId = (payload as { viewerId?: unknown }).viewerId;
+  if (typeof viewerId !== 'string') return null;
+  const trimmed = viewerId.trim();
+  return trimmed ? trimmed : null;
 }
 
 function checkSellerOwner(saleSellerId: string, userId: string | null) {
@@ -222,6 +240,22 @@ export async function POST(req: Request, { params }: Params) {
 
   if (payload == null || typeof payload !== 'object') {
     return NextResponse.json({ error: 'payload must be an object' }, { status: 400 });
+  }
+
+  if (
+    role === LIVE_SIGNAL_ROLES.BUYER
+    && BUYER_VIEWER_ID_REQUIRED_KINDS.has(kind)
+    && !getPayloadViewerId(payload)
+  ) {
+    return NextResponse.json({ error: 'viewerId is required for buyer signaling payloads' }, { status: 400 });
+  }
+
+  if (
+    role === LIVE_SIGNAL_ROLES.SELLER
+    && SELLER_VIEWER_ID_REQUIRED_KINDS.has(kind)
+    && !getPayloadViewerId(payload)
+  ) {
+    return NextResponse.json({ error: 'viewerId is required for seller offer/ice payloads' }, { status: 400 });
   }
 
   const payloadRaw = JSON.stringify(payload);

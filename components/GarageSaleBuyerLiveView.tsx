@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { MessageCircle, Send, Radio, Eye, Heart, Video, VideoOff, PhoneOff } from 'lucide-react';
 import { LIVE_ENGAGEMENT_EVENTS } from '@/lib/live-engagement';
+import { payloadTargetsViewer } from '@/lib/garage-sale-live-stream';
 import { RTC_CONFIG, HAS_TURN_CONFIG } from '@/lib/rtc-config';
 import { getIceCandidateType, type IceCandidateType } from '@/lib/rtc-diagnostics';
 import { LIVE_SIGNAL_EVENTS, LIVE_SIGNAL_KINDS, LIVE_SIGNAL_ROLES, getLiveRoomId, MAX_LIVE_GUESTS } from '@/lib/live-signaling';
@@ -510,9 +511,13 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
     };
   }, [logLiveRoomDetails, saleId]);
 
-  const handleSellerOffer = useCallback(async (signalId: string, payload: { type?: string; sdp?: string }) => {
+  const handleSellerOffer = useCallback(async (
+    signalId: string,
+    payload: { type?: string; sdp?: string; viewerId?: string },
+  ) => {
     const type = payload.type === 'offer' ? payload.type : null;
     if (!type || !payload.sdp) return;
+    const viewerId = getViewerId();
     if (typeof RTCPeerConnection === 'undefined') {
       setStreamError('Live streaming is not supported in this browser.');
       return;
@@ -602,7 +607,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
       if (!event.candidate) return;
       const candidateType = rememberCandidateType(event.candidate.candidate);
       logPeerStates('local-ice-candidate', { candidateType });
-      void postSignal(LIVE_SIGNAL_KINDS.ICE, { candidate: event.candidate.toJSON() });
+      void postSignal(LIVE_SIGNAL_KINDS.ICE, { candidate: event.candidate.toJSON(), viewerId });
     };
 
     pc.onconnectionstatechange = () => {
@@ -674,7 +679,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
     logLiveDebug('answer-created', { hasSdp: Boolean(answer.sdp), signalId });
     await pc.setLocalDescription(answer);
     logLiveDebug('set-local-description-success', { type: answer.type, signalId });
-    await postSignal(LIVE_SIGNAL_KINDS.ANSWER, { type: answer.type, sdp: answer.sdp }, { critical: true });
+    await postSignal(LIVE_SIGNAL_KINDS.ANSWER, { type: answer.type, sdp: answer.sdp, viewerId }, { critical: true });
     logLiveDebug(LIVE_SIGNAL_EVENTS.ANSWER, { signalId });
 
     // Attach srcObject early so the video element is ready when tracks arrive
@@ -721,6 +726,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
       }
 
       setViewerCount(data.viewerCount ?? 0);
+      const viewerId = getViewerId();
 
       for (const signal of data.signals) {
         if (signal.kind === LIVE_SIGNAL_KINDS.OFFER) {
@@ -730,8 +736,12 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
             signalCursorRef.current = signal.createdAt;
             continue;
           }
-          const payload = signal.payload as { type?: string; sdp?: string } | null;
+          const payload = signal.payload as { type?: string; sdp?: string; viewerId?: string } | null;
           if (!payload) {
+            signalCursorRef.current = signal.createdAt;
+            continue;
+          }
+          if (!payloadTargetsViewer(payload, viewerId)) {
             signalCursorRef.current = signal.createdAt;
             continue;
           }
@@ -754,6 +764,10 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
         } else if (signal.kind === LIVE_SIGNAL_KINDS.ICE) {
           const payload = signal.payload as { candidate?: RTCIceCandidateInit } | null;
           if (payload?.candidate) {
+            if (!payloadTargetsViewer(payload, viewerId)) {
+              signalCursorRef.current = signal.createdAt;
+              continue;
+            }
             const candidateType = rememberCandidateType(payload.candidate.candidate);
             logLiveDebug('signal-ice', { createdAt: signal.createdAt, candidateType });
             if (!peerRef.current || !hasRemoteDescriptionRef.current) {

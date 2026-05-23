@@ -5,6 +5,7 @@ import {
   getBuyerPlaybackState,
   getSignalViewerId,
   isSellerLiveReady,
+  payloadTargetsViewer,
   payloadHasLiveSession,
 } from '@/lib/garage-sale-live-stream';
 
@@ -39,6 +40,9 @@ test('live signal payloads stay scoped to the canonical live session and viewer 
   assert.equal(payloadHasLiveSession(payload, 'sale-123:other-session'), false);
   assert.equal(getSignalViewerId(payload), 'viewer-456');
   assert.equal(getSignalViewerId({ liveSessionId }), null);
+  assert.equal(payloadTargetsViewer(payload, 'viewer-456'), true);
+  assert.equal(payloadTargetsViewer(payload, 'viewer-999'), false);
+  assert.equal(payloadTargetsViewer({ liveSessionId }, 'viewer-999'), true);
 });
 
 test('seller LIVE NOW only turns on after camera, tracks, signaling join, publish, and server activation succeed', () => {
