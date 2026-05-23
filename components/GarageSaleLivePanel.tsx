@@ -2,6 +2,7 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { Video, VideoOff, Mic, MicOff, Radio, AlertTriangle, Eye, RefreshCcw, MessageCircle, Heart, Trash2, Users, PhoneOff, VolumeX, Volume2, Maximize2, X } from 'lucide-react';
 import { getCanonicalLiveSaleId, LIVE_ENGAGEMENT_EVENTS, LIVE_ENGAGEMENT_SIGNAL_KINDS, isSameLiveSession } from '@/lib/live-engagement';
+import { getSignalViewerId } from '@/lib/garage-sale-live-stream';
 import { RTC_CONFIG, HAS_TURN_CONFIG } from '@/lib/rtc-config';
 import { getIceCandidateType } from '@/lib/rtc-diagnostics';
 import { LIVE_SIGNAL_EVENTS, LIVE_SIGNAL_KINDS, LIVE_SIGNAL_ROLES, getLiveRoomId, getLiveSessionId, MAX_LIVE_GUESTS } from '@/lib/live-signaling';
@@ -38,6 +39,13 @@ interface GuestPeerState {
   stream: MediaStream | null;
 }
 
+interface SellerViewerPeerState {
+  pc: RTCPeerConnection;
+  hasRemoteAnswer: boolean;
+  pendingIce: RTCIceCandidateInit[];
+  lastHeartbeatAt: number;
+}
+
 const PREVIEW_REQUIRED_MESSAGE = 'Preview your camera before starting your live garage sale.';
 const CAMERA_BLOCKED_MESSAGE = 'Camera access blocked';
 const CAMERA_READY_MESSAGE = 'Camera ready';
@@ -54,6 +62,7 @@ const SELLER_RECONNECT_MAX_ATTEMPTS = 3;
 const SELLER_RECONNECT_STEP_DELAY_MS = 1200;
 const SELLER_RECONNECT_MAX_DELAY_MS = 8000;
 const SELLER_RECONNECT_JITTER_MS = 250;
+const SELLER_VIEWER_STALE_MS = 40_000;
 
 type CameraStatus = 'idle' | 'connecting' | 'ready' | 'awaitingInteraction' | 'blocked' | 'denied' | 'unsupported';
 
@@ -87,6 +96,9 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
   const expandedPreviewRef = useRef<HTMLDivElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const peerRef = useRef<RTCPeerConnection | null>(null);
+  const viewerPeersRef = useRef<Map<string, SellerViewerPeerState>>(new Map());
+  const viewerHeartbeatRef = useRef<Map<string, number>>(new Map());
+  const viewerOfferInFlightRef = useRef<Set<string>>(new Set());
   const signalPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const signalCursorRef = useRef<string | null>(null);
   const hasRemoteAnswerRef = useRef(false);
@@ -483,6 +495,18 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
     }
   }, []);
 
+  const closeViewerPeer = useCallback((viewerId: string, reason: string) => {
+    const peerState = viewerPeersRef.current.get(viewerId);
+    if (!peerState) return;
+    peerState.pc.close();
+    viewerPeersRef.current.delete(viewerId);
+    logLiveDebug('viewer-peer-closed', {
+      viewerId,
+      reason,
+      activePeers: viewerPeersRef.current.size,
+    });
+  }, [logLiveDebug]);
+
   const closePeerConnection = useCallback(() => {
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
@@ -490,9 +514,14 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
     }
     hasRemoteAnswerRef.current = false;
     pendingIceCandidatesRef.current = [];
+    for (const viewerId of Array.from(viewerPeersRef.current.keys())) {
+      closeViewerPeer(viewerId, 'close-all');
+    }
+    viewerOfferInFlightRef.current.clear();
+    viewerHeartbeatRef.current.clear();
     peerRef.current?.close();
     peerRef.current = null;
-  }, []);
+  }, [closeViewerPeer]);
 
   const clearReconnectRetryTimeout = useCallback(() => {
     if (reconnectRetryTimeoutRef.current != null) {
@@ -551,6 +580,93 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
     }
   }, [saleId]);
 
+  const createAndSendOfferForViewer = useCallback(async (viewerId: string, options?: { force?: boolean }) => {
+    const stream = streamRef.current;
+    if (!stream || !liveRef.current || !viewerId) return;
+    if (typeof RTCPeerConnection === 'undefined') return;
+    if (viewerOfferInFlightRef.current.has(viewerId)) return;
+    if (viewerPeersRef.current.has(viewerId) && !options?.force) return;
+
+    if (options?.force) {
+      closeViewerPeer(viewerId, 'force-recreate');
+    }
+
+    const videoTracks = stream.getVideoTracks();
+    if (videoTracks.length === 0 || videoTracks[0].readyState !== 'live') {
+      return;
+    }
+
+    viewerOfferInFlightRef.current.add(viewerId);
+
+    try {
+      const pc = new RTCPeerConnection(RTC_CONFIG);
+      const peerState: SellerViewerPeerState = {
+        pc,
+        hasRemoteAnswer: false,
+        pendingIce: [],
+        lastHeartbeatAt: Date.now(),
+      };
+      viewerPeersRef.current.set(viewerId, peerState);
+      peerRef.current = pc;
+      logLiveDebug('viewer-peer-created', {
+        viewerId,
+        activePeers: viewerPeersRef.current.size,
+      });
+
+      stream.getTracks().forEach((track) => {
+        pc.addTrack(track, stream);
+      });
+
+      pc.onicecandidate = (event) => {
+        if (!event.candidate) return;
+        const candidateType = getIceCandidateType(event.candidate.candidate);
+        logLiveDebug('local-ice-candidate', { viewerId, candidateType });
+        void postSignal(LIVE_SIGNAL_KINDS.ICE, {
+          candidate: event.candidate.toJSON(),
+          viewerId,
+          roomId: liveRoomIdRef.current,
+          liveSessionId: liveSessionIdRef.current,
+        });
+      };
+
+      pc.onconnectionstatechange = () => {
+        logLiveDebug('viewer-peer-state', { viewerId, state: pc.connectionState });
+        if (pc.connectionState === 'connected') {
+          setError(null);
+          setLiveConnectionWarning(null);
+          resetReconnectState();
+        }
+        if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected' || pc.connectionState === 'closed') {
+          closeViewerPeer(viewerId, `connection-${pc.connectionState}`);
+        }
+      };
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      await postSignal(LIVE_SIGNAL_KINDS.OFFER, {
+        type: offer.type,
+        sdp: offer.sdp,
+        viewerId,
+        roomId: liveRoomIdRef.current,
+        liveSessionId: liveSessionIdRef.current,
+      }, { critical: true });
+      logLiveDebug(LIVE_SIGNAL_EVENTS.OFFER, {
+        viewerId,
+        roomId: liveRoomIdRef.current,
+        liveSessionId: liveSessionIdRef.current,
+      });
+      setSellerPublished(true);
+    } catch (error) {
+      logLiveDebug('viewer-offer-create-failed', {
+        viewerId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      closeViewerPeer(viewerId, 'offer-failed');
+    } finally {
+      viewerOfferInFlightRef.current.delete(viewerId);
+    }
+  }, [closeViewerPeer, logLiveDebug, postSignal, resetReconnectState]);
+
   const pollSignals = useCallback(async () => {
     // Read live state from the ref so this callback works correctly even when
     // captured in a setInterval closure before the React state update flushes.
@@ -591,6 +707,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
         setStreamReadyCount(0);
         setSubscriberPathReady(false);
         setViewerCount(0);
+        closePeerConnection();
         stopSignalPolling();
         return;
       }
@@ -604,48 +721,64 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
       for (const signal of data.signals) {
         signalCursorRef.current = signal.createdAt;
 
-        if (signal.kind === LIVE_SIGNAL_KINDS.ANSWER && !hasRemoteAnswerRef.current) {
-          logLiveDebug('signal-answer', { createdAt: signal.createdAt });
-          const payload = signal.payload as { type?: string; sdp?: string } | null;
-          if (!payload) continue;
-          const type = payload?.type === 'answer' ? payload.type : null;
-          if (!type || !payload.sdp || !peerRef.current) continue;
-
-          await peerRef.current.setRemoteDescription({ type, sdp: payload.sdp });
-          hasRemoteAnswerRef.current = true;
-          setSubscriberPathReady(true);
-          logLiveDebug(LIVE_SIGNAL_EVENTS.ANSWER, { createdAt: signal.createdAt });
-
-          // Drain ICE candidates that arrived before the answer was applied.
-          for (const candidate of pendingIceCandidatesRef.current) {
-            if (!peerRef.current) break;
-            try {
-              await peerRef.current.addIceCandidate(new RTCIceCandidate(candidate));
-            } catch {
-              // Stale or incompatible candidate — ignore
-            }
+        if (signal.kind === LIVE_SIGNAL_KINDS.VIEWER_HEARTBEAT) {
+          const viewerId = getSignalViewerId(signal.payload);
+          if (!viewerId) continue;
+          const heartbeatAt = Date.now();
+          viewerHeartbeatRef.current.set(viewerId, heartbeatAt);
+          const peerState = viewerPeersRef.current.get(viewerId);
+          if (peerState) {
+            peerState.lastHeartbeatAt = heartbeatAt;
+          } else {
+            logLiveDebug('viewer-heartbeat-new-peer', { viewerId });
+            await createAndSendOfferForViewer(viewerId);
           }
-          pendingIceCandidatesRef.current = [];
+          continue;
+        }
+
+        if (signal.kind === LIVE_SIGNAL_KINDS.ANSWER) {
+          const payload = signal.payload as { type?: string; sdp?: string; viewerId?: string } | null;
+          const viewerId = getSignalViewerId(payload);
+          if (!viewerId || !payload?.sdp || payload.type !== 'answer') continue;
+          const peerState = viewerPeersRef.current.get(viewerId);
+          if (!peerState || peerState.hasRemoteAnswer) continue;
+          try {
+            await peerState.pc.setRemoteDescription({ type: 'answer', sdp: payload.sdp });
+            peerState.hasRemoteAnswer = true;
+            setSubscriberPathReady(true);
+            logLiveDebug(LIVE_SIGNAL_EVENTS.ANSWER, { createdAt: signal.createdAt, viewerId });
+            for (const candidate of peerState.pendingIce) {
+              try {
+                await peerState.pc.addIceCandidate(new RTCIceCandidate(candidate));
+              } catch {
+                // Ignore stale or incompatible candidates
+              }
+            }
+            peerState.pendingIce = [];
+          } catch {
+            closeViewerPeer(viewerId, 'answer-apply-failed');
+          }
+          continue;
         }
 
         if (signal.kind === LIVE_SIGNAL_KINDS.ICE) {
-          const payload = signal.payload as { candidate?: RTCIceCandidateInit } | null;
-          if (!payload?.candidate) continue;
+          const payload = signal.payload as { candidate?: RTCIceCandidateInit; viewerId?: string } | null;
+          const viewerId = getSignalViewerId(payload);
+          if (!viewerId || !payload?.candidate) continue;
+          const peerState = viewerPeersRef.current.get(viewerId);
+          if (!peerState) continue;
           const candidateType = getIceCandidateType(payload.candidate.candidate);
-          logLiveDebug('signal-ice', { createdAt: signal.createdAt, candidateType });
-          if (!hasRemoteAnswerRef.current) {
-            // Buffer the candidate until setRemoteDescription(answer) completes.
-            // Adding a candidate before the remote description is set throws and
-            // the candidate would be permanently dropped.
-            pendingIceCandidatesRef.current.push(payload.candidate);
+          logLiveDebug('signal-ice', { createdAt: signal.createdAt, candidateType, viewerId });
+          if (!peerState.hasRemoteAnswer) {
+            peerState.pendingIce.push(payload.candidate);
             continue;
           }
-          if (!peerRef.current) continue;
           try {
-            await peerRef.current.addIceCandidate(new RTCIceCandidate(payload.candidate));
+            await peerState.pc.addIceCandidate(new RTCIceCandidate(payload.candidate));
           } catch {
             // Ignore stale candidates from a previous peer connection
           }
+          continue;
         }
 
         if (signal.kind === LIVE_SIGNAL_KINDS.STREAM_READY) {
@@ -783,6 +916,15 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
           });
         }
       }
+
+      const cutoff = Date.now() - SELLER_VIEWER_STALE_MS;
+      for (const [viewerId, peerState] of viewerPeersRef.current.entries()) {
+        const lastHeartbeatAt = viewerHeartbeatRef.current.get(viewerId) ?? peerState.lastHeartbeatAt;
+        if (lastHeartbeatAt < cutoff) {
+          closeViewerPeer(viewerId, 'stale-heartbeat');
+          viewerHeartbeatRef.current.delete(viewerId);
+        }
+      }
     } catch {
       console.warn('[GarageSaleLivePanel] Network error while polling seller signals', {
         operation: 'seller.subscription.poll',
@@ -792,7 +934,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
         timestamp: new Date().toISOString(),
       });
     }
-  }, [handleGuestIce, handleGuestOffer, logLiveDebug, logSellerRoomDetails, saleId, stopSignalPolling, totalLikes]);
+  }, [closePeerConnection, closeViewerPeer, createAndSendOfferForViewer, handleGuestIce, handleGuestOffer, logLiveDebug, logSellerRoomDetails, saleId, stopSignalPolling, totalLikes]);
 
   const startSignalPolling = useCallback(() => {
     stopSignalPolling();
@@ -830,134 +972,17 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
     setSubscriberPathReady(false);
     setStreamReadyCount(0);
 
-    const pc = new RTCPeerConnection(RTC_CONFIG);
-    peerRef.current = pc;
-    const logPeerStates = (event: string, details?: Record<string, unknown>) => {
-      logLiveDebug(event, {
-        connectionState: pc.connectionState,
-        iceConnectionState: pc.iceConnectionState,
-        iceGatheringState: pc.iceGatheringState,
-        signalingState: pc.signalingState,
-        ...details,
-      });
-    };
-    logPeerStates('peer-created');
-
-    stream.getTracks().forEach((track) => {
-      pc.addTrack(track, stream);
-      logLiveDebug('offer-track-added', { kind: track.kind, enabled: track.enabled, readyState: track.readyState });
-    });
-
-    pc.onicecandidate = (event) => {
-      if (!event.candidate) return;
-      const candidateType = getIceCandidateType(event.candidate.candidate);
-      logPeerStates('local-ice-candidate', { candidateType });
-      void postSignal(LIVE_SIGNAL_KINDS.ICE, { candidate: event.candidate.toJSON() });
-    };
-
-    pc.onconnectionstatechange = () => {
-      logPeerStates('peer-connection-state-change');
-      if (pc.connectionState === 'connected') {
-        setError(null);
-        setLiveConnectionWarning(null);
-        resetReconnectState();
-        if (reconnectTimeoutRef.current) {
-          clearTimeout(reconnectTimeoutRef.current);
-          reconnectTimeoutRef.current = null;
-        }
-      }
-
-      if (pc.connectionState === 'disconnected') {
-        // Give ICE 5 seconds to self-recover before scheduling a bounded reconnect.
-        if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
-        reconnectTimeoutRef.current = window.setTimeout(() => {
-          reconnectTimeoutRef.current = null;
-          if (!liveRef.current || peerRef.current !== pc) return;
-          const attempt = reconnectAttemptRef.current + 1;
-          reconnectAttemptRef.current = attempt;
-          if (attempt > SELLER_RECONNECT_MAX_ATTEMPTS) {
-            setLiveConnectionWarning('Connection lost. Could not reconnect the live stream.');
-            return;
-          }
-          const retryDelay = Math.min(
-            SELLER_RECONNECT_MAX_DELAY_MS,
-            SELLER_RECONNECT_STEP_DELAY_MS * (2 ** (attempt - 1)),
-          ) + Math.floor(Math.random() * SELLER_RECONNECT_JITTER_MS);
-          clearReconnectRetryTimeout();
-          reconnectRetryTimeoutRef.current = window.setTimeout(() => {
-            reconnectRetryTimeoutRef.current = null;
-            if (!liveRef.current || peerRef.current !== pc) return;
-            closePeerConnection();
-            signalCursorRef.current = null;
-            logLiveDebug('seller-reconnect', { reason: 'peer-disconnected', attempt, retryDelay });
-            void (async () => {
-              try {
-                await createAndSendOfferRef.current?.();
-              } catch {
-                startSignalPollingRef.current?.();
-              }
-            })();
-          }, retryDelay);
-        }, 5000);
-      }
-
-      if (pc.connectionState === 'failed') {
-        setLiveConnectionWarning('Connection lost. Attempting to reconnect…');
-        const attempt = reconnectAttemptRef.current + 1;
-        reconnectAttemptRef.current = attempt;
-        if (attempt > SELLER_RECONNECT_MAX_ATTEMPTS) {
-          setLiveConnectionWarning('Connection lost. Could not reconnect the live stream.');
-          return;
-        }
-        const retryDelay = Math.min(
-          SELLER_RECONNECT_MAX_DELAY_MS,
-          SELLER_RECONNECT_STEP_DELAY_MS * (2 ** (attempt - 1)),
-        ) + Math.floor(Math.random() * SELLER_RECONNECT_JITTER_MS);
-        clearReconnectRetryTimeout();
-        reconnectRetryTimeoutRef.current = window.setTimeout(() => {
-          reconnectRetryTimeoutRef.current = null;
-          if (!liveRef.current || peerRef.current !== pc) return;
-          closePeerConnection();
-          signalCursorRef.current = null;
-          logLiveDebug('seller-reconnect', { reason: 'peer-failed', attempt, retryDelay });
-          void (async () => {
-            try {
-              await createAndSendOfferRef.current?.();
-            } catch {
-              startSignalPollingRef.current?.();
-            }
-          })();
-        }, retryDelay);
-      }
-    };
-
-    pc.oniceconnectionstatechange = () => {
-      logPeerStates('ice-connection-state-change');
-    };
-
-    pc.onicegatheringstatechange = () => {
-      logPeerStates('ice-gathering-state-change');
-    };
-
-    pc.onsignalingstatechange = () => {
-      logPeerStates('signaling-state-change');
-    };
-
-    const offer = await pc.createOffer();
-    logLiveDebug('offer-created', { hasSdp: Boolean(offer.sdp) });
-    await pc.setLocalDescription(offer);
-    logLiveDebug('offer-local-description-set', { type: offer.type });
-    await postSignal(LIVE_SIGNAL_KINDS.OFFER, {
-      type: offer.type,
-      sdp: offer.sdp,
-      roomId: liveRoomIdRef.current,
-      liveSessionId: liveSessionIdRef.current,
-    }, { critical: true });
-    logLiveDebug(LIVE_SIGNAL_EVENTS.OFFER, { roomId: liveRoomIdRef.current, liveSessionId: liveSessionIdRef.current });
-    setSellerPublished(true);
-
     startSignalPolling();
-  }, [clearReconnectRetryTimeout, closePeerConnection, logLiveDebug, postSignal, resetReconnectState, startSignalPolling]);
+
+    const now = Date.now();
+    const activeViewerIds = Array.from(viewerHeartbeatRef.current.entries())
+      .filter(([, heartbeatAt]) => heartbeatAt >= now - SELLER_VIEWER_STALE_MS)
+      .map(([viewerId]) => viewerId);
+
+    for (const viewerId of activeViewerIds) {
+      await createAndSendOfferForViewer(viewerId, { force: true });
+    }
+  }, [closePeerConnection, createAndSendOfferForViewer, logLiveDebug, startSignalPolling]);
 
   // Keep the ref current so connection-state handlers can always call the latest version.
   useEffect(() => {
@@ -1229,10 +1254,11 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
         videoRef.current.srcObject = newStream;
       }
 
-      // If live, replace the video track in the peer connection without renegotiating.
-      if (isLive && peerRef.current) {
-        const videoSender = peerRef.current.getSenders().find((s) => s.track?.kind === 'video');
-        if (videoSender) {
+      // If live, replace the video track across all active viewer peers.
+      if (isLive) {
+        for (const peerState of viewerPeersRef.current.values()) {
+          const videoSender = peerState.pc.getSenders().find((s) => s.track?.kind === 'video');
+          if (!videoSender) continue;
           try {
             await videoSender.replaceTrack(newVideoTrack);
           } catch (replaceErr) {

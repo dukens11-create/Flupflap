@@ -33,6 +33,12 @@ export function getSignalViewerId(payload: unknown) {
   return typeof viewerId === 'string' && viewerId.trim() ? viewerId : null;
 }
 
+export function payloadTargetsViewer(payload: unknown, viewerId: string) {
+  const targetViewerId = getSignalViewerId(payload);
+  if (!targetViewerId) return true;
+  return targetViewerId === viewerId;
+}
+
 type SellerLiveReadyInput = {
   cameraPermissionGranted: boolean;
   hasVideoTrack: boolean;
