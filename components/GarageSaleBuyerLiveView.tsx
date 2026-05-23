@@ -726,10 +726,9 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
       }
 
       setViewerCount(data.viewerCount ?? 0);
+      const viewerId = getViewerId();
 
       for (const signal of data.signals) {
-        const viewerId = getViewerId();
-
         if (signal.kind === LIVE_SIGNAL_KINDS.OFFER) {
           logLiveDebug('signal-offer', { id: signal.id, createdAt: signal.createdAt });
           // Skip already-processed offers without losing the cursor position.

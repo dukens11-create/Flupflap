@@ -101,6 +101,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
   const viewerPeersRef = useRef<Map<string, SellerViewerPeerState>>(new Map());
   const viewerHeartbeatRef = useRef<Map<string, number>>(new Map());
   const viewerOfferInFlightRef = useRef<Set<string>>(new Set());
+  const viewerDisconnectTimeoutsRef = useRef<Map<string, number>>(new Map());
   const signalPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const signalCursorRef = useRef<string | null>(null);
   const liveRef = useRef(initialIsLive);
@@ -494,6 +495,11 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
   }, []);
 
   const closeViewerPeer = useCallback((viewerId: string, reason: string) => {
+    const disconnectTimeout = viewerDisconnectTimeoutsRef.current.get(viewerId);
+    if (disconnectTimeout != null) {
+      window.clearTimeout(disconnectTimeout);
+      viewerDisconnectTimeoutsRef.current.delete(viewerId);
+    }
     const peerState = viewerPeersRef.current.get(viewerId);
     if (!peerState) return;
     peerState.pc.close();
@@ -513,6 +519,10 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
     for (const viewerId of Array.from(viewerPeersRef.current.keys())) {
       closeViewerPeer(viewerId, 'close-all');
     }
+    for (const timeoutId of viewerDisconnectTimeoutsRef.current.values()) {
+      window.clearTimeout(timeoutId);
+    }
+    viewerDisconnectTimeoutsRef.current.clear();
     viewerOfferInFlightRef.current.clear();
     viewerHeartbeatRef.current.clear();
   }, [closeViewerPeer]);
@@ -576,7 +586,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
 
   const createAndSendOfferForViewer = useCallback(async (viewerId: string, options?: { force?: boolean }) => {
     const stream = streamRef.current;
-    if (!stream || !liveRef.current || !viewerId) return;
+    if (!stream || !liveRef.current || !viewerId.trim()) return;
     if (typeof RTCPeerConnection === 'undefined') return;
     if (viewerOfferInFlightRef.current.has(viewerId)) return;
     if (viewerPeersRef.current.has(viewerId) && !options?.force) return;
@@ -625,6 +635,11 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
       pc.onconnectionstatechange = () => {
         logLiveDebug('viewer-peer-state', { viewerId, state: pc.connectionState });
         if (pc.connectionState === 'connected') {
+          const disconnectTimeout = viewerDisconnectTimeoutsRef.current.get(viewerId);
+          if (disconnectTimeout != null) {
+            window.clearTimeout(disconnectTimeout);
+            viewerDisconnectTimeoutsRef.current.delete(viewerId);
+          }
           setError(null);
           setLiveConnectionWarning(null);
           resetReconnectState();
@@ -634,13 +649,18 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
           return;
         }
         if (pc.connectionState === 'disconnected') {
-          window.setTimeout(() => {
+          const existingTimeout = viewerDisconnectTimeoutsRef.current.get(viewerId);
+          if (existingTimeout != null) {
+            window.clearTimeout(existingTimeout);
+          }
+          const timeoutId = window.setTimeout(() => {
             if (!viewerPeersRef.current.has(viewerId)) return;
             const currentState = viewerPeersRef.current.get(viewerId)?.pc.connectionState;
             if (currentState === 'disconnected') {
               closeViewerPeer(viewerId, 'connection-disconnected-timeout');
             }
           }, VIEWER_DISCONNECT_TIMEOUT_MS);
+          viewerDisconnectTimeoutsRef.current.set(viewerId, timeoutId);
         }
       };
 
