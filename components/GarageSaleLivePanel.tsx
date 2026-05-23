@@ -741,7 +741,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
               try {
                 await peerState.pc.addIceCandidate(new RTCIceCandidate(candidate));
               } catch {
-                // Ignore stale or incompatible candidates
+                // Ignore stale or incompatible candidates from previous reconnect attempts.
               }
             }
             peerState.pendingIce = [];
@@ -908,7 +908,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
       }
 
       const cutoff = Date.now() - SELLER_VIEWER_STALE_MS;
-      for (const [viewerId, peerState] of viewerPeersRef.current.entries()) {
+      for (const [viewerId, peerState] of Array.from(viewerPeersRef.current.entries())) {
         const lastHeartbeatAt = viewerHeartbeatRef.current.get(viewerId) ?? peerState.lastHeartbeatAt;
         if (lastHeartbeatAt < cutoff) {
           closeViewerPeer(viewerId, 'stale-heartbeat');
@@ -1248,14 +1248,15 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
       if (isLive) {
         for (const peerState of viewerPeersRef.current.values()) {
           const videoSender = peerState.pc.getSenders().find((s) => s.track?.kind === 'video');
-          if (!videoSender) continue;
-          try {
-            await videoSender.replaceTrack(newVideoTrack);
-          } catch (replaceErr) {
-            logMobileCameraIssue('camera constraint fallback', {
-              reason: 'replaceTrack failed during live switch',
-              error: replaceErr instanceof Error ? replaceErr.message : 'unknown',
-            });
+          if (videoSender) {
+            try {
+              await videoSender.replaceTrack(newVideoTrack);
+            } catch (replaceErr) {
+              logMobileCameraIssue('camera constraint fallback', {
+                reason: 'replaceTrack failed during live switch',
+                error: replaceErr instanceof Error ? replaceErr.message : 'unknown',
+              });
+            }
           }
         }
       }
