@@ -68,9 +68,12 @@ async function cleanupDuplicateBuyerSignals(
 ) {
   if (!BUYER_IDEMPOTENT_SIGNAL_KINDS.has(kind)) return 0;
 
-  const liveSessionClause = liveSessionId
-    ? Prisma.sql`AND COALESCE(payload->>'liveSessionId', '') = ${liveSessionId}`
-    : Prisma.empty;
+  // Normalize null/missing liveSessionId to '' so reconnect cleanup can compare
+  // both explicit and absent session markers consistently.
+  const normalizedLiveSession = liveSessionId ?? '';
+  // COALESCE converts null/missing payload session IDs from JSON to '' in SQL,
+  // matching the normalized JavaScript session marker above for reconnect dedupe.
+  const liveSessionClause = Prisma.sql`AND COALESCE(payload->>'liveSessionId', '') = ${normalizedLiveSession}`;
 
   const deletedCount = await prisma.$executeRaw(Prisma.sql`
     DELETE FROM "GarageSaleLiveSignal"

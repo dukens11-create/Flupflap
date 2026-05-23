@@ -24,6 +24,7 @@ const CHAT_LOGIN_REQUIRED_MESSAGE = 'Please log in to chat';
 const MEDIA_READY_TIMEOUT_MS = 1200;
 const PLAYBACK_RETRY_DELAY_MS = 250;
 const PLAYBACK_RECOVERY_THROTTLE_MS = 1200;
+const LIFECYCLE_RECOVERY_THROTTLE_MS = 1500;
 const CONNECTION_RECOVERY_TIMEOUT_MS = 8000;
 const RECENT_CANDIDATE_TYPES_LIMIT = 6;
 const LIVE_CONTEXT_STORAGE_VERSION = 1;
@@ -111,6 +112,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
   const reconnectRetryTimeoutRef = useRef<number | null>(null);
   const reconnectAttemptRef = useRef(0);
   const playbackRecoveryAtRef = useRef(0);
+  const lifecycleRecoveryAtRef = useRef(0);
   const hasRemoteDescriptionRef = useRef(false);
   const pendingRemoteIceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const waitingForPublisherTimerRef = useRef<number | null>(null);
@@ -144,7 +146,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
     console.info('[GarageSaleBuyerLiveView]', event);
   }, [liveDebugEnabled]);
 
-  const contextStorageKey = `garage-sale-live-context:${saleId}`;
+  const contextStorageKey = useMemo(() => `garage-sale-live-context:${saleId}`, [saleId]);
 
   const persistLiveContext = useCallback((roomId: string, liveSessionId: string | null) => {
     try {
@@ -154,8 +156,8 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
         liveSessionId,
         updatedAt: new Date().toISOString(),
       }));
-    } catch {
-      // Best effort only.
+    } catch (error) {
+      console.warn('[GarageSaleBuyerLiveView] Failed to persist live context', { error });
     }
   }, [contextStorageKey]);
 
@@ -383,7 +385,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
 
     liveRoomIdRef.current = expectedRoomId;
     if (typeof liveSessionId === 'string' || liveSessionId === null) {
-      liveSessionIdRef.current = liveSessionId ?? null;
+      liveSessionIdRef.current = liveSessionId;
     }
     persistLiveContext(liveRoomIdRef.current, liveSessionIdRef.current);
     logLiveRoomDetails(liveRoomIdRef.current, liveSessionIdRef.current, source);
@@ -394,17 +396,36 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
     try {
       const storedRaw = window.sessionStorage.getItem(contextStorageKey);
       if (!storedRaw) return;
-      const stored = JSON.parse(storedRaw) as {
-        v?: number;
-        roomId?: string;
-        liveSessionId?: string | null;
+      const parsed: unknown = JSON.parse(storedRaw);
+      if (!parsed || typeof parsed !== 'object') return;
+      const stored = parsed as {
+        v?: unknown;
+        roomId?: unknown;
+        liveSessionId?: unknown;
       };
       if (stored.v !== LIVE_CONTEXT_STORAGE_VERSION) return;
-      syncLiveContext(stored.roomId, stored.liveSessionId, 'session-storage');
-    } catch {
-      // Ignore malformed session storage payloads.
+      if (stored.roomId !== undefined && typeof stored.roomId !== 'string') return;
+      if (stored.liveSessionId !== undefined && stored.liveSessionId !== null && typeof stored.liveSessionId !== 'string') return;
+      syncLiveContext(
+        stored.roomId as string | undefined,
+        (stored.liveSessionId as string | null | undefined) ?? undefined,
+        'session-storage',
+      );
+    } catch (error) {
+      console.warn('[GarageSaleBuyerLiveView] Failed to restore live context from session storage', { error });
     }
   }, [contextStorageKey, syncLiveContext]);
+
+  const isViewerConnectionHealthy = useCallback(() => (
+    peerRef.current?.connectionState === 'connected'
+    && streamConnected
+    && connectionStatus === 'live'
+  ), [connectionStatus, streamConnected]);
+
+  const shouldThrottleLifecycleRecovery = useCallback((now: number) => (
+    lifecycleRecoveryAtRef.current > 0
+    && now - lifecycleRecoveryAtRef.current < LIFECYCLE_RECOVERY_THROTTLE_MS
+  ), []);
 
   const postSignal = useCallback(async (
     kind: 'ANSWER' | 'ICE' | 'VIEWER_HEARTBEAT' | 'STREAM_READY',
@@ -507,8 +528,8 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
       }
       syncLiveContext(getLiveRoomId(saleId), data.liveSessionId ?? null, 'live-status-check');
       return true;
-    } catch {
-      console.warn('[GarageSaleBuyerLiveView] Network error verifying live room during reconnect', { reason });
+    } catch (error) {
+      console.warn('[GarageSaleBuyerLiveView] Network error verifying live room during reconnect', { reason, error });
       return true;
     }
   }, [logLiveDebug, saleId, syncLiveContext]);
@@ -557,7 +578,10 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
       void (async () => {
         try {
           const stillLive = await ensureRoomIsStillLive(reason);
-          if (!stillLive) return;
+          if (!stillLive) {
+            reconnectingNowRef.current = false;
+            return;
+          }
           closePeerConnection();
           setRecoveringConnection(true);
           activeOfferSignalRef.current = null;
@@ -598,8 +622,8 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
       };
 
       syncLiveContext(data.roomId, data.liveSessionId, 'engagement-refresh');
-    } catch {
-      console.warn('[GarageSaleBuyerLiveView] Network error refreshing live engagement context');
+    } catch (error) {
+      console.warn('[GarageSaleBuyerLiveView] Network error refreshing live engagement context', { error });
     }
 
     return {
@@ -935,8 +959,8 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
           signalCursorRef.current = signal.createdAt;
         }
       }
-    } catch {
-      console.warn('[GarageSaleBuyerLiveView] Network error while polling buyer signals');
+    } catch (error) {
+      console.warn('[GarageSaleBuyerLiveView] Network error while polling buyer signals', { error });
       scheduleConnectionRecovery('signal-poll-network-error');
     }
   }, [clearConnectionRecoveryTimeout, clearReconnectRetryTimeout, closePeerConnection, handleSellerOffer, isLive, logLiveDebug, saleId, scheduleConnectionRecovery, syncLiveContext]);
@@ -947,6 +971,13 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
 
   const recoverAfterLifecycleResume = useCallback((source: string) => {
     if (!isLive) return;
+    // Skip lifecycle reconnect work while the viewer is already healthy/live.
+    if (isViewerConnectionHealthy()) {
+      return;
+    }
+    const now = Date.now();
+    if (shouldThrottleLifecycleRecovery(now)) return;
+    lifecycleRecoveryAtRef.current = now;
     if (reconnectingNowRef.current) return;
     reconnectingNowRef.current = true;
     setRecoveringConnection(true);
@@ -956,7 +987,10 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
     void (async () => {
       try {
         const stillLive = await ensureRoomIsStillLive(source);
-        if (!stillLive) return;
+        if (!stillLive) {
+          reconnectingNowRef.current = false;
+          return;
+        }
         closePeerConnection();
         activeOfferSignalRef.current = null;
         hasRemoteDescriptionRef.current = false;
@@ -968,7 +1002,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
         reconnectingNowRef.current = false;
       }
     })();
-  }, [closePeerConnection, ensureRoomIsStillLive, isLive, logLiveDebug, sendViewerHeartbeat]);
+  }, [closePeerConnection, ensureRoomIsStillLive, isLive, isViewerConnectionHealthy, logLiveDebug, sendViewerHeartbeat, shouldThrottleLifecycleRecovery]);
 
   useEffect(() => {
     const onVisibilityChange = () => {
