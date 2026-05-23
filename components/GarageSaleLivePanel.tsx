@@ -95,13 +95,11 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
   const expandedVideoRef = useRef<HTMLVideoElement>(null);
   const expandedPreviewRef = useRef<HTMLDivElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const peerRef = useRef<RTCPeerConnection | null>(null);
   const viewerPeersRef = useRef<Map<string, SellerViewerPeerState>>(new Map());
   const viewerHeartbeatRef = useRef<Map<string, number>>(new Map());
   const viewerOfferInFlightRef = useRef<Set<string>>(new Set());
   const signalPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const signalCursorRef = useRef<string | null>(null);
-  const hasRemoteAnswerRef = useRef(false);
   const liveRef = useRef(initialIsLive);
   const micOnRef = useRef(true);
   const micPermissionDeniedRef = useRef(false);
@@ -114,9 +112,6 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
   // Always points at the latest startSignalPolling so reconnect error paths can
   // restart polling without a stale closure.
   const startSignalPollingRef = useRef<(() => void) | null>(null);
-  // ICE candidates received before the remote answer is applied are buffered here
-  // and drained once setRemoteDescription(answer) completes.
-  const pendingIceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const reconnectRetryTimeoutRef = useRef<number | null>(null);
   const reconnectAttemptRef = useRef(0);
   const liveRoomIdRef = useRef<string>(getLiveRoomId(saleId));
@@ -512,15 +507,11 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
     }
-    hasRemoteAnswerRef.current = false;
-    pendingIceCandidatesRef.current = [];
     for (const viewerId of Array.from(viewerPeersRef.current.keys())) {
       closeViewerPeer(viewerId, 'close-all');
     }
     viewerOfferInFlightRef.current.clear();
     viewerHeartbeatRef.current.clear();
-    peerRef.current?.close();
-    peerRef.current = null;
   }, [closeViewerPeer]);
 
   const clearReconnectRetryTimeout = useCallback(() => {
@@ -607,7 +598,6 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
         lastHeartbeatAt: Date.now(),
       };
       viewerPeersRef.current.set(viewerId, peerState);
-      peerRef.current = pc;
       logLiveDebug('viewer-peer-created', {
         viewerId,
         activePeers: viewerPeersRef.current.size,

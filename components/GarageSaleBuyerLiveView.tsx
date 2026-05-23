@@ -514,10 +514,10 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
   const handleSellerOffer = useCallback(async (
     signalId: string,
     payload: { type?: string; sdp?: string; viewerId?: string },
-    viewerId: string,
   ) => {
     const type = payload.type === 'offer' ? payload.type : null;
     if (!type || !payload.sdp) return;
+    const viewerId = getViewerId();
     if (typeof RTCPeerConnection === 'undefined') {
       setStreamError('Live streaming is not supported in this browser.');
       return;
@@ -687,7 +687,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
       videoRef.current.srcObject = remoteStream;
       void playRemoteStream();
     }
-  }, [clearWaitingForPublisherTimer, closePeerConnection, logLiveDebug, playRemoteStream, postSignal, resetReconnectState, scheduleConnectionRecovery]);
+  }, [clearWaitingForPublisherTimer, closePeerConnection, getViewerId, logLiveDebug, playRemoteStream, postSignal, resetReconnectState, scheduleConnectionRecovery]);
 
   const pollSignals = useCallback(async () => {
     if (!isLive) return;
@@ -749,7 +749,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
           setRecoveringConnection(false);
           setStreamError(null);
           try {
-            await handleSellerOffer(signal.id, payload, viewerId);
+            await handleSellerOffer(signal.id, payload);
             // Advance cursor only after the offer was successfully processed.
             signalCursorRef.current = signal.createdAt;
           } catch {
