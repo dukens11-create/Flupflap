@@ -61,3 +61,11 @@ export function computeReconnectDelay(attempt: number, jitter = 0): number {
 export function shouldAttemptReconnect(nextAttempt: number): boolean {
   return nextAttempt <= MAX_RECONNECT_ATTEMPTS;
 }
+
+/**
+ * Returns true when reconnecting should stop because the room/session is no
+ * longer recoverable for the viewer.
+ */
+export function shouldStopReconnectForHttpStatus(status: number): boolean {
+  return status === 404 || status === 410 || status === 422;
+}

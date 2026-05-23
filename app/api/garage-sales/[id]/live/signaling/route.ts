@@ -33,6 +33,10 @@ const SELLER_VIEWER_ID_REQUIRED_KINDS = new Set<LiveSignalKind>([
   LIVE_SIGNAL_KINDS.OFFER,
   LIVE_SIGNAL_KINDS.ICE,
 ]);
+const BUYER_IDEMPOTENT_SIGNAL_KINDS = new Set<LiveSignalKind>([
+  LIVE_SIGNAL_KINDS.VIEWER_HEARTBEAT,
+  LIVE_SIGNAL_KINDS.STREAM_READY,
+]);
 
 function isSignalRole(value: unknown): value is LiveSignalRole {
   return typeof value === 'string' && SIGNAL_ROLES.includes(value as LiveSignalRole);
@@ -54,6 +58,30 @@ function getPayloadViewerId(payload: unknown) {
   if (typeof viewerId !== 'string') return null;
   const trimmed = viewerId.trim();
   return trimmed ? trimmed : null;
+}
+
+async function cleanupDuplicateBuyerSignals(
+  saleId: string,
+  kind: LiveSignalKind,
+  viewerId: string,
+  liveSessionId: string | null,
+) {
+  if (!BUYER_IDEMPOTENT_SIGNAL_KINDS.has(kind)) return 0;
+
+  const liveSessionClause = liveSessionId
+    ? Prisma.sql`AND COALESCE(payload->>'liveSessionId', '') = ${liveSessionId}`
+    : Prisma.empty;
+
+  const deletedCount = await prisma.$executeRaw(Prisma.sql`
+    DELETE FROM "GarageSaleLiveSignal"
+    WHERE "saleId" = ${saleId}
+      AND sender = 'BUYER'
+      AND kind = ${kind}
+      AND COALESCE(payload->>'viewerId', '') = ${viewerId}
+      ${liveSessionClause}
+  `);
+
+  return typeof deletedCount === 'number' ? deletedCount : Number(deletedCount);
 }
 
 function checkSellerOwner(saleSellerId: string, userId: string | null) {
@@ -275,6 +303,7 @@ export async function POST(req: Request, { params }: Params) {
       endDate: true,
       isLive: true,
       sellerId: true,
+      liveStartedAt: true,
     },
   });
   if (!sale) {
@@ -289,6 +318,22 @@ export async function POST(req: Request, { params }: Params) {
 
   const accessCheck = requireRoleAccess(role, sale.sellerId, userId);
   if (!accessCheck.ok) return accessCheck.response;
+
+  const viewerId = role === LIVE_SIGNAL_ROLES.BUYER ? getPayloadViewerId(payload) : null;
+  const liveSessionId = getLiveSessionId(id, sale.liveStartedAt);
+
+  if (viewerId && BUYER_IDEMPOTENT_SIGNAL_KINDS.has(kind)) {
+    const deleted = await cleanupDuplicateBuyerSignals(id, kind, viewerId, liveSessionId);
+    if (deleted > 0) {
+      console.info('[garage-sale-live-signaling] cleaned duplicate viewer signal', {
+        saleId: id,
+        kind,
+        viewerId,
+        liveSessionId,
+        removed: deleted,
+      });
+    }
+  }
 
   const signal = await prisma.garageSaleLiveSignal.create({
     data: {

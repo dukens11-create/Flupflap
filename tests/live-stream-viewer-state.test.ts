@@ -19,6 +19,7 @@ import {
   STREAM_TERMINAL_FAILURE_MESSAGE,
   computeReconnectDelay,
   shouldAttemptReconnect,
+  shouldStopReconnectForHttpStatus,
   getConnectionStatusLabel,
   type ViewerConnectionStatus,
 } from '@/lib/live-stream-viewer-state';
@@ -43,6 +44,18 @@ test('shouldAttemptReconnect: rejects attempt MAX+1 (terminal failure)', () => {
 
 test('shouldAttemptReconnect: rejects any attempt above MAX', () => {
   assert.equal(shouldAttemptReconnect(MAX_RECONNECT_ATTEMPTS + 5), false);
+});
+
+test('shouldStopReconnectForHttpStatus: stops reconnect on ended/invalid room statuses', () => {
+  assert.equal(shouldStopReconnectForHttpStatus(404), true);
+  assert.equal(shouldStopReconnectForHttpStatus(410), true);
+  assert.equal(shouldStopReconnectForHttpStatus(422), true);
+});
+
+test('shouldStopReconnectForHttpStatus: keeps retrying on transient statuses', () => {
+  assert.equal(shouldStopReconnectForHttpStatus(500), false);
+  assert.equal(shouldStopReconnectForHttpStatus(503), false);
+  assert.equal(shouldStopReconnectForHttpStatus(429), false);
 });
 
 // ── computeReconnectDelay ─────────────────────────────────────────────────────
