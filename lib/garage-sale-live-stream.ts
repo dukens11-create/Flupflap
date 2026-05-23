@@ -33,6 +33,10 @@ export function getSignalViewerId(payload: unknown) {
   return typeof viewerId === 'string' && viewerId.trim() ? viewerId : null;
 }
 
+/**
+ * Returns whether a signaling payload targets the current viewer.
+ * Payloads without a viewerId are treated as broadcast and match all viewers.
+ */
 export function payloadTargetsViewer(payload: unknown, currentViewerId: string) {
   const targetViewerId = getSignalViewerId(payload);
   if (!targetViewerId) return true;

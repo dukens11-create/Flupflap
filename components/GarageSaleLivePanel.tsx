@@ -64,7 +64,8 @@ const SELLER_RECONNECT_MAX_DELAY_MS = 8000;
 const SELLER_RECONNECT_JITTER_MS = 250;
 // Buyer heartbeats are sent every 15s; 40s allows for transient misses while
 // still cleaning up stale viewers promptly when they leave.
-const SELLER_VIEWER_STALE_MS = 40_000;
+const VIEWER_HEARTBEAT_TIMEOUT_MS = 40_000;
+const VIEWER_DISCONNECT_TIMEOUT_MS = 5_000;
 
 type CameraStatus = 'idle' | 'connecting' | 'ready' | 'awaitingInteraction' | 'blocked' | 'denied' | 'unsupported';
 
@@ -639,7 +640,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
             if (currentState === 'disconnected') {
               closeViewerPeer(viewerId, 'connection-disconnected-timeout');
             }
-          }, 5000);
+          }, VIEWER_DISCONNECT_TIMEOUT_MS);
         }
       };
 
@@ -919,7 +920,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
         }
       }
 
-      const cutoff = Date.now() - SELLER_VIEWER_STALE_MS;
+      const cutoff = Date.now() - VIEWER_HEARTBEAT_TIMEOUT_MS;
       // Iterate over a snapshot because closeViewerPeer deletes from the map.
       for (const [viewerId, peerState] of Array.from(viewerPeersRef.current.entries())) {
         const lastHeartbeatAt = viewerHeartbeatRef.current.get(viewerId) ?? peerState.lastHeartbeatAt;
@@ -979,7 +980,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
 
     const now = Date.now();
     const activeViewerIds = Array.from(viewerHeartbeatRef.current.entries())
-      .filter(([, heartbeatAt]) => heartbeatAt >= now - SELLER_VIEWER_STALE_MS)
+      .filter(([, heartbeatAt]) => heartbeatAt >= now - VIEWER_HEARTBEAT_TIMEOUT_MS)
       .map(([viewerId]) => viewerId);
 
     for (const viewerId of activeViewerIds) {
