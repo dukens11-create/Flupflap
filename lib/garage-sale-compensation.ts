@@ -1,5 +1,19 @@
 export type GarageSaleCompensationReason = 'ended_early' | 'system_cutoff';
 
+export type GarageSaleCompensationAudit = {
+  reason: GarageSaleCompensationReason;
+  note?: string;
+  grantedBy: string;
+  sourceSale: string;
+  at: string;
+  replacement?: string;
+};
+
+export const GARAGE_SALE_COMPENSATION_REASON_LABELS: Record<GarageSaleCompensationReason, string> = {
+  ended_early: 'Live ended early',
+  system_cutoff: 'Platform issue / system cutoff',
+};
+
 type GarageSaleCompensationEligibilityInput = {
   isLive: boolean;
   isArchived: boolean;
@@ -23,4 +37,56 @@ export function isGarageSaleCompensationEligible(
 
 export function buildGarageSaleCompensationSourceKey(saleId: string) {
   return `garage_sale_early_end_compensation:${saleId}`;
+}
+
+export function formatGarageSaleCompensationReason(reason: GarageSaleCompensationReason) {
+  return GARAGE_SALE_COMPENSATION_REASON_LABELS[reason];
+}
+
+export function formatGarageSaleCompensationSummary(
+  reason: GarageSaleCompensationReason,
+  note?: string | null,
+) {
+  const trimmedNote = note?.trim();
+  if (!trimmedNote) return formatGarageSaleCompensationReason(reason);
+  return `${formatGarageSaleCompensationReason(reason)} — ${trimmedNote}`;
+}
+
+export function buildGarageSaleCompensationAuditLine(audit: GarageSaleCompensationAudit) {
+  return `[compensation] ${JSON.stringify({
+    ...audit,
+    note: audit.note?.trim() || undefined,
+  })}`;
+}
+
+export function parseGarageSaleCompensationAudit(adminNotes?: string | null): GarageSaleCompensationAudit | null {
+  if (!adminNotes) return null;
+
+  for (const line of adminNotes.split('\n').reverse()) {
+    const match = line.match(/\[compensation\]\s+(\{.*\})/);
+    if (!match) continue;
+
+    try {
+      const parsed = JSON.parse(match[1]) as Partial<GarageSaleCompensationAudit>;
+      if (
+        (parsed.reason === 'ended_early' || parsed.reason === 'system_cutoff')
+        && typeof parsed.grantedBy === 'string'
+        && typeof parsed.sourceSale === 'string'
+        && typeof parsed.at === 'string'
+      ) {
+        return {
+          reason: parsed.reason,
+          note: parsed.note?.trim() || undefined,
+          grantedBy: parsed.grantedBy,
+          sourceSale: parsed.sourceSale,
+          at: parsed.at,
+          replacement: typeof parsed.replacement === 'string' ? parsed.replacement : undefined,
+        };
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
 }
