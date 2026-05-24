@@ -206,7 +206,7 @@ export default function AdminGarageSalesClient({ sales: initialSales, total, pag
               Existing compensation history stays visible so the same disrupted sale is not compensated twice.
             </p>
             <p className="mt-2 max-w-3xl text-xs text-slate-500">
-              Paid approved/expired listings are directly eligible once started. Hidden or archived paid listings can still be granted through admin override when business-approved.
+              Paid approved/expired listings are directly eligible once started. Hidden listings and archived paid listings in non-standard statuses can still be granted through admin override when business-approved.
               Spam, unpaid, and refunded listings remain locked.
             </p>
           </div>

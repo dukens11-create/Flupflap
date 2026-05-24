@@ -46,6 +46,8 @@ export function isGarageSaleCompensationOverrideEligible(
   if (sale.isSpam) return false;
   if (sale.paymentStatus !== 'PAID') return false;
   if (sale.startDate > now) return false;
+  // Override path is only for business-exception records that are hidden or archived
+  // outside the standard approved/expired states.
   return sale.status === 'HIDDEN'
     || (sale.isArchived && !GARAGE_SALE_STANDARD_COMPENSATION_STATUSES.has(sale.status));
 }
