@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { MessageCircle, Send, Radio, Eye, Heart, Video, VideoOff, PhoneOff, Share2, Gift, MicOff } from 'lucide-react';
 import { LIVE_ENGAGEMENT_EVENTS } from '@/lib/live-engagement';
-import { payloadTargetsViewer } from '@/lib/garage-sale-live-stream';
+import { bindGuestLocalPreviewStream, payloadTargetsViewer } from '@/lib/garage-sale-live-stream';
 import { RTC_CONFIG, HAS_TURN_CONFIG } from '@/lib/rtc-config';
 import { getIceCandidateType, type IceCandidateType } from '@/lib/rtc-diagnostics';
 import { LIVE_SIGNAL_EVENTS, LIVE_SIGNAL_KINDS, LIVE_SIGNAL_ROLES, getLiveRoomId, MAX_LIVE_GUESTS } from '@/lib/live-signaling';
@@ -138,6 +138,11 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
   const guestSignalOfferSentRef = useRef(false);
   // Stable ref so polling callbacks always see the latest status without stale closures
   const guestJoinStatusRef = useRef<GuestJoinStatus>('idle');
+
+  const setGuestLocalVideoRef = useCallback((videoEl: HTMLVideoElement | null) => {
+    guestLocalVideoRef.current = videoEl;
+    bindGuestLocalPreviewStream(videoEl, guestLocalStreamRef.current);
+  }, []);
 
   const logLiveDebug = useCallback((event: string, details?: Record<string, unknown>) => {
     if (!liveDebugEnabled) return;
@@ -1077,15 +1082,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
         audio: true,
       });
       guestLocalStreamRef.current = localStream;
-      // Show local preview (muted so no echo)
-      if (guestLocalVideoRef.current) {
-        // load() ensures a fresh media pipeline, fixing dark video after camera was stopped
-        // and a new stream was acquired (common on iOS/Safari and after reconnect).
-        guestLocalVideoRef.current.srcObject = localStream;
-        guestLocalVideoRef.current.muted = true;
-        guestLocalVideoRef.current.load();
-        void guestLocalVideoRef.current.play().catch(() => undefined);
-      }
+      bindGuestLocalPreviewStream(guestLocalVideoRef.current, localStream);
       logLiveDebug(LIVE_SIGNAL_EVENTS.REQUEST_JOIN_LIVE, { guestId: guestIdRef.current });
     } catch (err) {
       const name = err instanceof DOMException ? err.name : '';
@@ -1592,7 +1589,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
               style={getStageTileStyle(stageLayout, 1)}
             >
               <video
-                ref={guestLocalVideoRef}
+                ref={setGuestLocalVideoRef}
                 autoPlay
                 playsInline
                 muted
@@ -1699,7 +1696,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
             {/* Show local preview so user sees their camera is ready */}
             <div className="relative aspect-video overflow-hidden rounded-xl bg-slate-900">
               <video
-                ref={guestLocalVideoRef}
+                ref={setGuestLocalVideoRef}
                 autoPlay
                 playsInline
                 muted
@@ -1726,7 +1723,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
             </p>
             <div className="relative aspect-video overflow-hidden rounded-xl bg-slate-900">
               <video
-                ref={guestLocalVideoRef}
+                ref={setGuestLocalVideoRef}
                 autoPlay
                 playsInline
                 muted
@@ -1750,7 +1747,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
             </p>
             <div className="relative aspect-video overflow-hidden rounded-xl bg-slate-900">
               <video
-                ref={guestLocalVideoRef}
+                ref={setGuestLocalVideoRef}
                 autoPlay
                 playsInline
                 muted

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  bindGuestLocalPreviewStream,
   buildGarageSaleLiveSessionId,
   getBuyerPlaybackState,
   getSignalViewerId,
@@ -120,4 +121,41 @@ test('guest peer is not recreated for invalid/empty incoming offer sdp', () => {
     remoteDescriptionSdp: 'v=0 same-offer',
     incomingOfferSdp: '   ',
   }), false);
+});
+
+test('guest local preview stream binds when the video element mounts after stream acquisition', () => {
+  const stream = { id: 'stream-1' } as unknown as MediaStream;
+  let loadCalls = 0;
+  let playCalls = 0;
+  const video = {
+    srcObject: null as MediaStream | null,
+    muted: false,
+    defaultMuted: false,
+    load: () => { loadCalls += 1; },
+    play: () => {
+      playCalls += 1;
+      return Promise.resolve();
+    },
+  };
+
+  assert.equal(bindGuestLocalPreviewStream(null, stream), false);
+  assert.equal(bindGuestLocalPreviewStream(video, stream), true);
+  assert.equal(video.srcObject, stream);
+  assert.equal(video.muted, true);
+  assert.equal(video.defaultMuted, true);
+  assert.equal(loadCalls, 1);
+  assert.equal(playCalls, 1);
+});
+
+test('guest local preview stream does not reload when same stream is rebound', () => {
+  const stream = { id: 'stream-2' } as unknown as MediaStream;
+  let loadCalls = 0;
+  const video = {
+    srcObject: stream,
+    load: () => { loadCalls += 1; },
+    play: () => Promise.resolve(),
+  };
+
+  assert.equal(bindGuestLocalPreviewStream(video, stream), true);
+  assert.equal(loadCalls, 0);
 });
