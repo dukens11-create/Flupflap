@@ -44,7 +44,7 @@ export function getGarageSaleCompensationIneligibilityReason(
   if (sale.isArchived || sale.isSpam) return 'Compensation is unavailable for archived or spam listings.';
   if (sale.paymentStatus !== 'PAID') return 'Compensation is only available for paid listings.';
   if (sale.status !== 'APPROVED' && sale.status !== 'EXPIRED') {
-    return 'Compensation is only available for approved live sessions.';
+    return 'Compensation is only available for approved or expired live sessions.';
   }
   if (sale.startDate > now) return 'Compensation becomes available once the approved live has started.';
   return GARAGE_SALE_COMPENSATION_NOT_ELIGIBLE_MESSAGE;
