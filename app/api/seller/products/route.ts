@@ -368,7 +368,7 @@ export async function POST(req: Request) {
     if (mediaEnhancements) normalizedAttributes.mediaEnhancements = mediaEnhancements;
 
     // Validate and normalize size_ml if present
-    if (normalizedAttributes.size_ml !== undefined && normalizedAttributes.size_ml !== null && normalizedAttributes.size_ml !== '') {
+    if (normalizedAttributes.size_ml != null && normalizedAttributes.size_ml !== '') {
       const normalized = normalizeSizeMlValue(normalizedAttributes.size_ml);
       if (!normalized) {
         return jsonError('Please enter a valid positive ML amount (e.g. 50ml or 1.5ml).', 400);

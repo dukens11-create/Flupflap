@@ -571,7 +571,7 @@ export async function POST(
     );
 
     // Validate and normalize size_ml if present
-    if (nextProductAttributes.size_ml !== undefined && nextProductAttributes.size_ml !== null && nextProductAttributes.size_ml !== '') {
+    if (nextProductAttributes.size_ml != null && nextProductAttributes.size_ml !== '') {
       const normalized = normalizeSizeMlValue(nextProductAttributes.size_ml);
       if (!normalized) {
         return respondWithError(id, 'Please enter a valid positive ML amount (e.g. 50ml or 1.5ml).', acceptsJson);
@@ -863,7 +863,7 @@ export async function PATCH(
     );
 
     // Validate and normalize size_ml if present
-    if (nextProductAttributes.size_ml !== undefined && nextProductAttributes.size_ml !== null && nextProductAttributes.size_ml !== '') {
+    if (nextProductAttributes.size_ml != null && nextProductAttributes.size_ml !== '') {
       const normalized = normalizeSizeMlValue(nextProductAttributes.size_ml);
       if (!normalized) {
         return NextResponse.json({ error: 'Please enter a valid positive ML amount (e.g. 50ml or 1.5ml).' }, { status: 400 });

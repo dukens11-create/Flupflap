@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { LEGACY_CATEGORY_ALIAS_FALLBACK } from '@/lib/category-aliases';
+import { normalizeSizeMlValue } from '@/lib/category-attribute-schema';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -984,14 +985,8 @@ export default function CategoryPicker({
                       value={attrs[field.name] ?? ''}
                       onChange={e => handleAttrChange(field.name, e.target.value)}
                       onBlur={e => {
-                        const val = e.target.value.trim();
-                        if (!val) return;
-                        if (!val.toLowerCase().endsWith('ml')) {
-                          const num = parseFloat(val);
-                          if (!isNaN(num) && num > 0 && isFinite(num)) {
-                            handleAttrChange(field.name, `${num}ml`);
-                          }
-                        }
+                        const normalized = normalizeSizeMlValue(e.target.value);
+                        if (normalized) handleAttrChange(field.name, normalized);
                       }}
                     />
                     <datalist id={`datalist-${field.name}`}>
