@@ -232,11 +232,11 @@
     "viewCart": "Ver tu carrito"
   },
   "sellerRefunds": {
-    "emptyRequests": "No refund requests right now. New buyer requests will appear here.",
-    "responsePlaceholder": "Share your side, shipping details, or resolution notes.",
+    "emptyRequests": "No hay solicitudes de reembolso por ahora. Las nuevas solicitudes de compradores aparecerán aquí.",
+    "responsePlaceholder": "Comparte tu versión, detalles de envío o notas de resolución.",
     "errors": {
-      "submitFailed": "Unable to submit response.",
-      "network": "Network error. Please try again."
+      "submitFailed": "No se pudo enviar la respuesta.",
+      "network": "Error de red. Inténtalo de nuevo."
     }
   }
 }

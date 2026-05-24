@@ -27,6 +27,12 @@ type SellerRefundRequest = {
   };
 };
 
+const RESOLVED_REFUND_STATUSES: ReadonlySet<SellerRefundRequest['status']> = new Set([
+  'APPROVED',
+  'DENIED',
+  'REFUNDED',
+]);
+
 function getRequestNextStep(status: SellerRefundRequest['status']): string {
   switch (status) {
     case 'REQUESTED':
@@ -101,7 +107,7 @@ export default function SellerRefundReviewList({ initialRefundRequests }: { init
         <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
       )}
       {refundRequests.map((request) => {
-        const isResolved = request.status === 'DENIED' || request.status === 'REFUNDED' || request.status === 'APPROVED';
+        const isResolved = RESOLVED_REFUND_STATUSES.has(request.status);
         const requestedDate = new Date(request.createdAt).toLocaleString('en-US', {
           dateStyle: 'medium',
           timeStyle: 'short',

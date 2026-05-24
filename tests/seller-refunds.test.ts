@@ -135,7 +135,6 @@ test('getSellerRefundsData gracefully falls back when refund history fails', asy
     const result = await getSellerRefundsData('seller_1', mockDb);
     assert.equal(result.refundRequestsFetchFailed, false);
     assert.equal(result.refundHistoryFetchFailed, true);
-    assert.equal(result.refundHistoryFetchFailed, true);
     assert.equal(result.refundRequests.length, 1);
     assert.deepEqual(result.refundHistory, []);
     assert.equal(errorCalls.length, 1);
