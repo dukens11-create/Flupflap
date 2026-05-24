@@ -46,7 +46,9 @@ export function isGarageSaleCompensationOverrideEligible(
   if (sale.paymentStatus !== 'PAID') return false;
   if (sale.startDate > now) return false;
   if (sale.status === 'APPROVED' || sale.status === 'EXPIRED') return false;
-  return sale.status === 'HIDDEN' || sale.isArchived;
+  if (sale.status === 'HIDDEN') return true;
+  if (sale.isArchived) return true;
+  return false;
 }
 
 export function getGarageSaleCompensationIneligibilityReason(
