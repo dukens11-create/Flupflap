@@ -7,7 +7,7 @@ import { LEGACY_CATEGORY_ALIAS_FALLBACK } from '@/lib/category-aliases';
 export interface FieldDef {
   name: string;
   label: string;
-  type: 'text' | 'select' | 'number';
+  type: 'text' | 'select' | 'number' | 'combobox';
   options?: string[];
 }
 
@@ -974,6 +974,31 @@ export default function CategoryPicker({
                     <option value="">Select…</option>
                     {field.options.map(o => <option key={o} value={o}>{o}</option>)}
                   </select>
+                ) : field.type === 'combobox' && field.options ? (
+                  <>
+                    <input
+                      type="text"
+                      list={`datalist-${field.name}`}
+                      className="input"
+                      placeholder="e.g. 50ml or type a custom amount"
+                      value={attrs[field.name] ?? ''}
+                      onChange={e => handleAttrChange(field.name, e.target.value)}
+                      onBlur={e => {
+                        const val = e.target.value.trim();
+                        if (!val) return;
+                        if (!val.toLowerCase().endsWith('ml')) {
+                          const num = parseFloat(val);
+                          if (!isNaN(num) && num > 0 && isFinite(num)) {
+                            handleAttrChange(field.name, `${num}ml`);
+                          }
+                        }
+                      }}
+                    />
+                    <datalist id={`datalist-${field.name}`}>
+                      {field.options.map(o => <option key={o} value={o} />)}
+                    </datalist>
+                    <p className="mt-1 text-xs text-slate-500">Choose a preset or type any amount (e.g. 105ml)</p>
+                  </>
                 ) : (
                   <input
                     type={field.type === 'number' ? 'number' : 'text'}
