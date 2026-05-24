@@ -4,6 +4,7 @@ import {
   buildGarageSaleLiveSessionId,
   getBuyerPlaybackState,
   getSignalViewerId,
+  hasLiveVideoTrack,
   isSellerLiveReady,
   payloadTargetsViewer,
   payloadHasLiveSession,
@@ -120,4 +121,11 @@ test('guest peer is not recreated for invalid/empty incoming offer sdp', () => {
     remoteDescriptionSdp: 'v=0 same-offer',
     incomingOfferSdp: '   ',
   }), false);
+});
+
+test('hasLiveVideoTrack only returns true when at least one video track is live and enabled', () => {
+  assert.equal(hasLiveVideoTrack([]), false);
+  assert.equal(hasLiveVideoTrack([{ readyState: 'ended', enabled: true }]), false);
+  assert.equal(hasLiveVideoTrack([{ readyState: 'live', enabled: false }]), false);
+  assert.equal(hasLiveVideoTrack([{ readyState: 'live', enabled: true }]), true);
 });

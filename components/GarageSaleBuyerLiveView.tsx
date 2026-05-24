@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { MessageCircle, Send, Radio, Eye, Heart, Video, VideoOff, PhoneOff, Share2, Gift, MicOff } from 'lucide-react';
 import { LIVE_ENGAGEMENT_EVENTS } from '@/lib/live-engagement';
-import { payloadTargetsViewer } from '@/lib/garage-sale-live-stream';
+import { hasLiveVideoTrack, payloadTargetsViewer } from '@/lib/garage-sale-live-stream';
 import { RTC_CONFIG, HAS_TURN_CONFIG } from '@/lib/rtc-config';
 import { getIceCandidateType, type IceCandidateType } from '@/lib/rtc-diagnostics';
 import { LIVE_SIGNAL_EVENTS, LIVE_SIGNAL_KINDS, LIVE_SIGNAL_ROLES, getLiveRoomId, MAX_LIVE_GUESTS } from '@/lib/live-signaling';
@@ -1076,6 +1076,13 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
         video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
         audio: true,
       });
+      if (!hasLiveVideoTrack(localStream.getVideoTracks())) {
+        localStream.getTracks().forEach((track) => track.stop());
+        setGuestJoinError('Camera video is unavailable. Please enable your camera and try again.');
+        setGuestJoinStatus('idle');
+        guestJoinStatusRef.current = 'idle';
+        return;
+      }
       guestLocalStreamRef.current = localStream;
       // Show local preview (muted so no echo)
       if (guestLocalVideoRef.current) {

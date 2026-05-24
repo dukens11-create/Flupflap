@@ -33,6 +33,20 @@ export function getSignalViewerId(payload: unknown) {
   return typeof viewerId === 'string' && viewerId.trim() ? viewerId : null;
 }
 
+type VideoTrackLike = {
+  readyState?: string;
+  enabled?: boolean;
+};
+
+/**
+ * Returns true when at least one video track is actively live and enabled.
+ * This guards against rendering a dark tile for audio-only or ended streams.
+ */
+export function hasLiveVideoTrack(tracks: VideoTrackLike[] | null | undefined) {
+  if (!tracks || tracks.length === 0) return false;
+  return tracks.some((track) => track.readyState === 'live' && track.enabled !== false);
+}
+
 type GuestOfferRecreateInput = {
   hasRemoteDesc: boolean;
   connectionState: string | null | undefined;

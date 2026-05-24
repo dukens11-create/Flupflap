@@ -2,7 +2,7 @@
 import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { Video, VideoOff, Mic, MicOff, Radio, AlertTriangle, Eye, RefreshCcw, MessageCircle, Heart, Trash2, Users, PhoneOff, VolumeX, Volume2, Maximize2, X } from 'lucide-react';
 import { getCanonicalLiveSaleId, LIVE_ENGAGEMENT_EVENTS, LIVE_ENGAGEMENT_SIGNAL_KINDS, isSameLiveSession } from '@/lib/live-engagement';
-import { getSignalViewerId, shouldRecreateGuestPeerOnOffer } from '@/lib/garage-sale-live-stream';
+import { getSignalViewerId, hasLiveVideoTrack, shouldRecreateGuestPeerOnOffer } from '@/lib/garage-sale-live-stream';
 import { RTC_CONFIG, HAS_TURN_CONFIG } from '@/lib/rtc-config';
 import { getIceCandidateType } from '@/lib/rtc-diagnostics';
 import { LIVE_SIGNAL_EVENTS, LIVE_SIGNAL_KINDS, LIVE_SIGNAL_ROLES, getLiveRoomId, getLiveSessionId, MAX_LIVE_GUESTS } from '@/lib/live-signaling';
@@ -356,7 +356,14 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
     guestPeersRef.current.set(requestId, peerState);
 
     pc.ontrack = (event) => {
-      const stream = event.streams[0] ?? new MediaStream([event.track]);
+      const stream = peerState.stream ?? new MediaStream();
+      const tracks = event.streams[0]?.getTracks() ?? [event.track];
+      for (const track of tracks) {
+        const alreadyAdded = stream.getTracks().some((existingTrack) => existingTrack.id === track.id);
+        if (!alreadyAdded) {
+          stream.addTrack(track);
+        }
+      }
       peerState.stream = stream;
       const videoEl = guestVideoElsRef.current.get(requestId);
       if (videoEl) {
@@ -1875,7 +1882,10 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
 
             {/* Guest tiles */}
             {activeGuests.map((req, idx) => {
-              const isGuestLive = Boolean(guestPeersRef.current.get(req.id)?.stream);
+              const guestStream = guestPeersRef.current.get(req.id)?.stream;
+              const isGuestLive = hasLiveVideoTrack(guestStream?.getVideoTracks());
+              const guestInitial = (req.guestName ?? 'G').charAt(0).toUpperCase();
+              const hasGuestAvatar = isSafeViewerAvatar(req.viewerAvatar);
               return (
                 <div
                   key={req.id}
@@ -1887,13 +1897,24 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
                     autoPlay
                     playsInline
                     muted={req.isMuted}
-                    className="h-full w-full object-cover"
+                    className={`h-full w-full object-cover ${isGuestLive ? '' : 'hidden'}`}
                   />
                   {/* Camera off / connecting placeholder */}
                   {!isGuestLive && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-slate-900 text-slate-400">
-                      <Video size={24} className="animate-pulse" />
-                      <span className="text-[10px]">Connecting…</span>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-900 text-slate-300">
+                      {hasGuestAvatar ? (
+                        <img
+                          src={req.viewerAvatar as string}
+                          alt={`${req.guestName ?? 'Guest'} avatar`}
+                          className="h-14 w-14 rounded-full border border-white/20 object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <div className="flex h-14 w-14 items-center justify-center rounded-full border border-white/20 bg-slate-700 text-lg font-bold text-white">
+                          {guestInitial}
+                        </div>
+                      )}
+                      <span className="text-[10px] font-medium">Camera unavailable</span>
                     </div>
                   )}
                   {/* Name + controls overlay */}
