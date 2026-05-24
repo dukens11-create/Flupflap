@@ -19,19 +19,41 @@ CREATE TABLE IF NOT EXISTS "GarageSaleChat" (
 
 ALTER TABLE "GarageSaleChat"
   ADD COLUMN IF NOT EXISTS "sellerId" TEXT,
-  ADD COLUMN IF NOT EXISTS "isHidden" BOOLEAN;
+  ADD COLUMN IF NOT EXISTS "isHidden" BOOLEAN DEFAULT false;
 
-UPDATE "GarageSaleChat"
-SET "isHidden" = false
-WHERE "isHidden" IS NULL;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'GarageSaleChat'
+      AND column_name = 'isHidden'
+  ) THEN
+    UPDATE "GarageSaleChat"
+    SET "isHidden" = false
+    WHERE "isHidden" IS NULL;
 
-ALTER TABLE "GarageSaleChat"
-  ALTER COLUMN "isHidden" SET DEFAULT false,
-  ALTER COLUMN "isHidden" SET NOT NULL;
+    ALTER TABLE "GarageSaleChat"
+      ALTER COLUMN "isHidden" SET DEFAULT false,
+      ALTER COLUMN "isHidden" SET NOT NULL;
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS "GarageSaleChat_saleId_idx" ON "GarageSaleChat"("saleId");
 CREATE INDEX IF NOT EXISTS "GarageSaleChat_saleId_sellerId_idx" ON "GarageSaleChat"("saleId", "sellerId");
-CREATE INDEX IF NOT EXISTS "GarageSaleChat_saleId_isHidden_idx" ON "GarageSaleChat"("saleId", "isHidden");
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'GarageSaleChat'
+      AND column_name = 'isHidden'
+  ) THEN
+    CREATE INDEX IF NOT EXISTS "GarageSaleChat_saleId_isHidden_idx" ON "GarageSaleChat"("saleId", "isHidden");
+  END IF;
+END $$;
 CREATE INDEX IF NOT EXISTS "GarageSaleChat_createdAt_idx" ON "GarageSaleChat"("createdAt");
 
 DO $$

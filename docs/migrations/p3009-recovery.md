@@ -7,8 +7,9 @@ Use this runbook when deploy is blocked with Prisma `P3009` because migration
 ## Why this happened
 
 The failed migration mixes schema backfill + constraints. In partially applied
-production states, strict `ALTER COLUMN ... SET NOT NULL` / FK steps can fail
-and leave `_prisma_migrations` in a failed state.
+production states, strict `ALTER COLUMN ... SET NOT NULL` / FK steps can fail,
+and `isHidden` index creation can fail when the column is not yet present.
+Either failure leaves `_prisma_migrations` in a failed state.
 
 This repository now includes a fix-forward, idempotent corrective migration:
 

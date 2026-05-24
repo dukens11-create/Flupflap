@@ -4,6 +4,8 @@ import { readFileSync } from 'node:fs';
 
 const correctiveMigrationPath =
   'prisma/migrations/20260522025500_recover_live_chat_reactions_after_p3009/migration.sql';
+const failedMigrationPath =
+  'prisma/migrations/20260521153000_backfill_live_chat_and_reactions_schema/migration.sql';
 const runbookPath = 'docs/migrations/p3009-recovery.md';
 
 test('corrective P3009 migration uses idempotent guard patterns', () => {
@@ -39,4 +41,17 @@ test('P3009 runbook includes required production recovery commands', () => {
   assert.ok(deployIndex > rolledBackIndex);
   assert.ok(appliedIndex > deployIndex);
   assert.match(runbook, /Do \*\*not\*\* use `--applied` as the default recovery action/);
+});
+
+test('failed backfill migration guards isHidden before indexing', () => {
+  const sql = readFileSync(failedMigrationPath, 'utf8');
+
+  assert.match(sql, /ADD COLUMN IF NOT EXISTS "isHidden" BOOLEAN DEFAULT false/);
+  assert.match(sql, /column_name = 'isHidden'/);
+  assert.match(
+    sql,
+    /IF EXISTS \([\s\S]*column_name = 'isHidden'[\s\S]*\)\s+THEN[\s\S]*UPDATE "GarageSaleChat"[\s\S]*SET "isHidden" = false[\s\S]*WHERE "isHidden" IS NULL/,
+  );
+  assert.match(sql, /ALTER COLUMN "isHidden" SET DEFAULT false[\s\S]*ALTER COLUMN "isHidden" SET NOT NULL/);
+  assert.match(sql, /CREATE INDEX IF NOT EXISTS "GarageSaleChat_saleId_isHidden_idx"/);
 });
