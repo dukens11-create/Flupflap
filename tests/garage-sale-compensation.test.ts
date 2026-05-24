@@ -75,14 +75,15 @@ test('buildGarageSaleCompensationSourceKey is deterministic per sale id', () => 
 
 test('formatGarageSaleCompensationSummary includes a trimmed audit note', () => {
   assert.equal(
-    formatGarageSaleCompensationSummary('system_cutoff', '  Seller lost final 20 minutes due to outage.  '),
-    'Platform issue / system cutoff — Seller lost final 20 minutes due to outage.',
+    formatGarageSaleCompensationSummary('system_cutoff', '  Seller lost final 20 minutes due to outage.  ', 4),
+    'Platform issue / system cutoff — 4 days — Seller lost final 20 minutes due to outage.',
   );
 });
 
 test('parseGarageSaleCompensationAudit reads the latest stored compensation audit entry', () => {
   const firstEntry = buildGarageSaleCompensationAuditLine({
     reason: 'ended_early',
+    grantedDays: 1,
     note: 'Initial note',
     grantedBy: 'admin_1',
     sourceSale: 'sale_123',
@@ -91,6 +92,7 @@ test('parseGarageSaleCompensationAudit reads the latest stored compensation audi
   });
   const latestEntry = buildGarageSaleCompensationAuditLine({
     reason: 'system_cutoff',
+    grantedDays: 3,
     note: '  Seller live dropped after platform issue.  ',
     grantedBy: 'admin_2',
     sourceSale: 'sale_123',
@@ -102,6 +104,7 @@ test('parseGarageSaleCompensationAudit reads the latest stored compensation audi
     parseGarageSaleCompensationAudit(`Manual note\n${firstEntry}\n${latestEntry}`),
     {
       reason: 'system_cutoff',
+      grantedDays: 3,
       note: 'Seller live dropped after platform issue.',
       grantedBy: 'admin_2',
       sourceSale: 'sale_123',
@@ -109,4 +112,9 @@ test('parseGarageSaleCompensationAudit reads the latest stored compensation audi
       replacement: 'replacement_2',
     },
   );
+});
+
+test('parseGarageSaleCompensationAudit defaults granted days to 1 for legacy entries', () => {
+  const legacyAuditEntry = '[compensation] {"reason":"ended_early","note":"Legacy","grantedBy":"admin_1","sourceSale":"sale_123","at":"2026-05-24T19:00:00.000Z"}';
+  assert.equal(parseGarageSaleCompensationAudit(legacyAuditEntry)?.grantedDays, 1);
 });

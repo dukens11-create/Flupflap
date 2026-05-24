@@ -2,6 +2,7 @@ export type GarageSaleCompensationReason = 'ended_early' | 'system_cutoff';
 
 export type GarageSaleCompensationAudit = {
   reason: GarageSaleCompensationReason;
+  grantedDays?: number;
   note?: string;
   grantedBy: string;
   sourceSale: string;
@@ -13,10 +14,21 @@ export const GARAGE_SALE_COMPENSATION_REASON_LABELS: Record<GarageSaleCompensati
   ended_early: 'Live ended early',
   system_cutoff: 'Platform issue / system cutoff',
 };
+export const GARAGE_SALE_COMPENSATION_MIN_DAYS = 1;
+export const GARAGE_SALE_COMPENSATION_MAX_DAYS = 7;
 export const GARAGE_SALE_COMPENSATION_NOTE_REQUIRED_MESSAGE = 'Compensation note is required for audit history';
 export const GARAGE_SALE_COMPENSATION_NOT_ELIGIBLE_MESSAGE = 'Compensation only available once a paid approved live has started and before its scheduled end.';
 export const GARAGE_SALE_COMPENSATION_OVERRIDE_REQUIRED_MESSAGE = 'Compensation is locked under standard rules. Use admin override with an audit note if this paid live was disrupted.';
 const GARAGE_SALE_STANDARD_COMPENSATION_STATUSES = new Set(['APPROVED', 'EXPIRED']);
+
+function normalizeGarageSaleCompensationDays(value?: number | null) {
+  if (!Number.isInteger(value)) return GARAGE_SALE_COMPENSATION_MIN_DAYS;
+  const normalizedValue = Number(value);
+  if (normalizedValue < GARAGE_SALE_COMPENSATION_MIN_DAYS || normalizedValue > GARAGE_SALE_COMPENSATION_MAX_DAYS) {
+    return GARAGE_SALE_COMPENSATION_MIN_DAYS;
+  }
+  return normalizedValue;
+}
 
 type GarageSaleCompensationEligibilityInput = {
   isLive: boolean;
@@ -85,15 +97,19 @@ export function formatGarageSaleCompensationReason(reason: GarageSaleCompensatio
 export function formatGarageSaleCompensationSummary(
   reason: GarageSaleCompensationReason,
   note?: string | null,
+  grantedDays = GARAGE_SALE_COMPENSATION_MIN_DAYS,
 ) {
+  const normalizedDays = normalizeGarageSaleCompensationDays(grantedDays);
   const trimmedNote = normalizeGarageSaleCompensationNote(note);
-  if (!trimmedNote) return formatGarageSaleCompensationReason(reason);
-  return `${formatGarageSaleCompensationReason(reason)} — ${trimmedNote}`;
+  const dayLabel = normalizedDays === 1 ? '1 day' : `${normalizedDays} days`;
+  if (!trimmedNote) return `${formatGarageSaleCompensationReason(reason)} — ${dayLabel}`;
+  return `${formatGarageSaleCompensationReason(reason)} — ${dayLabel} — ${trimmedNote}`;
 }
 
 export function buildGarageSaleCompensationAuditLine(audit: GarageSaleCompensationAudit) {
   return `[compensation] ${JSON.stringify({
     ...audit,
+    grantedDays: normalizeGarageSaleCompensationDays(audit.grantedDays),
     note: normalizeGarageSaleCompensationNote(audit.note),
   })}`;
 }
@@ -115,6 +131,7 @@ export function parseGarageSaleCompensationAudit(adminNotes?: string | null): Ga
       ) {
         return {
           reason: parsed.reason,
+          grantedDays: normalizeGarageSaleCompensationDays(Number(parsed.grantedDays)),
           note: normalizeGarageSaleCompensationNote(parsed.note),
           grantedBy: parsed.grantedBy,
           sourceSale: parsed.sourceSale,
