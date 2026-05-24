@@ -4,6 +4,7 @@ import {
   buildGarageSaleCompensationAuditLine,
   buildGarageSaleCompensationSourceKey,
   formatGarageSaleCompensationSummary,
+  getGarageSaleCompensationIneligibilityReason,
   isGarageSaleCompensationEligible,
   parseGarageSaleCompensationAudit,
 } from '@/lib/garage-sale-compensation';
@@ -27,14 +28,22 @@ test('isGarageSaleCompensationEligible returns true for paid approved sale ended
   assert.equal(isGarageSaleCompensationEligible(sale, new Date()), true);
 });
 
-test('isGarageSaleCompensationEligible returns false once scheduled window has already ended', () => {
-  const sale = makeSale({ endDate: new Date(Date.now() - 1000) });
-  assert.equal(isGarageSaleCompensationEligible(sale, new Date()), false);
+test('isGarageSaleCompensationEligible returns true for paid expired sale that already started', () => {
+  const sale = makeSale({ status: 'EXPIRED', endDate: new Date(Date.now() - 1000) });
+  assert.equal(isGarageSaleCompensationEligible(sale, new Date()), true);
 });
 
 test('isGarageSaleCompensationEligible returns false when session has not started yet', () => {
   const sale = makeSale({ startDate: new Date(Date.now() + 60_000) });
   assert.equal(isGarageSaleCompensationEligible(sale, new Date()), false);
+});
+
+test('getGarageSaleCompensationIneligibilityReason explains why a listing cannot be compensated', () => {
+  const sale = makeSale({ paymentStatus: 'FAILED' });
+  assert.equal(
+    getGarageSaleCompensationIneligibilityReason(sale, new Date()),
+    'Compensation is only available for paid listings.',
+  );
 });
 
 test('buildGarageSaleCompensationSourceKey is deterministic per sale id', () => {
