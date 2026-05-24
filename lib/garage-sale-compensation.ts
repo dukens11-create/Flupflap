@@ -15,6 +15,8 @@ export const GARAGE_SALE_COMPENSATION_REASON_LABELS: Record<GarageSaleCompensati
 };
 export const GARAGE_SALE_COMPENSATION_NOTE_REQUIRED_MESSAGE = 'Compensation note is required for audit history';
 export const GARAGE_SALE_COMPENSATION_NOT_ELIGIBLE_MESSAGE = 'Compensation only available once a paid approved live has started and before its scheduled end.';
+export const GARAGE_SALE_COMPENSATION_OVERRIDE_REQUIRED_MESSAGE = 'Compensation is locked under standard rules. Use admin override with an audit note if this paid live was disrupted.';
+const GARAGE_SALE_STANDARD_COMPENSATION_STATUSES = new Set(['APPROVED', 'EXPIRED']);
 
 type GarageSaleCompensationEligibilityInput = {
   isLive: boolean;
@@ -30,23 +32,40 @@ export function isGarageSaleCompensationEligible(
   sale: GarageSaleCompensationEligibilityInput,
   now = new Date(),
 ) {
-  if (sale.isArchived || sale.isSpam) return false;
+  if (sale.isSpam) return false;
   if (sale.paymentStatus !== 'PAID') return false;
-  if (sale.status !== 'APPROVED' && sale.status !== 'EXPIRED') return false;
+  if (!GARAGE_SALE_STANDARD_COMPENSATION_STATUSES.has(sale.status)) return false;
   if (sale.startDate > now) return false;
   return true;
+}
+
+export function isGarageSaleCompensationOverrideEligible(
+  sale: GarageSaleCompensationEligibilityInput,
+  now = new Date(),
+) {
+  if (sale.isSpam) return false;
+  if (sale.paymentStatus !== 'PAID') return false;
+  if (sale.startDate > now) return false;
+  // Override path is only for business-exception records that are hidden or archived
+  // outside the standard approved/expired states. Archived APPROVED/EXPIRED sales
+  // remain standard-eligible and should not require this override path.
+  return sale.status === 'HIDDEN'
+    || (sale.isArchived && !GARAGE_SALE_STANDARD_COMPENSATION_STATUSES.has(sale.status));
 }
 
 export function getGarageSaleCompensationIneligibilityReason(
   sale: GarageSaleCompensationEligibilityInput,
   now = new Date(),
 ) {
-  if (sale.isArchived || sale.isSpam) return 'Compensation is unavailable for archived or spam listings.';
+  if (sale.isSpam) return 'Compensation is unavailable for spam listings.';
   if (sale.paymentStatus !== 'PAID') return 'Compensation is only available for paid listings.';
-  if (sale.status !== 'APPROVED' && sale.status !== 'EXPIRED') {
+  if (sale.startDate > now) return 'Compensation becomes available once the live has started.';
+  if (isGarageSaleCompensationOverrideEligible(sale, now)) {
+    return GARAGE_SALE_COMPENSATION_OVERRIDE_REQUIRED_MESSAGE;
+  }
+  if (!GARAGE_SALE_STANDARD_COMPENSATION_STATUSES.has(sale.status)) {
     return 'Compensation is only available for approved or expired live sessions.';
   }
-  if (sale.startDate > now) return 'Compensation becomes available once the approved live has started.';
   return GARAGE_SALE_COMPENSATION_NOT_ELIGIBLE_MESSAGE;
 }
 

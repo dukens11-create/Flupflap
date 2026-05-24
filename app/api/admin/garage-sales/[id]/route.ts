@@ -14,6 +14,7 @@ import {
   buildGarageSaleCompensationSourceKey,
   formatGarageSaleCompensationSummary,
   isGarageSaleCompensationEligible,
+  isGarageSaleCompensationOverrideEligible,
   normalizeGarageSaleCompensationNote,
   type GarageSaleCompensationReason,
 } from '@/lib/garage-sale-compensation';
@@ -27,6 +28,7 @@ const actionSchema = z.object({
   notes: z.string().max(1000).optional(),
   promotionType: z.enum(['FEATURED', 'HOMEPAGE_BOOST', 'LOCAL_AREA_BOOST', 'WEEKEND_PROMOTION']).optional().nullable(),
   compensationReason: z.enum(['ended_early', 'system_cutoff']).optional(),
+  forceCompensation: z.boolean().optional(),
 });
 
 type Params = { params: Promise<{ id: string }> };
@@ -152,7 +154,11 @@ export async function PATCH(req: Request, { params }: Params) {
       return NextResponse.json(refunded);
     }
     case 'grant_compensation': {
-      if (!isGarageSaleCompensationEligible(sale, new Date())) {
+      const now = new Date();
+      const isStandardEligible = isGarageSaleCompensationEligible(sale, now);
+      const isOverrideRequested = parsed.data.forceCompensation === true;
+      const canGrantWithOverride = isOverrideRequested && isGarageSaleCompensationOverrideEligible(sale, now);
+      if (!isStandardEligible && !canGrantWithOverride) {
         return NextResponse.json({ error: 'Sale is not eligible for compensation' }, { status: 422 });
       }
       const compensationReason: GarageSaleCompensationReason = parsed.data.compensationReason ?? 'ended_early';
@@ -161,7 +167,6 @@ export async function PATCH(req: Request, { params }: Params) {
         return NextResponse.json({ error: GARAGE_SALE_COMPENSATION_NOTE_REQUIRED_MESSAGE }, { status: 422 });
       }
       const sourceKey = buildGarageSaleCompensationSourceKey(sale.id);
-      const now = new Date();
       const originalDurationDays = sale.durationDays > 0
         ? sale.durationDays
         : calculateGarageSaleDurationDays(sale.startDate, sale.endDate);
