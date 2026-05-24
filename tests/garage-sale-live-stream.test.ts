@@ -7,6 +7,7 @@ import {
   isSellerLiveReady,
   payloadTargetsViewer,
   payloadHasLiveSession,
+  shouldRecreateGuestPeerOnOffer,
 } from '@/lib/garage-sale-live-stream';
 
 test('seller and buyer derive the same canonical live session id for the same garage sale stream', () => {
@@ -83,4 +84,40 @@ test('buyer stays in waiting state until remote tracks arrive, then transitions 
   assert.equal(waitingState.waitingTitle, 'Waiting for seller video');
   assert.equal(liveState.showLiveBadge, true);
   assert.equal(liveState.statusLabel, 'Live');
+});
+
+test('guest peer is recreated when an already-negotiated request gets a new offer sdp', () => {
+  assert.equal(shouldRecreateGuestPeerOnOffer({
+    hasRemoteDesc: true,
+    connectionState: 'connected',
+    remoteDescriptionSdp: 'v=0 old-offer',
+    incomingOfferSdp: 'v=0 new-offer',
+  }), true);
+});
+
+test('guest peer is not recreated for duplicate offer retries with same sdp while healthy', () => {
+  assert.equal(shouldRecreateGuestPeerOnOffer({
+    hasRemoteDesc: true,
+    connectionState: 'connected',
+    remoteDescriptionSdp: 'v=0 same-offer',
+    incomingOfferSdp: 'v=0 same-offer',
+  }), false);
+});
+
+test('guest peer is recreated when connection is disconnected even if sdp matches', () => {
+  assert.equal(shouldRecreateGuestPeerOnOffer({
+    hasRemoteDesc: true,
+    connectionState: 'disconnected',
+    remoteDescriptionSdp: 'v=0 same-offer',
+    incomingOfferSdp: 'v=0 same-offer',
+  }), true);
+});
+
+test('guest peer is not recreated for invalid/empty incoming offer sdp', () => {
+  assert.equal(shouldRecreateGuestPeerOnOffer({
+    hasRemoteDesc: true,
+    connectionState: 'connected',
+    remoteDescriptionSdp: 'v=0 same-offer',
+    incomingOfferSdp: '   ',
+  }), false);
 });

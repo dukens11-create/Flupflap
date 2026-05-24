@@ -2,7 +2,7 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { Video, VideoOff, Mic, MicOff, Radio, AlertTriangle, Eye, RefreshCcw, MessageCircle, Heart, Trash2, Users, PhoneOff, VolumeX, Volume2, Maximize2, X } from 'lucide-react';
 import { getCanonicalLiveSaleId, LIVE_ENGAGEMENT_EVENTS, LIVE_ENGAGEMENT_SIGNAL_KINDS, isSameLiveSession } from '@/lib/live-engagement';
-import { getSignalViewerId } from '@/lib/garage-sale-live-stream';
+import { getSignalViewerId, shouldRecreateGuestPeerOnOffer } from '@/lib/garage-sale-live-stream';
 import { RTC_CONFIG, HAS_TURN_CONFIG } from '@/lib/rtc-config';
 import { getIceCandidateType } from '@/lib/rtc-diagnostics';
 import { LIVE_SIGNAL_EVENTS, LIVE_SIGNAL_KINDS, LIVE_SIGNAL_ROLES, getLiveRoomId, getLiveSessionId, MAX_LIVE_GUESTS } from '@/lib/live-signaling';
@@ -237,6 +237,25 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
 
   // ── Guest Video Call — Seller side ───────────────────────────────────────────
 
+  const closeGuestPeer = useCallback((requestId: string, reason: string, options?: { clearVideo?: boolean }) => {
+    const peerState = guestPeersRef.current.get(requestId);
+    if (!peerState) return;
+    guestPeersRef.current.delete(requestId);
+    peerState.pc.close();
+    const shouldClearVideo = options?.clearVideo ?? true;
+    if (shouldClearVideo) {
+      const videoEl = guestVideoElsRef.current.get(requestId);
+      if (videoEl) {
+        videoEl.srcObject = null;
+      }
+    }
+    logLiveDebug('guest-peer-closed', {
+      requestId,
+      reason,
+      activePeers: guestPeersRef.current.size,
+    });
+  }, [logLiveDebug]);
+
   const postGuestSignal = useCallback(async (kind: 'GUEST_ANSWER' | 'GUEST_ICE', payload: Record<string, unknown>) => {
     try {
       const res = await fetch(`/api/garage-sales/${saleId}/live/signaling`, {
@@ -308,6 +327,18 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
         } catch (err) {
           console.warn('[GuestCall] Failed to re-apply GUEST_OFFER to existing peer', err);
         }
+      } else if (shouldRecreateGuestPeerOnOffer({
+        hasRemoteDesc: existing.hasRemoteDesc,
+        connectionState: existing.pc.connectionState,
+        remoteDescriptionSdp: existing.pc.remoteDescription?.sdp,
+        incomingOfferSdp: payload.sdp,
+      })) {
+        closeGuestPeer(requestId, 'new-offer-recreate', { clearVideo: false });
+      } else {
+        logLiveDebug('guest-offer-duplicate-ignored', {
+          requestId,
+          state: existing.pc.connectionState,
+        });
       }
       return;
     }
@@ -341,7 +372,8 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
     pc.onconnectionstatechange = () => {
       logLiveDebug('guest-peer-state', { state: pc.connectionState, requestId });
       if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
-        console.warn('[GuestCall] Guest peer disconnected/failed', { requestId });
+        console.warn('[GuestCall] Guest peer disconnected/failed', { requestId, state: pc.connectionState });
+        closeGuestPeer(requestId, `connection-${pc.connectionState}`);
       }
     };
 
@@ -364,10 +396,9 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
       console.info('[GuestCall] Seller sent GUEST_ANSWER', { requestId });
     } catch (err) {
       console.warn('[GuestCall] Failed to handle GUEST_OFFER', err);
-      pc.close();
-      guestPeersRef.current.delete(requestId);
+      closeGuestPeer(requestId, 'offer-handle-failed');
     }
-  }, [guestRequests, logLiveDebug, postGuestSignal, saleId]);
+  }, [closeGuestPeer, guestRequests, logLiveDebug, postGuestSignal, saleId]);
 
   /** Process a GUEST_ICE signal from a buyer-guest. */
   const handleGuestIce = useCallback(async (signal: { payload: unknown }) => {
@@ -398,16 +429,13 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
       for (const [reqId, peerState] of guestPeersRef.current.entries()) {
         const req = data.requests.find((r) => r.id === reqId);
         if (!req || ['declined', 'removed'].includes(req.status)) {
-          peerState.pc.close();
-          guestPeersRef.current.delete(reqId);
-          const el = guestVideoElsRef.current.get(reqId);
-          if (el) el.srcObject = null;
+          closeGuestPeer(reqId, 'request-inactive');
         }
       }
     } catch {
       // Silent fail — polling will retry
     }
-  }, [saleId]);
+  }, [closeGuestPeer, saleId]);
 
   const handleAcceptGuest = useCallback(async (reqId: string) => {
     try {
@@ -453,15 +481,14 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
         setGuestRequests((prev) => prev.filter((r) => r.id !== reqId));
         const peerState = guestPeersRef.current.get(reqId);
         if (peerState) {
-          peerState.pc.close();
-          guestPeersRef.current.delete(reqId);
+          closeGuestPeer(reqId, 'seller-removed');
         }
         logLiveDebug(LIVE_SIGNAL_EVENTS.GUEST_REMOVED, { requestId: reqId });
       }
     } catch {
       // Silent fail
     }
-  }, [logLiveDebug, saleId]);
+  }, [closeGuestPeer, logLiveDebug, saleId]);
 
   const handleToggleMuteGuest = useCallback(async (reqId: string, currentlyMuted: boolean) => {
     const action = currentlyMuted ? 'unmute' : 'mute';
@@ -1497,13 +1524,12 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
       closePeerConnection();
       streamRef.current?.getTracks().forEach((t) => t.stop());
       // Clean up all guest peer connections
-      for (const peerState of guestPeersRef.current.values()) {
-        peerState.pc.close();
+      for (const reqId of Array.from(guestPeersRef.current.keys())) {
+        closeGuestPeer(reqId, 'component-unmount');
       }
-      guestPeersRef.current.clear();
       if (guestPollRef.current) clearInterval(guestPollRef.current);
     };
-  }, [clearReconnectRetryTimeout, closePeerConnection, endLiveOnPageLeave, stopChatPolling, stopReactionPolling, stopSignalPolling]);
+  }, [clearReconnectRetryTimeout, closeGuestPeer, closePeerConnection, endLiveOnPageLeave, stopChatPolling, stopReactionPolling, stopSignalPolling]);
 
   // Start/stop guest request polling when live state changes
   useEffect(() => {
@@ -1516,10 +1542,9 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
         guestPollRef.current = null;
       }
       // Close all guest peers when live ends
-      for (const peerState of guestPeersRef.current.values()) {
-        peerState.pc.close();
+      for (const reqId of Array.from(guestPeersRef.current.keys())) {
+        closeGuestPeer(reqId, 'live-ended');
       }
-      guestPeersRef.current.clear();
       setGuestRequests([]);
     }
     return () => {
@@ -1528,7 +1553,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
         guestPollRef.current = null;
       }
     };
-  }, [isLive, pollGuestRequests]);
+  }, [closeGuestPeer, isLive, pollGuestRequests]);
 
   // Start/stop chat + reaction polling when live state changes
   useEffect(() => {
