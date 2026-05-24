@@ -234,6 +234,18 @@
   "sellerRefunds": {
     "emptyRequests": "Aucune demande de remboursement pour le moment. Les nouvelles demandes des acheteurs apparaîtront ici.",
     "responsePlaceholder": "Partagez votre version, les détails d’expédition ou des notes de résolution.",
+    "actions": {
+      "approve": "Approuver",
+      "reject": "Rejeter",
+      "sendMessage": "Envoyer un message"
+    },
+    "nextSteps": {
+      "pendingSellerResponse": "En attente de réponse du vendeur",
+      "adminReview": "Examen de l’administrateur",
+      "completed": "Terminé",
+      "closed": "Clôturé",
+      "pending": "En attente"
+    },
     "errors": {
       "submitFailed": "Impossible d’envoyer la réponse.",
       "network": "Erreur réseau. Veuillez réessayer."

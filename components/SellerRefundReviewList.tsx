@@ -32,35 +32,40 @@ const RESOLVED_REFUND_STATUSES: ReadonlySet<SellerRefundRequest['status']> = new
   'DENIED',
   'REFUNDED',
 ]);
-const REFUND_REQUEST_DATE_TIME_FORMATTER = new Intl.DateTimeFormat('en-US', {
-  dateStyle: 'medium',
-  timeStyle: 'short',
-  timeZone: 'UTC',
-});
+const LOCALE_TO_DATE_LOCALE: Record<string, string> = {
+  en: 'en-US',
+  es: 'es-ES',
+  fr: 'fr-FR',
+};
 
-function getRequestNextStep(status: SellerRefundRequest['status']): string {
+function getRequestNextStep(status: SellerRefundRequest['status'], t: (key: string) => string): string {
   switch (status) {
     case 'REQUESTED':
-      return 'Pending seller response';
+      return t('sellerRefunds.nextSteps.pendingSellerResponse');
     case 'SELLER_REVIEW':
-      return 'Admin review';
+      return t('sellerRefunds.nextSteps.adminReview');
     case 'APPROVED':
-      return 'Admin review';
+      return t('sellerRefunds.nextSteps.adminReview');
     case 'DENIED':
-      return 'Completed';
+      return t('sellerRefunds.nextSteps.completed');
     case 'REFUNDED':
-      return 'Completed';
+      return t('sellerRefunds.nextSteps.completed');
     default:
-      return 'Pending';
+      return t('sellerRefunds.nextSteps.pending');
   }
 }
 
 export default function SellerRefundReviewList({ initialRefundRequests }: { initialRefundRequests: SellerRefundRequest[] }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [refundRequests, setRefundRequests] = useState(initialRefundRequests);
   const [responses, setResponses] = useState<Record<string, string>>({});
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const refundRequestDateFormatter = new Intl.DateTimeFormat(LOCALE_TO_DATE_LOCALE[locale] ?? 'en-US', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: 'UTC',
+  });
 
   async function handleRefundAction(refundRequestId: string, action: 'approve' | 'reject' | 'message') {
     if (submittingId) return;
@@ -113,7 +118,7 @@ export default function SellerRefundReviewList({ initialRefundRequests }: { init
       )}
       {refundRequests.map((request) => {
         const isResolved = RESOLVED_REFUND_STATUSES.has(request.status);
-        const requestedDate = REFUND_REQUEST_DATE_TIME_FORMATTER.format(new Date(request.createdAt));
+        const requestedDate = refundRequestDateFormatter.format(new Date(request.createdAt));
         return (
           <div key={request.id} className="card p-5 space-y-3">
             <div className="flex items-start justify-between gap-3">
@@ -142,7 +147,7 @@ export default function SellerRefundReviewList({ initialRefundRequests }: { init
             </p>
             <p className="text-xs text-slate-600">
               <span className="font-semibold">Requested:</span> {requestedDate} UTC ·{' '}
-              <span className="font-semibold">Next step:</span> {getRequestNextStep(request.status)}
+              <span className="font-semibold">Next step:</span> {getRequestNextStep(request.status, t)}
             </p>
             {request.sellerResponse && (
               <p className="text-sm text-slate-700"><span className="font-semibold">Your response:</span> {request.sellerResponse}</p>
@@ -168,7 +173,7 @@ export default function SellerRefundReviewList({ initialRefundRequests }: { init
                     disabled={submittingId === request.id}
                     onClick={() => handleRefundAction(request.id, 'approve')}
                   >
-                    Approve
+                    {t('sellerRefunds.actions.approve')}
                   </button>
                   <button
                     type="button"
@@ -176,7 +181,7 @@ export default function SellerRefundReviewList({ initialRefundRequests }: { init
                     disabled={submittingId === request.id}
                     onClick={() => handleRefundAction(request.id, 'reject')}
                   >
-                    Reject
+                    {t('sellerRefunds.actions.reject')}
                   </button>
                   <button
                     type="button"
@@ -184,7 +189,7 @@ export default function SellerRefundReviewList({ initialRefundRequests }: { init
                     disabled={submittingId === request.id}
                     onClick={() => handleRefundAction(request.id, 'message')}
                   >
-                    Send Message
+                    {t('sellerRefunds.actions.sendMessage')}
                   </button>
                 </div>
               </div>

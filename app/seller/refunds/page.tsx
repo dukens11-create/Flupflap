@@ -4,6 +4,7 @@ import { requireSeller } from '@/lib/require-seller';
 import SellerRefundReviewList from '@/components/SellerRefundReviewList';
 import { dollars } from '@/lib/money';
 import { getSellerRefundsData } from '@/lib/seller-refunds';
+import { getServerTranslations } from '@/lib/i18n/server';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Seller Refunds' };
@@ -23,34 +24,31 @@ function formatRefundHistoryStatus(status: string): string {
     .join(' ');
 }
 
-function getHistoryStatusMeta(status: string): { badge: string; nextStep: string } {
+function getHistoryStatusMeta(status: string): { badge: string; nextStepKey: string } {
   const normalized = status.toLowerCase();
   if (['succeeded', 'completed', 'refunded'].includes(normalized)) {
     return {
       badge: 'badge-green',
-      nextStep: 'Completed',
+      nextStepKey: 'sellerRefunds.nextSteps.completed',
     };
   }
   if (['denied', 'rejected', 'failed', 'canceled', 'cancelled'].includes(normalized)) {
     return {
       badge: 'badge-red',
-      nextStep: 'Closed',
+      nextStepKey: 'sellerRefunds.nextSteps.closed',
     };
   }
   return {
     badge: 'badge-blue',
-    nextStep: 'Admin review',
+    nextStepKey: 'sellerRefunds.nextSteps.adminReview',
   };
 }
 
 export default async function SellerRefundsPage() {
   const { sellerId } = await requireSeller();
-  const refundRequestDateFormatter = new Intl.DateTimeFormat('en-US', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-    timeZone: 'UTC',
-  });
-  const refundHistoryDateFormatter = new Intl.DateTimeFormat('en-US', {
+  const { locale, t } = await getServerTranslations();
+  const formatterLocale = locale === 'es' ? 'es-ES' : locale === 'fr' ? 'fr-FR' : 'en-US';
+  const refundDateFormatter = new Intl.DateTimeFormat(formatterLocale, {
     dateStyle: 'medium',
     timeStyle: 'short',
     timeZone: 'UTC',
@@ -120,11 +118,11 @@ export default async function SellerRefundsPage() {
                 </p>
                 <p className="text-xs text-slate-500">
                   {entry.reason ? `Reason: ${entry.reason} · ` : ''}
-                  Recorded {refundHistoryDateFormatter.format(entry.createdAt)} UTC
-                  {entry.resolvedAt ? ` · Resolved ${refundHistoryDateFormatter.format(entry.resolvedAt)} UTC` : ''}
+                  Recorded {refundDateFormatter.format(entry.createdAt)} UTC
+                  {entry.resolvedAt ? ` · Resolved ${refundDateFormatter.format(entry.resolvedAt)} UTC` : ''}
                 </p>
                 <p className="text-xs text-slate-600">
-                  <span className="font-semibold">Next step:</span> {getHistoryStatusMeta(entry.status).nextStep}
+                  <span className="font-semibold">Next step:</span> {t(getHistoryStatusMeta(entry.status).nextStepKey)}
                 </p>
               </div>
             ))}
@@ -140,7 +138,7 @@ export default async function SellerRefundsPage() {
         {!refundRequestsFetchFailed && refundRequests.length > 0 ? (
           <p className="text-xs text-slate-500">
             Showing {refundRequests.length} request{refundRequests.length === 1 ? '' : 's'} · latest request received{' '}
-            {refundRequestDateFormatter.format(refundRequests[0].createdAt)} UTC
+            {refundDateFormatter.format(refundRequests[0].createdAt)} UTC
           </p>
         ) : null}
         {refundRequestsFetchFailed ? (

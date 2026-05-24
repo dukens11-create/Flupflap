@@ -234,6 +234,18 @@
   "sellerRefunds": {
     "emptyRequests": "No hay solicitudes de reembolso por ahora. Las nuevas solicitudes de compradores aparecerán aquí.",
     "responsePlaceholder": "Comparte tu versión, detalles de envío o notas de resolución.",
+    "actions": {
+      "approve": "Aprobar",
+      "reject": "Rechazar",
+      "sendMessage": "Enviar mensaje"
+    },
+    "nextSteps": {
+      "pendingSellerResponse": "Pendiente de respuesta del vendedor",
+      "adminReview": "Revisión del administrador",
+      "completed": "Completado",
+      "closed": "Cerrado",
+      "pending": "Pendiente"
+    },
     "errors": {
       "submitFailed": "No se pudo enviar la respuesta.",
       "network": "Error de red. Inténtalo de nuevo."

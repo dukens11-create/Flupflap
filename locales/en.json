@@ -234,6 +234,18 @@
   "sellerRefunds": {
     "emptyRequests": "No refund requests right now. New buyer requests will appear here.",
     "responsePlaceholder": "Share your side, shipping details, or resolution notes.",
+    "actions": {
+      "approve": "Approve",
+      "reject": "Reject",
+      "sendMessage": "Send Message"
+    },
+    "nextSteps": {
+      "pendingSellerResponse": "Pending seller response",
+      "adminReview": "Admin review",
+      "completed": "Completed",
+      "closed": "Closed",
+      "pending": "Pending"
+    },
     "errors": {
       "submitFailed": "Unable to submit response.",
       "network": "Network error. Please try again."
