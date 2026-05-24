@@ -52,7 +52,7 @@
     "autoprefixer": "10.4.21",
     "postcss": "8.5.14",
     "tailwindcss": "4.2.4",
-    "tsx": "^4.19.3",
+    "tsx": "^4.22.3",
     "typescript": "5.8.3"
   }
 }
