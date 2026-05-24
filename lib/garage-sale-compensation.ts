@@ -14,6 +14,7 @@ export const GARAGE_SALE_COMPENSATION_REASON_LABELS: Record<GarageSaleCompensati
   system_cutoff: 'Platform issue / system cutoff',
 };
 export const GARAGE_SALE_COMPENSATION_NOTE_REQUIRED_MESSAGE = 'Compensation note is required for audit history';
+export const GARAGE_SALE_COMPENSATION_NOT_ELIGIBLE_MESSAGE = 'Compensation only available once a paid approved live has started and before its scheduled end.';
 
 type GarageSaleCompensationEligibilityInput = {
   isLive: boolean;
@@ -29,11 +30,24 @@ export function isGarageSaleCompensationEligible(
   sale: GarageSaleCompensationEligibilityInput,
   now = new Date(),
 ) {
-  if (sale.isLive || sale.isArchived || sale.isSpam) return false;
-  if (sale.status !== 'APPROVED' || sale.paymentStatus !== 'PAID') return false;
+  if (sale.isArchived || sale.isSpam) return false;
+  if (sale.paymentStatus !== 'PAID') return false;
+  if (sale.status !== 'APPROVED' && sale.status !== 'EXPIRED') return false;
   if (sale.startDate > now) return false;
-  if (sale.endDate <= now) return false;
   return true;
+}
+
+export function getGarageSaleCompensationIneligibilityReason(
+  sale: GarageSaleCompensationEligibilityInput,
+  now = new Date(),
+) {
+  if (sale.isArchived || sale.isSpam) return 'Compensation is unavailable for archived or spam listings.';
+  if (sale.paymentStatus !== 'PAID') return 'Compensation is only available for paid listings.';
+  if (sale.status !== 'APPROVED' && sale.status !== 'EXPIRED') {
+    return 'Compensation is only available for approved live sessions.';
+  }
+  if (sale.startDate > now) return 'Compensation becomes available once the approved live has started.';
+  return GARAGE_SALE_COMPENSATION_NOT_ELIGIBLE_MESSAGE;
 }
 
 export function buildGarageSaleCompensationSourceKey(saleId: string) {

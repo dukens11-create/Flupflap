@@ -153,7 +153,7 @@ export async function PATCH(req: Request, { params }: Params) {
     }
     case 'grant_compensation': {
       if (!isGarageSaleCompensationEligible(sale, new Date())) {
-        return NextResponse.json({ error: 'Sale is not eligible for early-end compensation' }, { status: 422 });
+        return NextResponse.json({ error: 'Sale is not eligible for compensation' }, { status: 422 });
       }
       const compensationReason: GarageSaleCompensationReason = parsed.data.compensationReason ?? 'ended_early';
       const compensationNote = normalizeGarageSaleCompensationNote(parsed.data.notes);

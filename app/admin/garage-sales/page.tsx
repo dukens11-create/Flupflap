@@ -6,6 +6,11 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { getMarketplaceSettings } from '@/lib/commission';
 import { expireGarageSales } from '@/lib/garage-sales';
+import {
+  getGarageSaleCompensationIneligibilityReason,
+  isGarageSaleCompensationEligible,
+  parseGarageSaleCompensationAudit,
+} from '@/lib/garage-sale-compensation';
 import AdminGarageSalesClient from './AdminGarageSalesClient';
 
 export const dynamic = 'force-dynamic';
@@ -62,6 +67,24 @@ export default async function AdminGarageSalesPage({
   ]);
 
   const totalPages = Math.ceil(total / perPage);
+  const compensationNow = new Date();
+  const salesWithCompensationState = sales.map((sale) => {
+    const compensationGranted = Boolean(sale.adminNotes && parseGarageSaleCompensationAudit(sale.adminNotes));
+    const compensationInput = {
+      isLive: sale.isLive,
+      isArchived: sale.isArchived,
+      isSpam: sale.isSpam,
+      status: sale.status,
+      paymentStatus: sale.paymentStatus,
+      startDate: sale.startDate,
+      endDate: sale.endDate,
+    };
+    return {
+      ...sale,
+      compensationEligible: !compensationGranted && isGarageSaleCompensationEligible(compensationInput, compensationNow),
+      compensationIneligibilityReason: getGarageSaleCompensationIneligibilityReason(compensationInput, compensationNow),
+    };
+  });
 
   return (
     <div className="space-y-6">
@@ -161,7 +184,7 @@ export default async function AdminGarageSalesPage({
       </div>
 
       <AdminGarageSalesClient
-        sales={JSON.parse(JSON.stringify(sales))}
+        sales={JSON.parse(JSON.stringify(salesWithCompensationState))}
         total={total}
         page={page}
         totalPages={totalPages}
