@@ -33,10 +33,7 @@ export function getSignalViewerId(payload: unknown) {
   return typeof viewerId === 'string' && viewerId.trim() ? viewerId : null;
 }
 
-type VideoTrackLike = {
-  readyState?: string;
-  enabled?: boolean;
-};
+type VideoTrackLike = Pick<MediaStreamTrack, 'readyState' | 'enabled'>;
 
 /**
  * Returns true when at least one video track is actively live and enabled.
@@ -44,7 +41,7 @@ type VideoTrackLike = {
  */
 export function hasLiveVideoTrack(tracks: VideoTrackLike[] | null | undefined) {
   if (!tracks || tracks.length === 0) return false;
-  return tracks.some((track) => track.readyState === 'live' && track.enabled !== false);
+  return tracks.some((track) => track.readyState === 'live' && track.enabled === true);
 }
 
 type GuestOfferRecreateInput = {

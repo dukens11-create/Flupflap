@@ -1078,7 +1078,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
       });
       if (!hasLiveVideoTrack(localStream.getVideoTracks())) {
         localStream.getTracks().forEach((track) => track.stop());
-        setGuestJoinError('Camera video is unavailable. Please enable your camera and try again.');
+        setGuestJoinError('Camera is not ready. Please ensure your camera is enabled and active, then try again.');
         setGuestJoinStatus('idle');
         guestJoinStatusRef.current = 'idle';
         return;

@@ -1886,6 +1886,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
               const isGuestLive = hasLiveVideoTrack(guestStream?.getVideoTracks());
               const guestInitial = (req.guestName ?? 'G').charAt(0).toUpperCase();
               const hasGuestAvatar = isSafeViewerAvatar(req.viewerAvatar);
+              const guestVideoStatusLabel = guestStream ? 'Camera unavailable' : 'Connecting…';
               return (
                 <div
                   key={req.id}
@@ -1910,11 +1911,15 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
                           referrerPolicy="no-referrer"
                         />
                       ) : (
-                        <div className="flex h-14 w-14 items-center justify-center rounded-full border border-white/20 bg-slate-700 text-lg font-bold text-white">
+                        <div
+                          role="img"
+                          aria-label={`${req.guestName ?? 'Guest'} avatar placeholder`}
+                          className="flex h-14 w-14 items-center justify-center rounded-full border border-white/20 bg-slate-700 text-lg font-bold text-white"
+                        >
                           {guestInitial}
                         </div>
                       )}
-                      <span className="text-[10px] font-medium">Camera unavailable</span>
+                      <span className="text-[10px] font-medium">{guestVideoStatusLabel}</span>
                     </div>
                   )}
                   {/* Name + controls overlay */}
