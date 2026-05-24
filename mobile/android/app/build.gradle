@@ -73,7 +73,7 @@ android {
             if (releaseSigningReady) {
                 keyAlias keyProperties['keyAlias']
                 keyPassword keyProperties['keyPassword']
-                storeFile file(keyProperties['storeFile'])
+                storeFile rootProject.file(keyProperties['storeFile'])
                 storePassword keyProperties['storePassword']
             }
         }

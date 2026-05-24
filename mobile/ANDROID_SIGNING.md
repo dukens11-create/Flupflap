@@ -57,7 +57,7 @@ Edit `mobile/android/key.properties`:
 storePassword=<your-keystore-password>
 keyPassword=<your-key-password>
 keyAlias=upload
-storeFile=../app/upload-keystore.jks
+storeFile=app/upload-keystore.jks
 ```
 
 | Field | Description |
@@ -65,7 +65,7 @@ storeFile=../app/upload-keystore.jks
 | `storePassword` | Password you chose for the keystore file |
 | `keyPassword` | Password for the key entry (often the same) |
 | `keyAlias` | Alias used with `-alias` in `keytool` (e.g. `upload`) |
-| `storeFile` | Path to the `.jks` file, relative to `mobile/android/app/` |
+| `storeFile` | Path to the `.jks` file, relative to `mobile/android/` |
 
 > `key.properties` and `upload-keystore.jks` are both gitignored.
 > Do **not** remove them from `.gitignore`.
