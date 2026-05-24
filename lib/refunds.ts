@@ -3,7 +3,7 @@ import { normalizeOrderStatus } from '@/lib/order-status';
 
 export const REFUND_STATUS_LABELS: Record<RefundRequestStatus, string> = {
   REQUESTED: 'Requested',
-  SELLER_REVIEW: 'Under seller review',
+  SELLER_REVIEW: 'Pending admin review',
   APPROVED: 'Approved',
   DENIED: 'Denied',
   REFUNDED: 'Refunded',

@@ -230,5 +230,13 @@
     "description": "The page you're looking for doesn't exist or may have been moved.",
     "goMarketplace": "Go to marketplace",
     "viewCart": "View your cart"
+  },
+  "sellerRefunds": {
+    "emptyRequests": "No refund requests right now. New buyer requests will appear here.",
+    "responsePlaceholder": "Share your side, shipping details, or resolution notes.",
+    "errors": {
+      "submitFailed": "Unable to submit response.",
+      "network": "Network error. Please try again."
+    }
   }
 }

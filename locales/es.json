@@ -230,5 +230,13 @@
     "description": "La página que buscas no existe o pudo haberse movido.",
     "goMarketplace": "Ir al marketplace",
     "viewCart": "Ver tu carrito"
+  },
+  "sellerRefunds": {
+    "emptyRequests": "No refund requests right now. New buyer requests will appear here.",
+    "responsePlaceholder": "Share your side, shipping details, or resolution notes.",
+    "errors": {
+      "submitFailed": "Unable to submit response.",
+      "network": "Network error. Please try again."
+    }
   }
 }
