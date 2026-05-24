@@ -307,7 +307,9 @@ export default function AdminGarageSalesClient({ sales: initialSales, total, pag
                           </span>
                           <p className="font-semibold text-slate-900">{formatGarageSaleCompensationReason(compensationAudit.reason)}</p>
                           <p className="font-semibold text-emerald-700">
-                            {compensationAudit.grantedDays === 1 ? '1 day granted' : `${compensationAudit.grantedDays} days granted`}
+                            {(compensationAudit.grantedDays ?? GARAGE_SALE_COMPENSATION_MIN_DAYS) === 1
+                              ? '1 day granted'
+                              : `${compensationAudit.grantedDays ?? GARAGE_SALE_COMPENSATION_MIN_DAYS} days granted`}
                           </p>
                           {compensationAudit.note && <p>{compensationAudit.note}</p>}
                           <p>Granted {new Date(compensationAudit.at).toLocaleString()}</p>

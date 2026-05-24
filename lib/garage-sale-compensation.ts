@@ -22,12 +22,11 @@ export const GARAGE_SALE_COMPENSATION_OVERRIDE_REQUIRED_MESSAGE = 'Compensation 
 const GARAGE_SALE_STANDARD_COMPENSATION_STATUSES = new Set(['APPROVED', 'EXPIRED']);
 
 function normalizeGarageSaleCompensationDays(value?: number | null) {
-  if (!Number.isInteger(value)) return GARAGE_SALE_COMPENSATION_MIN_DAYS;
-  const normalizedValue = value as number;
-  if (normalizedValue < GARAGE_SALE_COMPENSATION_MIN_DAYS || normalizedValue > GARAGE_SALE_COMPENSATION_MAX_DAYS) {
+  if (typeof value !== 'number' || !Number.isInteger(value)) return GARAGE_SALE_COMPENSATION_MIN_DAYS;
+  if (value < GARAGE_SALE_COMPENSATION_MIN_DAYS || value > GARAGE_SALE_COMPENSATION_MAX_DAYS) {
     return GARAGE_SALE_COMPENSATION_MIN_DAYS;
   }
-  return normalizedValue;
+  return value;
 }
 
 type GarageSaleCompensationEligibilityInput = {
