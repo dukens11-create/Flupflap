@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { dollars } from '@/lib/money';
 import { REFUND_STATUS_LABELS, refundStatusBadge } from '@/lib/refunds';
 import { useI18n } from '@/components/I18nProvider';
+import { getLocaleDateTimeFormatLocale } from '@/lib/i18n/shared';
 
 type SellerRefundRequest = {
   id: string;
@@ -32,12 +33,6 @@ const RESOLVED_REFUND_STATUSES: ReadonlySet<SellerRefundRequest['status']> = new
   'DENIED',
   'REFUNDED',
 ]);
-const LOCALE_TO_DATE_LOCALE: Record<string, string> = {
-  en: 'en-US',
-  es: 'es-ES',
-  fr: 'fr-FR',
-};
-
 function getRequestNextStep(status: SellerRefundRequest['status'], t: (key: string) => string): string {
   switch (status) {
     case 'REQUESTED':
@@ -61,10 +56,11 @@ export default function SellerRefundReviewList({ initialRefundRequests }: { init
   const [responses, setResponses] = useState<Record<string, string>>({});
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [error, setError] = useState('');
-  const refundRequestDateFormatter = new Intl.DateTimeFormat(LOCALE_TO_DATE_LOCALE[locale] ?? 'en-US', {
+  const refundRequestDateFormatter = new Intl.DateTimeFormat(getLocaleDateTimeFormatLocale(locale), {
     dateStyle: 'medium',
     timeStyle: 'short',
     timeZone: 'UTC',
+    timeZoneName: 'short',
   });
 
   async function handleRefundAction(refundRequestId: string, action: 'approve' | 'reject' | 'message') {
@@ -146,7 +142,7 @@ export default function SellerRefundReviewList({ initialRefundRequests }: { init
               )}
             </p>
             <p className="text-xs text-slate-600">
-              <span className="font-semibold">Requested:</span> {requestedDate} UTC ·{' '}
+              <span className="font-semibold">Requested:</span> {requestedDate} ·{' '}
               <span className="font-semibold">Next step:</span> {getRequestNextStep(request.status, t)}
             </p>
             {request.sellerResponse && (

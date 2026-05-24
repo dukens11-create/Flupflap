@@ -44,3 +44,15 @@ export function translate(locale: Locale, key: string, vars?: Record<string, str
     base,
   );
 }
+
+export function getLocaleDateTimeFormatLocale(locale: Locale): string {
+  switch (locale) {
+    case 'es':
+      return 'es-ES';
+    case 'fr':
+      return 'fr-FR';
+    case 'en':
+    default:
+      return 'en-US';
+  }
+}

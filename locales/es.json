@@ -232,6 +232,11 @@
     "viewCart": "Ver tu carrito"
   },
   "sellerRefunds": {
+    "historyDescription": "Haz seguimiento de los reembolsos procesados y en curso con estado claro y notas de resolución.",
+    "requestsDescription": "Revisa las solicitudes de compradores, aprueba/rechaza o envía contexto para revisión administrativa.",
+    "requestsSummaryOne": "Mostrando 1 solicitud · última solicitud recibida {date}",
+    "requestsSummaryMany": "Mostrando {count} solicitudes · última solicitud recibida {date}",
+    "itemUnavailable": "Detalles del artículo no disponibles",
     "emptyRequests": "No hay solicitudes de reembolso por ahora. Las nuevas solicitudes de compradores aparecerán aquí.",
     "responsePlaceholder": "Comparte tu versión, detalles de envío o notas de resolución.",
     "actions": {

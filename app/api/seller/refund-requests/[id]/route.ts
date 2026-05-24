@@ -8,13 +8,6 @@ const sellerRefundSchema = z.object({
   action: z.enum(['approve', 'reject', 'message', 'accept', 'dispute']),
   sellerResponse: z.string().trim().max(2000).optional(),
 });
-const ACTION_ALIAS: Record<z.infer<typeof sellerRefundSchema>['action'], 'approve' | 'reject' | 'message'> = {
-  approve: 'approve',
-  reject: 'reject',
-  message: 'message',
-  accept: 'approve',
-  dispute: 'reject',
-};
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
@@ -61,7 +54,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Invalid payload.' }, { status: 422 });
   }
 
-  const normalizedAction = ACTION_ALIAS[parsed.data.action];
+  const normalizedAction = parsed.data.action === 'accept'
+    ? 'approve'
+    : parsed.data.action === 'dispute'
+      ? 'reject'
+      : parsed.data.action;
   const prefix = normalizedAction === 'approve'
     ? 'Seller approved request'
     : normalizedAction === 'reject'

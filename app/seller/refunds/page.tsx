@@ -5,6 +5,7 @@ import SellerRefundReviewList from '@/components/SellerRefundReviewList';
 import { dollars } from '@/lib/money';
 import { getSellerRefundsData } from '@/lib/seller-refunds';
 import { getServerTranslations } from '@/lib/i18n/server';
+import { getLocaleDateTimeFormatLocale } from '@/lib/i18n/shared';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Seller Refunds' };
@@ -47,11 +48,11 @@ function getHistoryStatusMeta(status: string): { badge: string; nextStepKey: str
 export default async function SellerRefundsPage() {
   const { sellerId } = await requireSeller();
   const { locale, t } = await getServerTranslations();
-  const formatterLocale = locale === 'es' ? 'es-ES' : locale === 'fr' ? 'fr-FR' : 'en-US';
-  const refundDateFormatter = new Intl.DateTimeFormat(formatterLocale, {
+  const refundDateFormatter = new Intl.DateTimeFormat(getLocaleDateTimeFormatLocale(locale), {
     dateStyle: 'medium',
     timeStyle: 'short',
     timeZone: 'UTC',
+    timeZoneName: 'short',
   });
 
   const {
@@ -79,7 +80,7 @@ export default async function SellerRefundsPage() {
       <section className="space-y-3">
         <h2 className="text-xl font-semibold">Refund History</h2>
         <p className="text-sm text-slate-500">
-          Track processed and in-progress refunds with clear status and resolution notes.
+          {t('sellerRefunds.historyDescription')}
         </p>
         {refundHistoryFetchFailed ? (
           <div className="card p-6 text-sm text-amber-700">
@@ -101,7 +102,7 @@ export default async function SellerRefundsPage() {
                     </p>
                     {entry.order?.items?.length ? (
                       <p className="text-xs text-slate-500">
-                        Item: {entry.order.items[0]?.product?.title ?? 'Item details unavailable'}
+                        Item: {entry.order.items[0]?.product?.title ?? t('sellerRefunds.itemUnavailable')}
                         {entry.order.items.length > 1 ? ` +${entry.order.items.length - 1} more` : ''}
                       </p>
                     ) : null}
@@ -118,8 +119,8 @@ export default async function SellerRefundsPage() {
                 </p>
                 <p className="text-xs text-slate-500">
                   {entry.reason ? `Reason: ${entry.reason} · ` : ''}
-                  Recorded {refundDateFormatter.format(entry.createdAt)} UTC
-                  {entry.resolvedAt ? ` · Resolved ${refundDateFormatter.format(entry.resolvedAt)} UTC` : ''}
+                  Recorded {refundDateFormatter.format(entry.createdAt)}
+                  {entry.resolvedAt ? ` · Resolved ${refundDateFormatter.format(entry.resolvedAt)}` : ''}
                 </p>
                 <p className="text-xs text-slate-600">
                   <span className="font-semibold">Next step:</span> {t(getHistoryStatusMeta(entry.status).nextStepKey)}
@@ -133,12 +134,16 @@ export default async function SellerRefundsPage() {
       <section className="space-y-3">
         <h2 className="text-xl font-semibold">Refund Requests</h2>
         <p className="text-sm text-slate-500">
-          Review buyer requests, approve/reject, or send context for admin review.
+          {t('sellerRefunds.requestsDescription')}
         </p>
         {!refundRequestsFetchFailed && refundRequests.length > 0 ? (
           <p className="text-xs text-slate-500">
-            Showing {refundRequests.length} request{refundRequests.length === 1 ? '' : 's'} · latest request received{' '}
-            {refundDateFormatter.format(refundRequests[0].createdAt)} UTC
+            {refundRequests.length === 1
+              ? t('sellerRefunds.requestsSummaryOne', { date: refundDateFormatter.format(refundRequests[0].createdAt) })
+              : t('sellerRefunds.requestsSummaryMany', {
+                count: refundRequests.length,
+                date: refundDateFormatter.format(refundRequests[0].createdAt),
+              })}
           </p>
         ) : null}
         {refundRequestsFetchFailed ? (

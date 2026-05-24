@@ -232,6 +232,11 @@
     "viewCart": "Voir votre panier"
   },
   "sellerRefunds": {
+    "historyDescription": "Suivez les remboursements traités et en cours avec un statut clair et des notes de résolution.",
+    "requestsDescription": "Examinez les demandes des acheteurs, approuvez/rejetez ou envoyez du contexte pour examen administratif.",
+    "requestsSummaryOne": "Affichage de 1 demande · dernière demande reçue {date}",
+    "requestsSummaryMany": "Affichage de {count} demandes · dernière demande reçue {date}",
+    "itemUnavailable": "Détails de l’article indisponibles",
     "emptyRequests": "Aucune demande de remboursement pour le moment. Les nouvelles demandes des acheteurs apparaîtront ici.",
     "responsePlaceholder": "Partagez votre version, les détails d’expédition ou des notes de résolution.",
     "actions": {
