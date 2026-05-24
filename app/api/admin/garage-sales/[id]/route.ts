@@ -188,7 +188,7 @@ export async function PATCH(req: Request, { params }: Params) {
         at: now.toISOString(),
       };
       const auditLine = buildGarageSaleCompensationAuditLine(auditPayload);
-      const auditSummary = formatGarageSaleCompensationSummary(compensationReason, compensationNote, durationDays);
+      const auditSummary = formatGarageSaleCompensationSummary(compensationReason, durationDays, compensationNote);
 
       try {
         const replacement = await prisma.$transaction(async (tx) => {

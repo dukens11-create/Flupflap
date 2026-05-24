@@ -75,7 +75,7 @@ test('buildGarageSaleCompensationSourceKey is deterministic per sale id', () => 
 
 test('formatGarageSaleCompensationSummary includes a trimmed audit note', () => {
   assert.equal(
-    formatGarageSaleCompensationSummary('system_cutoff', '  Seller lost final 20 minutes due to outage.  ', 4),
+    formatGarageSaleCompensationSummary('system_cutoff', 4, '  Seller lost final 20 minutes due to outage.  '),
     'Platform issue / system cutoff — 4 days — Seller lost final 20 minutes due to outage.',
   );
 });

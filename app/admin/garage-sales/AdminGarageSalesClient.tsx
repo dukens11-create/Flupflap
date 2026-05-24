@@ -266,6 +266,7 @@ export default function AdminGarageSalesClient({ sales: initialSales, total, pag
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {saleCompensation.map(({ sale, compensationAudit, compensationGranted, isCompensationEligible, canOverrideCompensation, ineligibilityReason }) => {
+                  const grantedCompensationDays = compensationAudit?.grantedDays ?? GARAGE_SALE_COMPENSATION_MIN_DAYS;
                   return (
                   <tr key={sale.id} className="hover:bg-slate-50">
                     <td className="px-4 py-3">
@@ -307,9 +308,9 @@ export default function AdminGarageSalesClient({ sales: initialSales, total, pag
                           </span>
                           <p className="font-semibold text-slate-900">{formatGarageSaleCompensationReason(compensationAudit.reason)}</p>
                           <p className="font-semibold text-emerald-700">
-                            {(compensationAudit.grantedDays ?? GARAGE_SALE_COMPENSATION_MIN_DAYS) === 1
+                            {grantedCompensationDays === 1
                               ? '1 day granted'
-                              : `${compensationAudit.grantedDays ?? GARAGE_SALE_COMPENSATION_MIN_DAYS} days granted`}
+                              : `${grantedCompensationDays} days granted`}
                           </p>
                           {compensationAudit.note && <p>{compensationAudit.note}</p>}
                           <p>Granted {new Date(compensationAudit.at).toLocaleString()}</p>

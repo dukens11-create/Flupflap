@@ -95,8 +95,8 @@ export function formatGarageSaleCompensationReason(reason: GarageSaleCompensatio
 
 export function formatGarageSaleCompensationSummary(
   reason: GarageSaleCompensationReason,
+  grantedDays: number,
   note?: string | null,
-  grantedDays = GARAGE_SALE_COMPENSATION_MIN_DAYS,
 ) {
   const normalizedDays = normalizeGarageSaleCompensationDays(grantedDays);
   const trimmedNote = normalizeGarageSaleCompensationNote(note);
