@@ -51,7 +51,7 @@ BEGIN
       AND table_name = 'GarageSaleChat'
       AND column_name = 'isHidden'
   ) THEN
-    EXECUTE 'CREATE INDEX IF NOT EXISTS "GarageSaleChat_saleId_isHidden_idx" ON "GarageSaleChat"("saleId", "isHidden")';
+    CREATE INDEX IF NOT EXISTS "GarageSaleChat_saleId_isHidden_idx" ON "GarageSaleChat"("saleId", "isHidden");
   END IF;
 END $$;
 CREATE INDEX IF NOT EXISTS "GarageSaleChat_createdAt_idx" ON "GarageSaleChat"("createdAt");

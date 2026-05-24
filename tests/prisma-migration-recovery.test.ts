@@ -48,5 +48,10 @@ test('failed backfill migration guards isHidden before indexing', () => {
 
   assert.match(sql, /ADD COLUMN IF NOT EXISTS "isHidden" BOOLEAN DEFAULT false/);
   assert.match(sql, /column_name = 'isHidden'/);
+  assert.match(
+    sql,
+    /IF EXISTS \([\s\S]*column_name = 'isHidden'[\s\S]*\)\s+THEN[\s\S]*UPDATE "GarageSaleChat"[\s\S]*SET "isHidden" = false[\s\S]*WHERE "isHidden" IS NULL/,
+  );
+  assert.match(sql, /ALTER COLUMN "isHidden" SET DEFAULT false[\s\S]*ALTER COLUMN "isHidden" SET NOT NULL/);
   assert.match(sql, /CREATE INDEX IF NOT EXISTS "GarageSaleChat_saleId_isHidden_idx"/);
 });
