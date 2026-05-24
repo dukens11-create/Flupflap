@@ -9,8 +9,12 @@ import { deriveGarageSaleLifecycle } from '@/lib/garage-sale-lifecycle';
 import { recordSellerRefundHistory } from '@/lib/seller-refund-history';
 import { calculateGarageSaleDurationDays } from '@/lib/garage-sale-pricing';
 import {
+  GARAGE_SALE_COMPENSATION_NOTE_REQUIRED_MESSAGE,
+  buildGarageSaleCompensationAuditLine,
   buildGarageSaleCompensationSourceKey,
+  formatGarageSaleCompensationSummary,
   isGarageSaleCompensationEligible,
+  normalizeGarageSaleCompensationNote,
   type GarageSaleCompensationReason,
 } from '@/lib/garage-sale-compensation';
 
@@ -152,6 +156,10 @@ export async function PATCH(req: Request, { params }: Params) {
         return NextResponse.json({ error: 'Sale is not eligible for early-end compensation' }, { status: 422 });
       }
       const compensationReason: GarageSaleCompensationReason = parsed.data.compensationReason ?? 'ended_early';
+      const compensationNote = normalizeGarageSaleCompensationNote(parsed.data.notes);
+      if (!compensationNote) {
+        return NextResponse.json({ error: GARAGE_SALE_COMPENSATION_NOTE_REQUIRED_MESSAGE }, { status: 422 });
+      }
       const sourceKey = buildGarageSaleCompensationSourceKey(sale.id);
       const now = new Date();
       const originalDurationDays = sale.durationDays > 0
@@ -165,11 +173,13 @@ export async function PATCH(req: Request, { params }: Params) {
       }
       const auditPayload = {
         reason: compensationReason,
+        note: compensationNote,
         grantedBy,
         sourceSale: sale.id,
         at: now.toISOString(),
       };
-      const auditLine = `[compensation] ${JSON.stringify(auditPayload)}`;
+      const auditLine = buildGarageSaleCompensationAuditLine(auditPayload);
+      const auditSummary = formatGarageSaleCompensationSummary(compensationReason, compensationNote);
 
       try {
         const replacement = await prisma.$transaction(async (tx) => {
@@ -183,7 +193,7 @@ export async function PATCH(req: Request, { params }: Params) {
               amountCents: 0,
               currency: 'USD',
               status: 'granted',
-              reason: compensationReason,
+              reason: auditSummary,
               refundedAt: now,
               resolvedAt: now,
             },
@@ -242,8 +252,8 @@ export async function PATCH(req: Request, { params }: Params) {
             where: { id: sale.id },
             data: {
               adminNotes: sale.adminNotes
-                ? `${sale.adminNotes}\n[compensation] ${JSON.stringify({ ...auditPayload, replacement: createdReplacement.id })}`
-                : `[compensation] ${JSON.stringify({ ...auditPayload, replacement: createdReplacement.id })}`,
+                ? `${sale.adminNotes}\n${buildGarageSaleCompensationAuditLine({ ...auditPayload, replacement: createdReplacement.id })}`
+                : buildGarageSaleCompensationAuditLine({ ...auditPayload, replacement: createdReplacement.id }),
             },
           });
 

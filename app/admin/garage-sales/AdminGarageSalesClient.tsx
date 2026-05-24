@@ -1,9 +1,15 @@
 'use client';
 import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight, CheckCircle, XCircle, Star, EyeOff, AlertTriangle, Trash2 } from 'lucide-react';
-import { isGarageSaleCompensationEligible } from '@/lib/garage-sale-compensation';
+import {
+  GARAGE_SALE_COMPENSATION_NOTE_REQUIRED_MESSAGE,
+  formatGarageSaleCompensationReason,
+  isGarageSaleCompensationEligible,
+  normalizeGarageSaleCompensationNote,
+  parseGarageSaleCompensationAudit,
+  type GarageSaleCompensationReason,
+} from '@/lib/garage-sale-compensation';
 
 type AdminSale = {
   id: string;
@@ -23,6 +29,7 @@ type AdminSale = {
   totalPaidCents: number;
   viewCount: number;
   createdAt: string;
+  adminNotes: string | null;
   compensationGranted?: boolean;
   seller: { id: string; name: string; email: string };
   _count: { reports: number; favorites: number };
@@ -52,10 +59,13 @@ interface Props {
 }
 
 export default function AdminGarageSalesClient({ sales: initialSales, total, page, totalPages, statusFilter }: Props) {
-  const router = useRouter();
   const [sales, setSales] = useState(initialSales);
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [compensationDrafts, setCompensationDrafts] = useState<Record<string, {
+    reason: GarageSaleCompensationReason;
+    note: string;
+  }>>({});
 
   async function doAction(id: string, action: string, extra: Record<string, unknown> = {}) {
     setLoading(id + action);
@@ -102,11 +112,90 @@ export default function AdminGarageSalesClient({ sales: initialSales, total, pag
     return `/admin/garage-sales?status=${statusFilter}&page=${p}`;
   }
 
+  function getCompensationDraft(id: string) {
+    return compensationDrafts[id] ?? { reason: 'ended_early', note: '' };
+  }
+
+  function updateCompensationDraft(
+    id: string,
+    updates: Partial<{ reason: GarageSaleCompensationReason; note: string }>,
+  ) {
+    setCompensationDrafts((prev) => ({
+      ...prev,
+      [id]: {
+        ...(prev[id] ?? { reason: 'ended_early', note: '' }),
+        ...updates,
+      },
+    }));
+  }
+
+  async function grantCompensation(id: string) {
+    const draft = getCompensationDraft(id);
+    const note = normalizeGarageSaleCompensationNote(draft.note);
+    if (!note) {
+      setError(GARAGE_SALE_COMPENSATION_NOTE_REQUIRED_MESSAGE);
+      return;
+    }
+
+    await doAction(id, 'grant_compensation', {
+      compensationReason: draft.reason,
+      notes: note,
+    });
+  }
+
+  const eligibilityNow = new Date();
+  const saleCompensation = sales.map((sale) => {
+    const compensationAudit = parseGarageSaleCompensationAudit(sale.adminNotes);
+    const compensationGranted = Boolean(sale.compensationGranted || compensationAudit);
+    const isCompensationEligible = !compensationGranted && isGarageSaleCompensationEligible({
+      isLive: sale.isLive,
+      isArchived: sale.isArchived,
+      isSpam: sale.isSpam,
+      status: sale.status,
+      paymentStatus: sale.paymentStatus,
+      startDate: new Date(sale.startDate),
+      endDate: new Date(sale.endDate),
+    }, eligibilityNow);
+
+    return {
+      sale,
+      compensationAudit,
+      compensationGranted,
+      isCompensationEligible,
+    };
+  });
+
+  const eligibleCompensationCount = saleCompensation.filter((entry) => entry.isCompensationEligible).length;
+  const grantedCompensationCount = saleCompensation.filter((entry) => entry.compensationGranted).length;
+
   return (
     <div className="space-y-4">
       {error && (
         <div className="rounded-xl bg-red-50 border border-red-200 p-3 text-sm text-red-700">{error}</div>
       )}
+
+      <section id="compensation-management" className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 sm:p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Compensation management</p>
+            <h2 className="mt-1 text-lg font-black text-slate-900">Grant free replacement garage sale lives without developer help</h2>
+            <p className="mt-2 max-w-3xl text-sm text-slate-600">
+              Use the compensation column below to choose the affected seller&apos;s issue, add an audit note, and grant one free replacement live.
+              Existing compensation history stays visible so the same disrupted sale is not compensated twice.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-3 text-center text-sm">
+            <div className="rounded-xl bg-white px-4 py-3 shadow-sm">
+              <p className="text-2xl font-black text-emerald-700">{eligibleCompensationCount}</p>
+              <p className="text-slate-500">Eligible now</p>
+            </div>
+            <div className="rounded-xl bg-white px-4 py-3 shadow-sm">
+              <p className="text-2xl font-black text-slate-900">{grantedCompensationCount}</p>
+              <p className="text-slate-500">Already compensated</p>
+            </div>
+          </div>
+        </div>
+      </section>
 
       {sales.length === 0 ? (
         <div className="card p-10 text-center text-slate-500">No garage sales found.</div>
@@ -123,22 +212,13 @@ export default function AdminGarageSalesClient({ sales: initialSales, total, pag
                   <th className="px-4 py-3 text-left">Payment</th>
                   <th className="px-4 py-3 text-center">Views</th>
                   <th className="px-4 py-3 text-center">Reports</th>
+                  <th className="px-4 py-3 text-left">Compensation</th>
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {sales.map((sale) => {
-                  const eligibilityNow = new Date();
-                  const isCompensationEligible = !sale.compensationGranted && isGarageSaleCompensationEligible({
-                    isLive: sale.isLive,
-                    isArchived: sale.isArchived,
-                    isSpam: sale.isSpam,
-                    status: sale.status,
-                    paymentStatus: sale.paymentStatus,
-                    startDate: new Date(sale.startDate),
-                    endDate: new Date(sale.endDate),
-                  }, eligibilityNow);
-
+                {saleCompensation.map(({ sale, compensationAudit, compensationGranted, isCompensationEligible }) => {
+                  const compensationDraft = getCompensationDraft(sale.id);
                   return (
                   <tr key={sale.id} className="hover:bg-slate-50">
                     <td className="px-4 py-3">
@@ -170,6 +250,65 @@ export default function AdminGarageSalesClient({ sales: initialSales, total, pag
                         <span className="badge badge-red">{sale._count.reports}</span>
                       ) : (
                         <span className="text-xs text-slate-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 align-top">
+                      {compensationGranted && compensationAudit ? (
+                        <div className="space-y-1 text-xs text-slate-600">
+                          <span className="inline-flex rounded-full bg-emerald-100 px-2 py-1 font-semibold text-emerald-700">
+                            Compensation granted
+                          </span>
+                          <p className="font-semibold text-slate-900">{formatGarageSaleCompensationReason(compensationAudit.reason)}</p>
+                          {compensationAudit.note && <p>{compensationAudit.note}</p>}
+                          <p>Granted {new Date(compensationAudit.at).toLocaleString()}</p>
+                          {compensationAudit.replacement && (
+                            <Link
+                              href={`/garage-sales/${compensationAudit.replacement}`}
+                              target="_blank"
+                              className="font-semibold text-[var(--ff-primary-navy)] hover:underline"
+                            >
+                              View replacement live
+                            </Link>
+                          )}
+                        </div>
+                      ) : isCompensationEligible ? (
+                        <div className="min-w-[220px] space-y-2 rounded-xl border border-emerald-200 bg-white p-3">
+                          <label className="block text-xs font-semibold text-slate-700">
+                            Compensation reason
+                            <select
+                              value={compensationDraft.reason}
+                              onChange={(event) => updateCompensationDraft(sale.id, {
+                                reason: event.target.value as GarageSaleCompensationReason,
+                              })}
+                              className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm text-slate-900"
+                            >
+                              <option value="ended_early">Live ended early</option>
+                              <option value="system_cutoff">Platform issue / system cutoff</option>
+                            </select>
+                          </label>
+                          <label className="block text-xs font-semibold text-slate-700">
+                            Audit note
+                            <textarea
+                              value={compensationDraft.note}
+                              onChange={(event) => updateCompensationDraft(sale.id, { note: event.target.value })}
+                              rows={3}
+                              maxLength={1000}
+                              placeholder="Example: Seller live was cut off 18 minutes early during outage."
+                              className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm text-slate-900"
+                            />
+                          </label>
+                          <button
+                            onClick={() => grantCompensation(sale.id)}
+                            disabled={loading === sale.id + 'grant_compensation'}
+                            className="w-full rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                          >
+                            Grant free replacement live
+                          </button>
+                        </div>
+                      ) : (
+                        <p className="max-w-[220px] text-xs text-slate-500">
+                          Available once a paid approved live has started and before its scheduled end.
+                        </p>
                       )}
                     </td>
                     <td className="px-4 py-3">
@@ -242,16 +381,6 @@ export default function AdminGarageSalesClient({ sales: initialSales, total, pag
                             className="flex items-center gap-1 rounded-lg bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-50"
                           >
                             Refund
-                          </button>
-                        )}
-                        {isCompensationEligible && (
-                          <button
-                            onClick={() => doAction(sale.id, 'grant_compensation', { compensationReason: 'ended_early' })}
-                            disabled={loading === sale.id + 'grant_compensation'}
-                            title="Grant free replacement live credit"
-                            className="flex items-center gap-1 rounded-lg bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
-                          >
-                            Replacement Credit
                           </button>
                         )}
                         <button
