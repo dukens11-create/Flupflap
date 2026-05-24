@@ -150,12 +150,21 @@ test('guest local preview stream binds when the video element mounts after strea
 test('guest local preview stream does not reload when same stream is rebound', () => {
   const stream = { id: 'stream-2' } as unknown as MediaStream;
   let loadCalls = 0;
+  let playCalls = 0;
   const video = {
     srcObject: stream,
+    muted: false,
+    defaultMuted: false,
     load: () => { loadCalls += 1; },
-    play: () => Promise.resolve(),
+    play: () => {
+      playCalls += 1;
+      return Promise.resolve();
+    },
   };
 
   assert.equal(bindGuestLocalPreviewStream(video, stream), true);
   assert.equal(loadCalls, 0);
+  assert.equal(playCalls, 1);
+  assert.equal(video.muted, true);
+  assert.equal(video.defaultMuted, true);
 });

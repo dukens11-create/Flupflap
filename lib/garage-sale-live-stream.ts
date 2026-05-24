@@ -77,7 +77,7 @@ export function payloadTargetsViewer(payload: unknown, currentViewerId: string) 
 }
 
 type VideoElementLike = {
-  srcObject: MediaProvider | null;
+  srcObject: HTMLMediaElement['srcObject'];
   muted?: boolean;
   defaultMuted?: boolean;
   load?: () => void;
@@ -101,8 +101,8 @@ export function bindGuestLocalPreviewStream(videoEl: VideoElementLike | null, st
   }
 
   const playResult = videoEl.play?.();
-  if (playResult && typeof (playResult as Promise<void>).catch === 'function') {
-    void (playResult as Promise<void>).catch(() => undefined);
+  if (playResult !== undefined) {
+    void Promise.resolve(playResult).catch(() => undefined);
   }
 
   return true;
