@@ -59,7 +59,7 @@ test('getStageLayoutKind: negative counts are treated as solo', () => {
 test('layout kind changes at each participant count from 1 to 5', () => {
   const layouts = [1, 2, 3, 4, 5].map(getStageLayoutKind);
   const unique = new Set(layouts);
-  assert.equal(unique.size, 5, `Expected 5 distinct layouts, got: ${[...unique].join(', ')}`);
+  assert.equal(unique.size, 5, `Expected 5 distinct layouts, got ${unique.size}: ${[...unique].join(', ')}`);
 });
 
 // ── getStageGridTemplateCols ─────────────────────────────────────────────────

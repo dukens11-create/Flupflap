@@ -384,14 +384,14 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
       } else if (pc.connectionState === 'disconnected') {
         // Grace period: WebRTC connections can briefly visit 'disconnected' before
         // recovering to 'connected'. Wait 5 s before tearing down.
-        const gracePeriod = window.setTimeout(() => {
+        window.setTimeout(() => {
           const current = guestPeersRef.current.get(requestId);
           if (current && current.pc.connectionState !== 'connected') {
             console.warn('[GuestCall] Guest peer disconnected (grace expired)', { requestId });
             closeGuestPeer(requestId, 'connection-disconnected-timeout');
           }
         }, 5000);
-        logLiveDebug('guest-peer-disconnect-grace', { requestId, gracePeriod });
+        logLiveDebug('guest-peer-disconnect-grace', { requestId, gracePeriodMs: 5000 });
       }
     };
 
@@ -1869,7 +1869,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
                   You (Host)
                 </span>
                 {!micOn && <MicOff size={11} className="shrink-0 text-red-400" />}
-                <span className="rounded bg-amber-500 px-1 py-0.5 text-[9px] font-bold text-white">HOST</span>
+                <span className="rounded bg-amber-500 px-1 py-0.5 text-[9px] font-bold text-white" aria-hidden="true">HOST</span>
               </div>
             </div>
 
