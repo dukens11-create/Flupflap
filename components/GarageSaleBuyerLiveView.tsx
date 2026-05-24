@@ -1,11 +1,12 @@
 'use client';
-import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { MessageCircle, Send, Radio, Eye, Heart, Video, VideoOff, PhoneOff } from 'lucide-react';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { MessageCircle, Send, Radio, Eye, Heart, Video, VideoOff, PhoneOff, Share2, Gift, MicOff } from 'lucide-react';
 import { LIVE_ENGAGEMENT_EVENTS } from '@/lib/live-engagement';
 import { payloadTargetsViewer } from '@/lib/garage-sale-live-stream';
 import { RTC_CONFIG, HAS_TURN_CONFIG } from '@/lib/rtc-config';
 import { getIceCandidateType, type IceCandidateType } from '@/lib/rtc-diagnostics';
 import { LIVE_SIGNAL_EVENTS, LIVE_SIGNAL_KINDS, LIVE_SIGNAL_ROLES, getLiveRoomId, MAX_LIVE_GUESTS } from '@/lib/live-signaling';
+import { getStageLayoutKind, getStageGridTemplateCols, getStageGridTemplateRows, getStageTileStyle } from '@/lib/live-stage-layout';
 import {
   MAX_RECONNECT_ATTEMPTS,
   RECONNECT_STEP_DELAY_MS,
@@ -19,12 +20,17 @@ import {
 } from '@/lib/live-stream-viewer-state';
 
 const DEFAULT_AUTHENTICATED_BUYER_NAME = 'Anonymous Buyer';
+const DEFAULT_CHAT_SENDER_NAME = 'Buyer';
 const CHAT_LOGIN_REQUIRED_MESSAGE = 'Please log in to chat';
 const MEDIA_READY_TIMEOUT_MS = 1200;
 const PLAYBACK_RETRY_DELAY_MS = 250;
 const PLAYBACK_RECOVERY_THROTTLE_MS = 1200;
 const CONNECTION_RECOVERY_TIMEOUT_MS = 8000;
 const RECENT_CANDIDATE_TYPES_LIMIT = 6;
+const RECENT_MESSAGES_COUNT = 3;
+const SHARE_FEEDBACK_TIMEOUT_MS = 1800;
+const LIVE_SHARE_TITLE = 'Garage Sale Live';
+const LIVE_STAGE_HEIGHT = 'clamp(260px, 42vh, 420px)';
 
 interface ChatMessage {
   id: string;
@@ -77,6 +83,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
   const [likeCount, setLikeCount] = useState(0);
   const [likeAnimating, setLikeAnimating] = useState(false);
   const [likeSending, setLikeSending] = useState(false);
+  const [shareFeedback, setShareFeedback] = useState<string | null>(null);
   const isAuthenticatedBuyer = Boolean(buyerId);
 
   // Guest video call state
@@ -1400,6 +1407,24 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
     }
   };
 
+  const handleShare = useCallback(async () => {
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: LIVE_SHARE_TITLE, url: window.location.href });
+        setShareFeedback('Link shared');
+      } else if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(window.location.href);
+        setShareFeedback('Link copied');
+      } else {
+        setShareFeedback('Share unavailable');
+      }
+    } catch {
+      setShareFeedback('Share failed');
+    } finally {
+      window.setTimeout(() => setShareFeedback(null), SHARE_FEEDBACK_TIMEOUT_MS);
+    }
+  }, []);
+
   if (!isLive) {
     return (
       <div className="card p-4 flex items-center gap-3 text-slate-500">
@@ -1409,11 +1434,16 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
     );
   }
   const showRemoteVideo = streamConnected || hasRemoteMedia;
-  const recentCandidateTypesLabel = useMemo(() => (
-    debugRecentCandidateTypes.length > 0
-      ? debugRecentCandidateTypes.join(', ')
-      : 'none'
-  ), [debugRecentCandidateTypes]);
+  const recentCandidateTypesLabel = debugRecentCandidateTypes.length > 0
+    ? debugRecentCandidateTypes.join(', ')
+    : 'none';
+  // "approved" means accepted and connecting; "active" means media connected.
+  const viewerOnStage = guestJoinStatus === 'approved' || guestJoinStatus === 'active';
+  const stageParticipantCount = 1 + (viewerOnStage ? 1 : 0);
+  const stageLayout = getStageLayoutKind(stageParticipantCount);
+  const stageGridCols = getStageGridTemplateCols(stageLayout);
+  const stageGridRows = getStageGridTemplateRows(stageLayout);
+  const recentMessages = messages.slice(-RECENT_MESSAGES_COUNT).reverse();
   const connectionStatusLabel = getConnectionStatusLabel(connectionStatus);
   const connectionStatusTone = (() => {
     switch (connectionStatus) {
@@ -1433,98 +1463,161 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
   })();
 
   return (
-    <div className="card space-y-4 p-4">
-      <div className="flex flex-wrap items-center gap-2">
-        {connectionStatus === 'live' && (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-red-500 px-3 py-1 text-xs font-bold text-white animate-pulse">
-            🔴 LIVE NOW
+    <div className="card space-y-4 p-4 sm:space-y-5 sm:p-5 transition-all duration-300">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-500">
+          <Radio size={13} /> Live Preview
+        </h2>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+            <Eye size={12} /> {viewerCount} watching
           </span>
-        )}
-        <p className="text-xs text-slate-500">The seller is live! Ask questions below.</p>
-        <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-          <Eye size={12} /> {viewerCount} watching
-        </span>
-        <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${connectionStatusTone}`}>
-          {connectionStatusLabel}
-        </span>
+          <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${connectionStatusTone}`}>
+            {connectionStatusLabel}
+          </span>
+        </div>
       </div>
 
-      <div className="relative aspect-[4/5] overflow-hidden rounded-2xl bg-slate-900 sm:aspect-video">
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          preload="auto"
-          controls
-          className={`h-full w-full object-contain ${showRemoteVideo ? '' : 'hidden'}`}
-        />
-        {!showRemoteVideo && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white">
-            <Radio size={40} className="animate-pulse text-red-400" />
-            {connectionStatus === 'waitingForPublisher' ? (
-              <>
-                <p className="text-sm font-semibold">Waiting for seller stream…</p>
-                <p className="text-xs text-slate-300 px-4 text-center">
-                  The seller has started a session but hasn't sent a video stream yet. Please wait.
-                </p>
-              </>
-            ) : (
-              <>
-                <p className="text-sm font-semibold">Connecting to seller stream…</p>
-                <p className="text-xs text-slate-300 px-4 text-center">
-                  Live video may take a few seconds on mobile networks.
-                </p>
-              </>
+      <div className="overflow-hidden rounded-2xl bg-slate-950 shadow-xl">
+        <div className="flex items-center justify-between gap-2 bg-slate-900/80 px-3 py-1.5">
+          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold text-white ${connectionStatus === 'live' ? 'animate-pulse bg-red-500' : 'bg-amber-500'}`}>
+            {connectionStatus === 'live' ? '🔴 LIVE' : '🟠 Connecting…'}
+          </span>
+          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-300">
+            <Eye size={11} /> {viewerCount}
+            {viewerOnStage && (
+              <span className="ml-1.5 text-indigo-300">• 1/{MAX_LIVE_GUESTS} guests</span>
             )}
-          </div>
-        )}
-        {showRemoteVideo && playbackBlocked && (
-          <div className="absolute inset-0 flex items-center justify-center bg-slate-950/50 p-4">
-            <button
-              type="button"
-              onClick={() => void playRemoteStream({ tryMutedFirst: false })}
-              className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-900 shadow-lg transition hover:bg-slate-100"
-            >
-              Tap to start live
-            </button>
-          </div>
-        )}
-        {showRemoteVideo && !playbackBlocked && audioUnlockRequired && (
-          <div className="absolute inset-0 flex items-end justify-center p-4 sm:items-center">
-            <button
-              type="button"
-              onClick={() => void playRemoteStream({ tryMutedFirst: false })}
-              className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-900 shadow-lg transition hover:bg-slate-100"
-            >
-              Tap for live audio
-            </button>
-          </div>
-        )}
-        {showRemoteVideo && recoveringConnection && (
-          <div className="pointer-events-none absolute inset-0 flex items-start justify-center p-4">
-            <span className="rounded-full bg-black/75 px-3 py-1.5 text-xs font-medium text-white shadow">
-              Reconnecting to live stream…
-            </span>
-          </div>
-        )}
-        {liveDebugOverlayEnabled && (
-          <div className="pointer-events-none absolute bottom-2 left-2 max-w-[92%] rounded-lg bg-black/70 px-2.5 py-2 text-[10px] leading-tight text-white backdrop-blur-sm sm:max-w-sm">
-            <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 font-mono">
-              <span className="text-white/75">conn</span>
-              <span className="truncate">{debugPcState}</span>
-              <span className="text-white/75">ice</span>
-              <span className="truncate">{debugIceState}</span>
-              <span className="text-white/75">gather</span>
-              <span className="truncate">{debugIceGatheringState}</span>
-              <span className="text-white/75">signal</span>
-              <span className="truncate">{debugSignalingState}</span>
-              <span className="text-white/75">retries</span>
-              <span>{debugReconnectAttempts}</span>
-              <span className="text-white/75">candidates</span>
-              <span className="truncate">{recentCandidateTypesLabel}</span>
+          </span>
+        </div>
+        <div
+          className="w-full"
+          style={{
+            display: 'grid',
+            gridTemplateColumns: stageGridCols,
+            gridTemplateRows: stageGridRows,
+            height: LIVE_STAGE_HEIGHT,
+            gap: '2px',
+          }}
+        >
+          <div
+            className="relative overflow-hidden bg-slate-900"
+            style={getStageTileStyle(stageLayout, 0)}
+          >
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              preload="auto"
+              controls
+              className={`h-full w-full object-cover ${showRemoteVideo ? '' : 'hidden'}`}
+            />
+            {!showRemoteVideo && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white">
+                <Radio size={32} className="animate-pulse text-red-400" />
+                {connectionStatus === 'waitingForPublisher' ? (
+                  <>
+                    <p className="text-sm font-semibold">Waiting for seller stream…</p>
+                    <p className="px-4 text-center text-xs text-slate-300">
+                      The seller has started a session but hasn&apos;t sent video yet.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm font-semibold">Connecting to seller stream…</p>
+                    <p className="px-4 text-center text-xs text-slate-300">
+                      Live video may take a few seconds on mobile networks.
+                    </p>
+                  </>
+                )}
+              </div>
+            )}
+            {showRemoteVideo && playbackBlocked && (
+              <div className="absolute inset-0 flex items-center justify-center bg-slate-950/50 p-4">
+                <button
+                  type="button"
+                  onClick={() => void playRemoteStream({ tryMutedFirst: false })}
+                  className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-900 shadow-lg transition hover:bg-slate-100"
+                >
+                  Tap to start live
+                </button>
+              </div>
+            )}
+            {showRemoteVideo && !playbackBlocked && audioUnlockRequired && (
+              <div className="absolute inset-0 flex items-end justify-center p-4 sm:items-center">
+                <button
+                  type="button"
+                  onClick={() => void playRemoteStream({ tryMutedFirst: false })}
+                  className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-900 shadow-lg transition hover:bg-slate-100"
+                >
+                  Tap for live audio
+                </button>
+              </div>
+            )}
+            {showRemoteVideo && recoveringConnection && (
+              <div className="pointer-events-none absolute inset-0 flex items-start justify-center p-4">
+                <span className="rounded-full bg-black/75 px-3 py-1.5 text-xs font-medium text-white shadow">
+                  Reconnecting to live stream…
+                </span>
+              </div>
+            )}
+            {liveDebugOverlayEnabled && (
+              <div className="pointer-events-none absolute bottom-2 left-2 max-w-[92%] rounded-lg bg-black/70 px-2.5 py-2 text-[10px] leading-tight text-white backdrop-blur-sm sm:max-w-sm">
+                <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 font-mono">
+                  <span className="text-white/75">conn</span>
+                  <span className="truncate">{debugPcState}</span>
+                  <span className="text-white/75">ice</span>
+                  <span className="truncate">{debugIceState}</span>
+                  <span className="text-white/75">gather</span>
+                  <span className="truncate">{debugIceGatheringState}</span>
+                  <span className="text-white/75">signal</span>
+                  <span className="truncate">{debugSignalingState}</span>
+                  <span className="text-white/75">retries</span>
+                  <span>{debugReconnectAttempts}</span>
+                  <span className="text-white/75">candidates</span>
+                  <span className="truncate">{recentCandidateTypesLabel}</span>
+                </div>
+              </div>
+            )}
+            <div className="absolute bottom-0 left-0 right-0 flex items-center gap-1 bg-gradient-to-t from-black/70 to-transparent px-2 py-2">
+              <span className="flex-1 truncate text-[11px] font-semibold text-white">
+                Seller
+              </span>
             </div>
           </div>
-        )}
+
+          {viewerOnStage && (
+            <div
+              className="relative overflow-hidden bg-slate-900"
+              style={getStageTileStyle(stageLayout, 1)}
+            >
+              <video
+                ref={guestLocalVideoRef}
+                autoPlay
+                playsInline
+                muted
+                className="h-full w-full object-cover scale-x-[-1]"
+              />
+              {!guestLocalStreamRef.current && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-slate-900 text-slate-400">
+                  <Video size={24} className="animate-pulse" />
+                  <span className="text-[10px]">Connecting…</span>
+                </div>
+              )}
+              <div className="absolute bottom-0 left-0 right-0 flex items-center gap-1 bg-gradient-to-t from-black/70 to-transparent px-1.5 py-1.5">
+                <span className="flex-1 truncate text-[11px] font-semibold text-white">
+                  You
+                </span>
+                {guestJoinStatus === 'active' ? (
+                  <span className="rounded bg-emerald-500 px-1 py-0.5 text-[9px] font-bold text-white" aria-hidden="true">LIVE</span>
+                ) : (
+                  <span className="rounded bg-amber-500 px-1 py-0.5 text-[9px] font-bold text-white" aria-hidden="true">JOINING</span>
+                )}
+                <MicOff size={10} className="shrink-0 text-red-300 opacity-70" />
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {streamError && (
@@ -1536,9 +1629,46 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
         </p>
       )}
 
-      {/* ── Guest Join Live section ──────────────────────────────────────────── */}
-      <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-3">
-        <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Join Live on Video</p>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="rounded-2xl border border-red-100 bg-red-50 p-3">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-red-600">❤️ Total likes</p>
+          <p className="mt-1 flex items-center gap-1 text-lg font-semibold text-red-700">
+            <Heart size={16} className="fill-red-500 text-red-500" />
+            {likeCount}
+          </p>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Viewer count</p>
+          <p className="mt-1 flex items-center gap-1 text-lg font-semibold text-slate-800">
+            <Eye size={16} />
+            {viewerCount}
+          </p>
+        </div>
+        <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-3">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-indigo-600">Recent messages</p>
+          <div className="mt-1 space-y-1">
+            {recentMessages.length === 0 ? (
+              <p className="text-xs text-indigo-500">Waiting for first message…</p>
+            ) : (
+              recentMessages.map((message) => (
+                <p key={message.id} className="truncate text-xs text-indigo-700">
+                  <span className="font-semibold">{message.guestName ?? DEFAULT_CHAT_SENDER_NAME}:</span> {message.message}
+                </p>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-3 rounded-xl border border-indigo-100 bg-indigo-50/50 p-3">
+        <h3 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-indigo-700">
+          <Video size={13} /> Join Live on Video
+          {viewerOnStage && (
+            <span className="ml-auto inline-flex items-center rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">
+              On stage
+            </span>
+          )}
+        </h3>
 
         {guestJoinStatus === 'idle' && (
           <button
@@ -1672,8 +1802,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
         )}
       </div>
 
-      {/* Like / heart button */}
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={() => void handleLike()}
@@ -1691,25 +1820,47 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
           />
           {likeCount > 0 ? likeCount : 'Like'}
         </button>
+        <button
+          type="button"
+          disabled
+          className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-4 py-1.5 text-sm font-semibold text-amber-700 opacity-70"
+        >
+          <Gift size={15} /> Gifts soon
+        </button>
+        <button
+          type="button"
+          onClick={handleShare}
+          className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-4 py-1.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-200"
+        >
+          <Share2 size={15} /> Share
+        </button>
+        {shareFeedback && (
+          <p className="text-xs text-slate-500">{shareFeedback}</p>
+        )}
       </div>
 
       <div className="space-y-2">
         <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500 flex items-center gap-1.5">
-          <MessageCircle size={13} /> Live Chat
+          <MessageCircle size={13} /> Live Questions / Chat
         </h3>
 
-        <div className="h-48 overflow-y-auto space-y-2 rounded-xl bg-slate-50 p-3 text-sm">
+        <div className="h-52 overflow-y-auto space-y-2 rounded-xl bg-slate-50 p-3 text-sm">
           {messages.length === 0 ? (
             <p className="text-xs text-slate-400 text-center mt-8">No messages yet. Be the first to say hi! 👋</p>
           ) : (
             messages.map((m) => (
-              <div key={m.id} className="flex gap-2">
+              <div key={m.id} className="group flex items-start gap-2">
                 <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-[10px] font-bold text-indigo-700">
                   {(m.guestName ?? 'U').charAt(0).toUpperCase()}
                 </div>
-                <div>
-                  <span className="text-[11px] font-semibold text-slate-700">{m.guestName ?? 'Buyer'} </span>
-                  <span className="text-slate-600">{m.message}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-[11px] font-semibold text-slate-700 truncate">{m.guestName ?? DEFAULT_CHAT_SENDER_NAME}</span>
+                    <span className="text-[10px] text-slate-400 shrink-0">
+                      {new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                  <p className="text-slate-600 text-xs break-words">{m.message}</p>
                 </div>
               </div>
             ))
