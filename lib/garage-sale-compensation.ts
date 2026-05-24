@@ -23,7 +23,7 @@ const GARAGE_SALE_STANDARD_COMPENSATION_STATUSES = new Set(['APPROVED', 'EXPIRED
 
 function normalizeGarageSaleCompensationDays(value?: number | null) {
   if (!Number.isInteger(value)) return GARAGE_SALE_COMPENSATION_MIN_DAYS;
-  const normalizedValue = Number(value);
+  const normalizedValue = value as number;
   if (normalizedValue < GARAGE_SALE_COMPENSATION_MIN_DAYS || normalizedValue > GARAGE_SALE_COMPENSATION_MAX_DAYS) {
     return GARAGE_SALE_COMPENSATION_MIN_DAYS;
   }
@@ -131,7 +131,7 @@ export function parseGarageSaleCompensationAudit(adminNotes?: string | null): Ga
       ) {
         return {
           reason: parsed.reason,
-          grantedDays: normalizeGarageSaleCompensationDays(Number(parsed.grantedDays)),
+          grantedDays: normalizeGarageSaleCompensationDays(parsed.grantedDays),
           note: normalizeGarageSaleCompensationNote(parsed.note),
           grantedBy: parsed.grantedBy,
           sourceSale: parsed.sourceSale,
