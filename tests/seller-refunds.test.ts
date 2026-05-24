@@ -53,6 +53,7 @@ test('getSellerRefundsData returns refund history and requests when queries succ
       findMany: async () => [{
         id: 'order_1',
         status: 'REFUNDED',
+        buyer: { name: 'Buyer', email: 'buyer@example.com' },
         items: [{
           quantity: 1,
           product: { title: 'Ankara Dress' },
@@ -70,6 +71,7 @@ test('getSellerRefundsData returns refund history and requests when queries succ
   assert.equal(result.refundHistory.length, 1);
   assert.equal(result.refundRequests[0].order.items[0].product.title, 'Ankara Dress');
   assert.equal(result.refundHistory[0].order?.items[0].product.title, 'Ankara Dress');
+  assert.equal(result.refundHistory[0].order?.buyer.email, 'buyer@example.com');
 });
 
 test('getSellerRefundsData keeps empty history as an intentional empty state', async () => {
@@ -153,6 +155,129 @@ test('getSellerRefundsData derives history from refund requests when history que
     console.error = originalConsoleError;
     console.warn = originalConsoleWarn;
   }
+});
+
+test('getSellerRefundsData derives history from resolved refund requests when history query is empty', async () => {
+  const now = new Date('2026-05-22T00:00:00.000Z');
+  const mockDb = {
+    refundRequest: {
+      findMany: async () => [{
+        id: 'refund_request_3',
+        status: 'DENIED',
+        reason: 'Item as described',
+        details: null,
+        requestedAmountCents: 500,
+        approvedAmountCents: null,
+        sellerResponse: null,
+        adminNotes: null,
+        createdAt: now,
+        resolvedAt: now,
+        updatedAt: now,
+        stripeRefundId: null,
+        stripeRefundStatus: null,
+        stripeRefundAmount: null,
+        stripeRefundCurrency: null,
+        stripeRefundCreatedAt: null,
+        orderId: 'order_3',
+        order: {
+          id: 'order_3',
+          status: 'SHIPPED',
+          totalCents: 2500,
+          buyer: { name: 'Buyer 3', email: 'buyer3@example.com' },
+          items: [{
+            quantity: 1,
+            product: { title: 'Wood Mask' },
+          }],
+        },
+      }],
+    },
+    sellerRefundHistory: {
+      findMany: async () => [],
+    },
+    order: {
+      findMany: async () => [],
+    },
+  } as any;
+
+  const result = await getSellerRefundsData('seller_1', mockDb);
+
+  assert.equal(result.refundHistoryFetchFailed, false);
+  assert.equal(result.refundHistory.length, 1);
+  assert.equal(result.refundHistory[0].status, 'DENIED');
+  assert.equal(result.refundHistory[0].order?.buyer.email, 'buyer3@example.com');
+});
+
+test('getSellerRefundsData avoids duplicate history rows for the same refunded order status', async () => {
+  const now = new Date('2026-05-22T00:00:00.000Z');
+  const mockDb = {
+    refundRequest: {
+      findMany: async () => [{
+        id: 'refund_request_4',
+        status: 'REFUNDED',
+        reason: 'Duplicate order',
+        details: null,
+        requestedAmountCents: 700,
+        approvedAmountCents: 700,
+        sellerResponse: null,
+        adminNotes: null,
+        createdAt: now,
+        resolvedAt: now,
+        updatedAt: now,
+        stripeRefundId: 're_123',
+        stripeRefundStatus: 'succeeded',
+        stripeRefundAmount: 700,
+        stripeRefundCurrency: 'USD',
+        stripeRefundCreatedAt: now,
+        orderId: 'order_4',
+        order: {
+          id: 'order_4',
+          status: 'REFUNDED',
+          totalCents: 700,
+          buyer: { name: 'Buyer 4', email: 'buyer4@example.com' },
+          items: [{
+            quantity: 1,
+            product: { title: 'Necklace' },
+          }],
+        },
+      }],
+    },
+    sellerRefundHistory: {
+      findMany: async () => [{
+        id: 'history_4',
+        sellerId: 'seller_1',
+        orderId: 'order_4',
+        saleId: null,
+        refundType: 'admin_order_refund',
+        sourceLabel: 'Order refund',
+        sourceKey: 'history_key_4',
+        stripePaymentIntentId: null,
+        stripeRefundId: 're_123',
+        amountCents: 700,
+        currency: 'USD',
+        status: 'succeeded',
+        reason: 'Duplicate order',
+        refundedAt: now,
+        resolvedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      }],
+    },
+    order: {
+      findMany: async () => [{
+        id: 'order_4',
+        status: 'REFUNDED',
+        buyer: { name: 'Buyer 4', email: 'buyer4@example.com' },
+        items: [{
+          quantity: 1,
+          product: { title: 'Necklace' },
+        }],
+      }],
+    },
+  } as any;
+
+  const result = await getSellerRefundsData('seller_1', mockDb);
+
+  assert.equal(result.refundHistory.length, 1);
 });
 
 test('getSellerRefundsData treats missing refund delegates as a friendly fallback state', async () => {

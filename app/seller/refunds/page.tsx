@@ -130,6 +130,11 @@ export default async function SellerRefundsPage() {
                         {entry.order.items.length > 1 ? ` +${entry.order.items.length - 1} more` : ''}
                       </p>
                     ) : null}
+                    {entry.order?.buyer ? (
+                      <p className="text-xs text-slate-500">
+                        Customer: {entry.order.buyer.name ?? entry.order.buyer.email}
+                      </p>
+                    ) : null}
                   </div>
                   <span className={`badge ${getHistoryStatusMeta(entry.status).badge}`}>
                     {formatRefundHistoryStatus(entry.status)}

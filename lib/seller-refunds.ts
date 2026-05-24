@@ -57,6 +57,10 @@ type SellerRefundHistoryRecord = SellerRefundHistory;
 type SellerRefundHistoryOrderRecord = {
   id: string;
   status: string;
+  buyer: {
+    name: string | null;
+    email: string;
+  };
   items: Array<{
     quantity: number;
     product: {
@@ -114,10 +118,40 @@ function fallbackHistoryFromRefundRequests(
         ? {
             id: request.order.id,
             status: request.order.status,
+            buyer: request.order.buyer,
             items: request.order.items,
           }
         : null,
     }));
+}
+
+function mergeRefundHistory(
+  sellerHistory: Array<SellerRefundHistoryRecord & { order: SellerRefundHistoryOrderRecord | null }>,
+  fallbackHistory: Array<SellerRefundHistoryRecord & { order: SellerRefundHistoryOrderRecord | null }>,
+): Array<SellerRefundHistoryRecord & { order: SellerRefundHistoryOrderRecord | null }> {
+  const isDuplicate = (
+    existing: SellerRefundHistoryRecord & { order: SellerRefundHistoryOrderRecord | null },
+    candidate: SellerRefundHistoryRecord & { order: SellerRefundHistoryOrderRecord | null },
+  ): boolean => {
+    if (existing.sourceKey === candidate.sourceKey) return true;
+    if (existing.stripeRefundId && candidate.stripeRefundId && existing.stripeRefundId === candidate.stripeRefundId) return true;
+    if (existing.orderId !== null && candidate.orderId !== null && existing.orderId === candidate.orderId) {
+      return existing.status.toLowerCase() === candidate.status.toLowerCase();
+    }
+    if (existing.saleId !== null && candidate.saleId !== null && existing.saleId === candidate.saleId) {
+      return existing.status.toLowerCase() === candidate.status.toLowerCase();
+    }
+    return false;
+  };
+
+  const merged = [...sellerHistory];
+  for (const fallbackEntry of fallbackHistory) {
+    if (!merged.some((entry) => isDuplicate(entry, fallbackEntry))) {
+      merged.push(fallbackEntry);
+    }
+  }
+
+  return merged.sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
 }
 
 export async function getSellerRefundsData(
@@ -171,6 +205,12 @@ export async function getSellerRefundsData(
           select: {
             id: true,
             status: true,
+            buyer: {
+              select: {
+                name: true,
+                email: true,
+              },
+            },
             items: {
               select: {
                 quantity: true,
@@ -203,6 +243,12 @@ export async function getSellerRefundsData(
         ...entry,
         order: null,
       }));
+    }
+    if (!refundRequestsFetchFailed) {
+      refundHistoryWithOrder = mergeRefundHistory(
+        refundHistoryWithOrder,
+        fallbackHistoryFromRefundRequests(sellerId, refundRequests),
+      );
     }
   } else {
     refundHistoryFetchFailed = true;
