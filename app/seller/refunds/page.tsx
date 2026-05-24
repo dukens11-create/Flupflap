@@ -103,7 +103,7 @@ export default async function SellerRefundsPage() {
                     </p>
                     {entry.order?.items?.length ? (
                       <p className="text-xs text-slate-500">
-                        Item: {entry.order.items[0]?.product.title}
+                        Item: {entry.order.items[0]?.product?.title ?? 'Item details unavailable'}
                         {entry.order.items.length > 1 ? ` +${entry.order.items.length - 1} more` : ''}
                       </p>
                     ) : null}
@@ -139,7 +139,7 @@ export default async function SellerRefundsPage() {
         </p>
         {!refundRequestsFetchFailed && refundRequests.length > 0 ? (
           <p className="text-xs text-slate-500">
-            Showing {refundRequests.length} request{refundRequests.length === 1 ? '' : 's'} · last updated{' '}
+            Showing {refundRequests.length} request{refundRequests.length === 1 ? '' : 's'} · latest request received{' '}
             {refundRequestDateFormatter.format(refundRequests[0].createdAt)} UTC
           </p>
         ) : null}
