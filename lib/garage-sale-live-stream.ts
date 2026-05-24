@@ -33,6 +33,35 @@ export function getSignalViewerId(payload: unknown) {
   return typeof viewerId === 'string' && viewerId.trim() ? viewerId : null;
 }
 
+type GuestOfferRecreateInput = {
+  hasRemoteDesc: boolean;
+  connectionState: string | null | undefined;
+  remoteDescriptionSdp: string | null | undefined;
+  incomingOfferSdp: string;
+};
+
+/**
+ * Determines whether a seller should rebuild an existing guest peer connection
+ * when a new GUEST_OFFER arrives for the same request.
+ */
+export function shouldRecreateGuestPeerOnOffer({
+  hasRemoteDesc,
+  connectionState,
+  remoteDescriptionSdp,
+  incomingOfferSdp,
+}: GuestOfferRecreateInput) {
+  if (!hasRemoteDesc) return false;
+
+  if (connectionState === 'failed' || connectionState === 'disconnected' || connectionState === 'closed') {
+    return true;
+  }
+
+  const nextSdp = incomingOfferSdp.trim();
+  const currentSdp = remoteDescriptionSdp?.trim() ?? '';
+  if (!nextSdp || !currentSdp) return true;
+  return nextSdp !== currentSdp;
+}
+
 /**
  * Returns whether a signaling payload targets the current viewer.
  * Payloads without a viewerId are treated as broadcast and match all viewers.
