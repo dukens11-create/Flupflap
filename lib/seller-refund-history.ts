@@ -1,5 +1,6 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { prisma } from '@/lib/db';
+import { isSchemaNotInitializedError } from '@/lib/db-errors';
 
 type RecordSellerRefundHistoryInput = {
   sellerId: string;
@@ -41,48 +42,59 @@ export async function recordSellerRefundHistory(
   input: RecordSellerRefundHistoryInput,
   db: SellerRefundHistoryDbClient = prisma,
 ) {
-  const sourceKey = normalizeSourceKey(input);
-  const upsertData = {
-    stripeRefundId: input.stripeRefundId ?? undefined,
-    amountCents: input.amountCents ?? undefined,
-    currency: input.currency?.toUpperCase() ?? undefined,
-    status: input.status,
-    reason: input.reason ?? undefined,
-    refundedAt: input.refundedAt ?? undefined,
-    resolvedAt: input.resolvedAt ?? undefined,
-  };
-
-  if (input.stripeRefundId) {
-    const existingByStripeRefundId = await db.sellerRefundHistory.findUnique({
-      where: { stripeRefundId: input.stripeRefundId },
-      select: { id: true },
-    });
-    if (existingByStripeRefundId) {
-      return db.sellerRefundHistory.update({
-        where: { id: existingByStripeRefundId.id },
-        data: upsertData,
-      });
-    }
-  }
-
-  return db.sellerRefundHistory.upsert({
-    where: { sourceKey },
-    create: {
-      sellerId: input.sellerId,
-      orderId: input.orderId ?? null,
-      saleId: input.saleId ?? null,
-      refundType: input.refundType,
-      sourceLabel: input.sourceLabel ?? null,
-      sourceKey,
-      stripePaymentIntentId: input.stripePaymentIntentId ?? null,
-      stripeRefundId: input.stripeRefundId ?? null,
-      amountCents: input.amountCents ?? null,
-      currency: input.currency?.toUpperCase() ?? null,
+  try {
+    const sourceKey = normalizeSourceKey(input);
+    const upsertData = {
+      stripeRefundId: input.stripeRefundId ?? undefined,
+      amountCents: input.amountCents ?? undefined,
+      currency: input.currency?.toUpperCase() ?? undefined,
       status: input.status,
-      reason: input.reason ?? null,
-      refundedAt: input.refundedAt ?? null,
-      resolvedAt: input.resolvedAt ?? null,
-    },
-    update: upsertData,
-  });
+      reason: input.reason ?? undefined,
+      refundedAt: input.refundedAt ?? undefined,
+      resolvedAt: input.resolvedAt ?? undefined,
+    };
+
+    if (input.stripeRefundId) {
+      const existingByStripeRefundId = await db.sellerRefundHistory.findUnique({
+        where: { stripeRefundId: input.stripeRefundId },
+        select: { id: true },
+      });
+      if (existingByStripeRefundId) {
+        return db.sellerRefundHistory.update({
+          where: { id: existingByStripeRefundId.id },
+          data: upsertData,
+        });
+      }
+    }
+
+    return db.sellerRefundHistory.upsert({
+      where: { sourceKey },
+      create: {
+        sellerId: input.sellerId,
+        orderId: input.orderId ?? null,
+        saleId: input.saleId ?? null,
+        refundType: input.refundType,
+        sourceLabel: input.sourceLabel ?? null,
+        sourceKey,
+        stripePaymentIntentId: input.stripePaymentIntentId ?? null,
+        stripeRefundId: input.stripeRefundId ?? null,
+        amountCents: input.amountCents ?? null,
+        currency: input.currency?.toUpperCase() ?? null,
+        status: input.status,
+        reason: input.reason ?? null,
+        refundedAt: input.refundedAt ?? null,
+        resolvedAt: input.resolvedAt ?? null,
+      },
+      update: upsertData,
+    });
+  } catch (error) {
+    if (isSchemaNotInitializedError(error)) {
+      console.warn('[refund-history] SellerRefundHistory table unavailable; skipping refund history write', {
+        sellerId: input.sellerId,
+        sourceKey: normalizeSourceKey(input),
+      });
+      return null;
+    }
+    throw error;
+  }
 }

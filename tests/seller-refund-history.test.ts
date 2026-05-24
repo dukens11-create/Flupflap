@@ -81,3 +81,28 @@ test('recordSellerRefundHistory gives explicit sourceKey priority over stripe re
   const payload = capturedArgs as { where: { sourceKey: string } };
   assert.equal(payload.where.sourceKey, 'manual_source_key');
 });
+
+test('recordSellerRefundHistory gracefully skips writes when SellerRefundHistory table is missing', async () => {
+  const mockDb = {
+    sellerRefundHistory: {
+      findUnique: async () => {
+        const missingTableError = new Error('The table `public.SellerRefundHistory` does not exist in the current database.') as Error & { code?: string };
+        missingTableError.code = 'P2021';
+        throw missingTableError;
+      },
+      upsert: async () => {
+        throw new Error('should not reach upsert when table is missing');
+      },
+    },
+  } as any;
+
+  await assert.doesNotReject(async () => {
+    const result = await recordSellerRefundHistory({
+      sellerId: 'seller_4',
+      refundType: 'admin_order_refund',
+      stripeRefundId: 're_missing_table',
+      status: 'succeeded',
+    }, mockDb);
+    assert.equal(result, null);
+  });
+});
