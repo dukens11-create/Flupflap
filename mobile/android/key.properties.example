@@ -1,0 +1,8 @@
+# Copy this file to android/key.properties and fill in your keystore values.
+# NEVER commit key.properties or the keystore file to version control.
+# See mobile/ANDROID_SIGNING.md for full setup instructions.
+
+storePassword=<your-keystore-password>
+keyPassword=<your-key-password>
+keyAlias=upload
+storeFile=app/upload-keystore.jks

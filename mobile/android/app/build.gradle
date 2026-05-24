@@ -21,6 +21,23 @@ if (flutterVersionName == null) {
     flutterVersionName = '1.0'
 }
 
+// Load release signing properties from key.properties if present.
+// Do NOT commit key.properties or the keystore file to version control.
+def keyPropertiesFile = rootProject.file('key.properties')
+def keyProperties = new Properties()
+def releaseSigningReady = keyPropertiesFile.exists()
+if (releaseSigningReady) {
+    keyPropertiesFile.withReader('UTF-8') { reader ->
+        keyProperties.load(reader)
+    }
+} else {
+    logger.warn(
+        "WARNING: android/key.properties not found. " +
+        "Release builds will NOT be signed for Play Store. " +
+        "See mobile/ANDROID_SIGNING.md for setup instructions."
+    )
+}
+
 apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
 apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
@@ -51,9 +68,23 @@ android {
         versionName flutterVersionName
     }
 
+    signingConfigs {
+        release {
+            if (releaseSigningReady) {
+                keyAlias keyProperties['keyAlias']
+                keyPassword keyProperties['keyPassword']
+                storeFile rootProject.file(keyProperties['storeFile'])
+                storePassword keyProperties['storePassword']
+            }
+        }
+    }
+
     buildTypes {
         release {
-            signingConfig signingConfigs.debug
+            // Use release signing when key.properties is present; otherwise
+            // fall back to debug signing so local builds still compile.
+            // Never use this fallback for Play Store submissions.
+            signingConfig releaseSigningReady ? signingConfigs.release : signingConfigs.debug
         }
     }
 }
