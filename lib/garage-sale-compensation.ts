@@ -16,6 +16,7 @@ export const GARAGE_SALE_COMPENSATION_REASON_LABELS: Record<GarageSaleCompensati
 export const GARAGE_SALE_COMPENSATION_NOTE_REQUIRED_MESSAGE = 'Compensation note is required for audit history';
 export const GARAGE_SALE_COMPENSATION_NOT_ELIGIBLE_MESSAGE = 'Compensation only available once a paid approved live has started and before its scheduled end.';
 export const GARAGE_SALE_COMPENSATION_OVERRIDE_REQUIRED_MESSAGE = 'Compensation is locked under standard rules. Use admin override with an audit note if this paid live was disrupted.';
+const GARAGE_SALE_STANDARD_COMPENSATION_STATUSES = new Set(['APPROVED', 'EXPIRED']);
 
 type GarageSaleCompensationEligibilityInput = {
   isLive: boolean;
@@ -33,7 +34,7 @@ export function isGarageSaleCompensationEligible(
 ) {
   if (sale.isSpam) return false;
   if (sale.paymentStatus !== 'PAID') return false;
-  if (sale.status !== 'APPROVED' && sale.status !== 'EXPIRED') return false;
+  if (!GARAGE_SALE_STANDARD_COMPENSATION_STATUSES.has(sale.status)) return false;
   if (sale.startDate > now) return false;
   return true;
 }
@@ -46,7 +47,7 @@ export function isGarageSaleCompensationOverrideEligible(
   if (sale.paymentStatus !== 'PAID') return false;
   if (sale.startDate > now) return false;
   return sale.status === 'HIDDEN'
-    || (sale.isArchived && sale.status !== 'APPROVED' && sale.status !== 'EXPIRED');
+    || (sale.isArchived && !GARAGE_SALE_STANDARD_COMPENSATION_STATUSES.has(sale.status));
 }
 
 export function getGarageSaleCompensationIneligibilityReason(
@@ -59,7 +60,7 @@ export function getGarageSaleCompensationIneligibilityReason(
   if (isGarageSaleCompensationOverrideEligible(sale, now)) {
     return GARAGE_SALE_COMPENSATION_OVERRIDE_REQUIRED_MESSAGE;
   }
-  if (sale.status !== 'APPROVED' && sale.status !== 'EXPIRED') {
+  if (!GARAGE_SALE_STANDARD_COMPENSATION_STATUSES.has(sale.status)) {
     return 'Compensation is only available for approved or expired live sessions.';
   }
   return GARAGE_SALE_COMPENSATION_NOT_ELIGIBLE_MESSAGE;
