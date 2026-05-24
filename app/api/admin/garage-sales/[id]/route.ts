@@ -157,7 +157,8 @@ export async function PATCH(req: Request, { params }: Params) {
       const now = new Date();
       const isStandardEligible = isGarageSaleCompensationEligible(sale, now);
       const isOverrideRequested = parsed.data.forceCompensation === true;
-      if (!isStandardEligible && (!isOverrideRequested || !isGarageSaleCompensationOverrideEligible(sale, now))) {
+      const canGrantWithOverride = isOverrideRequested && isGarageSaleCompensationOverrideEligible(sale, now);
+      if (!isStandardEligible && !canGrantWithOverride) {
         return NextResponse.json({ error: 'Sale is not eligible for compensation' }, { status: 422 });
       }
       const compensationReason: GarageSaleCompensationReason = parsed.data.compensationReason ?? 'ended_early';
