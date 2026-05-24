@@ -984,18 +984,20 @@ export default function CategoryPicker({
                       type="text"
                       list={`datalist-${field.name}`}
                       className="input"
-                      placeholder={`e.g. 50${field.name === 'size_ml' ? 'ml' : ''} or type a custom amount`}
+                      placeholder={field.name === 'size_ml' ? 'e.g. 50ml or type a custom amount' : field.label}
                       value={attrs[field.name] ?? ''}
                       onChange={e => handleAttrChange(field.name, e.target.value)}
-                      onBlur={e => {
+                      onBlur={field.name === 'size_ml' ? (e => {
                         const normalized = normalizeSizeMlValue(e.target.value);
                         if (normalized) handleAttrChange(field.name, normalized);
-                      }}
+                      }) : undefined}
                     />
                     <datalist id={`datalist-${field.name}`}>
                       {field.options.map(o => <option key={o} value={o} />)}
                     </datalist>
-                    <p className="mt-1 text-xs text-slate-500">Choose a preset or type any amount (e.g. 105ml)</p>
+                    {field.name === 'size_ml' && (
+                      <p className="mt-1 text-xs text-slate-500">Choose a preset or type any amount (e.g. 105ml)</p>
+                    )}
                   </>
                 ) : (
                   <input
