@@ -13,6 +13,7 @@ export const GARAGE_SALE_COMPENSATION_REASON_LABELS: Record<GarageSaleCompensati
   ended_early: 'Live ended early',
   system_cutoff: 'Platform issue / system cutoff',
 };
+export const GARAGE_SALE_COMPENSATION_NOTE_REQUIRED_MESSAGE = 'Compensation note is required for audit history';
 
 type GarageSaleCompensationEligibilityInput = {
   isLive: boolean;
@@ -39,6 +40,11 @@ export function buildGarageSaleCompensationSourceKey(saleId: string) {
   return `garage_sale_early_end_compensation:${saleId}`;
 }
 
+export function normalizeGarageSaleCompensationNote(note?: string | null) {
+  const trimmedNote = note?.trim();
+  return trimmedNote ? trimmedNote : undefined;
+}
+
 export function formatGarageSaleCompensationReason(reason: GarageSaleCompensationReason) {
   return GARAGE_SALE_COMPENSATION_REASON_LABELS[reason];
 }
@@ -47,7 +53,7 @@ export function formatGarageSaleCompensationSummary(
   reason: GarageSaleCompensationReason,
   note?: string | null,
 ) {
-  const trimmedNote = note?.trim();
+  const trimmedNote = normalizeGarageSaleCompensationNote(note);
   if (!trimmedNote) return formatGarageSaleCompensationReason(reason);
   return `${formatGarageSaleCompensationReason(reason)} — ${trimmedNote}`;
 }
@@ -55,7 +61,7 @@ export function formatGarageSaleCompensationSummary(
 export function buildGarageSaleCompensationAuditLine(audit: GarageSaleCompensationAudit) {
   return `[compensation] ${JSON.stringify({
     ...audit,
-    note: audit.note?.trim() || undefined,
+    note: normalizeGarageSaleCompensationNote(audit.note),
   })}`;
 }
 
@@ -76,7 +82,7 @@ export function parseGarageSaleCompensationAudit(adminNotes?: string | null): Ga
       ) {
         return {
           reason: parsed.reason,
-          note: parsed.note?.trim() || undefined,
+          note: normalizeGarageSaleCompensationNote(parsed.note),
           grantedBy: parsed.grantedBy,
           sourceSale: parsed.sourceSale,
           at: parsed.at,

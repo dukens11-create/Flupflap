@@ -9,10 +9,12 @@ import { deriveGarageSaleLifecycle } from '@/lib/garage-sale-lifecycle';
 import { recordSellerRefundHistory } from '@/lib/seller-refund-history';
 import { calculateGarageSaleDurationDays } from '@/lib/garage-sale-pricing';
 import {
+  GARAGE_SALE_COMPENSATION_NOTE_REQUIRED_MESSAGE,
   buildGarageSaleCompensationAuditLine,
   buildGarageSaleCompensationSourceKey,
   formatGarageSaleCompensationSummary,
   isGarageSaleCompensationEligible,
+  normalizeGarageSaleCompensationNote,
   type GarageSaleCompensationReason,
 } from '@/lib/garage-sale-compensation';
 
@@ -154,9 +156,9 @@ export async function PATCH(req: Request, { params }: Params) {
         return NextResponse.json({ error: 'Sale is not eligible for early-end compensation' }, { status: 422 });
       }
       const compensationReason: GarageSaleCompensationReason = parsed.data.compensationReason ?? 'ended_early';
-      const compensationNote = parsed.data.notes?.trim();
+      const compensationNote = normalizeGarageSaleCompensationNote(parsed.data.notes);
       if (!compensationNote) {
-        return NextResponse.json({ error: 'Compensation note is required for audit history' }, { status: 422 });
+        return NextResponse.json({ error: GARAGE_SALE_COMPENSATION_NOTE_REQUIRED_MESSAGE }, { status: 422 });
       }
       const sourceKey = buildGarageSaleCompensationSourceKey(sale.id);
       const now = new Date();

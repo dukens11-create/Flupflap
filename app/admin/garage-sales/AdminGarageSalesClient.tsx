@@ -3,8 +3,10 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { ChevronLeft, ChevronRight, CheckCircle, XCircle, Star, EyeOff, AlertTriangle, Trash2 } from 'lucide-react';
 import {
+  GARAGE_SALE_COMPENSATION_NOTE_REQUIRED_MESSAGE,
   formatGarageSaleCompensationReason,
   isGarageSaleCompensationEligible,
+  normalizeGarageSaleCompensationNote,
   parseGarageSaleCompensationAudit,
   type GarageSaleCompensationReason,
 } from '@/lib/garage-sale-compensation';
@@ -129,9 +131,9 @@ export default function AdminGarageSalesClient({ sales: initialSales, total, pag
 
   async function grantCompensation(id: string) {
     const draft = getCompensationDraft(id);
-    const note = draft.note.trim();
+    const note = normalizeGarageSaleCompensationNote(draft.note);
     if (!note) {
-      setError('Add a compensation note before granting a free replacement live.');
+      setError(GARAGE_SALE_COMPENSATION_NOTE_REQUIRED_MESSAGE);
       return;
     }
 
