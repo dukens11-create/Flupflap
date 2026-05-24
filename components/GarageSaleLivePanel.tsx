@@ -1,11 +1,12 @@
 'use client';
-import { useRef, useState, useCallback, useEffect } from 'react';
+import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { Video, VideoOff, Mic, MicOff, Radio, AlertTriangle, Eye, RefreshCcw, MessageCircle, Heart, Trash2, Users, PhoneOff, VolumeX, Volume2, Maximize2, X } from 'lucide-react';
 import { getCanonicalLiveSaleId, LIVE_ENGAGEMENT_EVENTS, LIVE_ENGAGEMENT_SIGNAL_KINDS, isSameLiveSession } from '@/lib/live-engagement';
 import { getSignalViewerId, shouldRecreateGuestPeerOnOffer } from '@/lib/garage-sale-live-stream';
 import { RTC_CONFIG, HAS_TURN_CONFIG } from '@/lib/rtc-config';
 import { getIceCandidateType } from '@/lib/rtc-diagnostics';
 import { LIVE_SIGNAL_EVENTS, LIVE_SIGNAL_KINDS, LIVE_SIGNAL_ROLES, getLiveRoomId, getLiveSessionId, MAX_LIVE_GUESTS } from '@/lib/live-signaling';
+import { getStageLayoutKind, getStageGridTemplateCols, getStageGridTemplateRows, getStageTileStyle } from '@/lib/live-stage-layout';
 
 interface Props {
   saleId: string;
@@ -97,6 +98,8 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
   const videoRef = useRef<HTMLVideoElement>(null);
   const expandedVideoRef = useRef<HTMLVideoElement>(null);
   const expandedPreviewRef = useRef<HTMLDivElement>(null);
+  /** Dedicated video element for the host tile in the live stage grid. */
+  const stageSellerVideoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const viewerPeersRef = useRef<Map<string, SellerViewerPeerState>>(new Map());
   const viewerHeartbeatRef = useRef<Map<string, number>>(new Map());
@@ -357,7 +360,11 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
       peerState.stream = stream;
       const videoEl = guestVideoElsRef.current.get(requestId);
       if (videoEl) {
-        videoEl.srcObject = stream;
+        // Ensure fresh initialization to fix dark video on rejoin (esp. on iOS/Safari).
+        if (videoEl.srcObject !== stream) {
+          videoEl.srcObject = stream;
+          videoEl.load();
+        }
         void videoEl.play().catch(() => undefined);
       }
       logLiveDebug(LIVE_SIGNAL_EVENTS.GUEST_JOINED_LIVE, { requestId, guestId });
@@ -371,9 +378,20 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
 
     pc.onconnectionstatechange = () => {
       logLiveDebug('guest-peer-state', { state: pc.connectionState, requestId });
-      if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
-        console.warn('[GuestCall] Guest peer disconnected/failed', { requestId, state: pc.connectionState });
-        closeGuestPeer(requestId, `connection-${pc.connectionState}`);
+      if (pc.connectionState === 'failed') {
+        console.warn('[GuestCall] Guest peer failed', { requestId, state: pc.connectionState });
+        closeGuestPeer(requestId, 'connection-failed');
+      } else if (pc.connectionState === 'disconnected') {
+        // Grace period: WebRTC connections can briefly visit 'disconnected' before
+        // recovering to 'connected'. Wait 5 s before tearing down.
+        const gracePeriod = window.setTimeout(() => {
+          const current = guestPeersRef.current.get(requestId);
+          if (current && current.pc.connectionState !== 'connected') {
+            console.warn('[GuestCall] Guest peer disconnected (grace expired)', { requestId });
+            closeGuestPeer(requestId, 'connection-disconnected-timeout');
+          }
+        }, 5000);
+        logLiveDebug('guest-peer-disconnect-grace', { requestId, gracePeriod });
       }
     };
 
@@ -513,7 +531,12 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
       guestVideoElsRef.current.set(reqId, el);
       const peerState = guestPeersRef.current.get(reqId);
       if (peerState?.stream) {
-        el.srcObject = peerState.stream;
+        // load() ensures a fresh media pipeline when the stream has changed,
+        // preventing dark video after a guest rejoins on iOS/Safari.
+        if (el.srcObject !== peerState.stream) {
+          el.srcObject = peerState.stream;
+          el.load();
+        }
         void el.play().catch(() => undefined);
       }
     } else {
@@ -1671,6 +1694,20 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
   const sellerLiveReady = isLive && sellerPublished && (subscriberPathReady || streamReadyCount > 0);
   const recentMessages = chatMessages.slice(-3).reverse();
 
+  // ── Stage layout ────────────────────────────────────────────────────────────
+  const activeGuests = useMemo(
+    () => guestRequests.filter((r) => r.status === 'accepted'),
+    [guestRequests],
+  );
+  const pendingRequests = useMemo(
+    () => guestRequests.filter((r) => r.status === 'pending'),
+    [guestRequests],
+  );
+  const stageParticipantCount = 1 + activeGuests.length; // host + accepted guests
+  const stageLayout = getStageLayoutKind(stageParticipantCount);
+  const stageGridCols = getStageGridTemplateCols(stageLayout);
+  const stageGridRows = getStageGridTemplateRows(stageLayout);
+
   const syncVideoElement = useCallback((element: HTMLVideoElement | null) => {
     if (!element || !streamRef.current) return;
     if (element.srcObject !== streamRef.current) {
@@ -1682,6 +1719,10 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
   useEffect(() => {
     syncVideoElement(videoRef.current);
   }, [camOn, previewReady, showExpandedPreview, syncVideoElement]);
+
+  useEffect(() => {
+    syncVideoElement(stageSellerVideoRef.current);
+  }, [isLive, previewReady, syncVideoElement]);
 
   useEffect(() => {
     if (!showExpandedPreview) return;
@@ -1744,7 +1785,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
         </div>
       </div>
 
-      <div className="relative flex aspect-[3/4] min-h-[22rem] w-full items-center justify-center overflow-hidden rounded-2xl bg-slate-900 sm:aspect-video sm:min-h-0">
+      <div className={`relative flex aspect-[3/4] min-h-[22rem] w-full items-center justify-center overflow-hidden rounded-2xl bg-slate-900 sm:aspect-video sm:min-h-0 ${isLive ? 'hidden' : ''}`}>
         <video
           ref={videoRef}
           autoPlay
@@ -1757,14 +1798,6 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
             <VideoOff size={40} />
             <p className="text-sm font-medium">{CAMERA_PREVIEW_PLACEHOLDER}</p>
           </div>
-        )}
-        {sellerLiveReady && (
-          <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-red-500 px-2.5 py-1 text-[11px] font-bold text-white animate-pulse shadow-lg" aria-live="polite">
-            <span aria-hidden="true" className="inline-flex items-center gap-1.5">
-              <span>🔴</span> LIVE <Eye size={11} /> {viewerCount}
-            </span>
-            <span className="sr-only">{viewerCount} viewers watching</span>
-          </span>
         )}
         {camOn && cameraStatus === 'connecting' && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-slate-950/45 px-4 transition-opacity duration-300">
@@ -1785,6 +1818,114 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
           </div>
         )}
       </div>
+
+      {/* ── TikTok-style live stage (shown only while live) ──────────────────── */}
+      {isLive && (
+        <div className="overflow-hidden rounded-2xl bg-slate-950 shadow-xl">
+          {/* Live indicator bar */}
+          <div className="flex items-center justify-between gap-2 px-3 py-1.5 bg-slate-900/80">
+            <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold text-white ${sellerLiveReady ? 'animate-pulse bg-red-500' : 'bg-amber-500'}`}>
+              {sellerLiveReady ? '🔴 LIVE' : '🟠 Starting…'}
+            </span>
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-300">
+              <Eye size={11} /> {viewerCount}
+              {activeGuests.length > 0 && (
+                <span className="ml-1.5 text-indigo-300">• {activeGuests.length}/{MAX_LIVE_GUESTS} guests</span>
+              )}
+            </span>
+          </div>
+          {/* Participant grid */}
+          <div
+            className="w-full"
+            style={{
+              display: 'grid',
+              gridTemplateColumns: stageGridCols,
+              gridTemplateRows: stageGridRows,
+              height: 'clamp(260px, 42vh, 420px)',
+              gap: '2px',
+            }}
+          >
+            {/* Host tile — seller's own camera */}
+            <div
+              className="relative overflow-hidden bg-slate-900"
+              style={getStageTileStyle(stageLayout, 0)}
+            >
+              <video
+                ref={stageSellerVideoRef}
+                autoPlay
+                playsInline
+                muted
+                className={camOn ? 'h-full w-full object-cover scale-x-[-1]' : 'hidden'}
+              />
+              {!camOn && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 text-slate-400">
+                  <VideoOff size={28} />
+                  <span className="text-[10px]">Camera off</span>
+                </div>
+              )}
+              {/* Name + status overlay */}
+              <div className="absolute bottom-0 left-0 right-0 flex items-center gap-1 bg-gradient-to-t from-black/70 to-transparent px-2 py-2">
+                <span className="text-[11px] font-semibold text-white truncate flex-1">
+                  You (Host)
+                </span>
+                {!micOn && <MicOff size={11} className="shrink-0 text-red-400" />}
+                <span className="rounded bg-amber-500 px-1 py-0.5 text-[9px] font-bold text-white">HOST</span>
+              </div>
+            </div>
+
+            {/* Guest tiles */}
+            {activeGuests.map((req, idx) => {
+              const isGuestLive = Boolean(guestPeersRef.current.get(req.id)?.stream);
+              return (
+                <div
+                  key={req.id}
+                  className="relative overflow-hidden bg-slate-900"
+                  style={getStageTileStyle(stageLayout, idx + 1)}
+                >
+                  <video
+                    ref={(el) => setGuestVideoRef(req.id, el)}
+                    autoPlay
+                    playsInline
+                    muted={req.isMuted}
+                    className="h-full w-full object-cover"
+                  />
+                  {/* Camera off / connecting placeholder */}
+                  {!isGuestLive && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-slate-900 text-slate-400">
+                      <Video size={24} className="animate-pulse" />
+                      <span className="text-[10px]">Connecting…</span>
+                    </div>
+                  )}
+                  {/* Name + controls overlay */}
+                  <div className="absolute bottom-0 left-0 right-0 flex items-center gap-1 bg-gradient-to-t from-black/70 to-transparent px-1.5 py-1.5">
+                    <span className="text-[11px] font-semibold text-white truncate flex-1">
+                      {req.guestName ?? 'Guest'}
+                    </span>
+                    {req.isMuted && <MicOff size={10} className="shrink-0 text-red-400" />}
+                    {/* Host-only tile controls */}
+                    <button
+                      type="button"
+                      onClick={() => void handleToggleMuteGuest(req.id, req.isMuted)}
+                      title={req.isMuted ? 'Unmute guest' : 'Mute guest'}
+                      className="rounded bg-black/50 p-0.5 text-white hover:bg-black/75 transition-colors"
+                    >
+                      {req.isMuted ? <Volume2 size={12} /> : <VolumeX size={12} />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleRemoveGuest(req.id)}
+                      title="Remove guest from stage"
+                      className="rounded bg-red-600/70 p-0.5 text-white hover:bg-red-600 transition-colors"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {cameraMessage && (
         <p className={cx('rounded-lg px-3 py-2 text-xs font-medium', getCameraMessageStyles(cameraStatus, Boolean(error)))}>
@@ -1932,19 +2073,25 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
           <div className="space-y-3 rounded-xl border border-indigo-100 bg-indigo-50/50 p-3">
             <h3 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-indigo-700">
               <Users size={13} /> Live Guest Requests
-              {guestRequests.filter((r) => r.status === 'accepted').length > 0 && (
+              {activeGuests.length > 0 && (
                 <span className="ml-auto inline-flex items-center rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">
-                  {guestRequests.filter((r) => r.status === 'accepted').length} / {MAX_LIVE_GUESTS} live
+                  {activeGuests.length} / {MAX_LIVE_GUESTS} live
                 </span>
               )}
             </h3>
 
-            {guestRequests.length === 0 && (
+            {pendingRequests.length === 0 && activeGuests.length === 0 && (
               <p className="text-center text-xs text-slate-400 py-1">No join requests yet.</p>
             )}
 
+            {activeGuests.length > 0 && pendingRequests.length === 0 && (
+              <p className="text-center text-xs text-emerald-600 py-1">
+                {activeGuests.length} guest{activeGuests.length > 1 ? 's' : ''} on stage — manage via video tiles above.
+              </p>
+            )}
+
             {/* Pending requests */}
-            {guestRequests.filter((r) => r.status === 'pending').map((req) => (
+            {pendingRequests.map((req) => (
               <div key={req.id} className="flex items-center gap-2 rounded-lg bg-white border border-indigo-100 px-3 py-2 shadow-sm">
                 {isSafeViewerAvatar(req.viewerAvatar) ? (
                   <img
@@ -1968,7 +2115,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
                   <button
                     type="button"
                     onClick={() => void handleAcceptGuest(req.id)}
-                    disabled={guestRequests.filter((r) => r.status === 'accepted').length >= MAX_LIVE_GUESTS}
+                    disabled={activeGuests.length >= MAX_LIVE_GUESTS}
                     className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     Accept
@@ -1983,74 +2130,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
                 </div>
               </div>
             ))}
-
-            {/* Active/approved guests */}
-            {guestRequests.filter((r) => r.status === 'accepted').map((req) => {
-              const isGuestLive = Boolean(guestPeersRef.current.get(req.id)?.stream);
-              return (
-              <div key={req.id} className="space-y-2">
-                <div className="flex items-center gap-2 rounded-lg bg-white border border-emerald-200 px-3 py-2 shadow-sm">
-                  {isSafeViewerAvatar(req.viewerAvatar) ? (
-                    <img
-                      src={req.viewerAvatar as string}
-                      alt={req.guestName ?? 'Guest avatar'}
-                      className="h-7 w-7 shrink-0 rounded-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-700">
-                      {(req.guestName ?? 'G').charAt(0).toUpperCase()}
-                    </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-slate-800 truncate">{req.guestName ?? 'Guest'}</p>
-                    <p className="text-[10px] text-emerald-600 font-medium">
-                      {isGuestLive ? '🟢 Live on video' : '⏳ Accepted — connecting…'}
-                    </p>
-                    {req.viewerId && (
-                      <p className="text-[10px] text-slate-400 truncate">ID: {req.viewerId}</p>
-                    )}
-                  </div>
-                  <div className="flex gap-1.5 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => void handleToggleMuteGuest(req.id, req.isMuted)}
-                      title={req.isMuted ? 'Unmute guest' : 'Mute guest'}
-                      className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-1"
-                    >
-                      {req.isMuted ? <Volume2 size={11} /> : <VolumeX size={11} />}
-                      {req.isMuted ? 'Unmute' : 'Mute'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void handleRemoveGuest(req.id)}
-                      className="rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-red-600 hover:bg-red-50 transition-colors flex items-center gap-1"
-                    >
-                      <PhoneOff size={11} /> Remove
-                    </button>
-                  </div>
-                </div>
-                {/* Guest video tile */}
-                <div className="relative aspect-video overflow-hidden rounded-xl bg-slate-900">
-                  <video
-                    ref={(el) => setGuestVideoRef(req.id, el)}
-                    autoPlay
-                    playsInline
-                    muted={req.isMuted}
-                    className="h-full w-full object-cover"
-                  />
-                  <div className="absolute bottom-0 left-0 right-0 flex items-center justify-between p-1.5 bg-gradient-to-t from-black/60 to-transparent">
-                    <span className="text-[10px] font-semibold text-white">{req.guestName ?? 'Guest'}</span>
-                    {req.isMuted && (
-                      <span className="inline-flex items-center gap-0.5 rounded bg-slate-800/80 px-1.5 py-0.5 text-[9px] text-white">
-                        <VolumeX size={9} /> Muted
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );})}
           </div>
-
           {/* Live Questions / Chat */}
           <div className="space-y-2">
             <h3 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-500">
