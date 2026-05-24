@@ -71,6 +71,7 @@ export default async function SellerRefundsPage() {
       refundHistory: [],
       refundRequestsFetchFailed: true,
       refundHistoryFetchFailed: true,
+      refundHistoryFetchError: 'Refund data failed to load due to an unexpected server error.',
     };
   }
 
@@ -79,6 +80,7 @@ export default async function SellerRefundsPage() {
     refundHistory,
     refundRequestsFetchFailed,
     refundHistoryFetchFailed,
+    refundHistoryFetchError,
   } = refundsData;
 
   const serializableRefundRequests = refundRequests.map((request) => ({
@@ -103,11 +105,14 @@ export default async function SellerRefundsPage() {
         </p>
         {refundHistoryFetchFailed ? (
           <div className="card p-6 text-sm text-amber-700">
-            Refund history could not be loaded right now. You can still review active refund requests below.
+            <p>Refund history could not be loaded right now.</p>
+            <p className="mt-1 text-xs text-amber-800">
+              {refundHistoryFetchError ?? 'A backend or network error occurred while loading refund history.'}
+            </p>
           </div>
         ) : refundHistory.length === 0 ? (
           <div className="card p-6 text-sm text-slate-500">
-            No processed refunds yet. Completed refunds will appear here.
+            No refunds processed yet for your account.
           </div>
         ) : (
           <div className="grid gap-3">

@@ -48,6 +48,9 @@ const sellerRefundHistoryQuery = {
   orderBy: { createdAt: 'desc' as const },
   take: 100,
 } satisfies Prisma.SellerRefundHistoryFindManyArgs;
+const REFUND_STATUS_REQUESTED = 'REQUESTED';
+const FALLBACK_REFUND_TYPE = 'order_refund_request';
+const FALLBACK_SOURCE_LABEL = 'Order refund request';
 
 type SellerRefundRequestRecord = Prisma.RefundRequestGetPayload<typeof sellerRefundRequestQuery>;
 type SellerRefundHistoryRecord = SellerRefundHistory;
@@ -69,10 +72,52 @@ export type SellerRefundsData = {
   }>;
   refundRequestsFetchFailed: boolean;
   refundHistoryFetchFailed: boolean;
+  refundHistoryFetchError: string | null;
 };
 
 function getUnavailableSellerRefundsError(subject: 'refund requests' | 'refund history' | 'order details') {
   return new Error(`Seller ${subject} are unavailable in this environment.`);
+}
+
+function fallbackHistoryFromRefundRequests(
+  sellerId: string,
+  refundRequests: SellerRefundRequestRecord[],
+): Array<SellerRefundHistoryRecord & { order: SellerRefundHistoryOrderRecord | null }> {
+  const isHistoryVisibleStatus = (status: SellerRefundRequestRecord['status']): boolean => status !== REFUND_STATUS_REQUESTED;
+  const resolveFallbackAmountCents = (request: SellerRefundRequestRecord): number => {
+    if (request.approvedAmountCents !== null) return request.approvedAmountCents;
+    if (request.status === 'REFUNDED' && request.stripeRefundAmount !== null) return request.stripeRefundAmount;
+    return request.requestedAmountCents;
+  };
+
+  return refundRequests
+    .filter((request) => isHistoryVisibleStatus(request.status))
+    .map((request) => ({
+      id: `refund_request:${request.id}`,
+      sellerId,
+      orderId: request.orderId,
+      saleId: null,
+      refundType: FALLBACK_REFUND_TYPE,
+      sourceLabel: FALLBACK_SOURCE_LABEL,
+      sourceKey: `refund_request:${request.id}`,
+      stripePaymentIntentId: null,
+      stripeRefundId: request.stripeRefundId,
+      amountCents: resolveFallbackAmountCents(request),
+      currency: request.stripeRefundCurrency ?? null,
+      status: request.stripeRefundStatus ?? request.status,
+      reason: request.reason,
+      refundedAt: request.stripeRefundCreatedAt ?? request.resolvedAt,
+      resolvedAt: request.resolvedAt,
+      createdAt: request.createdAt,
+      updatedAt: request.updatedAt,
+      order: request.order
+        ? {
+            id: request.order.id,
+            status: request.order.status,
+            items: request.order.items,
+          }
+        : null,
+    }));
 }
 
 export async function getSellerRefundsData(
@@ -96,6 +141,7 @@ export async function getSellerRefundsData(
   let refundHistoryWithOrder: Array<SellerRefundHistoryRecord & { order: SellerRefundHistoryOrderRecord | null }> = [];
   let refundRequestsFetchFailed = false;
   let refundHistoryFetchFailed = false;
+  let refundHistoryFetchError: string | null = null;
 
   if (refundRequestsResult.status === 'fulfilled') {
     refundRequests = refundRequestsResult.value;
@@ -162,11 +208,24 @@ export async function getSellerRefundsData(
     refundHistoryFetchFailed = true;
     const schemaNotInitialized = isSchemaNotInitializedError(refundHistoryResult.reason);
     const logger = schemaNotInitialized ? console.warn : console.error;
+    refundHistoryFetchError = schemaNotInitialized
+      ? 'Refund history data is unavailable because database migrations are not fully applied.'
+      : 'Refund history query failed due to a backend or network error.';
     logger('[seller/refunds] Failed to load seller refund history', {
       sellerId,
       schemaNotInitialized,
+      cause: schemaNotInitialized ? 'schema_not_initialized' : 'query_failed',
       error: refundHistoryResult.reason,
     });
+
+    if (!refundRequestsFetchFailed) {
+      refundHistoryWithOrder = fallbackHistoryFromRefundRequests(sellerId, refundRequests);
+      refundHistoryFetchFailed = false;
+      console.warn('[seller/refunds] Using refund request data as fallback refund history', {
+        sellerId,
+        fallbackCount: refundHistoryWithOrder.length,
+      });
+    }
   }
 
   return {
@@ -174,5 +233,6 @@ export async function getSellerRefundsData(
     refundHistory: refundHistoryWithOrder,
     refundRequestsFetchFailed,
     refundHistoryFetchFailed,
+    refundHistoryFetchError,
   };
 }
