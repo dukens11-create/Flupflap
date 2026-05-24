@@ -48,6 +48,9 @@ const sellerRefundHistoryQuery = {
   orderBy: { createdAt: 'desc' as const },
   take: 100,
 } satisfies Prisma.SellerRefundHistoryFindManyArgs;
+const REFUND_STATUS_REQUESTED = 'REQUESTED';
+const FALLBACK_REFUND_TYPE = 'order_refund_request';
+const FALLBACK_SOURCE_LABEL = 'Order refund request';
 
 type SellerRefundRequestRecord = Prisma.RefundRequestGetPayload<typeof sellerRefundRequestQuery>;
 type SellerRefundHistoryRecord = SellerRefundHistory;
@@ -80,25 +83,32 @@ function fallbackHistoryFromRefundRequests(
   sellerId: string,
   refundRequests: SellerRefundRequestRecord[],
 ): Array<SellerRefundHistoryRecord & { order: SellerRefundHistoryOrderRecord | null }> {
+  const isHistoryVisibleStatus = (status: SellerRefundRequestRecord['status']): boolean => status !== REFUND_STATUS_REQUESTED;
+  const resolveFallbackAmountCents = (request: SellerRefundRequestRecord): number => {
+    if (request.approvedAmountCents !== null) return request.approvedAmountCents;
+    if (request.status === 'REFUNDED' && request.stripeRefundAmount !== null) return request.stripeRefundAmount;
+    return request.requestedAmountCents;
+  };
+
   return refundRequests
-    .filter((request) => request.status !== 'REQUESTED')
+    .filter((request) => isHistoryVisibleStatus(request.status))
     .map((request) => ({
       id: `refund_request:${request.id}`,
       sellerId,
       orderId: request.orderId,
       saleId: null,
-      refundType: 'order_refund_request',
-      sourceLabel: 'Order refund request',
+      refundType: FALLBACK_REFUND_TYPE,
+      sourceLabel: FALLBACK_SOURCE_LABEL,
       sourceKey: `refund_request:${request.id}`,
       stripePaymentIntentId: null,
       stripeRefundId: request.stripeRefundId,
-      amountCents: request.approvedAmountCents ?? request.requestedAmountCents,
+      amountCents: resolveFallbackAmountCents(request),
       currency: request.stripeRefundCurrency ?? null,
       status: request.stripeRefundStatus ?? request.status,
       reason: request.reason,
       refundedAt: request.stripeRefundCreatedAt ?? request.resolvedAt,
       resolvedAt: request.resolvedAt,
-      createdAt: request.resolvedAt ?? request.createdAt,
+      createdAt: request.createdAt,
       updatedAt: request.updatedAt,
       order: request.order
         ? {
