@@ -2,17 +2,24 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { stripe } from '@/lib/stripe';
 import { deriveGarageSaleLifecycle } from '@/lib/garage-sale-lifecycle';
 import { recordSellerRefundHistory } from '@/lib/seller-refund-history';
+import {
+  buildGarageSaleCompensationSourceKey,
+  isGarageSaleCompensationEligible,
+  type GarageSaleCompensationReason,
+} from '@/lib/garage-sale-compensation';
 
 export const dynamic = 'force-dynamic';
 
 const actionSchema = z.object({
-  action: z.enum(['approve', 'reject', 'feature', 'unfeature', 'hide', 'mark_spam', 'unmark_spam', 'refund']),
+  action: z.enum(['approve', 'reject', 'feature', 'unfeature', 'hide', 'mark_spam', 'unmark_spam', 'refund', 'grant_compensation']),
   notes: z.string().max(1000).optional(),
   promotionType: z.enum(['FEATURED', 'HOMEPAGE_BOOST', 'LOCAL_AREA_BOOST', 'WEEKEND_PROMOTION']).optional().nullable(),
+  compensationReason: z.enum(['ended_early', 'system_cutoff']).optional(),
 });
 
 type Params = { params: Promise<{ id: string }> };
@@ -136,6 +143,110 @@ export async function PATCH(req: Request, { params }: Params) {
       });
       const refunded = await prisma.garageSale.findUnique({ where: { id: sale.id } });
       return NextResponse.json(refunded);
+    }
+    case 'grant_compensation': {
+      if (!isGarageSaleCompensationEligible(sale, new Date())) {
+        return NextResponse.json({ error: 'Sale is not eligible for early-end compensation' }, { status: 422 });
+      }
+      const compensationReason: GarageSaleCompensationReason = parsed.data.compensationReason ?? 'system_cutoff';
+      const sourceKey = buildGarageSaleCompensationSourceKey(sale.id);
+      const now = new Date();
+      const durationDays = sale.durationDays > 0
+        ? sale.durationDays
+        : Math.max(1, Math.ceil((sale.endDate.getTime() - sale.startDate.getTime()) / (24 * 60 * 60 * 1000)));
+      const replacementEndDate = new Date(now.getTime() + durationDays * 24 * 60 * 60 * 1000);
+      const auditLine = `[compensation] reason=${compensationReason}; grantedBy=${session.user.id}; sourceSale=${sale.id}; at=${now.toISOString()}`;
+
+      try {
+        const replacement = await prisma.$transaction(async (tx) => {
+          await tx.sellerRefundHistory.create({
+            data: {
+              sellerId: sale.sellerId,
+              saleId: sale.id,
+              refundType: 'garage_sale_live_compensation_credit',
+              sourceLabel: 'Garage live replacement credit',
+              sourceKey,
+              amountCents: 0,
+              currency: 'USD',
+              status: 'granted',
+              reason: compensationReason,
+              refundedAt: now,
+              resolvedAt: now,
+            },
+          });
+
+          const createdReplacement = await tx.garageSale.create({
+            data: {
+              sellerId: sale.sellerId,
+              repostOfId: sale.id,
+              title: sale.title,
+              description: sale.description,
+              saleType: sale.saleType,
+              listingType: 'STANDARD',
+              status: 'APPROVED',
+              address: sale.address,
+              city: sale.city,
+              state: sale.state,
+              zipCode: sale.zipCode,
+              latitude: sale.latitude,
+              longitude: sale.longitude,
+              startDate: now,
+              endDate: replacementEndDate,
+              expirationTimestamp: replacementEndDate,
+              durationDays,
+              photos: sale.photos,
+              videoUrl: sale.videoUrl,
+              categories: sale.categories,
+              sellerPhone: sale.sellerPhone,
+              priceRangeMin: sale.priceRangeMin,
+              priceRangeMax: sale.priceRangeMax,
+              isFeatured: false,
+              homepagePromoted: false,
+              topSearchPromoted: false,
+              pricePerDayCents: sale.pricePerDayCents,
+              baseAmountCents: 0,
+              addOnsAmountCents: 0,
+              totalPaidCents: 0,
+              paymentStatus: 'PAID',
+              paidAt: now,
+              activatedAt: now,
+              adminNotes: `Compensation replacement granted from ${sale.id} (${compensationReason}).`,
+            },
+          });
+
+          await tx.garageSalePayment.create({
+            data: {
+              saleId: createdReplacement.id,
+              sellerId: sale.sellerId,
+              amountCents: 0,
+              status: 'PAID',
+            },
+          });
+
+          await tx.garageSale.update({
+            where: { id: sale.id },
+            data: {
+              adminNotes: sale.adminNotes
+                ? `${sale.adminNotes}\n${auditLine}; replacement=${createdReplacement.id}`
+                : `${auditLine}; replacement=${createdReplacement.id}`,
+            },
+          });
+
+          return createdReplacement;
+        });
+
+        const refreshedSale = await prisma.garageSale.findUnique({ where: { id: sale.id } });
+        return NextResponse.json({
+          ...refreshedSale,
+          compensationGranted: true,
+          compensationReplacementSaleId: replacement.id,
+        });
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+          return NextResponse.json({ error: 'Compensation already granted for this early-ended session' }, { status: 409 });
+        }
+        throw error;
+      }
     }
   }
 

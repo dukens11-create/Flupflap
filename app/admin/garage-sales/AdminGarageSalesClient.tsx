@@ -3,6 +3,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight, CheckCircle, XCircle, Star, EyeOff, AlertTriangle, Trash2 } from 'lucide-react';
+import { isGarageSaleCompensationEligible } from '@/lib/garage-sale-compensation';
 
 type AdminSale = {
   id: string;
@@ -16,10 +17,12 @@ type AdminSale = {
   endDate: string;
   isFeatured: boolean;
   isSpam: boolean;
+  isLive: boolean;
   paymentStatus: string;
   totalPaidCents: number;
   viewCount: number;
   createdAt: string;
+  compensationGranted?: boolean;
   seller: { id: string; name: string; email: string };
   _count: { reports: number; favorites: number };
 };
@@ -157,6 +160,17 @@ export default function AdminGarageSalesClient({ sales: initialSales, total, pag
                       )}
                     </td>
                     <td className="px-4 py-3">
+                      {(() => {
+                        const isCompensationEligible = !sale.compensationGranted && isGarageSaleCompensationEligible({
+                          isLive: sale.isLive,
+                          isArchived: sale.status === 'EXPIRED',
+                          isSpam: sale.isSpam,
+                          status: sale.status,
+                          paymentStatus: sale.paymentStatus,
+                          startDate: new Date(sale.startDate),
+                          endDate: new Date(sale.endDate),
+                        }, new Date());
+                        return (
                       <div className="flex items-center justify-end gap-1 flex-wrap">
                         {sale.status === 'PENDING' && (
                           <>
@@ -228,6 +242,16 @@ export default function AdminGarageSalesClient({ sales: initialSales, total, pag
                             Refund
                           </button>
                         )}
+                        {isCompensationEligible && (
+                          <button
+                            onClick={() => doAction(sale.id, 'grant_compensation', { compensationReason: 'system_cutoff' })}
+                            disabled={loading === sale.id + 'grant_compensation'}
+                            title="Grant free replacement live credit"
+                            className="flex items-center gap-1 rounded-lg bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                          >
+                            Replacement Credit
+                          </button>
+                        )}
                         <button
                           onClick={() => doDelete(sale.id)}
                           disabled={loading === sale.id + 'delete'}
@@ -237,6 +261,8 @@ export default function AdminGarageSalesClient({ sales: initialSales, total, pag
                           <Trash2 size={13} />
                         </button>
                       </div>
+                        );
+                      })()}
                     </td>
                   </tr>
                 ))}
