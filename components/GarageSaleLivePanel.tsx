@@ -240,8 +240,8 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
   const closeGuestPeer = useCallback((requestId: string, reason: string, options?: { clearVideo?: boolean }) => {
     const peerState = guestPeersRef.current.get(requestId);
     if (!peerState) return;
-    peerState.pc.close();
     guestPeersRef.current.delete(requestId);
+    peerState.pc.close();
     const shouldClearVideo = options?.clearVideo ?? true;
     if (shouldClearVideo) {
       const videoEl = guestVideoElsRef.current.get(requestId);
@@ -371,7 +371,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
 
     pc.onconnectionstatechange = () => {
       logLiveDebug('guest-peer-state', { state: pc.connectionState, requestId });
-      if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected' || pc.connectionState === 'closed') {
+      if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
         console.warn('[GuestCall] Guest peer disconnected/failed', { requestId, state: pc.connectionState });
         closeGuestPeer(requestId, `connection-${pc.connectionState}`);
       }

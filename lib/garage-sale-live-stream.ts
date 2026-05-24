@@ -52,7 +52,7 @@ export function shouldRecreateGuestPeerOnOffer({
 }: GuestOfferRecreateInput) {
   if (!hasRemoteDesc) return false;
 
-  if (connectionState === 'failed' || connectionState === 'disconnected' || connectionState === 'closed') {
+  if (connectionState === 'failed' || connectionState === 'disconnected') {
     return true;
   }
 
