@@ -57,8 +57,10 @@ export function shouldRecreateGuestPeerOnOffer({
   }
 
   const nextSdp = incomingOfferSdp.trim();
+  if (!nextSdp) return false;
+
   const currentSdp = remoteDescriptionSdp?.trim() ?? '';
-  if (!nextSdp || !currentSdp) return true;
+  if (!currentSdp) return true;
   return nextSdp !== currentSdp;
 }
 

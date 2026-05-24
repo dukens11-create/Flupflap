@@ -242,7 +242,8 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
     if (!peerState) return;
     peerState.pc.close();
     guestPeersRef.current.delete(requestId);
-    if (options?.clearVideo !== false) {
+    const shouldClearVideo = options?.clearVideo ?? true;
+    if (shouldClearVideo) {
       const videoEl = guestVideoElsRef.current.get(requestId);
       if (videoEl) {
         videoEl.srcObject = null;

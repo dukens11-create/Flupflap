@@ -112,3 +112,12 @@ test('guest peer is recreated when connection is disconnected even if sdp matche
     incomingOfferSdp: 'v=0 same-offer',
   }), true);
 });
+
+test('guest peer is not recreated for invalid/empty incoming offer sdp', () => {
+  assert.equal(shouldRecreateGuestPeerOnOffer({
+    hasRemoteDesc: true,
+    connectionState: 'connected',
+    remoteDescriptionSdp: 'v=0 same-offer',
+    incomingOfferSdp: '   ',
+  }), false);
+});
