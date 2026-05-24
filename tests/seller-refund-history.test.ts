@@ -1,6 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { recordSellerRefundHistory } from '@/lib/seller-refund-history';
+import {
+  getSellerRefundHistoryWriteErrorMessage,
+  getSellerRefundHistoryWriteErrorStatus,
+  recordSellerRefundHistory,
+  SELLER_REFUND_HISTORY_SCHEMA_INIT_ERROR,
+  SELLER_REFUND_HISTORY_WRITE_ERROR,
+} from '@/lib/seller-refund-history';
 
 test('recordSellerRefundHistory uses stripe refund id as default source key and uppercases currency', async () => {
   let capturedUpsertArgs: unknown;
@@ -80,4 +86,50 @@ test('recordSellerRefundHistory gives explicit sourceKey priority over stripe re
 
   const payload = capturedArgs as { where: { sourceKey: string } };
   assert.equal(payload.where.sourceKey, 'manual_source_key');
+});
+
+test('recordSellerRefundHistory updates an existing row when stripe refund id already exists', async () => {
+  let capturedUpdateArgs: unknown;
+  let upsertCalled = false;
+  const mockDb = {
+    sellerRefundHistory: {
+      findUnique: async () => ({ id: 'history_1' }),
+      update: async (args: unknown) => {
+        capturedUpdateArgs = args;
+        return args;
+      },
+      upsert: async () => {
+        upsertCalled = true;
+        return null;
+      },
+    },
+  } as any;
+
+  await recordSellerRefundHistory({
+    sellerId: 'seller_4',
+    orderId: 'order_4',
+    refundType: 'admin_order_refund',
+    stripeRefundId: 're_existing',
+    currency: 'usd',
+    status: 'succeeded',
+    reason: 'Updated refund status',
+  }, mockDb);
+
+  assert.equal(upsertCalled, false);
+  const payload = capturedUpdateArgs as { where: { id: string }; data: { currency: string; status: string } };
+  assert.equal(payload.where.id, 'history_1');
+  assert.equal(payload.data.currency, 'USD');
+  assert.equal(payload.data.status, 'succeeded');
+});
+
+test('seller refund history write errors expose schema-aware messages and statuses', () => {
+  const schemaError = {
+    code: 'P2021',
+    message: 'The table `public.SellerRefundHistory` does not exist in the current database.',
+  };
+
+  assert.equal(getSellerRefundHistoryWriteErrorMessage(schemaError), SELLER_REFUND_HISTORY_SCHEMA_INIT_ERROR);
+  assert.equal(getSellerRefundHistoryWriteErrorStatus(schemaError), 503);
+  assert.equal(getSellerRefundHistoryWriteErrorMessage(new Error('temporary database timeout')), SELLER_REFUND_HISTORY_WRITE_ERROR);
+  assert.equal(getSellerRefundHistoryWriteErrorStatus(new Error('temporary database timeout')), 500);
 });

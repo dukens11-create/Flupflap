@@ -6,7 +6,11 @@ import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { stripe } from '@/lib/stripe';
 import { deriveGarageSaleLifecycle } from '@/lib/garage-sale-lifecycle';
-import { recordSellerRefundHistory } from '@/lib/seller-refund-history';
+import {
+  getSellerRefundHistoryWriteErrorMessage,
+  getSellerRefundHistoryWriteErrorStatus,
+  recordSellerRefundHistory,
+} from '@/lib/seller-refund-history';
 import { calculateGarageSaleDurationDays } from '@/lib/garage-sale-pricing';
 import {
   GARAGE_SALE_COMPENSATION_NOTE_REQUIRED_MESSAGE,
@@ -120,36 +124,48 @@ export async function PATCH(req: Request, { params }: Params) {
           action: 'admin_refund',
         },
       });
-      await prisma.$transaction(async (tx) => {
-        await tx.garageSalePayment.update({
-          where: { id: latestPaid.id },
-          data: { status: 'REFUNDED' },
+      try {
+        await prisma.$transaction(async (tx) => {
+          await tx.garageSalePayment.update({
+            where: { id: latestPaid.id },
+            data: { status: 'REFUNDED' },
+          });
+          await tx.garageSale.update({
+            where: { id: sale.id },
+            data: {
+              paymentStatus: 'REFUNDED',
+              status: 'HIDDEN',
+              isArchived: true,
+              archivedAt: new Date(),
+              isFeatured: false,
+            },
+          });
+          await recordSellerRefundHistory({
+            sellerId: sale.sellerId,
+            saleId: sale.id,
+            refundType: 'admin_garage_sale_refund',
+            sourceLabel: 'Admin garage sale refund',
+            stripePaymentIntentId: latestPaid.stripePaymentId,
+            stripeRefundId: stripeRefund.id,
+            amountCents: Number.isFinite(stripeRefund.amount) ? stripeRefund.amount : latestPaid.amountCents,
+            currency: stripeRefund.currency ?? null,
+            status: stripeRefund.status ?? 'succeeded',
+            reason: 'Admin-initiated garage sale refund',
+            refundedAt: Number.isFinite(stripeRefund.created) ? new Date(stripeRefund.created * 1000) : new Date(),
+            resolvedAt: new Date(),
+          }, tx);
         });
-        await tx.garageSale.update({
-          where: { id: sale.id },
-          data: {
-            paymentStatus: 'REFUNDED',
-            status: 'HIDDEN',
-            isArchived: true,
-            archivedAt: new Date(),
-            isFeatured: false,
-          },
-        });
-        await recordSellerRefundHistory({
-          sellerId: sale.sellerId,
+      } catch (error) {
+        console.error('[api/admin/garage-sales] Failed to persist refund history for refunded garage sale.', {
           saleId: sale.id,
-          refundType: 'admin_garage_sale_refund',
-          sourceLabel: 'Admin garage sale refund',
-          stripePaymentIntentId: latestPaid.stripePaymentId,
           stripeRefundId: stripeRefund.id,
-          amountCents: Number.isFinite(stripeRefund.amount) ? stripeRefund.amount : latestPaid.amountCents,
-          currency: stripeRefund.currency ?? null,
-          status: stripeRefund.status ?? 'succeeded',
-          reason: 'Admin-initiated garage sale refund',
-          refundedAt: Number.isFinite(stripeRefund.created) ? new Date(stripeRefund.created * 1000) : new Date(),
-          resolvedAt: new Date(),
-        }, tx);
-      });
+          error,
+        });
+        return NextResponse.json(
+          { error: getSellerRefundHistoryWriteErrorMessage(error) },
+          { status: getSellerRefundHistoryWriteErrorStatus(error) },
+        );
+      }
       const refunded = await prisma.garageSale.findUnique({ where: { id: sale.id } });
       return NextResponse.json(refunded);
     }
@@ -275,7 +291,15 @@ export async function PATCH(req: Request, { params }: Params) {
         if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
           return NextResponse.json({ error: 'Compensation already granted for this early-ended session' }, { status: 409 });
         }
-        throw error;
+        console.error('[api/admin/garage-sales] Failed to persist compensation history.', {
+          saleId: sale.id,
+          sourceKey,
+          error,
+        });
+        return NextResponse.json(
+          { error: getSellerRefundHistoryWriteErrorMessage(error) },
+          { status: getSellerRefundHistoryWriteErrorStatus(error) },
+        );
       }
     }
   }

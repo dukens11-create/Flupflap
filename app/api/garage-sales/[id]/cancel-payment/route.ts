@@ -5,7 +5,11 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { resolveGarageSaleByRouteParam } from '@/lib/garage-sales';
 import { classifyStripeError, stripe } from '@/lib/stripe';
-import { recordSellerRefundHistory } from '@/lib/seller-refund-history';
+import {
+  getSellerRefundHistoryWriteErrorMessage,
+  getSellerRefundHistoryWriteErrorStatus,
+  recordSellerRefundHistory,
+} from '@/lib/seller-refund-history';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -179,9 +183,12 @@ export async function POST(_req: Request, { params }: Params) {
         stripeRefundId: stripeRefund.id,
         error,
       });
+      const status = getSellerRefundHistoryWriteErrorStatus(error);
       return NextResponse.json({
-        error: 'Refund completed in Stripe, but listing state could not be updated. Please contact support.',
-      }, { status: 500 });
+        error: status === 503
+          ? getSellerRefundHistoryWriteErrorMessage(error)
+          : 'Refund completed in Stripe, but listing state could not be updated. Please contact support.',
+      }, { status });
     }
 
     return NextResponse.json({

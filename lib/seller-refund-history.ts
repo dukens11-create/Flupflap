@@ -1,5 +1,6 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { prisma } from '@/lib/db';
+import { isSchemaNotInitializedError } from '@/lib/db-errors';
 
 type RecordSellerRefundHistoryInput = {
   sellerId: string;
@@ -19,6 +20,21 @@ type RecordSellerRefundHistoryInput = {
 };
 
 type SellerRefundHistoryDbClient = PrismaClient | Prisma.TransactionClient;
+
+export const SELLER_REFUND_HISTORY_SCHEMA_INIT_ERROR =
+  'Seller refund history is unavailable because database migrations are not fully applied.';
+export const SELLER_REFUND_HISTORY_WRITE_ERROR =
+  'Seller refund history could not be saved right now. Please try again.';
+
+export function getSellerRefundHistoryWriteErrorMessage(error: unknown): string {
+  return isSchemaNotInitializedError(error)
+    ? SELLER_REFUND_HISTORY_SCHEMA_INIT_ERROR
+    : SELLER_REFUND_HISTORY_WRITE_ERROR;
+}
+
+export function getSellerRefundHistoryWriteErrorStatus(error: unknown): number {
+  return isSchemaNotInitializedError(error) ? 503 : 500;
+}
 
 function normalizeSourceKey(input: RecordSellerRefundHistoryInput): string {
   const explicitSourceKey = input.sourceKey?.trim();

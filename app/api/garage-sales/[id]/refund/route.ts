@@ -4,7 +4,11 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { stripe } from '@/lib/stripe';
 import { resolveGarageSaleByRouteParam } from '@/lib/garage-sales';
-import { recordSellerRefundHistory } from '@/lib/seller-refund-history';
+import {
+  getSellerRefundHistoryWriteErrorMessage,
+  getSellerRefundHistoryWriteErrorStatus,
+  recordSellerRefundHistory,
+} from '@/lib/seller-refund-history';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -62,36 +66,48 @@ export async function POST(_req: Request, { params }: Params) {
     },
   });
 
-  await prisma.$transaction(async (tx) => {
-    await tx.garageSalePayment.update({
-      where: { id: latestPaid.id },
-      data: { status: 'REFUNDED' },
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.garageSalePayment.update({
+        where: { id: latestPaid.id },
+        data: { status: 'REFUNDED' },
+      });
+      await tx.garageSale.update({
+        where: { id: sale.id },
+        data: {
+          paymentStatus: 'REFUNDED',
+          status: 'HIDDEN',
+          isArchived: true,
+          archivedAt: new Date(),
+          isFeatured: false,
+        },
+      });
+      await recordSellerRefundHistory({
+        sellerId: sale.sellerId,
+        saleId: sale.id,
+        refundType: isAdmin ? 'admin_garage_sale_refund' : 'garage_sale_refund',
+        sourceLabel: isAdmin ? 'Admin garage sale refund' : 'Garage sale refund',
+        stripePaymentIntentId: latestPaid.stripePaymentId,
+        stripeRefundId: stripeRefund.id,
+        amountCents: Number.isFinite(stripeRefund.amount) ? stripeRefund.amount : latestPaid.amountCents,
+        currency: stripeRefund.currency ?? null,
+        status: stripeRefund.status ?? 'succeeded',
+        reason: 'Garage sale listing refund',
+        refundedAt: Number.isFinite(stripeRefund.created) ? new Date(stripeRefund.created * 1000) : new Date(),
+        resolvedAt: new Date(),
+      }, tx);
     });
-    await tx.garageSale.update({
-      where: { id: sale.id },
-      data: {
-        paymentStatus: 'REFUNDED',
-        status: 'HIDDEN',
-        isArchived: true,
-        archivedAt: new Date(),
-        isFeatured: false,
-      },
-    });
-    await recordSellerRefundHistory({
-      sellerId: sale.sellerId,
+  } catch (error) {
+    console.error('[api/garage-sales/[id]/refund] Failed to persist seller refund history.', {
       saleId: sale.id,
-      refundType: isAdmin ? 'admin_garage_sale_refund' : 'garage_sale_refund',
-      sourceLabel: isAdmin ? 'Admin garage sale refund' : 'Garage sale refund',
-      stripePaymentIntentId: latestPaid.stripePaymentId,
       stripeRefundId: stripeRefund.id,
-      amountCents: Number.isFinite(stripeRefund.amount) ? stripeRefund.amount : latestPaid.amountCents,
-      currency: stripeRefund.currency ?? null,
-      status: stripeRefund.status ?? 'succeeded',
-      reason: 'Garage sale listing refund',
-      refundedAt: Number.isFinite(stripeRefund.created) ? new Date(stripeRefund.created * 1000) : new Date(),
-      resolvedAt: new Date(),
-    }, tx);
-  });
+      error,
+    });
+    return NextResponse.json(
+      { error: getSellerRefundHistoryWriteErrorMessage(error) },
+      { status: getSellerRefundHistoryWriteErrorStatus(error) },
+    );
+  }
 
   const refunded = await prisma.garageSale.findUnique({
     where: { id: sale.id },

@@ -6,7 +6,11 @@ import { isOrderRefundEligible, normalizeRefundAmountCents } from '@/lib/refunds
 import { stripe } from '@/lib/stripe';
 import { isSchemaNotInitializedError } from '@/lib/db-errors';
 import { ADMIN_REFUNDS_LOAD_ERROR, ADMIN_REFUNDS_SCHEMA_INIT_ERROR } from '@/lib/admin-refunds-errors';
-import { recordSellerRefundHistory } from '@/lib/seller-refund-history';
+import {
+  getSellerRefundHistoryWriteErrorMessage,
+  getSellerRefundHistoryWriteErrorStatus,
+  recordSellerRefundHistory,
+} from '@/lib/seller-refund-history';
 
 export type AdminRefundRecord = {
   id: string;
@@ -414,7 +418,11 @@ export async function approveAdminRefund(input: RefundActionInput): Promise<Refu
     );
   } catch (error) {
     console.error(`[admin/refunds] Failed to approve refund ${input.refundId}.`, error);
-    return { ok: false, status: 500, error: 'Unable to approve this refund right now.' };
+    return {
+      ok: false,
+      status: getSellerRefundHistoryWriteErrorStatus(error),
+      error: getSellerRefundHistoryWriteErrorMessage(error),
+    };
   }
 }
 
