@@ -7,7 +7,6 @@ import { z } from 'zod';
 import { stripe } from '@/lib/stripe';
 import { deriveGarageSaleLifecycle } from '@/lib/garage-sale-lifecycle';
 import { recordSellerRefundHistory } from '@/lib/seller-refund-history';
-import { calculateGarageSaleDurationDays } from '@/lib/garage-sale-pricing';
 import { isSchemaNotInitializedError } from '@/lib/db-errors';
 import {
   GARAGE_SALE_COMPENSATION_MAX_DAYS,
@@ -166,17 +165,15 @@ export async function PATCH(req: Request, { params }: Params) {
       }
       const compensationReason: GarageSaleCompensationReason = parsed.data.compensationReason ?? 'ended_early';
       const compensationNote = normalizeGarageSaleCompensationNote(parsed.data.notes);
+      const compensationDays = parsed.data.compensationDays;
       if (!compensationNote) {
         return NextResponse.json({ error: GARAGE_SALE_COMPENSATION_NOTE_REQUIRED_MESSAGE }, { status: 422 });
       }
+      if (compensationDays === undefined) {
+        return NextResponse.json({ error: `Compensation days must be between ${GARAGE_SALE_COMPENSATION_MIN_DAYS} and ${GARAGE_SALE_COMPENSATION_MAX_DAYS}.` }, { status: 422 });
+      }
       const sourceKey = buildGarageSaleCompensationSourceKey(sale.id);
-      const originalDurationDays = sale.durationDays > 0
-        ? sale.durationDays
-        : calculateGarageSaleDurationDays(sale.startDate, sale.endDate);
-      const durationDays = parsed.data.compensationDays ?? Math.max(
-        GARAGE_SALE_COMPENSATION_MIN_DAYS,
-        Math.min(GARAGE_SALE_COMPENSATION_MAX_DAYS, originalDurationDays),
-      );
+      const durationDays = compensationDays;
       const replacementEndDate = new Date(now.getTime() + durationDays * MS_PER_DAY);
       const grantedBy = session.user.id?.trim();
       if (!grantedBy) {
