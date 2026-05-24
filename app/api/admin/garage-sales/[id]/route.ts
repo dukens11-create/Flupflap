@@ -281,7 +281,12 @@ export async function PATCH(req: Request, { params }: Params) {
         if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
           return NextResponse.json({ error: 'Compensation already granted for this early-ended session' }, { status: 409 });
         }
-        throw error;
+        if (isSchemaNotInitializedError(error)) {
+          console.error('[admin/garage-sales] Compensation grant failed: database schema not fully applied (missing SellerRefundHistory table). Run pending migrations.', { saleId: id });
+          return NextResponse.json({ error: 'Compensation service is temporarily unavailable. A required database table is missing — please contact support or re-run migrations.' }, { status: 503 });
+        }
+        console.error('[admin/garage-sales] Unexpected error during compensation grant', { saleId: id, error });
+        return NextResponse.json({ error: 'An unexpected error occurred while granting compensation. Please try again or contact support.' }, { status: 500 });
       }
     }
   }

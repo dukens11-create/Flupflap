@@ -83,8 +83,22 @@ export default function AdminGarageSalesClient({ sales: initialSales, total, pag
         body: JSON.stringify({ action, ...extra }),
       });
       if (!res.ok) {
-        const d = await res.json();
-        setError(d.error ?? 'Action failed');
+        let errorMessage = 'Action failed';
+        try {
+          const d = await res.json();
+          errorMessage = d.error ?? errorMessage;
+        } catch {
+          // Response body is not JSON (e.g. HTML error page from the server).
+          // Fall back to a status-code-based message so the user gets actionable info.
+          if (res.status >= 500) {
+            errorMessage = 'A server error occurred. Please try again or contact support.';
+          } else if (res.status === 403) {
+            errorMessage = 'You do not have permission to perform this action.';
+          } else {
+            errorMessage = `Request failed (HTTP ${res.status}). Please try again.`;
+          }
+        }
+        setError(errorMessage);
         return false;
       } else {
         const updated = await res.json();
@@ -92,7 +106,7 @@ export default function AdminGarageSalesClient({ sales: initialSales, total, pag
         return true;
       }
     } catch {
-      setError('Network error');
+      setError('Network error — please check your connection and try again.');
       return false;
     } finally {
       setLoading(null);
