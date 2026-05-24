@@ -8,6 +8,7 @@ import { stripe } from '@/lib/stripe';
 import { deriveGarageSaleLifecycle } from '@/lib/garage-sale-lifecycle';
 import { recordSellerRefundHistory } from '@/lib/seller-refund-history';
 import { calculateGarageSaleDurationDays } from '@/lib/garage-sale-pricing';
+import { isSchemaNotInitializedError } from '@/lib/db-errors';
 import {
   GARAGE_SALE_COMPENSATION_NOTE_REQUIRED_MESSAGE,
   buildGarageSaleCompensationAuditLine,
@@ -272,6 +273,11 @@ export async function PATCH(req: Request, { params }: Params) {
           compensationReplacementSaleId: replacement.id,
         });
       } catch (error) {
+        if (isSchemaNotInitializedError(error)) {
+          return NextResponse.json({
+            error: 'Compensation history is temporarily unavailable because database migrations are not fully applied. Please run prisma migrate deploy and try again.',
+          }, { status: 503 });
+        }
         if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
           return NextResponse.json({ error: 'Compensation already granted for this early-ended session' }, { status: 409 });
         }
