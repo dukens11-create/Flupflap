@@ -8,6 +8,7 @@ import {
   formatGarageSaleCompensationReason,
   getGarageSaleCompensationIneligibilityReason,
   isGarageSaleCompensationEligible,
+  isGarageSaleCompensationOverrideEligible,
   normalizeGarageSaleCompensationNote,
   parseGarageSaleCompensationAudit,
   type GarageSaleCompensationReason,
@@ -137,7 +138,7 @@ export default function AdminGarageSalesClient({ sales: initialSales, total, pag
     }));
   }
 
-  async function grantCompensation(id: string) {
+  async function grantCompensation(id: string, forceCompensation = false) {
     const draft = getCompensationDraft(id);
     const note = normalizeGarageSaleCompensationNote(draft.note);
     if (!note) {
@@ -148,6 +149,7 @@ export default function AdminGarageSalesClient({ sales: initialSales, total, pag
     const didGrant = await doAction(id, 'grant_compensation', {
       compensationReason: draft.reason,
       notes: note,
+      forceCompensation,
     });
     if (didGrant) {
       setActiveCompensationSaleId(null);
@@ -168,7 +170,9 @@ export default function AdminGarageSalesClient({ sales: initialSales, total, pag
       endDate: new Date(sale.endDate),
     };
     const computedEligible = isGarageSaleCompensationEligible(compensationInput, eligibilityNow);
+    const computedOverrideEligible = isGarageSaleCompensationOverrideEligible(compensationInput, eligibilityNow);
     const isCompensationEligible = !compensationGranted && (sale.compensationEligible ?? computedEligible);
+    const canOverrideCompensation = !compensationGranted && !isCompensationEligible && computedOverrideEligible;
     const ineligibilityReason = sale.compensationIneligibilityReason
       ?? getGarageSaleCompensationIneligibilityReason(compensationInput, eligibilityNow)
       ?? GARAGE_SALE_COMPENSATION_NOT_ELIGIBLE_MESSAGE;
@@ -178,11 +182,12 @@ export default function AdminGarageSalesClient({ sales: initialSales, total, pag
       compensationAudit,
       compensationGranted,
       isCompensationEligible,
+      canOverrideCompensation,
       ineligibilityReason,
     };
   });
 
-  const eligibleCompensationCount = saleCompensation.filter((entry) => entry.isCompensationEligible).length;
+  const eligibleCompensationCount = saleCompensation.filter((entry) => entry.isCompensationEligible || entry.canOverrideCompensation).length;
   const grantedCompensationCount = saleCompensation.filter((entry) => entry.compensationGranted).length;
 
   return (
@@ -199,6 +204,10 @@ export default function AdminGarageSalesClient({ sales: initialSales, total, pag
             <p className="mt-2 max-w-3xl text-sm text-slate-600">
               Use the compensation column below to choose the affected seller&apos;s issue, add an audit note, and grant one free replacement live.
               Existing compensation history stays visible so the same disrupted sale is not compensated twice.
+            </p>
+            <p className="mt-2 max-w-3xl text-xs text-slate-500">
+              Paid approved/expired listings are directly eligible once started. Hidden or archived paid listings can still be granted through admin override when business-approved.
+              Spam, unpaid, and refunded listings remain locked.
             </p>
           </div>
           <div className="grid grid-cols-2 gap-3 text-center text-sm">
@@ -234,7 +243,7 @@ export default function AdminGarageSalesClient({ sales: initialSales, total, pag
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {saleCompensation.map(({ sale, compensationAudit, compensationGranted, isCompensationEligible, ineligibilityReason }) => {
+                {saleCompensation.map(({ sale, compensationAudit, compensationGranted, isCompensationEligible, canOverrideCompensation, ineligibilityReason }) => {
                   return (
                   <tr key={sale.id} className="hover:bg-slate-50">
                     <td className="px-4 py-3">
@@ -297,6 +306,17 @@ export default function AdminGarageSalesClient({ sales: initialSales, total, pag
                             Grant Compensation
                           </button>
                           <p className="text-xs text-slate-500">Grant one free replacement live with required audit details.</p>
+                        </div>
+                      ) : canOverrideCompensation ? (
+                        <div className="min-w-[220px] space-y-2 rounded-xl border border-amber-200 bg-amber-50 p-3">
+                          <button
+                            onClick={() => setActiveCompensationSaleId(sale.id)}
+                            disabled={loading === sale.id + 'grant_compensation' || activeCompensationSaleId === sale.id}
+                            className="w-full rounded-lg bg-amber-600 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+                          >
+                            Grant with override
+                          </button>
+                          <p className="text-xs text-amber-700">Requires explicit admin override and audit note.</p>
                         </div>
                       ) : (
                         <p className="max-w-[220px] text-xs text-slate-500" title={ineligibilityReason}>
@@ -414,16 +434,22 @@ export default function AdminGarageSalesClient({ sales: initialSales, total, pag
 
       {activeCompensationSaleId && (() => {
         const selectedEntry = saleCompensation.find((entry) => entry.sale.id === activeCompensationSaleId);
-        if (!selectedEntry || !selectedEntry.isCompensationEligible) return null;
+        if (!selectedEntry || (!selectedEntry.isCompensationEligible && !selectedEntry.canOverrideCompensation)) return null;
 
         const selectedDraft = getCompensationDraft(selectedEntry.sale.id);
+        const requiresOverride = selectedEntry.canOverrideCompensation && !selectedEntry.isCompensationEligible;
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
             <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl">
-              <h3 className="text-lg font-black text-slate-900">Grant Compensation</h3>
+              <h3 className="text-lg font-black text-slate-900">{requiresOverride ? 'Grant Compensation (Override)' : 'Grant Compensation'}</h3>
               <p className="mt-1 text-sm text-slate-600">
                 Confirm a free replacement live for <span className="font-semibold text-slate-900">{selectedEntry.sale.seller.name}</span>.
               </p>
+              {requiresOverride && (
+                <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                  This listing is outside standard eligibility. Use override only for approved business exceptions.
+                </p>
+              )}
               <div className="mt-4 space-y-3">
                 <label className="block text-xs font-semibold text-slate-700">
                   Compensation reason
@@ -460,7 +486,7 @@ export default function AdminGarageSalesClient({ sales: initialSales, total, pag
                 </button>
                 <button
                   type="button"
-                  onClick={() => grantCompensation(selectedEntry.sale.id)}
+                  onClick={() => grantCompensation(selectedEntry.sale.id, requiresOverride)}
                   disabled={loading === selectedEntry.sale.id + 'grant_compensation'}
                   className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
                 >

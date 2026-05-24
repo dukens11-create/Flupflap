@@ -6,6 +6,7 @@ import {
   formatGarageSaleCompensationSummary,
   getGarageSaleCompensationIneligibilityReason,
   isGarageSaleCompensationEligible,
+  isGarageSaleCompensationOverrideEligible,
   parseGarageSaleCompensationAudit,
 } from '@/lib/garage-sale-compensation';
 
@@ -33,6 +34,11 @@ test('isGarageSaleCompensationEligible returns true for paid expired sale that a
   assert.equal(isGarageSaleCompensationEligible(sale, new Date()), true);
 });
 
+test('isGarageSaleCompensationEligible returns true for archived paid expired sale that already started', () => {
+  const sale = makeSale({ status: 'EXPIRED', isArchived: true, endDate: new Date(Date.now() - 1000) });
+  assert.equal(isGarageSaleCompensationEligible(sale, new Date()), true);
+});
+
 test('isGarageSaleCompensationEligible returns false when session has not started yet', () => {
   const sale = makeSale({ startDate: new Date(Date.now() + 60_000) });
   assert.equal(isGarageSaleCompensationEligible(sale, new Date()), false);
@@ -43,6 +49,20 @@ test('getGarageSaleCompensationIneligibilityReason explains why a listing cannot
   assert.equal(
     getGarageSaleCompensationIneligibilityReason(sale, new Date()),
     'Compensation is only available for paid listings.',
+  );
+});
+
+test('isGarageSaleCompensationOverrideEligible returns true for paid hidden listing that started', () => {
+  const sale = makeSale({ status: 'HIDDEN' });
+  assert.equal(isGarageSaleCompensationEligible(sale, new Date()), false);
+  assert.equal(isGarageSaleCompensationOverrideEligible(sale, new Date()), true);
+});
+
+test('getGarageSaleCompensationIneligibilityReason explains when override is required', () => {
+  const sale = makeSale({ status: 'HIDDEN' });
+  assert.equal(
+    getGarageSaleCompensationIneligibilityReason(sale, new Date()),
+    'Compensation is locked under standard rules. Use admin override with an audit note if this paid live was disrupted.',
   );
 });
 
