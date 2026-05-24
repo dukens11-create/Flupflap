@@ -17,3 +17,49 @@ workflows:
     artifacts:
       - .next/**/*
       - coverage/**/*
+
+  android_release:
+    name: Flutter Android Release (App Bundle)
+    max_build_duration: 60
+    instance_type: linux_x2
+    # Trigger on pushes to main or manual dispatch only.
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+    environment:
+      flutter: stable
+      # Store these values as Codemagic environment secrets (never plain-text).
+      # Required secrets:
+      #   CM_KEYSTORE        – Base64-encoded upload-keystore.jks
+      #   CM_KEYSTORE_PASSWORD – Keystore password
+      #   CM_KEY_PASSWORD    – Key password
+      #   CM_KEY_ALIAS       – Key alias (e.g. "upload")
+      groups:
+        - android_signing  # Create this group in Codemagic with the secrets above
+    scripts:
+      - name: Set up release signing
+        script: |
+          # Decode the base64 keystore secret to a file.
+          echo "$CM_KEYSTORE" | base64 --decode > "$CM_BUILD_DIR/mobile/android/app/upload-keystore.jks"
+
+          # Write key.properties so build.gradle can find the credentials.
+          cat > "$CM_BUILD_DIR/mobile/android/key.properties" <<EOF
+          storePassword=$CM_KEYSTORE_PASSWORD
+          keyPassword=$CM_KEY_PASSWORD
+          keyAlias=$CM_KEY_ALIAS
+          storeFile=../app/upload-keystore.jks
+          EOF
+      - name: Install Flutter dependencies
+        script: |
+          cd mobile
+          flutter pub get
+      - name: Build Android App Bundle
+        script: |
+          cd mobile
+          flutter build appbundle --release
+    artifacts:
+      # Signed .aab ready for Google Play upload.
+      - mobile/build/app/outputs/bundle/release/app-release.aab

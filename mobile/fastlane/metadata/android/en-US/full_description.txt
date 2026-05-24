@@ -1,0 +1,19 @@
+FlupFlap is a marketplace connecting buyers and sellers of cultural products from African, Caribbean, Asian, and other global communities.
+
+Browse handcrafted goods, traditional clothing, foods, art, beauty products, and more — sourced from independent sellers who are passionate about their culture.
+
+**For buyers:**
+- Discover unique products from around the world
+- Filter by category, seller location, and price
+- Secure checkout via Stripe
+- Track your orders in the app
+
+**For sellers:**
+- Create a seller profile and list your products in minutes
+- Manage inventory, orders, and shipping from one place
+- Receive payouts directly through Stripe Connect
+- Reach customers who value authentic cultural goods
+
+FlupFlap is committed to celebrating cultural diversity through commerce. All sellers agree to our conduct policy, and prohibited items are not permitted on the platform.
+
+For support, visit flupflap.com or contact us through the app.

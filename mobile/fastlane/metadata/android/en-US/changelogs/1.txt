@@ -1,0 +1,1 @@
+Initial release of FlupFlap for Android. Browse and purchase cultural products, or create a seller account to list your own goods. Includes buyer and seller flows, order tracking, and secure payments via Stripe.
