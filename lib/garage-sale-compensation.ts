@@ -45,9 +45,8 @@ export function isGarageSaleCompensationOverrideEligible(
   if (sale.isSpam) return false;
   if (sale.paymentStatus !== 'PAID') return false;
   if (sale.startDate > now) return false;
-  return (sale.status === 'HIDDEN' || sale.isArchived)
-    && sale.status !== 'APPROVED'
-    && sale.status !== 'EXPIRED';
+  return sale.status === 'HIDDEN'
+    || (sale.isArchived && sale.status !== 'APPROVED' && sale.status !== 'EXPIRED');
 }
 
 export function getGarageSaleCompensationIneligibilityReason(
@@ -56,7 +55,7 @@ export function getGarageSaleCompensationIneligibilityReason(
 ) {
   if (sale.isSpam) return 'Compensation is unavailable for spam listings.';
   if (sale.paymentStatus !== 'PAID') return 'Compensation is only available for paid listings.';
-  if (sale.startDate > now) return 'Compensation becomes available once the approved live has started.';
+  if (sale.startDate > now) return 'Compensation becomes available once the live has started.';
   if (isGarageSaleCompensationOverrideEligible(sale, now)) {
     return GARAGE_SALE_COMPENSATION_OVERRIDE_REQUIRED_MESSAGE;
   }
