@@ -43,12 +43,14 @@ function getLifecycle(sale: GarageSaleVisibilityInput) {
 }
 
 export function isGarageSalePubliclyVisible(sale: GarageSaleVisibilityInput) {
-  if (sale.isArchived) return false;
   if (sale.isSpam) return false;
   if (sale.paymentStatus === 'FAILED' || sale.paymentStatus === 'REFUNDED') return false;
   if (sale.status === 'REJECTED' || sale.status === 'HIDDEN') return false;
-
+  // Live sessions remain publicly visible even if the listing has been archived
+  // (e.g. endDate passed mid-broadcast).  Archival only takes full effect once
+  // the seller explicitly ends the live stream.
   if (sale.isLive) return true;
+  if (sale.isArchived) return false;
 
   const reason = getGarageSaleVisibilityBlockReason(sale);
   return reason === null || reason === 'UPCOMING';

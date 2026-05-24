@@ -126,9 +126,22 @@ export async function POST(req: Request, { params }: Params) {
         where: { saleId: id, status: { in: ['pending', 'accepted'] } },
         data: { status: 'removed', updatedAt: now },
       });
+      // If the scheduled sale window has already passed, archive the listing
+      // now that the live session is closing.  This is the deferred expiry that
+      // expireGarageSales() skips while the session is still live.
+      const pastScheduledEnd = sale.endDate < now;
       const ended = await tx.garageSale.update({
         where: { id },
-        data: { isLive: false, liveStartedAt: null },
+        data: {
+          isLive: false,
+          liveStartedAt: null,
+          ...(pastScheduledEnd ? {
+            status: 'EXPIRED',
+            isArchived: true,
+            archivedAt: now,
+            isFeatured: false,
+          } : {}),
+        },
         select: { id: true, isLive: true, liveStartedAt: true },
       });
       console.info('[garage-sale-live] room ended', {
@@ -136,6 +149,7 @@ export async function POST(req: Request, { params }: Params) {
         roomId: getLiveRoomId(id),
         clearedSignalCount: deletedSignals.count,
         resetGuestRequestCount: resetGuestRequests.count,
+        pastScheduledEnd,
         operation: 'live.room.end',
         timestamp: new Date().toISOString(),
       });

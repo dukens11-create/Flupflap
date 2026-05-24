@@ -18,11 +18,16 @@ export function getDefaultGarageSalePricingSettings(): GarageSalePricingSettings
 }
 
 export async function expireGarageSales(now = new Date()) {
+  // Exclude currently-live sessions so that an active live stream is never
+  // archived mid-broadcast just because the scheduled endDate has passed.
+  // The live API end action will handle deferred archival once the seller
+  // explicitly closes their session.
   const expired = await prisma.garageSale.updateMany({
     where: {
       status: { in: ['APPROVED', 'PENDING', 'HIDDEN'] },
       endDate: { lt: now },
       isArchived: false,
+      isLive: false,
     },
     data: {
       status: 'EXPIRED',
