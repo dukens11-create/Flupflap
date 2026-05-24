@@ -1072,8 +1072,11 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
       guestLocalStreamRef.current = localStream;
       // Show local preview (muted so no echo)
       if (guestLocalVideoRef.current) {
+        // load() ensures a fresh media pipeline, fixing dark video after camera was stopped
+        // and a new stream was acquired (common on iOS/Safari and after reconnect).
         guestLocalVideoRef.current.srcObject = localStream;
         guestLocalVideoRef.current.muted = true;
+        guestLocalVideoRef.current.load();
         void guestLocalVideoRef.current.play().catch(() => undefined);
       }
       logLiveDebug(LIVE_SIGNAL_EVENTS.REQUEST_JOIN_LIVE, { guestId: guestIdRef.current });
