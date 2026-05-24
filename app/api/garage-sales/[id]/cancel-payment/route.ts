@@ -185,9 +185,7 @@ export async function POST(_req: Request, { params }: Params) {
       });
       const status = getSellerRefundHistoryWriteErrorStatus(error);
       return NextResponse.json({
-        error: status === 503
-          ? getSellerRefundHistoryWriteErrorMessage(error)
-          : 'Refund completed in Stripe, but listing state could not be updated. Please contact support.',
+        error: getSellerRefundHistoryWriteErrorMessage(error),
       }, { status });
     }
 
