@@ -3,6 +3,17 @@ import { prisma } from '@/lib/db';
 import { isSchemaNotInitializedError } from '@/lib/db-errors';
 
 type SellerRefundsDbClient = PrismaClient | Prisma.TransactionClient;
+type SellerRefundsDbDelegates = {
+  refundRequest?: {
+    findMany(args: Prisma.RefundRequestFindManyArgs): Promise<SellerRefundRequestRecord[]>;
+  };
+  sellerRefundHistory?: {
+    findMany(args: Prisma.SellerRefundHistoryFindManyArgs): Promise<SellerRefundHistoryRecord[]>;
+  };
+  order?: {
+    findMany(args: Prisma.OrderFindManyArgs): Promise<SellerRefundHistoryOrderRecord[]>;
+  };
+};
 
 const sellerRefundRequestQuery = {
   include: {
@@ -60,19 +71,24 @@ export type SellerRefundsData = {
   refundHistoryFetchFailed: boolean;
 };
 
+function getUnavailableSellerRefundsError(subject: 'refund requests' | 'refund history' | 'order details') {
+  return new Error(`Seller ${subject} are unavailable in this environment.`);
+}
+
 export async function getSellerRefundsData(
   sellerId: string,
   db: SellerRefundsDbClient = prisma,
 ): Promise<SellerRefundsData> {
+  const sellerRefundsDb = db as SellerRefundsDbClient & SellerRefundsDbDelegates;
   const [refundRequestsResult, refundHistoryResult] = await Promise.allSettled([
-    db.refundRequest.findMany({
+    sellerRefundsDb.refundRequest?.findMany({
       ...sellerRefundRequestQuery,
       where: { sellerId },
-    }),
-    db.sellerRefundHistory.findMany({
+    }) ?? Promise.reject(getUnavailableSellerRefundsError('refund requests')),
+    sellerRefundsDb.sellerRefundHistory?.findMany({
       ...sellerRefundHistoryQuery,
       where: { sellerId },
-    }),
+    }) ?? Promise.reject(getUnavailableSellerRefundsError('refund history')),
   ]);
 
   let refundRequests: SellerRefundRequestRecord[] = [];
@@ -99,7 +115,10 @@ export async function getSellerRefundsData(
 
     if (orderIds.length > 0) {
       try {
-        const orders = await db.order.findMany({
+        if (!sellerRefundsDb.order?.findMany) {
+          throw getUnavailableSellerRefundsError('order details');
+        }
+        const orders = await sellerRefundsDb.order.findMany({
           where: {
             id: { in: orderIds },
           },

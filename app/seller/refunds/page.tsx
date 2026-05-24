@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import { requireSeller } from '@/lib/require-seller';
 import SellerRefundReviewList from '@/components/SellerRefundReviewList';
 import { dollars } from '@/lib/money';
-import { getSellerRefundsData } from '@/lib/seller-refunds';
+import { getSellerRefundsData, type SellerRefundsData } from '@/lib/seller-refunds';
 import { getServerTranslations } from '@/lib/i18n/server';
 import { getLocaleDateTimeFormatLocale } from '@/lib/i18n/shared';
 
@@ -49,18 +49,37 @@ export default async function SellerRefundsPage() {
   const { sellerId } = await requireSeller();
   const { locale, t } = await getServerTranslations();
   const refundDateFormatter = new Intl.DateTimeFormat(getLocaleDateTimeFormatLocale(locale), {
-    dateStyle: 'medium',
-    timeStyle: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
     timeZone: 'UTC',
     timeZoneName: 'short',
   });
+
+  let refundsData: SellerRefundsData;
+  try {
+    refundsData = await getSellerRefundsData(sellerId);
+  } catch (error) {
+    console.error('[seller/refunds] Failed to render seller refunds page', {
+      sellerId,
+      error,
+    });
+    refundsData = {
+      refundRequests: [],
+      refundHistory: [],
+      refundRequestsFetchFailed: true,
+      refundHistoryFetchFailed: true,
+    };
+  }
 
   const {
     refundRequests,
     refundHistory,
     refundRequestsFetchFailed,
     refundHistoryFetchFailed,
-  } = await getSellerRefundsData(sellerId);
+  } = refundsData;
 
   const serializableRefundRequests = refundRequests.map((request) => ({
     ...request,

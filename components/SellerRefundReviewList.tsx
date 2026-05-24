@@ -58,8 +58,11 @@ export default function SellerRefundReviewList({ initialRefundRequests }: { init
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const refundRequestDateFormatter = new Intl.DateTimeFormat(getLocaleDateTimeFormatLocale(locale), {
-    dateStyle: 'medium',
-    timeStyle: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
     timeZone: 'UTC',
     timeZoneName: 'short',
   });
