@@ -47,7 +47,8 @@ export function isGarageSaleCompensationOverrideEligible(
   if (sale.paymentStatus !== 'PAID') return false;
   if (sale.startDate > now) return false;
   // Override path is only for business-exception records that are hidden or archived
-  // outside the standard approved/expired states.
+  // outside the standard approved/expired states. Archived APPROVED/EXPIRED sales
+  // remain standard-eligible and should not require this override path.
   return sale.status === 'HIDDEN'
     || (sale.isArchived && !GARAGE_SALE_STANDARD_COMPENSATION_STATUSES.has(sale.status));
 }
