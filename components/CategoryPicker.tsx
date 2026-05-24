@@ -976,12 +976,15 @@ export default function CategoryPicker({
                     {field.options.map(o => <option key={o} value={o}>{o}</option>)}
                   </select>
                 ) : field.type === 'combobox' && field.options ? (
+                  // combobox: text input with a datalist for preset suggestions (currently used for size_ml fields).
+                  // Normalization on blur appends the 'ml' suffix when only a number is typed.
+                  // If the value is invalid, it is left as-is so the server can return a clear error.
                   <>
                     <input
                       type="text"
                       list={`datalist-${field.name}`}
                       className="input"
-                      placeholder="e.g. 50ml or type a custom amount"
+                      placeholder={`e.g. 50${field.name === 'size_ml' ? 'ml' : ''} or type a custom amount`}
                       value={attrs[field.name] ?? ''}
                       onChange={e => handleAttrChange(field.name, e.target.value)}
                       onBlur={e => {
