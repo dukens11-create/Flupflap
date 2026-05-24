@@ -124,7 +124,7 @@ export default function SellerRefundReviewList({ initialRefundRequests }: { init
                 <p className="text-sm text-slate-600">Buyer: {request.order.buyer.name ?? request.order.buyer.email}</p>
                 {request.order.items.length > 0 ? (
                   <p className="text-sm text-slate-600">
-                    Item: {request.order.items[0].product.title}
+                    Item: {request.order.items[0]?.product?.title ?? t('sellerRefunds.itemUnavailable')}
                     {request.order.items.length > 1 ? ` +${request.order.items.length - 1} more` : ''}
                   </p>
                 ) : null}
