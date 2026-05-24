@@ -54,11 +54,18 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Invalid payload.' }, { status: 422 });
   }
 
-  const normalizedAction = parsed.data.action === 'accept'
-    ? 'approve'
-    : parsed.data.action === 'dispute'
-      ? 'reject'
-      : parsed.data.action;
+  let normalizedAction: 'approve' | 'reject' | 'message';
+  switch (parsed.data.action) {
+    case 'accept':
+      normalizedAction = 'approve';
+      break;
+    case 'dispute':
+      normalizedAction = 'reject';
+      break;
+    default:
+      normalizedAction = parsed.data.action;
+      break;
+  }
   const prefix = normalizedAction === 'approve'
     ? 'Seller approved request'
     : normalizedAction === 'reject'

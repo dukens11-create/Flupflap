@@ -102,7 +102,7 @@ export default async function SellerRefundsPage() {
                     </p>
                     {entry.order?.items?.length ? (
                       <p className="text-xs text-slate-500">
-                        Item: {entry.order.items[0]?.product?.title ?? t('sellerRefunds.itemUnavailable')}
+                        Item: {(entry.order.items[0]?.product?.title?.trim() || t('sellerRefunds.itemUnavailable'))}
                         {entry.order.items.length > 1 ? ` +${entry.order.items.length - 1} more` : ''}
                       </p>
                     ) : null}

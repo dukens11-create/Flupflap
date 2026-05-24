@@ -27,6 +27,7 @@ type SellerRefundRequest = {
     }>;
   };
 };
+type SellerRefundAction = 'approve' | 'reject' | 'message';
 
 const RESOLVED_REFUND_STATUSES: ReadonlySet<SellerRefundRequest['status']> = new Set([
   'APPROVED',
@@ -63,7 +64,7 @@ export default function SellerRefundReviewList({ initialRefundRequests }: { init
     timeZoneName: 'short',
   });
 
-  async function handleRefundAction(refundRequestId: string, action: 'approve' | 'reject' | 'message') {
+  async function handleRefundAction(refundRequestId: string, action: SellerRefundAction) {
     if (submittingId) return;
     setError('');
     setSubmittingId(refundRequestId);

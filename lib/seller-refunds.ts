@@ -93,7 +93,9 @@ export async function getSellerRefundsData(
 
   if (refundHistoryResult.status === 'fulfilled') {
     refundHistory = refundHistoryResult.value;
-    const orderIds = Array.from(new Set(refundHistory.map((entry) => entry.orderId).filter((orderId): orderId is string => !!orderId)));
+    const orderIds = Array.from(new Set(refundHistory
+      .map((entry) => entry.orderId)
+      .filter((orderId): orderId is string => orderId != null && orderId !== '')));
 
     if (orderIds.length > 0) {
       try {
