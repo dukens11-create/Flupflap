@@ -1,4 +1,4 @@
--- Restore seller refund audit history used by seller/admin refund and garage sale compensation flows.
+-- Create seller refund audit history used by seller/admin refund and garage sale compensation flows.
 
 CREATE TABLE IF NOT EXISTS "SellerRefundHistory" (
   "id" TEXT NOT NULL,

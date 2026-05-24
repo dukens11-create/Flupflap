@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { isSchemaNotInitializedError } from '@/lib/db-errors';
 import {
   getSellerRefundHistoryWriteErrorMessage,
   getSellerRefundHistoryWriteErrorStatus,
@@ -132,4 +133,11 @@ test('seller refund history write errors expose schema-aware messages and status
   assert.equal(getSellerRefundHistoryWriteErrorStatus(schemaError), 503);
   assert.equal(getSellerRefundHistoryWriteErrorMessage(new Error('temporary database timeout')), SELLER_REFUND_HISTORY_WRITE_ERROR);
   assert.equal(getSellerRefundHistoryWriteErrorStatus(new Error('temporary database timeout')), 500);
+});
+
+test('isSchemaNotInitializedError recognizes missing tables and columns but ignores other Prisma errors', () => {
+  assert.equal(isSchemaNotInitializedError({ code: 'P2021' }), true);
+  assert.equal(isSchemaNotInitializedError({ code: 'P2022' }), true);
+  assert.equal(isSchemaNotInitializedError({ code: 'P2002', message: 'Unique constraint failed' }), false);
+  assert.equal(isSchemaNotInitializedError({ message: 'relation "SellerRefundHistory" does not exist' }), true);
 });
