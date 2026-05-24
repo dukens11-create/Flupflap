@@ -27,6 +27,7 @@ import { toSellerLifecycleStatus } from '@/lib/listing-status';
 import { getSchedulingDisabledError } from '@/lib/listing-scheduling';
 import { canEditProductForSeller, getProductEditSuccessPath } from '@/lib/product-edit-access';
 import { getAvailableVariantInventory, normalizeProductVariantsInput } from '@/lib/product-variants';
+import { normalizeSizeMlValue } from '@/lib/category-attribute-schema';
 
 const optionalInputString = z.preprocess((value) => {
   if (value === undefined || value === null) return undefined;
@@ -568,6 +569,16 @@ export async function POST(
       data.productAttributes === undefined ? existing.productAttributes : parseJsonOrNull(data.productAttributes),
       packageDetails.shippingClass,
     );
+
+    // Validate and normalize size_ml if present
+    if (nextProductAttributes.size_ml != null && nextProductAttributes.size_ml !== '') {
+      const normalized = normalizeSizeMlValue(nextProductAttributes.size_ml);
+      if (!normalized) {
+        return respondWithError(id, 'Please enter a valid positive ML amount (e.g. 50ml or 1.5ml).', acceptsJson);
+      }
+      nextProductAttributes.size_ml = normalized;
+    }
+
     const nextTitle = data.title ?? existing.title;
     const nextDescription = data.description ?? existing.description;
     const nextCondition = data.condition ?? existing.condition;
@@ -850,6 +861,16 @@ export async function PATCH(
       parsedAttributes,
       data.shippingClass !== undefined ? packageDetails.shippingClass : getShippingClass(parsedAttributes),
     );
+
+    // Validate and normalize size_ml if present
+    if (nextProductAttributes.size_ml != null && nextProductAttributes.size_ml !== '') {
+      const normalized = normalizeSizeMlValue(nextProductAttributes.size_ml);
+      if (!normalized) {
+        return NextResponse.json({ error: 'Please enter a valid positive ML amount (e.g. 50ml or 1.5ml).' }, { status: 400 });
+      }
+      nextProductAttributes.size_ml = normalized;
+    }
+
     const nextTitle = data.title ?? existing.title;
     const nextDescription = data.description ?? existing.description;
     const nextCondition = data.condition ?? existing.condition;

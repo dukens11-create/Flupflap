@@ -15,7 +15,7 @@ const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL ?? '' 
 const prisma = new PrismaClient({ adapter });
 
 // ── Category seed helpers ──────────────────────────────────────────────────────
-type FieldDef = { name: string; label: string; type: 'text' | 'select' | 'number'; options?: string[] };
+type FieldDef = { name: string; label: string; type: 'text' | 'select' | 'number' | 'combobox'; options?: string[] };
 
 function fields(...defs: FieldDef[]) {
   return JSON.stringify(defs);
@@ -50,7 +50,7 @@ const CLOTHING_FIELDS = fields(
 );
 const PERFUME_FIELDS = fields(
   { name: 'brand', label: 'Brand', type: 'text' },
-  { name: 'size_ml', label: 'Size (ml)', type: 'select', options: [...PERFUME_SIZE_OPTIONS] },
+  { name: 'size_ml', label: 'Size (ml)', type: 'combobox', options: [...PERFUME_SIZE_OPTIONS] },
   { name: 'fragrance_type', label: 'Fragrance Type', type: 'select', options: ['Floral', 'Woody', 'Fresh', 'Oriental', 'Citrus', 'Gourmand'] },
   { name: 'gender', label: 'Gender', type: 'select', options: ['Men', 'Women', 'Unisex'] },
 );
@@ -58,7 +58,7 @@ const BEAUTY_SKINCARE_FIELDS = fields(
   { name: 'brand', label: 'Brand', type: 'text' },
   { name: 'skin_type', label: 'Skin Type', type: 'select', options: ['All Skin Types', 'Dry', 'Oily', 'Combination', 'Sensitive'] },
   { name: 'concern', label: 'Primary Concern', type: 'select', options: ['Hydration', 'Brightening', 'Acne', 'Anti-Aging', 'Soothing', 'Sun Care'] },
-  { name: 'size_ml', label: 'Size (ml)', type: 'select', options: [...PERFUME_SIZE_OPTIONS] },
+  { name: 'size_ml', label: 'Size (ml)', type: 'combobox', options: [...PERFUME_SIZE_OPTIONS] },
 );
 const CAR_FIELDS = fields(
   { name: 'brand', label: 'Brand / Make', type: 'text' },

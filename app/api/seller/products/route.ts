@@ -25,6 +25,7 @@ import { buildProductSearchableText } from '@/lib/smart-search';
 import { applyRateLimitAsync } from '@/lib/security';
 import { getSchedulingDisabledError } from '@/lib/listing-scheduling';
 import { getAvailableVariantInventory, normalizeProductVariantsInput } from '@/lib/product-variants';
+import { normalizeSizeMlValue } from '@/lib/category-attribute-schema';
 
 import { SHIPPING_MODES, type ShippingMode } from '@/lib/product-constants';
 const schema = z.object({
@@ -365,6 +366,15 @@ export async function POST(req: Request) {
     }
     if (data.gender) normalizedAttributes.gender = data.gender;
     if (mediaEnhancements) normalizedAttributes.mediaEnhancements = mediaEnhancements;
+
+    // Validate and normalize size_ml if present
+    if (normalizedAttributes.size_ml != null && normalizedAttributes.size_ml !== '') {
+      const normalized = normalizeSizeMlValue(normalizedAttributes.size_ml);
+      if (!normalized) {
+        return jsonError('Please enter a valid positive ML amount (e.g. 50ml or 1.5ml).', 400);
+      }
+      normalizedAttributes.size_ml = normalized;
+    }
 
     await ensureFashionCategoryHierarchy(prisma);
     const categoryNodes = await loadCategoryHierarchyNodesWithFallback(prisma);

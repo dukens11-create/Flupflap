@@ -1,13 +1,14 @@
 "use client";
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { LEGACY_CATEGORY_ALIAS_FALLBACK } from '@/lib/category-aliases';
+import { normalizeSizeMlValue } from '@/lib/category-attribute-schema';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface FieldDef {
   name: string;
   label: string;
-  type: 'text' | 'select' | 'number';
+  type: 'text' | 'select' | 'number' | 'combobox';
   options?: string[];
 }
 
@@ -974,6 +975,30 @@ export default function CategoryPicker({
                     <option value="">Select…</option>
                     {field.options.map(o => <option key={o} value={o}>{o}</option>)}
                   </select>
+                ) : field.type === 'combobox' && field.options ? (
+                  // combobox: text input with a datalist for preset suggestions (currently used for size_ml fields).
+                  // Normalization on blur appends the 'ml' suffix when only a number is typed.
+                  // If the value is invalid, it is left as-is so the server can return a clear error.
+                  <>
+                    <input
+                      type="text"
+                      list={`datalist-${field.name}`}
+                      className="input"
+                      placeholder={field.name === 'size_ml' ? 'e.g. 50ml or type a custom amount' : field.label}
+                      value={attrs[field.name] ?? ''}
+                      onChange={e => handleAttrChange(field.name, e.target.value)}
+                      onBlur={field.name === 'size_ml' ? (e => {
+                        const normalized = normalizeSizeMlValue(e.target.value);
+                        if (normalized) handleAttrChange(field.name, normalized);
+                      }) : undefined}
+                    />
+                    <datalist id={`datalist-${field.name}`}>
+                      {field.options.map(o => <option key={o} value={o} />)}
+                    </datalist>
+                    {field.name === 'size_ml' && (
+                      <p className="mt-1 text-xs text-slate-500">Choose a preset or type any amount (e.g. 105ml)</p>
+                    )}
+                  </>
                 ) : (
                   <input
                     type={field.type === 'number' ? 'number' : 'text'}

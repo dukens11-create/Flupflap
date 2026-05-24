@@ -23,6 +23,22 @@ type CategoryAttributeField = {
   options?: string[];
 };
 
+/**
+ * Validates and normalizes a size_ml value.
+ * Accepts a positive number optionally followed by "ml" (case-insensitive).
+ * Returns the normalized "Xml" string on success, or null if invalid.
+ */
+export function normalizeSizeMlValue(value: unknown): string | null {
+  if (value === undefined || value === null || value === '') return null;
+  const str = String(value).trim().toLowerCase();
+  const numStr = str.endsWith('ml') ? str.slice(0, -2).trim() : str;
+  // Reject if the numeric part contains any non-numeric characters (spaces, letters, etc.)
+  if (!/^\d+(\.\d+)?$/.test(numStr)) return null;
+  const num = parseFloat(numStr);
+  if (isNaN(num) || !isFinite(num) || num <= 0) return null;
+  return `${num}ml`;
+}
+
 function parseAttributeSchema(attributeSchema: unknown) {
   if (typeof attributeSchema === 'string') {
     try {
@@ -54,6 +70,7 @@ export function normalizePerfumeAttributeSchema(attributeSchema: unknown) {
 
     return {
       ...nextField,
+      type: 'combobox',
       options: [...PERFUME_SIZE_OPTIONS],
     };
   });
