@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { stripe } from '@/lib/stripe';
 import { deriveGarageSaleLifecycle } from '@/lib/garage-sale-lifecycle';
 import { recordSellerRefundHistory } from '@/lib/seller-refund-history';
+import { calculateGarageSaleDurationDays } from '@/lib/garage-sale-pricing';
 import {
   buildGarageSaleCompensationSourceKey,
   isGarageSaleCompensationEligible,
@@ -14,6 +15,8 @@ import {
 } from '@/lib/garage-sale-compensation';
 
 export const dynamic = 'force-dynamic';
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const MAX_COMPENSATION_DURATION_DAYS = 30;
 
 const actionSchema = z.object({
   action: z.enum(['approve', 'reject', 'feature', 'unfeature', 'hide', 'mark_spam', 'unmark_spam', 'refund', 'grant_compensation']),
@@ -148,14 +151,25 @@ export async function PATCH(req: Request, { params }: Params) {
       if (!isGarageSaleCompensationEligible(sale, new Date())) {
         return NextResponse.json({ error: 'Sale is not eligible for early-end compensation' }, { status: 422 });
       }
-      const compensationReason: GarageSaleCompensationReason = parsed.data.compensationReason ?? 'system_cutoff';
+      const compensationReason: GarageSaleCompensationReason = parsed.data.compensationReason ?? 'ended_early';
       const sourceKey = buildGarageSaleCompensationSourceKey(sale.id);
       const now = new Date();
-      const durationDays = sale.durationDays > 0
+      const originalDurationDays = sale.durationDays > 0
         ? sale.durationDays
-        : Math.max(1, Math.ceil((sale.endDate.getTime() - sale.startDate.getTime()) / (24 * 60 * 60 * 1000)));
-      const replacementEndDate = new Date(now.getTime() + durationDays * 24 * 60 * 60 * 1000);
-      const auditLine = `[compensation] reason=${compensationReason}; grantedBy=${session.user.id}; sourceSale=${sale.id}; at=${now.toISOString()}`;
+        : calculateGarageSaleDurationDays(sale.startDate, sale.endDate);
+      const durationDays = Math.max(1, Math.min(MAX_COMPENSATION_DURATION_DAYS, originalDurationDays));
+      const replacementEndDate = new Date(now.getTime() + durationDays * MS_PER_DAY);
+      const grantedBy = session.user.id?.trim();
+      if (!grantedBy) {
+        return NextResponse.json({ error: 'Invalid admin session' }, { status: 403 });
+      }
+      const auditPayload = {
+        reason: compensationReason,
+        grantedBy,
+        sourceSale: sale.id,
+        at: now.toISOString(),
+      };
+      const auditLine = `[compensation] ${JSON.stringify(auditPayload)}`;
 
       try {
         const replacement = await prisma.$transaction(async (tx) => {
@@ -163,8 +177,8 @@ export async function PATCH(req: Request, { params }: Params) {
             data: {
               sellerId: sale.sellerId,
               saleId: sale.id,
-              refundType: 'garage_sale_live_compensation_credit',
-              sourceLabel: 'Garage live replacement credit',
+              refundType: 'garage_sale_early_end_compensation_credit',
+              sourceLabel: 'Garage sale early-end replacement credit',
               sourceKey,
               amountCents: 0,
               currency: 'USD',
@@ -204,13 +218,14 @@ export async function PATCH(req: Request, { params }: Params) {
               homepagePromoted: false,
               topSearchPromoted: false,
               pricePerDayCents: sale.pricePerDayCents,
+              // Zeroed amounts represent a granted free compensation credit.
               baseAmountCents: 0,
               addOnsAmountCents: 0,
               totalPaidCents: 0,
               paymentStatus: 'PAID',
               paidAt: now,
               activatedAt: now,
-              adminNotes: `Compensation replacement granted from ${sale.id} (${compensationReason}).`,
+              adminNotes: `${auditLine}; replacementFor=${sale.id}`,
             },
           });
 
@@ -227,8 +242,8 @@ export async function PATCH(req: Request, { params }: Params) {
             where: { id: sale.id },
             data: {
               adminNotes: sale.adminNotes
-                ? `${sale.adminNotes}\n${auditLine}; replacement=${createdReplacement.id}`
-                : `${auditLine}; replacement=${createdReplacement.id}`,
+                ? `${sale.adminNotes}\n[compensation] ${JSON.stringify({ ...auditPayload, replacement: createdReplacement.id })}`
+                : `[compensation] ${JSON.stringify({ ...auditPayload, replacement: createdReplacement.id })}`,
             },
           });
 

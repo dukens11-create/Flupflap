@@ -37,6 +37,6 @@ test('isGarageSaleCompensationEligible returns false when session has not starte
 test('buildGarageSaleCompensationSourceKey is deterministic per sale id', () => {
   assert.equal(
     buildGarageSaleCompensationSourceKey('sale_123'),
-    'garage_sale_live_compensation:sale_123',
+    'garage_sale_early_end_compensation:sale_123',
   );
 });

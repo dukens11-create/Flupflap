@@ -18,6 +18,7 @@ type AdminSale = {
   isFeatured: boolean;
   isSpam: boolean;
   isLive: boolean;
+  isArchived: boolean;
   paymentStatus: string;
   totalPaidCents: number;
   viewCount: number;
@@ -126,7 +127,19 @@ export default function AdminGarageSalesClient({ sales: initialSales, total, pag
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {sales.map((sale) => (
+                {sales.map((sale) => {
+                  const eligibilityNow = new Date();
+                  const isCompensationEligible = !sale.compensationGranted && isGarageSaleCompensationEligible({
+                    isLive: sale.isLive,
+                    isArchived: sale.isArchived,
+                    isSpam: sale.isSpam,
+                    status: sale.status,
+                    paymentStatus: sale.paymentStatus,
+                    startDate: new Date(sale.startDate),
+                    endDate: new Date(sale.endDate),
+                  }, eligibilityNow);
+
+                  return (
                   <tr key={sale.id} className="hover:bg-slate-50">
                     <td className="px-4 py-3">
                       <Link href={`/garage-sales/${sale.id}`} target="_blank" className="font-semibold text-slate-900 hover:text-[var(--ff-primary-navy)] hover:underline line-clamp-1">
@@ -160,17 +173,6 @@ export default function AdminGarageSalesClient({ sales: initialSales, total, pag
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      {(() => {
-                        const isCompensationEligible = !sale.compensationGranted && isGarageSaleCompensationEligible({
-                          isLive: sale.isLive,
-                          isArchived: sale.status === 'EXPIRED',
-                          isSpam: sale.isSpam,
-                          status: sale.status,
-                          paymentStatus: sale.paymentStatus,
-                          startDate: new Date(sale.startDate),
-                          endDate: new Date(sale.endDate),
-                        }, new Date());
-                        return (
                       <div className="flex items-center justify-end gap-1 flex-wrap">
                         {sale.status === 'PENDING' && (
                           <>
@@ -244,7 +246,7 @@ export default function AdminGarageSalesClient({ sales: initialSales, total, pag
                         )}
                         {isCompensationEligible && (
                           <button
-                            onClick={() => doAction(sale.id, 'grant_compensation', { compensationReason: 'system_cutoff' })}
+                            onClick={() => doAction(sale.id, 'grant_compensation', { compensationReason: 'ended_early' })}
                             disabled={loading === sale.id + 'grant_compensation'}
                             title="Grant free replacement live credit"
                             className="flex items-center gap-1 rounded-lg bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
@@ -261,11 +263,10 @@ export default function AdminGarageSalesClient({ sales: initialSales, total, pag
                           <Trash2 size={13} />
                         </button>
                       </div>
-                        );
-                      })()}
                     </td>
                   </tr>
-                ))}
+                );
+                })}
               </tbody>
             </table>
           </div>

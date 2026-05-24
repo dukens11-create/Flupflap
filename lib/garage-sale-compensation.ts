@@ -22,5 +22,5 @@ export function isGarageSaleCompensationEligible(
 }
 
 export function buildGarageSaleCompensationSourceKey(saleId: string) {
-  return `garage_sale_live_compensation:${saleId}`;
+  return `garage_sale_early_end_compensation:${saleId}`;
 }
