@@ -142,3 +142,73 @@ test('getSellerRefundsData gracefully falls back when refund history fails', asy
     console.error = originalConsoleError;
   }
 });
+
+test('getSellerRefundsData treats missing refund delegates as a friendly fallback state', async () => {
+  const originalConsoleError = console.error;
+  const errorCalls: unknown[][] = [];
+  console.error = (...args: unknown[]) => {
+    errorCalls.push(args);
+  };
+
+  try {
+    const result = await getSellerRefundsData('seller_1', {
+      order: {
+        findMany: async () => [],
+      },
+    } as any);
+
+    assert.equal(result.refundRequestsFetchFailed, true);
+    assert.equal(result.refundHistoryFetchFailed, true);
+    assert.deepEqual(result.refundRequests, []);
+    assert.deepEqual(result.refundHistory, []);
+    assert.equal(errorCalls.length, 2);
+  } finally {
+    console.error = originalConsoleError;
+  }
+});
+
+test('getSellerRefundsData keeps refund history visible when order lookup is unavailable', async () => {
+  const originalConsoleError = console.error;
+  const errorCalls: unknown[][] = [];
+  console.error = (...args: unknown[]) => {
+    errorCalls.push(args);
+  };
+
+  try {
+    const now = new Date('2026-05-22T00:00:00.000Z');
+    const result = await getSellerRefundsData('seller_1', {
+      refundRequest: {
+        findMany: async () => [],
+      },
+      sellerRefundHistory: {
+        findMany: async () => [{
+          id: 'history_2',
+          sellerId: 'seller_1',
+          orderId: 'order_2',
+          saleId: null,
+          refundType: 'admin_order_refund',
+          sourceLabel: 'Order refund',
+          sourceKey: 'history_key_2',
+          stripePaymentIntentId: null,
+          stripeRefundId: null,
+          amountCents: 900,
+          currency: 'USD',
+          status: 'pending',
+          reason: 'Missing item',
+          refundedAt: null,
+          resolvedAt: null,
+          createdAt: now,
+          updatedAt: now,
+        }],
+      },
+    } as any);
+
+    assert.equal(result.refundRequestsFetchFailed, false);
+    assert.equal(result.refundHistoryFetchFailed, false);
+    assert.equal(result.refundHistory.length, 1);
+    assert.equal(result.refundHistory[0].order, null);
+    assert.equal(errorCalls.length, 1);
+  } finally {
+    console.error = originalConsoleError;
+  }
+});
