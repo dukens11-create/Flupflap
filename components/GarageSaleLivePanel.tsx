@@ -333,7 +333,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
         remoteDescriptionSdp: existing.pc.remoteDescription?.sdp,
         incomingOfferSdp: payload.sdp,
       })) {
-        closeGuestPeer(requestId, 'new-offer-recreate');
+        closeGuestPeer(requestId, 'new-offer-recreate', { clearVideo: false });
       } else {
         logLiveDebug('guest-offer-duplicate-ignored', {
           requestId,

@@ -52,7 +52,7 @@ export function shouldRecreateGuestPeerOnOffer({
 }: GuestOfferRecreateInput) {
   if (!hasRemoteDesc) return false;
 
-  if (connectionState === 'failed' || connectionState === 'disconnected') {
+  if (connectionState === 'failed' || connectionState === 'disconnected' || connectionState === 'closed') {
     return true;
   }
 
@@ -60,6 +60,8 @@ export function shouldRecreateGuestPeerOnOffer({
   if (!nextSdp) return false;
 
   const currentSdp = remoteDescriptionSdp?.trim() ?? '';
+  // A negotiated peer without stored remote SDP is in an inconsistent/stale state,
+  // so force recreation to recover media delivery on the next valid offer.
   if (!currentSdp) return true;
   return nextSdp !== currentSdp;
 }
