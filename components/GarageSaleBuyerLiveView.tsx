@@ -20,12 +20,17 @@ import {
 } from '@/lib/live-stream-viewer-state';
 
 const DEFAULT_AUTHENTICATED_BUYER_NAME = 'Anonymous Buyer';
+const DEFAULT_CHAT_SENDER_NAME = 'Buyer';
 const CHAT_LOGIN_REQUIRED_MESSAGE = 'Please log in to chat';
 const MEDIA_READY_TIMEOUT_MS = 1200;
 const PLAYBACK_RETRY_DELAY_MS = 250;
 const PLAYBACK_RECOVERY_THROTTLE_MS = 1200;
 const CONNECTION_RECOVERY_TIMEOUT_MS = 8000;
 const RECENT_CANDIDATE_TYPES_LIMIT = 6;
+const RECENT_MESSAGES_COUNT = 3;
+const SHARE_FEEDBACK_TIMEOUT_MS = 1800;
+const LIVE_SHARE_TITLE = 'Garage Sale Live';
+const LIVE_STAGE_HEIGHT = 'clamp(260px, 42vh, 420px)';
 
 interface ChatMessage {
   id: string;
@@ -1405,15 +1410,18 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
   const handleShare = useCallback(async () => {
     try {
       if (navigator.share) {
-        await navigator.share({ title: 'Garage Sale Live', url: window.location.href });
+        await navigator.share({ title: LIVE_SHARE_TITLE, url: window.location.href });
+        setShareFeedback('Link shared');
       } else if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(window.location.href);
+        setShareFeedback('Link copied');
+      } else {
+        setShareFeedback('Share unavailable');
       }
-      setShareFeedback('Link shared');
     } catch {
-      setShareFeedback('Share canceled');
+      setShareFeedback('Share failed');
     } finally {
-      window.setTimeout(() => setShareFeedback(null), 1800);
+      window.setTimeout(() => setShareFeedback(null), SHARE_FEEDBACK_TIMEOUT_MS);
     }
   }, []);
 
@@ -1429,12 +1437,13 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
   const recentCandidateTypesLabel = debugRecentCandidateTypes.length > 0
     ? debugRecentCandidateTypes.join(', ')
     : 'none';
+  // "approved" means accepted and connecting; "active" means media connected.
   const viewerOnStage = guestJoinStatus === 'approved' || guestJoinStatus === 'active';
   const stageParticipantCount = 1 + (viewerOnStage ? 1 : 0);
   const stageLayout = getStageLayoutKind(stageParticipantCount);
   const stageGridCols = getStageGridTemplateCols(stageLayout);
   const stageGridRows = getStageGridTemplateRows(stageLayout);
-  const recentMessages = messages.slice(-3).reverse();
+  const recentMessages = messages.slice(-RECENT_MESSAGES_COUNT).reverse();
   const connectionStatusLabel = getConnectionStatusLabel(connectionStatus);
   const connectionStatusTone = (() => {
     switch (connectionStatus) {
@@ -1487,7 +1496,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
             display: 'grid',
             gridTemplateColumns: stageGridCols,
             gridTemplateRows: stageGridRows,
-            height: 'clamp(260px, 42vh, 420px)',
+            height: LIVE_STAGE_HEIGHT,
             gap: '2px',
           }}
         >
@@ -1639,11 +1648,11 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
           <p className="text-[11px] font-bold uppercase tracking-wide text-indigo-600">Recent messages</p>
           <div className="mt-1 space-y-1">
             {recentMessages.length === 0 ? (
-              <p className="text-xs text-indigo-500">Waiting for first question…</p>
+              <p className="text-xs text-indigo-500">Waiting for first message…</p>
             ) : (
               recentMessages.map((message) => (
                 <p key={message.id} className="truncate text-xs text-indigo-700">
-                  <span className="font-semibold">{message.guestName ?? 'Buyer'}:</span> {message.message}
+                  <span className="font-semibold">{message.guestName ?? DEFAULT_CHAT_SENDER_NAME}:</span> {message.message}
                 </p>
               ))
             )}
@@ -1813,15 +1822,14 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
         </button>
         <button
           type="button"
-          onClick={() => void handleLike()}
-          disabled={likeSending}
-          className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-4 py-1.5 text-sm font-semibold text-amber-700 transition-colors hover:bg-amber-200 disabled:opacity-60"
+          disabled
+          className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-4 py-1.5 text-sm font-semibold text-amber-700 opacity-70"
         >
-          <Gift size={15} /> Gift
+          <Gift size={15} /> Gifts soon
         </button>
         <button
           type="button"
-          onClick={() => void handleShare()}
+          onClick={handleShare}
           className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-4 py-1.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-200"
         >
           <Share2 size={15} /> Share
@@ -1847,7 +1855,7 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-baseline gap-1.5">
-                    <span className="text-[11px] font-semibold text-slate-700 truncate">{m.guestName ?? 'Buyer'}</span>
+                    <span className="text-[11px] font-semibold text-slate-700 truncate">{m.guestName ?? DEFAULT_CHAT_SENDER_NAME}</span>
                     <span className="text-[10px] text-slate-400 shrink-0">
                       {new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
