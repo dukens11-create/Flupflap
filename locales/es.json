@@ -230,5 +230,30 @@
     "description": "La página que buscas no existe o pudo haberse movido.",
     "goMarketplace": "Ir al marketplace",
     "viewCart": "Ver tu carrito"
+  },
+  "sellerRefunds": {
+    "historyDescription": "Haz seguimiento de los reembolsos procesados y en curso con estado claro y notas de resolución.",
+    "requestsDescription": "Revisa las solicitudes de compradores, aprueba/rechaza o envía contexto para revisión administrativa.",
+    "requestsSummaryOne": "Mostrando 1 solicitud · última solicitud recibida {date}",
+    "requestsSummaryMany": "Mostrando {count} solicitudes · última solicitud recibida {date}",
+    "itemUnavailable": "Detalles del artículo no disponibles",
+    "emptyRequests": "No hay solicitudes de reembolso por ahora. Las nuevas solicitudes de compradores aparecerán aquí.",
+    "responsePlaceholder": "Comparte tu versión, detalles de envío o notas de resolución.",
+    "actions": {
+      "approve": "Aprobar",
+      "reject": "Rechazar",
+      "sendMessage": "Enviar mensaje"
+    },
+    "nextSteps": {
+      "pendingSellerResponse": "Pendiente de respuesta del vendedor",
+      "adminReview": "Revisión del administrador",
+      "completed": "Completado",
+      "closed": "Cerrado",
+      "pending": "Pendiente"
+    },
+    "errors": {
+      "submitFailed": "No se pudo enviar la respuesta.",
+      "network": "Error de red. Inténtalo de nuevo."
+    }
   }
 }

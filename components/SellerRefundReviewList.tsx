@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { dollars } from '@/lib/money';
 import { REFUND_STATUS_LABELS, refundStatusBadge } from '@/lib/refunds';
+import { useI18n } from '@/components/I18nProvider';
+import { getLocaleDateTimeFormatLocale } from '@/lib/i18n/shared';
 
 type SellerRefundRequest = {
   id: string;
@@ -19,16 +21,50 @@ type SellerRefundRequest = {
     status: string;
     totalCents: number;
     buyer: { name: string | null; email: string };
+    items: Array<{
+      quantity: number;
+      product: { title: string };
+    }>;
   };
 };
+type SellerRefundAction = 'approve' | 'reject' | 'message';
+
+const RESOLVED_REFUND_STATUSES: ReadonlySet<SellerRefundRequest['status']> = new Set([
+  'APPROVED',
+  'DENIED',
+  'REFUNDED',
+]);
+function getRequestNextStep(status: SellerRefundRequest['status'], t: (key: string) => string): string {
+  switch (status) {
+    case 'REQUESTED':
+      return t('sellerRefunds.nextSteps.pendingSellerResponse');
+    case 'SELLER_REVIEW':
+      return t('sellerRefunds.nextSteps.adminReview');
+    case 'APPROVED':
+      return t('sellerRefunds.nextSteps.adminReview');
+    case 'DENIED':
+      return t('sellerRefunds.nextSteps.completed');
+    case 'REFUNDED':
+      return t('sellerRefunds.nextSteps.completed');
+    default:
+      return t('sellerRefunds.nextSteps.pending');
+  }
+}
 
 export default function SellerRefundReviewList({ initialRefundRequests }: { initialRefundRequests: SellerRefundRequest[] }) {
+  const { t, locale } = useI18n();
   const [refundRequests, setRefundRequests] = useState(initialRefundRequests);
   const [responses, setResponses] = useState<Record<string, string>>({});
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const refundRequestDateFormatter = new Intl.DateTimeFormat(getLocaleDateTimeFormatLocale(locale), {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: 'UTC',
+    timeZoneName: 'short',
+  });
 
-  async function submitResponse(refundRequestId: string, action: 'accept' | 'dispute') {
+  async function handleRefundAction(refundRequestId: string, action: SellerRefundAction) {
     if (submittingId) return;
     setError('');
     setSubmittingId(refundRequestId);
@@ -44,7 +80,7 @@ export default function SellerRefundReviewList({ initialRefundRequests }: { init
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error ?? 'Unable to submit response.');
+        setError(data.error ?? t('sellerRefunds.errors.submitFailed'));
         return;
       }
 
@@ -58,14 +94,18 @@ export default function SellerRefundReviewList({ initialRefundRequests }: { init
           : request
       )));
     } catch {
-      setError('Network error. Please try again.');
+      setError(t('sellerRefunds.errors.network'));
     } finally {
       setSubmittingId(null);
     }
   }
 
   if (refundRequests.length === 0) {
-    return <div className="card p-6 text-sm text-slate-500">No refund requests yet.</div>;
+    return (
+      <div className="card p-6 text-sm text-slate-500">
+        {t('sellerRefunds.emptyRequests')}
+      </div>
+    );
   }
 
   return (
@@ -74,13 +114,20 @@ export default function SellerRefundReviewList({ initialRefundRequests }: { init
         <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
       )}
       {refundRequests.map((request) => {
-        const isResolved = request.status === 'DENIED' || request.status === 'REFUNDED';
+        const isResolved = RESOLVED_REFUND_STATUSES.has(request.status);
+        const requestedDate = refundRequestDateFormatter.format(new Date(request.createdAt));
         return (
           <div key={request.id} className="card p-5 space-y-3">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs text-slate-400 font-mono">Order #{request.order.id.slice(-8).toUpperCase()}</p>
                 <p className="text-sm text-slate-600">Buyer: {request.order.buyer.name ?? request.order.buyer.email}</p>
+                {request.order.items.length > 0 ? (
+                  <p className="text-sm text-slate-600">
+                    Item: {request.order.items[0]?.product?.title ?? t('sellerRefunds.itemUnavailable')}
+                    {request.order.items.length > 1 ? ` +${request.order.items.length - 1} more` : ''}
+                  </p>
+                ) : null}
               </div>
               <span className={`badge ${refundStatusBadge(request.status)}`}>{REFUND_STATUS_LABELS[request.status]}</span>
             </div>
@@ -94,6 +141,10 @@ export default function SellerRefundReviewList({ initialRefundRequests }: { init
               {request.approvedAmountCents !== null && (
                 <> · <span className="font-semibold">Approved amount:</span> {dollars(request.approvedAmountCents)}</>
               )}
+            </p>
+            <p className="text-xs text-slate-600">
+              <span className="font-semibold">Requested:</span> {requestedDate} ·{' '}
+              <span className="font-semibold">Next step:</span> {getRequestNextStep(request.status, t)}
             </p>
             {request.sellerResponse && (
               <p className="text-sm text-slate-700"><span className="font-semibold">Your response:</span> {request.sellerResponse}</p>
@@ -110,24 +161,32 @@ export default function SellerRefundReviewList({ initialRefundRequests }: { init
                   maxLength={2000}
                   value={responses[request.id] ?? ''}
                   onChange={(event) => setResponses((prev) => ({ ...prev, [request.id]: event.target.value }))}
-                  placeholder="Share your side, shipping details, or resolution notes."
+                  placeholder={t('sellerRefunds.responsePlaceholder')}
                 />
                 <div className="flex gap-2">
                   <button
                     type="button"
                     className="btn-primary text-sm"
                     disabled={submittingId === request.id}
-                    onClick={() => submitResponse(request.id, 'accept')}
+                    onClick={() => handleRefundAction(request.id, 'approve')}
                   >
-                    Accept Request
+                    {t('sellerRefunds.actions.approve')}
                   </button>
                   <button
                     type="button"
                     className="btn-outline text-sm"
                     disabled={submittingId === request.id}
-                    onClick={() => submitResponse(request.id, 'dispute')}
+                    onClick={() => handleRefundAction(request.id, 'reject')}
                   >
-                    Dispute Request
+                    {t('sellerRefunds.actions.reject')}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-outline text-sm"
+                    disabled={submittingId === request.id}
+                    onClick={() => handleRefundAction(request.id, 'message')}
+                  >
+                    {t('sellerRefunds.actions.sendMessage')}
                   </button>
                 </div>
               </div>

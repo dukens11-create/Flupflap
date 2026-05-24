@@ -21,6 +21,10 @@ test('getSellerRefundsData returns refund history and requests when queries succ
           status: 'PAID',
           totalCents: 2200,
           buyer: { name: 'Buyer', email: 'buyer@example.com' },
+          items: [{
+            quantity: 1,
+            product: { title: 'Ankara Dress' },
+          }],
         },
       }],
     },
@@ -45,15 +49,26 @@ test('getSellerRefundsData returns refund history and requests when queries succ
         updatedAt: now,
       }],
     },
+    order: {
+      findMany: async () => [{
+        id: 'order_1',
+        status: 'REFUNDED',
+        items: [{
+          quantity: 1,
+          product: { title: 'Ankara Dress' },
+        }],
+      }],
+    },
   } as any;
 
   const result = await getSellerRefundsData('seller_1', mockDb);
 
   assert.equal(result.refundRequestsFetchFailed, false);
   assert.equal(result.refundHistoryFetchFailed, false);
-  assert.equal(result.refundHistorySchemaNotInitialized, false);
   assert.equal(result.refundRequests.length, 1);
   assert.equal(result.refundHistory.length, 1);
+  assert.equal(result.refundRequests[0].order.items[0].product.title, 'Ankara Dress');
+  assert.equal(result.refundHistory[0].order?.items[0].product.title, 'Ankara Dress');
 });
 
 test('getSellerRefundsData keeps empty history as an intentional empty state', async () => {
@@ -62,6 +77,9 @@ test('getSellerRefundsData keeps empty history as an intentional empty state', a
       findMany: async () => [],
     },
     sellerRefundHistory: {
+      findMany: async () => [],
+    },
+    order: {
       findMany: async () => [],
     },
   } as any;
@@ -100,6 +118,10 @@ test('getSellerRefundsData gracefully falls back when refund history fails', asy
             status: 'SHIPPED',
             totalCents: 2500,
             buyer: { name: null, email: 'buyer2@example.com' },
+            items: [{
+              quantity: 1,
+              product: { title: 'Beaded Purse' },
+            }],
           },
         }],
       },
@@ -111,10 +133,8 @@ test('getSellerRefundsData gracefully falls back when refund history fails', asy
     } as any;
 
     const result = await getSellerRefundsData('seller_1', mockDb);
-
     assert.equal(result.refundRequestsFetchFailed, false);
     assert.equal(result.refundHistoryFetchFailed, true);
-    assert.equal(result.refundHistorySchemaNotInitialized, false);
     assert.equal(result.refundRequests.length, 1);
     assert.deepEqual(result.refundHistory, []);
     assert.equal(errorCalls.length, 1);

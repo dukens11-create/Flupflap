@@ -17,6 +17,16 @@ const sellerRefundRequestQuery = {
             email: true,
           },
         },
+        items: {
+          select: {
+            quantity: true,
+            product: {
+              select: {
+                title: true,
+              },
+            },
+          },
+        },
       },
     },
   },
@@ -30,13 +40,24 @@ const sellerRefundHistoryQuery = {
 
 type SellerRefundRequestRecord = Prisma.RefundRequestGetPayload<typeof sellerRefundRequestQuery>;
 type SellerRefundHistoryRecord = SellerRefundHistory;
+type SellerRefundHistoryOrderRecord = {
+  id: string;
+  status: string;
+  items: Array<{
+    quantity: number;
+    product: {
+      title: string;
+    };
+  }>;
+};
 
 export type SellerRefundsData = {
   refundRequests: SellerRefundRequestRecord[];
-  refundHistory: SellerRefundHistoryRecord[];
+  refundHistory: Array<SellerRefundHistoryRecord & {
+    order: SellerRefundHistoryOrderRecord | null;
+  }>;
   refundRequestsFetchFailed: boolean;
   refundHistoryFetchFailed: boolean;
-  refundHistorySchemaNotInitialized: boolean;
 };
 
 export async function getSellerRefundsData(
@@ -56,9 +77,9 @@ export async function getSellerRefundsData(
 
   let refundRequests: SellerRefundRequestRecord[] = [];
   let refundHistory: SellerRefundHistoryRecord[] = [];
+  let refundHistoryWithOrder: Array<SellerRefundHistoryRecord & { order: SellerRefundHistoryOrderRecord | null }> = [];
   let refundRequestsFetchFailed = false;
   let refundHistoryFetchFailed = false;
-  let refundHistorySchemaNotInitialized = false;
 
   if (refundRequestsResult.status === 'fulfilled') {
     refundRequests = refundRequestsResult.value;
@@ -72,22 +93,67 @@ export async function getSellerRefundsData(
 
   if (refundHistoryResult.status === 'fulfilled') {
     refundHistory = refundHistoryResult.value;
+    const orderIds = Array.from(new Set(refundHistory
+      .map((entry) => entry.orderId)
+      .filter((orderId): orderId is string => orderId != null && orderId !== '')));
+
+    if (orderIds.length > 0) {
+      try {
+        const orders = await db.order.findMany({
+          where: {
+            id: { in: orderIds },
+          },
+          select: {
+            id: true,
+            status: true,
+            items: {
+              select: {
+                quantity: true,
+                product: {
+                  select: {
+                    title: true,
+                  },
+                },
+              },
+            },
+          },
+        });
+        const orderById = new Map(orders.map((order) => [order.id, order]));
+        refundHistoryWithOrder = refundHistory.map((entry) => ({
+          ...entry,
+          order: entry.orderId ? (orderById.get(entry.orderId) ?? null) : null,
+        }));
+      } catch (orderLookupError) {
+        console.error('[seller/refunds] Failed to load order details for refund history', {
+          sellerId,
+          error: orderLookupError,
+        });
+        refundHistoryWithOrder = refundHistory.map((entry) => ({
+          ...entry,
+          order: null,
+        }));
+      }
+    } else {
+      refundHistoryWithOrder = refundHistory.map((entry) => ({
+        ...entry,
+        order: null,
+      }));
+    }
   } else {
     refundHistoryFetchFailed = true;
-    refundHistorySchemaNotInitialized = isSchemaNotInitializedError(refundHistoryResult.reason);
-    const logger = refundHistorySchemaNotInitialized ? console.warn : console.error;
+    const schemaNotInitialized = isSchemaNotInitializedError(refundHistoryResult.reason);
+    const logger = schemaNotInitialized ? console.warn : console.error;
     logger('[seller/refunds] Failed to load seller refund history', {
       sellerId,
-      schemaNotInitialized: refundHistorySchemaNotInitialized,
+      schemaNotInitialized,
       error: refundHistoryResult.reason,
     });
   }
 
   return {
     refundRequests,
-    refundHistory,
+    refundHistory: refundHistoryWithOrder,
     refundRequestsFetchFailed,
     refundHistoryFetchFailed,
-    refundHistorySchemaNotInitialized,
   };
 }

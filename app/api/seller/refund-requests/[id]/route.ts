@@ -5,7 +5,7 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 
 const sellerRefundSchema = z.object({
-  action: z.enum(['accept', 'dispute']),
+  action: z.enum(['approve', 'reject', 'message', 'accept', 'dispute']),
   sellerResponse: z.string().trim().max(2000).optional(),
 });
 
@@ -54,7 +54,23 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Invalid payload.' }, { status: 422 });
   }
 
-  const prefix = parsed.data.action === 'accept' ? 'Seller accepted request' : 'Seller disputed request';
+  let normalizedAction: 'approve' | 'reject' | 'message';
+  switch (parsed.data.action) {
+    case 'accept':
+      normalizedAction = 'approve';
+      break;
+    case 'dispute':
+      normalizedAction = 'reject';
+      break;
+    default:
+      normalizedAction = parsed.data.action;
+      break;
+  }
+  const prefix = normalizedAction === 'approve'
+    ? 'Seller approved request'
+    : normalizedAction === 'reject'
+      ? 'Seller rejected request'
+      : 'Seller message';
   const sellerResponse = parsed.data.sellerResponse
     ? `${prefix}: ${parsed.data.sellerResponse}`
     : `${prefix}.`;

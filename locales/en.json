@@ -230,5 +230,30 @@
     "description": "The page you're looking for doesn't exist or may have been moved.",
     "goMarketplace": "Go to marketplace",
     "viewCart": "View your cart"
+  },
+  "sellerRefunds": {
+    "historyDescription": "Track processed and in-progress refunds with clear status and resolution notes.",
+    "requestsDescription": "Review buyer requests, approve/reject, or send context for admin review.",
+    "requestsSummaryOne": "Showing 1 request · latest request received {date}",
+    "requestsSummaryMany": "Showing {count} requests · latest request received {date}",
+    "itemUnavailable": "Item details unavailable",
+    "emptyRequests": "No refund requests right now. New buyer requests will appear here.",
+    "responsePlaceholder": "Share your side, shipping details, or resolution notes.",
+    "actions": {
+      "approve": "Approve",
+      "reject": "Reject",
+      "sendMessage": "Send Message"
+    },
+    "nextSteps": {
+      "pendingSellerResponse": "Pending seller response",
+      "adminReview": "Admin review",
+      "completed": "Completed",
+      "closed": "Closed",
+      "pending": "Pending"
+    },
+    "errors": {
+      "submitFailed": "Unable to submit response.",
+      "network": "Network error. Please try again."
+    }
   }
 }
