@@ -7,9 +7,10 @@ import { z } from 'zod';
 import { stripe } from '@/lib/stripe';
 import { deriveGarageSaleLifecycle } from '@/lib/garage-sale-lifecycle';
 import { recordSellerRefundHistory } from '@/lib/seller-refund-history';
-import { calculateGarageSaleDurationDays } from '@/lib/garage-sale-pricing';
 import { isSchemaNotInitializedError } from '@/lib/db-errors';
 import {
+  GARAGE_SALE_COMPENSATION_MAX_DAYS,
+  GARAGE_SALE_COMPENSATION_MIN_DAYS,
   GARAGE_SALE_COMPENSATION_NOTE_REQUIRED_MESSAGE,
   buildGarageSaleCompensationAuditLine,
   buildGarageSaleCompensationSourceKey,
@@ -22,13 +23,13 @@ import {
 
 export const dynamic = 'force-dynamic';
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
-const MAX_COMPENSATION_DURATION_DAYS = 30;
 
 const actionSchema = z.object({
   action: z.enum(['approve', 'reject', 'feature', 'unfeature', 'hide', 'mark_spam', 'unmark_spam', 'refund', 'grant_compensation']),
   notes: z.string().max(1000).optional(),
   promotionType: z.enum(['FEATURED', 'HOMEPAGE_BOOST', 'LOCAL_AREA_BOOST', 'WEEKEND_PROMOTION']).optional().nullable(),
   compensationReason: z.enum(['ended_early', 'system_cutoff']).optional(),
+  compensationDays: z.coerce.number().int().min(GARAGE_SALE_COMPENSATION_MIN_DAYS).max(GARAGE_SALE_COMPENSATION_MAX_DAYS).optional(),
   forceCompensation: z.boolean().optional(),
 });
 
@@ -164,14 +165,15 @@ export async function PATCH(req: Request, { params }: Params) {
       }
       const compensationReason: GarageSaleCompensationReason = parsed.data.compensationReason ?? 'ended_early';
       const compensationNote = normalizeGarageSaleCompensationNote(parsed.data.notes);
+      const compensationDays = parsed.data.compensationDays;
       if (!compensationNote) {
         return NextResponse.json({ error: GARAGE_SALE_COMPENSATION_NOTE_REQUIRED_MESSAGE }, { status: 422 });
       }
+      if (compensationDays === undefined) {
+        return NextResponse.json({ error: `Compensation days must be between ${GARAGE_SALE_COMPENSATION_MIN_DAYS} and ${GARAGE_SALE_COMPENSATION_MAX_DAYS}.` }, { status: 422 });
+      }
       const sourceKey = buildGarageSaleCompensationSourceKey(sale.id);
-      const originalDurationDays = sale.durationDays > 0
-        ? sale.durationDays
-        : calculateGarageSaleDurationDays(sale.startDate, sale.endDate);
-      const durationDays = Math.max(1, Math.min(MAX_COMPENSATION_DURATION_DAYS, originalDurationDays));
+      const durationDays = compensationDays;
       const replacementEndDate = new Date(now.getTime() + durationDays * MS_PER_DAY);
       const grantedBy = session.user.id?.trim();
       if (!grantedBy) {
@@ -179,13 +181,14 @@ export async function PATCH(req: Request, { params }: Params) {
       }
       const auditPayload = {
         reason: compensationReason,
+        grantedDays: durationDays,
         note: compensationNote,
         grantedBy,
         sourceSale: sale.id,
         at: now.toISOString(),
       };
       const auditLine = buildGarageSaleCompensationAuditLine(auditPayload);
-      const auditSummary = formatGarageSaleCompensationSummary(compensationReason, compensationNote);
+      const auditSummary = formatGarageSaleCompensationSummary(compensationReason, durationDays, compensationNote);
 
       try {
         const replacement = await prisma.$transaction(async (tx) => {
@@ -270,6 +273,7 @@ export async function PATCH(req: Request, { params }: Params) {
         return NextResponse.json({
           ...refreshedSale,
           compensationGranted: true,
+          compensationGrantedDays: durationDays,
           compensationReplacementSaleId: replacement.id,
         });
       } catch (error) {

@@ -3,6 +3,8 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { ChevronLeft, ChevronRight, CheckCircle, XCircle, Star, EyeOff, AlertTriangle, Trash2 } from 'lucide-react';
 import {
+  GARAGE_SALE_COMPENSATION_MAX_DAYS,
+  GARAGE_SALE_COMPENSATION_MIN_DAYS,
   GARAGE_SALE_COMPENSATION_NOT_ELIGIBLE_MESSAGE,
   GARAGE_SALE_COMPENSATION_NOTE_REQUIRED_MESSAGE,
   formatGarageSaleCompensationReason,
@@ -71,6 +73,7 @@ export default function AdminGarageSalesClient({ sales: initialSales, total, pag
   const [compensationDrafts, setCompensationDrafts] = useState<Record<string, {
     reason: GarageSaleCompensationReason;
     note: string;
+    days: number;
   }>>({});
 
   async function doAction(id: string, action: string, extra: Record<string, unknown> = {}) {
@@ -136,17 +139,17 @@ export default function AdminGarageSalesClient({ sales: initialSales, total, pag
   }
 
   function getCompensationDraft(id: string) {
-    return compensationDrafts[id] ?? { reason: 'ended_early', note: '' };
+    return compensationDrafts[id] ?? { reason: 'ended_early', note: '', days: GARAGE_SALE_COMPENSATION_MIN_DAYS };
   }
 
   function updateCompensationDraft(
     id: string,
-    updates: Partial<{ reason: GarageSaleCompensationReason; note: string }>,
+    updates: Partial<{ reason: GarageSaleCompensationReason; note: string; days: number }>,
   ) {
     setCompensationDrafts((prev) => ({
       ...prev,
       [id]: {
-        ...(prev[id] ?? { reason: 'ended_early', note: '' }),
+        ...(prev[id] ?? { reason: 'ended_early', note: '', days: GARAGE_SALE_COMPENSATION_MIN_DAYS }),
         ...updates,
       },
     }));
@@ -159,9 +162,14 @@ export default function AdminGarageSalesClient({ sales: initialSales, total, pag
       setError(GARAGE_SALE_COMPENSATION_NOTE_REQUIRED_MESSAGE);
       return;
     }
+    if (!Number.isInteger(draft.days) || draft.days < GARAGE_SALE_COMPENSATION_MIN_DAYS || draft.days > GARAGE_SALE_COMPENSATION_MAX_DAYS) {
+      setError(`Compensation days must be between ${GARAGE_SALE_COMPENSATION_MIN_DAYS} and ${GARAGE_SALE_COMPENSATION_MAX_DAYS}.`);
+      return;
+    }
 
     const didGrant = await doAction(id, 'grant_compensation', {
       compensationReason: draft.reason,
+      compensationDays: draft.days,
       notes: note,
       forceCompensation,
     });
@@ -216,7 +224,7 @@ export default function AdminGarageSalesClient({ sales: initialSales, total, pag
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Compensation management</p>
             <h2 className="mt-1 text-lg font-black text-slate-900">Grant free replacement garage sale lives without developer help</h2>
             <p className="mt-2 max-w-3xl text-sm text-slate-600">
-              Use the compensation column below to choose the affected seller&apos;s issue, add an audit note, and grant one free replacement live.
+              Use the compensation column below to choose the affected seller&apos;s issue, add an audit note, and grant 1 to 7 free replacement days.
               Existing compensation history stays visible so the same disrupted sale is not compensated twice.
             </p>
             <p className="mt-2 max-w-3xl text-xs text-slate-500">
@@ -258,6 +266,7 @@ export default function AdminGarageSalesClient({ sales: initialSales, total, pag
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {saleCompensation.map(({ sale, compensationAudit, compensationGranted, isCompensationEligible, canOverrideCompensation, ineligibilityReason }) => {
+                  const grantedCompensationDays = compensationAudit?.grantedDays ?? GARAGE_SALE_COMPENSATION_MIN_DAYS;
                   return (
                   <tr key={sale.id} className="hover:bg-slate-50">
                     <td className="px-4 py-3">
@@ -298,6 +307,11 @@ export default function AdminGarageSalesClient({ sales: initialSales, total, pag
                             Compensation granted
                           </span>
                           <p className="font-semibold text-slate-900">{formatGarageSaleCompensationReason(compensationAudit.reason)}</p>
+                          <p className="font-semibold text-emerald-700">
+                            {grantedCompensationDays === 1
+                              ? '1 day granted'
+                              : `${grantedCompensationDays} days granted`}
+                          </p>
                           {compensationAudit.note && <p>{compensationAudit.note}</p>}
                           <p>Granted {new Date(compensationAudit.at).toLocaleString()}</p>
                           {compensationAudit.replacement && (
@@ -319,7 +333,7 @@ export default function AdminGarageSalesClient({ sales: initialSales, total, pag
                           >
                             Grant Compensation
                           </button>
-                          <p className="text-xs text-slate-500">Grant one free replacement live with required audit details.</p>
+                          <p className="text-xs text-slate-500">Grant 1 to 7 free replacement days with required audit details.</p>
                         </div>
                       ) : canOverrideCompensation ? (
                         <div className="min-w-[220px] space-y-2 rounded-xl border border-amber-200 bg-amber-50 p-3">
@@ -477,6 +491,28 @@ export default function AdminGarageSalesClient({ sales: initialSales, total, pag
                     <option value="ended_early">Live ended early</option>
                     <option value="system_cutoff">Platform issue / system cutoff</option>
                   </select>
+                </label>
+                <label className="block text-xs font-semibold text-slate-700">
+                  Compensation days
+                  <select
+                    value={selectedDraft.days}
+                    onChange={(event) => updateCompensationDraft(selectedEntry.sale.id, {
+                      days: Number.parseInt(event.target.value, 10),
+                    })}
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
+                  >
+                    {Array.from(
+                      { length: GARAGE_SALE_COMPENSATION_MAX_DAYS - GARAGE_SALE_COMPENSATION_MIN_DAYS + 1 },
+                      (_, index) => GARAGE_SALE_COMPENSATION_MIN_DAYS + index,
+                    ).map((dayCount) => (
+                      <option key={dayCount} value={dayCount}>
+                        {dayCount} {dayCount === 1 ? 'day' : 'days'}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-[11px] font-normal text-slate-500" title="Admins can grant between 1 and 7 days per compensation action.">
+                    Choose 1–7 days per grant action.
+                  </p>
                 </label>
                 <label className="block text-xs font-semibold text-slate-700">
                   Audit note
