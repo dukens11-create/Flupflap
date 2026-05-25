@@ -1,6 +1,6 @@
 'use client';
 import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
-import { Video, VideoOff, Mic, MicOff, Radio, AlertTriangle, Eye, RefreshCcw, MessageCircle, Heart, Trash2, Users, PhoneOff, VolumeX, Volume2, Maximize2, X } from 'lucide-react';
+import { Video, VideoOff, Mic, MicOff, Radio, AlertTriangle, Eye, RefreshCcw, MessageCircle, Heart, Trash2, Users, PhoneCall, PhoneOff, VolumeX, Volume2, Maximize2, X } from 'lucide-react';
 import { getCanonicalLiveSaleId, LIVE_ENGAGEMENT_EVENTS, LIVE_ENGAGEMENT_SIGNAL_KINDS, isSameLiveSession } from '@/lib/live-engagement';
 import { getSignalViewerId, shouldRecreateGuestPeerOnOffer } from '@/lib/garage-sale-live-stream';
 import { RTC_CONFIG, HAS_TURN_CONFIG } from '@/lib/rtc-config';
@@ -1703,6 +1703,9 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
     () => guestRequests.filter((r) => r.status === 'pending'),
     [guestRequests],
   );
+  const incomingRequest = pendingRequests[0] ?? null;
+  const incomingCallerName = incomingRequest?.guestName ?? 'Guest';
+  const isGuestCapacityFull = activeGuests.length >= MAX_LIVE_GUESTS;
   const stageParticipantCount = 1 + activeGuests.length; // host + accepted guests
   const stageLayout = getStageLayoutKind(stageParticipantCount);
   const stageGridCols = getStageGridTemplateCols(stageLayout);
@@ -1821,7 +1824,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
 
       {/* ── TikTok-style live stage (shown only while live) ──────────────────── */}
       {isLive && (
-        <div className="overflow-hidden rounded-2xl bg-slate-950 shadow-xl">
+        <div className="relative overflow-hidden rounded-2xl bg-slate-950 shadow-xl">
           {/* Live indicator bar */}
           <div className="flex items-center justify-between gap-2 px-3 py-1.5 bg-slate-900/80">
             <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold text-white ${sellerLiveReady ? 'animate-pulse bg-red-500' : 'bg-amber-500'}`}>
@@ -1924,6 +1927,58 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
               );
             })}
           </div>
+          {incomingRequest && (
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-start justify-end p-2 sm:p-3">
+              <div
+                role="dialog"
+                aria-live="polite"
+                aria-labelledby={`incoming-call-title-${incomingRequest.id}`}
+                className="pointer-events-auto w-full max-w-60 rounded-2xl border border-white/10 bg-slate-950/95 p-3 shadow-2xl backdrop-blur-sm sm:w-64"
+              >
+                <p id={`incoming-call-title-${incomingRequest.id}`} className="text-[11px] font-semibold uppercase tracking-wide text-emerald-400">
+                  +Incoming call+
+                </p>
+                <div className="mt-2 flex items-center gap-2.5">
+                  {isSafeViewerAvatar(incomingRequest.viewerAvatar) ? (
+                    <img
+                      src={incomingRequest.viewerAvatar as string}
+                      alt={incomingRequest.guestName ?? 'Guest avatar'}
+                      className="h-10 w-10 shrink-0 rounded-full object-cover ring-1 ring-white/15"
+                    />
+                  ) : (
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-700 text-sm font-bold text-white">
+                      {(incomingRequest.guestName ?? 'G').charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <p className="min-w-0 truncate text-sm font-semibold text-white">
+                    {incomingRequest.guestName ?? 'Guest'}
+                  </p>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleDeclineGuest(incomingRequest.id)}
+                    aria-label={`Decline call from ${incomingCallerName}`}
+                    className="inline-flex items-center justify-center gap-1 rounded-xl bg-red-600 px-2.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-red-700"
+                  >
+                    <PhoneOff size={12} /> Decline
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleAcceptGuest(incomingRequest.id)}
+                    aria-label={isGuestCapacityFull
+                      ? `Accept call from ${incomingCallerName} (maximum guests reached)`
+                      : `Accept call from ${incomingCallerName}`}
+                    aria-disabled={isGuestCapacityFull}
+                    disabled={isGuestCapacityFull}
+                    className="inline-flex items-center justify-center gap-1 rounded-xl bg-emerald-600 px-2.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <PhoneCall size={12} /> Accept
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -2084,52 +2139,17 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
               <p className="text-center text-xs text-slate-400 py-1">No join requests yet.</p>
             )}
 
+            {pendingRequests.length > 0 && (
+              <p className="text-center text-xs text-emerald-700 py-1">
+                Incoming call request is shown on the live video overlay.
+              </p>
+            )}
+
             {activeGuests.length > 0 && pendingRequests.length === 0 && (
               <p className="text-center text-xs text-emerald-600 py-1">
                 {activeGuests.length} guest{activeGuests.length > 1 ? 's' : ''} on stage — manage via video tiles above.
               </p>
             )}
-
-            {/* Pending requests */}
-            {pendingRequests.map((req) => (
-              <div key={req.id} className="flex items-center gap-2 rounded-lg bg-white border border-indigo-100 px-3 py-2 shadow-sm">
-                {isSafeViewerAvatar(req.viewerAvatar) ? (
-                  <img
-                    src={req.viewerAvatar as string}
-                    alt={req.guestName ?? 'Guest avatar'}
-                    className="h-7 w-7 shrink-0 rounded-full object-cover"
-                  />
-                ) : (
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-700">
-                    {(req.guestName ?? 'G').charAt(0).toUpperCase()}
-                  </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-slate-800 truncate">{req.guestName ?? 'Guest'}</p>
-                  <p className="text-[10px] text-slate-400">Wants to join live on video</p>
-                  {req.viewerId && (
-                    <p className="text-[10px] text-slate-400 truncate">ID: {req.viewerId}</p>
-                  )}
-                </div>
-                <div className="flex gap-1.5 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => void handleAcceptGuest(req.id)}
-                    disabled={activeGuests.length >= MAX_LIVE_GUESTS}
-                    className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    Accept
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void handleDeclineGuest(req.id)}
-                    className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-[11px] font-bold text-red-600 hover:bg-red-50 transition-colors"
-                  >
-                    Decline
-                  </button>
-                </div>
-              </div>
-            ))}
           </div>
           {/* Live Questions / Chat */}
           <div className="space-y-2">
