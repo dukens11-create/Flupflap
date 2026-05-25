@@ -2,7 +2,7 @@ pluginManagement {
     def flutterSdkPath = {
         def properties = new Properties()
         def localPropertiesFile = new File(rootDir, "local.properties")
-        assert localPropertiesFile.exists()
+        assert localPropertiesFile.exists(), "local.properties file not found at ${localPropertiesFile.absolutePath}. Run 'flutter pub get' to generate it."
         localPropertiesFile.withReader("UTF-8") { reader -> properties.load(reader) }
         def flutterSdkPath = properties.getProperty("flutter.sdk")
         assert flutterSdkPath != null, "flutter.sdk not set in local.properties"
@@ -24,4 +24,4 @@ plugins {
     id "org.jetbrains.kotlin.android" version "1.9.22" apply false
 }
 
-include(":app")
+include ':app'
