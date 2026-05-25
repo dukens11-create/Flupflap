@@ -1933,38 +1933,39 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
                 role="dialog"
                 aria-live="polite"
                 aria-labelledby={`incoming-call-title-${incomingRequest.id}`}
-                className="pointer-events-auto w-[min(13.5rem,68vw)] rounded-2xl border border-white/10 bg-slate-950/95 p-3 shadow-[0_16px_40px_rgba(15,23,42,0.55)] backdrop-blur-sm sm:w-64"
+                className="pointer-events-auto w-[min(12rem,60vw)] rounded-2xl border border-white/10 bg-slate-950/95 px-3 py-4 shadow-[0_16px_40px_rgba(15,23,42,0.65)] backdrop-blur-sm sm:w-52"
               >
-                <p id={`incoming-call-title-${incomingRequest.id}`} className="text-[11px] font-semibold uppercase tracking-wide text-emerald-400">
+                <p id={`incoming-call-title-${incomingRequest.id}`} className="text-center text-xs font-bold uppercase tracking-widest text-emerald-400">
                   Incoming call
                 </p>
-                <div className="mt-2 flex items-center gap-2.5">
+                <div className="mt-3 flex flex-col items-center gap-1.5">
                   {isSafeViewerAvatar(incomingRequest.viewerAvatar) ? (
                     <img
                       src={incomingRequest.viewerAvatar as string}
                       alt={incomingRequest.guestName ?? 'Guest avatar'}
-                      className="h-10 w-10 shrink-0 rounded-full object-cover ring-1 ring-white/15"
+                      className="h-16 w-16 rounded-full object-cover ring-2 ring-emerald-500/40 shadow-lg"
                     />
                   ) : (
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-700 text-sm font-bold text-white">
+                    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-700 text-2xl font-bold text-white shadow-lg ring-2 ring-emerald-500/30">
                       {(incomingRequest.guestName ?? 'G').charAt(0).toUpperCase()}
                     </div>
                   )}
-                  <p className="min-w-0 truncate text-sm font-semibold text-white">
+                  <p className="mt-1 max-w-full truncate text-sm font-semibold text-white">
                     {incomingRequest.guestName ?? 'Guest'}
                   </p>
+                  <p className="text-xs text-slate-400">
+                    wants to join live
+                  </p>
                 </div>
-                <p className="mt-2 text-xs text-slate-300">
-                  wants to join live on video
-                </p>
-                <div className="mt-3 grid grid-cols-2 gap-2">
+                <div className="mt-4 grid grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={() => void handleDeclineGuest(incomingRequest.id)}
                     aria-label={`Decline call from ${incomingCallerName}`}
-                    className="inline-flex items-center justify-center gap-1 rounded-xl bg-red-600 px-2.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-red-700"
+                    className="inline-flex flex-col items-center justify-center gap-1 rounded-xl bg-red-600 px-2 py-2.5 text-[11px] font-semibold text-white transition-colors hover:bg-red-700 active:bg-red-800"
                   >
-                    <PhoneOff size={12} /> Decline
+                    <PhoneOff size={15} />
+                    <span>Decline</span>
                   </button>
                   <button
                     type="button"
@@ -1974,9 +1975,10 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
                       : `Accept call from ${incomingCallerName}`}
                     aria-disabled={isGuestCapacityFull}
                     disabled={isGuestCapacityFull}
-                    className="inline-flex items-center justify-center gap-1 rounded-xl bg-emerald-600 px-2.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex flex-col items-center justify-center gap-1 rounded-xl bg-emerald-600 px-2 py-2.5 text-[11px] font-semibold text-white transition-colors hover:bg-emerald-700 active:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    <PhoneCall size={12} /> Accept
+                    <PhoneCall size={15} />
+                    <span>Accept</span>
                   </button>
                 </div>
               </div>
