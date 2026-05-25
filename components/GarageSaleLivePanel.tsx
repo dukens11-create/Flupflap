@@ -1,6 +1,6 @@
 'use client';
 import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
-import { Video, VideoOff, Mic, MicOff, Radio, AlertTriangle, Eye, RefreshCcw, MessageCircle, Heart, Trash2, Users, PhoneCall, PhoneOff, VolumeX, Volume2, Maximize2, X } from 'lucide-react';
+import { Video, VideoOff, Mic, MicOff, Radio, AlertTriangle, Eye, RefreshCcw, MessageCircle, Heart, Trash2, PhoneCall, PhoneOff, VolumeX, Volume2, Maximize2, X } from 'lucide-react';
 import { getCanonicalLiveSaleId, LIVE_ENGAGEMENT_EVENTS, LIVE_ENGAGEMENT_SIGNAL_KINDS, isSameLiveSession } from '@/lib/live-engagement';
 import { getSignalViewerId, shouldRecreateGuestPeerOnOffer } from '@/lib/garage-sale-live-stream';
 import { RTC_CONFIG, HAS_TURN_CONFIG } from '@/lib/rtc-config';
@@ -1933,10 +1933,10 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
                 role="dialog"
                 aria-live="polite"
                 aria-labelledby={`incoming-call-title-${incomingRequest.id}`}
-                className="pointer-events-auto w-full max-w-60 rounded-2xl border border-white/10 bg-slate-950/95 p-3 shadow-2xl backdrop-blur-sm sm:w-64"
+                className="pointer-events-auto w-[min(15rem,calc(100%-0.5rem))] rounded-2xl border border-white/10 bg-slate-950/95 p-3 shadow-2xl backdrop-blur-sm sm:w-64"
               >
                 <p id={`incoming-call-title-${incomingRequest.id}`} className="text-[11px] font-semibold uppercase tracking-wide text-emerald-400">
-                  +Incoming call+
+                  Incoming call
                 </p>
                 <div className="mt-2 flex items-center gap-2.5">
                   {isSafeViewerAvatar(incomingRequest.viewerAvatar) ? (
@@ -1954,6 +1954,9 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
                     {incomingRequest.guestName ?? 'Guest'}
                   </p>
                 </div>
+                <p className="mt-2 text-xs text-slate-300">
+                  wants to join live on video
+                </p>
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   <button
                     type="button"
@@ -2124,33 +2127,6 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
             </div>
           </div>
 
-          {/* Live Guest Requests panel */}
-          <div className="space-y-3 rounded-xl border border-indigo-100 bg-indigo-50/50 p-3">
-            <h3 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-indigo-700">
-              <Users size={13} /> Live Guest Requests
-              {activeGuests.length > 0 && (
-                <span className="ml-auto inline-flex items-center rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">
-                  {activeGuests.length} / {MAX_LIVE_GUESTS} live
-                </span>
-              )}
-            </h3>
-
-            {pendingRequests.length === 0 && activeGuests.length === 0 && (
-              <p className="text-center text-xs text-slate-400 py-1">No join requests yet.</p>
-            )}
-
-            {pendingRequests.length > 0 && (
-              <p className="text-center text-xs text-emerald-700 py-1">
-                Incoming call request is shown on the live video overlay.
-              </p>
-            )}
-
-            {activeGuests.length > 0 && pendingRequests.length === 0 && (
-              <p className="text-center text-xs text-emerald-600 py-1">
-                {activeGuests.length} guest{activeGuests.length > 1 ? 's' : ''} on stage — manage via video tiles above.
-              </p>
-            )}
-          </div>
           {/* Live Questions / Chat */}
           <div className="space-y-2">
             <h3 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-500">
