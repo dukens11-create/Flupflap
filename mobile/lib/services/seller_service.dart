@@ -30,6 +30,7 @@ class SellerService {
     required double lengthIn,
     required double widthIn,
     required double heightIn,
+    String submitAction = 'SUBMIT_REVIEW',
   }) async {
     final shippingMode = shippingUsd > 0 ? 'FLAT' : 'CALCULATED';
     final fields = <String, String>{
@@ -48,7 +49,7 @@ class SellerService {
       'length': lengthIn.toStringAsFixed(2),
       'width': widthIn.toStringAsFixed(2),
       'height': heightIn.toStringAsFixed(2),
-      'submitAction': 'SUBMIT_REVIEW',
+      'submitAction': submitAction,
     };
     if (pickupCity != null && pickupCity.isNotEmpty) fields['pickupCity'] = pickupCity;
     if (pickupState != null && pickupState.isNotEmpty) fields['pickupState'] = pickupState;

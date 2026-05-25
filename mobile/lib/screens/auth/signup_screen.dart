@@ -58,7 +58,7 @@ class _SignupScreenState extends State<SignupScreen> {
         _firebaseIdToken = null;
         _verifiedPhone = phone;
         final digits = phone.replaceAll(RegExp(r'\D'), '');
-        _maskedPhone = digits.length >= 4 ? '***-***-${digits.substring(digits.length - 4)}' : phone;
+        _maskedPhone = digits.length >= 4 ? '***-***-${digits.substring(digits.length - 4)}' : '****';
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
