@@ -1927,7 +1927,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
           </div>
           {incomingRequest && (
             <div className="pointer-events-none absolute inset-y-0 right-0 flex items-start justify-end p-2 sm:p-3">
-              <div className="pointer-events-auto w-[min(15rem,calc(100%-0.5rem))] rounded-2xl border border-white/10 bg-slate-950/95 p-3 shadow-2xl backdrop-blur-sm sm:w-64">
+              <div className="pointer-events-auto w-full max-w-60 rounded-2xl border border-white/10 bg-slate-950/95 p-3 shadow-2xl backdrop-blur-sm sm:w-64">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-400">
                   +Incoming call+
                 </p>
