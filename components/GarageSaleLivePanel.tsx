@@ -1928,12 +1928,12 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
             })}
           </div>
           {incomingRequest && (
-            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-start justify-end p-2 sm:p-3">
+            <div className="pointer-events-none absolute right-2 top-2 z-20 sm:right-3 sm:top-3">
               <div
                 role="dialog"
                 aria-live="polite"
                 aria-labelledby={`incoming-call-title-${incomingRequest.id}`}
-                className="pointer-events-auto w-[min(15rem,calc(100%-0.5rem))] rounded-2xl border border-white/10 bg-slate-950/95 p-3 shadow-2xl backdrop-blur-sm sm:w-64"
+                className="pointer-events-auto w-[min(13.5rem,68vw)] rounded-2xl border border-white/10 bg-slate-950/95 p-3 shadow-[0_16px_40px_rgba(15,23,42,0.55)] backdrop-blur-sm sm:w-64"
               >
                 <p id={`incoming-call-title-${incomingRequest.id}`} className="text-[11px] font-semibold uppercase tracking-wide text-emerald-400">
                   Incoming call
