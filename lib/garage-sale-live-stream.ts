@@ -76,6 +76,38 @@ export function payloadTargetsViewer(payload: unknown, currentViewerId: string) 
   return targetViewerId === currentViewerId;
 }
 
+type VideoElementLike = {
+  srcObject: HTMLMediaElement['srcObject'];
+  muted?: boolean;
+  defaultMuted?: boolean;
+  load?: () => void;
+  play?: () => Promise<void> | void;
+};
+
+/**
+ * Binds a guest's local camera stream to the active preview video element.
+ * Handles delayed element mounting (common when join state changes UI sections)
+ * so the preview does not stay dark.
+ */
+export function bindGuestLocalPreviewStream(videoEl: VideoElementLike | null, stream: MediaStream | null) {
+  if (!videoEl || !stream) return false;
+
+  videoEl.muted = true;
+  videoEl.defaultMuted = true;
+
+  if (videoEl.srcObject !== stream) {
+    videoEl.srcObject = stream;
+    videoEl.load?.();
+  }
+
+  const playResult = videoEl.play?.();
+  if (playResult !== undefined) {
+    void Promise.resolve(playResult).catch(() => undefined);
+  }
+
+  return true;
+}
+
 type SellerLiveReadyInput = {
   cameraPermissionGranted: boolean;
   hasVideoTrack: boolean;
