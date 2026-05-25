@@ -1704,6 +1704,8 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
     [guestRequests],
   );
   const incomingRequest = pendingRequests[0] ?? null;
+  const incomingCallerName = incomingRequest?.guestName ?? 'Guest';
+  const isGuestCapacityFull = activeGuests.length >= MAX_LIVE_GUESTS;
   const stageParticipantCount = 1 + activeGuests.length; // host + accepted guests
   const stageLayout = getStageLayoutKind(stageParticipantCount);
   const stageGridCols = getStageGridTemplateCols(stageLayout);
@@ -1956,7 +1958,7 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
                   <button
                     type="button"
                     onClick={() => void handleDeclineGuest(incomingRequest.id)}
-                    aria-label={`Decline call from ${incomingRequest.guestName ?? 'Guest'}`}
+                    aria-label={`Decline call from ${incomingCallerName}`}
                     className="inline-flex items-center justify-center gap-1 rounded-xl bg-red-600 px-2.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-red-700"
                   >
                     <PhoneOff size={12} /> Decline
@@ -1964,8 +1966,11 @@ export default function GarageSaleLivePanel({ saleId, initialIsLive, initialLive
                   <button
                     type="button"
                     onClick={() => void handleAcceptGuest(incomingRequest.id)}
-                    aria-label={`Accept call from ${incomingRequest.guestName ?? 'Guest'}`}
-                    disabled={activeGuests.length >= MAX_LIVE_GUESTS}
+                    aria-label={isGuestCapacityFull
+                      ? `Accept call from ${incomingCallerName} (maximum guests reached)`
+                      : `Accept call from ${incomingCallerName}`}
+                    aria-disabled={isGuestCapacityFull}
+                    disabled={isGuestCapacityFull}
                     className="inline-flex items-center justify-center gap-1 rounded-xl bg-emerald-600 px-2.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <PhoneCall size={12} /> Accept
