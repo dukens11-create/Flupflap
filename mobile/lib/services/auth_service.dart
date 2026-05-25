@@ -1,27 +1,35 @@
-import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../config/constants.dart';
 import '../models/user.dart';
 import 'api_client.dart';
 
-/// Handles login, signup, OTP verification, session check, and logout.
-///
-/// The FlupFlap backend uses NextAuth with a credentials provider.
-/// Login POSTs to /api/auth/callback/credentials (NextAuth standard endpoint).
+class LoginFlowResponse {
+  final String step; // signin | add_phone | otp
+  final String? phone;
+  final String? maskedPhone;
+
+  const LoginFlowResponse({
+    required this.step,
+    this.phone,
+    this.maskedPhone,
+  });
+}
+
 class AuthService {
   final ApiClient _client;
   AuthService({ApiClient? client}) : _client = client ?? ApiClient();
 
-  /// Sign in with email + password.
-  /// Returns [AppUser] on success or throws [AuthException].
-  Future<AppUser> login(String email, String password) async {
-    // Step 1: Fetch the CSRF token required by NextAuth
+  Future<AppUser> login(
+    String email,
+    String password, {
+    String? phone,
+    String? firebaseIdToken,
+  }) async {
     final csrfRes = await _client.get('/api/auth/csrf');
     if (!csrfRes.ok) throw AuthException('Could not initiate login. Please try again.');
     final csrfToken = (csrfRes.data as Map<String, dynamic>)['csrfToken'] as String;
 
-    // Step 2: POST to NextAuth credentials callback
     final uri = Uri.parse('${AppConstants.baseUrl}/api/auth/callback/credentials');
     final cookie = await _client.getSessionCookie();
     final response = await http.post(
@@ -37,52 +45,85 @@ class AuthService {
         'csrfToken': csrfToken,
         'callbackUrl': '/',
         'json': 'true',
+        if (phone != null && phone.isNotEmpty) 'phone': phone,
+        if (firebaseIdToken != null && firebaseIdToken.isNotEmpty) 'firebaseIdToken': firebaseIdToken,
       },
     );
+
     await _client.saveSessionCookie(
       response.headers['set-cookie']?.split(';').first.trim() ?? '',
     );
 
-    // Step 3: Fetch session to get user details
     return _fetchSession();
   }
 
-  /// Sign up with name, email, password, and role.
+  Future<LoginFlowResponse> startLoginFlow({
+    required String email,
+    required String password,
+  }) async {
+    final res = await _client.post('/api/auth/otp/send', body: {
+      'email': email,
+      'password': password,
+    });
+    if (!res.ok) throw AuthException(res.error ?? 'Invalid email or password.');
+
+    final data = (res.data as Map<String, dynamic>? ?? const <String, dynamic>{});
+    final step = (data['step'] as String? ?? 'signin').trim();
+    return LoginFlowResponse(
+      step: step,
+      phone: data['phone'] as String?,
+      maskedPhone: data['maskedPhone'] as String?,
+    );
+  }
+
+  Future<LoginFlowResponse> setupSellerPhone({
+    required String email,
+    required String password,
+    required String phone,
+  }) async {
+    final res = await _client.post('/api/auth/otp/setup-phone', body: {
+      'email': email,
+      'password': password,
+      'phone': phone,
+    });
+    if (!res.ok) throw AuthException(res.error ?? 'Could not save phone number.');
+    final data = (res.data as Map<String, dynamic>? ?? const <String, dynamic>{});
+    return LoginFlowResponse(
+      step: (data['step'] as String? ?? 'otp').trim(),
+      phone: data['phone'] as String?,
+      maskedPhone: data['maskedPhone'] as String?,
+    );
+  }
+
   Future<AppUser> signup({
     required String name,
     required String email,
     required String password,
     String role = 'CUSTOMER',
+    String? phone,
+    String? firebaseIdToken,
   }) async {
-    final res = await _client.post('/api/auth/signup', body: {
+    final body = <String, dynamic>{
       'name': name,
       'email': email,
       'password': password,
       'role': role,
-    });
+    };
+    if (phone != null && phone.isNotEmpty) body['phone'] = phone;
+    if (firebaseIdToken != null && firebaseIdToken.isNotEmpty) body['firebaseIdToken'] = firebaseIdToken;
+
+    final res = await _client.post('/api/auth/signup', body: body);
     if (!res.ok) {
       throw AuthException(res.error ?? 'Signup failed');
     }
-    return login(email, password);
+    return login(
+      email,
+      password,
+      phone: phone,
+      firebaseIdToken: firebaseIdToken,
+    );
   }
 
-  /// Send OTP to seller's phone number.
-  Future<void> sendOtp(String phone) async {
-    final res = await _client.post('/api/auth/otp/send', body: {'phone': phone});
-    if (!res.ok) throw AuthException(res.error ?? 'Could not send OTP');
-  }
-
-  /// Verify OTP code for seller phone authentication.
-  Future<AppUser> verifyOtp(String phone, String code) async {
-    final res = await _client.post('/api/auth/otp/verify', body: {
-      'phone': phone,
-      'code': code,
-    });
-    if (!res.ok) throw AuthException(res.error ?? 'Invalid or expired OTP');
-    return _fetchSession();
-  }
-
-  /// Fetch current session user from /api/auth/session.
   Future<AppUser> fetchCurrentUser() => _fetchSession();
 
   Future<AppUser> _fetchSession() async {
@@ -96,7 +137,6 @@ class AuthService {
     return AppUser.fromJson(userJson);
   }
 
-  /// Clear local session cookie.
   Future<void> logout() async {
     try {
       await _client.post('/api/auth/signout', body: {'callbackUrl': '/'});
@@ -104,7 +144,6 @@ class AuthService {
     await _client.clearSession();
   }
 
-  /// Check whether a session cookie is stored locally.
   Future<bool> hasLocalSession() async {
     final cookie = await _client.getSessionCookie();
     return cookie != null && cookie.isNotEmpty;

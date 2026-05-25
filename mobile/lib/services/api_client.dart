@@ -74,6 +74,24 @@ class ApiClient {
     return _parse(response);
   }
 
+  Future<ApiResponse> postForm(String path, {Map<String, String>? fields}) async {
+    final uri = Uri.parse('$baseUrl$path');
+    final request = http.MultipartRequest('POST', uri);
+    final cookie = await getSessionCookie();
+    request.headers[HttpHeaders.acceptHeader] = 'application/json';
+    if (cookie != null) {
+      request.headers[HttpHeaders.cookieHeader] = cookie;
+    }
+    if (fields != null && fields.isNotEmpty) {
+      request.fields.addAll(fields);
+    }
+
+    final streamed = await request.send();
+    final response = await http.Response.fromStream(streamed);
+    await _maybeStoreCookie(response);
+    return _parse(response);
+  }
+
   Future<ApiResponse> patch(String path, {dynamic body}) async {
     final uri = Uri.parse('$baseUrl$path');
     final response = await http.patch(

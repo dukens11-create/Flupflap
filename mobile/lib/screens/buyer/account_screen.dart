@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../config/constants.dart';
 import '../../config/theme.dart';
 import '../../providers/auth_provider.dart';
 
@@ -130,9 +132,7 @@ class AccountScreen extends StatelessWidget {
             _MenuItem(
               icon: Icons.lock_outline,
               title: 'Change Password',
-              onTap: () {
-                // TODO: implement change password
-              },
+              onTap: () => _openExternal(context, AppConstants.forgotPasswordUrl),
             ),
             _MenuItem(
               icon: Icons.phone_outlined,
@@ -140,23 +140,20 @@ class AccountScreen extends StatelessWidget {
               trailing: user?.phoneVerified == true
                   ? const Icon(Icons.verified, color: AppTheme.accent, size: 18)
                   : null,
-              onTap: () {
-                // TODO: implement phone verification
-              },
+              onTap: () => _openExternal(context, AppConstants.accountSecurityUrl),
             ),
             _MenuItem(
               icon: Icons.help_outline,
               title: 'Help & Support',
-              onTap: () {
-                // TODO: open support
-              },
+              onTap: () => _openExternal(
+                context,
+                'mailto:${AppConstants.supportEmail}?subject=FlupFlap%20Support',
+              ),
             ),
             _MenuItem(
               icon: Icons.description_outlined,
               title: 'Terms & Privacy',
-              onTap: () {
-                // TODO: open legal
-              },
+              onTap: () => _openExternal(context, AppConstants.legalTermsUrl),
             ),
 
             const SizedBox(height: 8),
@@ -181,6 +178,19 @@ class AccountScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _openExternal(BuildContext context, String target) async {
+    final uri = Uri.parse(target);
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not open link right now. Please try again.'),
+          backgroundColor: AppTheme.danger,
+        ),
+      );
+    }
   }
 }
 

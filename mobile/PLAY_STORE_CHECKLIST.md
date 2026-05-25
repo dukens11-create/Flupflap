@@ -105,3 +105,14 @@ uploaded to the **internal testing** track before promoting:
   sellers, payment info, shipping address, device identifiers).
 - Legal pages (ToS, privacy policy) should be reviewed by an attorney before
   production launch.
+
+---
+
+## 8. Deep-link release checks
+
+- [ ] `flupflap.com` and `www.flupflap.com` host a valid `/.well-known/assetlinks.json` for package `com.flupflap.app`
+- [ ] Optional iOS universal-link association (`apple-app-site-association`) is configured for production domains
+- [ ] Test these links on a production-signed build:
+  - [ ] `https://flupflap.com/products/<id>` opens in-app product route
+  - [ ] `https://flupflap.com/seller` opens seller dashboard route
+  - [ ] `flupflap://app/seller/subscription` opens seller subscription route

@@ -6,7 +6,6 @@ import '../providers/auth_provider.dart';
 import '../providers/cart_provider.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/auth/signup_screen.dart';
-import '../screens/auth/otp_screen.dart';
 import '../screens/buyer/home_screen.dart';
 import '../screens/buyer/product_detail_screen.dart';
 import '../screens/buyer/cart_screen.dart';
@@ -37,8 +36,7 @@ class AppRouter {
         if (isInitializing) return null;
 
         final isOnAuth = state.matchedLocation.startsWith('/login') ||
-            state.matchedLocation.startsWith('/signup') ||
-            state.matchedLocation.startsWith('/otp');
+            state.matchedLocation.startsWith('/signup');
 
         if (!isLoggedIn && !isOnAuth) return '/login';
         if (isLoggedIn && isOnAuth) return '/';
@@ -56,15 +54,6 @@ class AppRouter {
           name: 'signup',
           builder: (ctx, state) => const SignupScreen(),
         ),
-        GoRoute(
-          path: '/otp',
-          name: 'otp',
-          builder: (ctx, state) {
-            final phone = state.uri.queryParameters['phone'] ?? '';
-            return OtpScreen(phone: phone);
-          },
-        ),
-
         // ── Buyer shell with bottom navigation ────────────────────────────
         ShellRoute(
           builder: (ctx, state, child) => BuyerShell(child: child),

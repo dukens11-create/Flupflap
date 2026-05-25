@@ -23,6 +23,10 @@ class _SellerNewListingScreenState extends State<SellerNewListingScreen> {
   final _shippingCtrl = TextEditingController(text: '0.00');
   final _inventoryCtrl = TextEditingController(text: '1');
   final _imageUrlCtrl = TextEditingController();
+  final _weightCtrl = TextEditingController(text: '16');
+  final _lengthCtrl = TextEditingController(text: '10');
+  final _widthCtrl = TextEditingController(text: '8');
+  final _heightCtrl = TextEditingController(text: '4');
   String _category = AppConstants.categories.first;
   String _condition = AppConstants.conditions.first;
   bool _pickupAvailable = false;
@@ -41,6 +45,10 @@ class _SellerNewListingScreenState extends State<SellerNewListingScreen> {
     _shippingCtrl.dispose();
     _inventoryCtrl.dispose();
     _imageUrlCtrl.dispose();
+    _weightCtrl.dispose();
+    _lengthCtrl.dispose();
+    _widthCtrl.dispose();
+    _heightCtrl.dispose();
     _pickupCityCtrl.dispose();
     _pickupStateCtrl.dispose();
     _pickupPostalCtrl.dispose();
@@ -67,6 +75,10 @@ class _SellerNewListingScreenState extends State<SellerNewListingScreen> {
         pickupCity: _pickupAvailable ? _pickupCityCtrl.text.trim() : null,
         pickupState: _pickupAvailable ? _pickupStateCtrl.text.trim() : null,
         pickupPostalCode: _pickupAvailable ? _pickupPostalCtrl.text.trim() : null,
+        weightOz: double.tryParse(_weightCtrl.text.trim()) ?? 0,
+        lengthIn: double.tryParse(_lengthCtrl.text.trim()) ?? 0,
+        widthIn: double.tryParse(_widthCtrl.text.trim()) ?? 0,
+        heightIn: double.tryParse(_heightCtrl.text.trim()) ?? 0,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -229,6 +241,76 @@ class _SellerNewListingScreenState extends State<SellerNewListingScreen> {
                   if (!v.startsWith('http')) return 'Must be a valid URL';
                   return null;
                 },
+              ),
+              const SizedBox(height: 20),
+
+              _SectionLabel(label: 'Shipping package'),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _weightCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Weight (oz)',
+                      ),
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      validator: (v) {
+                        final d = double.tryParse(v ?? '');
+                        if (d == null || d <= 0) return 'Required';
+                        return null;
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _lengthCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Length (in)',
+                      ),
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      validator: (v) {
+                        final d = double.tryParse(v ?? '');
+                        if (d == null || d <= 0) return 'Required';
+                        return null;
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _widthCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Width (in)',
+                      ),
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      validator: (v) {
+                        final d = double.tryParse(v ?? '');
+                        if (d == null || d <= 0) return 'Required';
+                        return null;
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _heightCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Height (in)',
+                      ),
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      validator: (v) {
+                        final d = double.tryParse(v ?? '');
+                        if (d == null || d <= 0) return 'Required';
+                        return null;
+                      },
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 20),
 

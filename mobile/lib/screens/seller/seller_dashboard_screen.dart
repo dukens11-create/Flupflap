@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../config/constants.dart';
 import '../../config/theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/seller_service.dart';
@@ -18,6 +19,7 @@ class SellerDashboardScreen extends StatefulWidget {
 class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
   final _service = SellerService();
   Map<String, dynamic>? _subscriptionData;
+  Map<String, dynamic>? _verificationData;
   List<Map<String, dynamic>> _recentOrders = [];
   bool _loading = true;
   String? _error;
@@ -35,6 +37,10 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     });
     try {
       final subData = await _service.fetchSubscriptionStatus();
+      Map<String, dynamic>? verificationData;
+      try {
+        verificationData = await _service.fetchVerificationStatus();
+      } catch (_) {}
       List<Map<String, dynamic>> orders = [];
       try {
         orders = await _service.fetchSellerOrders();
@@ -42,6 +48,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
       if (mounted) {
         setState(() {
           _subscriptionData = subData;
+          _verificationData = verificationData;
           _recentOrders = orders.take(5).toList();
         });
       }
@@ -123,6 +130,12 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                       // Stripe Connect onboarding
                       if (user?.stripeOnboardingComplete == false)
                         _OnboardingCard(onStart: _startOnboarding),
+                      const SizedBox(height: 8),
+                      _SellerVerificationCard(
+                        verificationData: _verificationData,
+                        onStartVerification: _startSellerVerification,
+                        onOpenShipping: _openShippingLabels,
+                      ),
 
                       // Quick actions
                       const SizedBox(height: 8),
@@ -189,6 +202,83 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString()), backgroundColor: AppTheme.danger),
+      );
+    }
+
+    Future<void> _startSellerVerification() async {
+      try {
+        final url = await _service.startVerification();
+        await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString()), backgroundColor: AppTheme.danger),
+        );
+      }
+    }
+
+    Future<void> _openShippingLabels() async {
+      await launchUrl(
+        Uri.parse('${AppConstants.baseUrl}/seller/orders-to-ship'),
+        mode: LaunchMode.externalApplication,
+      );
+    }
+  }
+
+  class _SellerVerificationCard extends StatelessWidget {
+    final Map<String, dynamic>? verificationData;
+    final VoidCallback onStartVerification;
+    final VoidCallback onOpenShipping;
+
+    const _SellerVerificationCard({
+      required this.verificationData,
+      required this.onStartVerification,
+      required this.onOpenShipping,
+    });
+
+    @override
+    Widget build(BuildContext context) {
+      final status = verificationData?['verificationStatus'] as String?;
+      final isApproved = status == 'APPROVED';
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    isApproved ? Icons.verified_user_outlined : Icons.badge_outlined,
+                    color: isApproved ? AppTheme.accent : AppTheme.warning,
+                  ),
+                  const SizedBox(width: 8),
+                  Text('Seller Verification', style: Theme.of(context).textTheme.titleMedium),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                isApproved
+                    ? 'Identity verified. You can manage shipping labels for paid orders.'
+                    : 'Complete identity verification to unlock listing and shipping features.',
+                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+              ),
+              const SizedBox(height: 12),
+              if (!isApproved)
+                ElevatedButton(
+                  onPressed: onStartVerification,
+                  style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 40)),
+                  child: const Text('Start Verification'),
+                )
+              else
+                OutlinedButton(
+                  onPressed: onOpenShipping,
+                  style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 40)),
+                  child: const Text('Manage Shipping Labels'),
+                ),
+            ],
+          ),
+        ),
       );
     }
   }

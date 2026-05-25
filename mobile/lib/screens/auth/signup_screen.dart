@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../config/theme.dart';
 import '../../providers/auth_provider.dart';
+import '../../services/firebase_otp_service.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -17,25 +18,106 @@ class _SignupScreenState extends State<SignupScreen> {
   final _nameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
+  final _phoneCtrl = TextEditingController();
+  final _otpCtrl = TextEditingController();
+  final _firebaseOtp = FirebaseOtpService();
   String _role = 'CUSTOMER';
   bool _obscurePassword = true;
+  bool _otpSent = false;
+  bool _otpVerified = false;
+  String? _firebaseIdToken;
+  String? _verifiedPhone;
+  String _maskedPhone = '';
 
   @override
   void dispose() {
     _nameCtrl.dispose();
     _emailCtrl.dispose();
     _passwordCtrl.dispose();
+    _phoneCtrl.dispose();
+    _otpCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _sendSellerOtp() async {
+    final auth = context.read<AuthProvider>();
+    final phone = _phoneCtrl.text.trim();
+    if (phone.isEmpty) {
+      auth.setError('Phone number is required for seller signup.');
+      return;
+    }
+    try {
+      await _firebaseOtp.sendCode(phone, resend: _otpSent);
+      if (!mounted) return;
+      auth.clearError();
+      setState(() {
+        _otpSent = true;
+        _otpVerified = false;
+        _firebaseIdToken = null;
+        _verifiedPhone = phone;
+        final digits = phone.replaceAll(RegExp(r'\D'), '');
+        _maskedPhone = digits.length >= 4 ? '***-***-${digits.substring(digits.length - 4)}' : phone;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Verification code sent.'),
+          backgroundColor: AppTheme.accent,
+        ),
+      );
+    } on FirebaseOtpException catch (e) {
+      auth.setError(e.message);
+    }
+  }
+
+  Future<void> _verifySellerOtp() async {
+    final auth = context.read<AuthProvider>();
+    final code = _otpCtrl.text.trim();
+    if (code.length != 6) {
+      auth.setError('Please enter the 6-digit OTP code.');
+      return;
+    }
+    try {
+      final proof = await _firebaseOtp.verifyCode(code);
+      if (!mounted) return;
+      auth.clearError();
+      setState(() {
+        _otpVerified = true;
+        _firebaseIdToken = proof.idToken;
+        _verifiedPhone = proof.phoneNumber ?? _phoneCtrl.text.trim();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Phone verified successfully.'),
+          backgroundColor: AppTheme.accent,
+        ),
+      );
+    } on FirebaseOtpException catch (e) {
+      auth.setError(e.message);
+    }
   }
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     final auth = context.read<AuthProvider>();
+
+    if (_role == 'SELLER') {
+      if (!_otpSent) {
+        auth.setError('Please send a verification code to your phone first.');
+        return;
+      }
+      if (!_otpVerified || _firebaseIdToken == null || _firebaseIdToken!.isEmpty) {
+        auth.setError('Please verify your phone number before creating a seller account.');
+        return;
+      }
+    }
+
     await auth.signup(
       name: _nameCtrl.text.trim(),
       email: _emailCtrl.text.trim(),
       password: _passwordCtrl.text,
       role: _role,
+      phone: _role == 'SELLER' ? _verifiedPhone ?? _phoneCtrl.text.trim() : null,
+      firebaseIdToken: _role == 'SELLER' ? _firebaseIdToken : null,
     );
     if (!mounted) return;
     if (auth.isLoggedIn) {
@@ -46,6 +128,7 @@ class _SignupScreenState extends State<SignupScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
+    final isSeller = _role == 'SELLER';
     return Scaffold(
       appBar: AppBar(title: const Text('Create Account')),
       body: SafeArea(
@@ -114,7 +197,6 @@ class _SignupScreenState extends State<SignupScreen> {
                   },
                 ),
                 const SizedBox(height: 20),
-                // Account type selector
                 const Text(
                   'I want to…',
                   style: TextStyle(fontWeight: FontWeight.w600),
@@ -126,7 +208,10 @@ class _SignupScreenState extends State<SignupScreen> {
                   icon: Icons.shopping_bag_outlined,
                   title: 'Buy items',
                   subtitle: 'Browse and purchase from sellers',
-                  onChanged: (v) => setState(() => _role = v!),
+                  onChanged: (v) => setState(() {
+                    _role = v!;
+                    auth.clearError();
+                  }),
                 ),
                 const SizedBox(height: 8),
                 _RoleOption(
@@ -135,8 +220,63 @@ class _SignupScreenState extends State<SignupScreen> {
                   icon: Icons.storefront_outlined,
                   title: 'Sell items',
                   subtitle: 'List and sell your items — \$4.99/month',
-                  onChanged: (v) => setState(() => _role = v!),
+                  onChanged: (v) => setState(() {
+                    _role = v!;
+                    auth.clearError();
+                  }),
                 ),
+                if (isSeller) ...[
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _phoneCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Phone number',
+                      prefixIcon: Icon(Icons.phone_outlined),
+                      hintText: '+1 555 000 1234',
+                    ),
+                    keyboardType: TextInputType.phone,
+                    validator: (v) {
+                      if (!isSeller) return null;
+                      if (v == null || v.trim().isEmpty) {
+                        return 'Phone number is required for seller signup';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  OutlinedButton(
+                    onPressed: auth.loading ? null : _sendSellerOtp,
+                    child: Text(_otpSent ? 'Resend verification code' : 'Send verification code'),
+                  ),
+                  if (_otpSent) ...[
+                    const SizedBox(height: 10),
+                    TextFormField(
+                      controller: _otpCtrl,
+                      decoration: InputDecoration(
+                        labelText: 'OTP code',
+                        prefixIcon: const Icon(Icons.pin_outlined),
+                        helperText: _maskedPhone.isNotEmpty
+                            ? 'Code sent to $_maskedPhone'
+                            : null,
+                      ),
+                      maxLength: 6,
+                      keyboardType: TextInputType.number,
+                    ),
+                    ElevatedButton(
+                      onPressed: auth.loading ? null : _verifySellerOtp,
+                      child: const Text('Verify phone'),
+                    ),
+                    if (_otpVerified)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 8),
+                        child: Text(
+                          'Phone verified ✓',
+                          style: TextStyle(color: AppTheme.accent, fontWeight: FontWeight.w600),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                  ],
+                ],
                 if (auth.error != null) ...[
                   const SizedBox(height: 16),
                   Container(

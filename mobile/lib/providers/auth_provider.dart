@@ -22,14 +22,12 @@ class AuthProvider extends ChangeNotifier {
   bool get loading => _loading;
   bool get isLoggedIn => _status == AuthStatus.authenticated;
 
-  /// Call on app startup to restore the session.
   Future<void> init() async {
     _setLoading(true);
     try {
       final hasSession = await _authService.hasLocalSession();
       if (hasSession) {
-        final user = await _authService.fetchCurrentUser();
-        _user = user;
+        _user = await _authService.fetchCurrentUser();
         _status = AuthStatus.authenticated;
       } else {
         _status = AuthStatus.unauthenticated;
@@ -55,11 +53,83 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  Future<LoginFlowResponse?> startLoginFlow({
+    required String email,
+    required String password,
+  }) async {
+    _clearError();
+    _setLoading(true);
+    try {
+      final response = await _authService.startLoginFlow(
+        email: email,
+        password: password,
+      );
+      if (response.step == 'signin') {
+        _user = await _authService.login(email, password);
+        _status = AuthStatus.authenticated;
+      }
+      return response;
+    } on AuthException catch (e) {
+      _error = e.message;
+      _status = AuthStatus.unauthenticated;
+      return null;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  Future<LoginFlowResponse?> setupSellerPhoneForLogin({
+    required String email,
+    required String password,
+    required String phone,
+  }) async {
+    _clearError();
+    _setLoading(true);
+    try {
+      return await _authService.setupSellerPhone(
+        email: email,
+        password: password,
+        phone: phone,
+      );
+    } on AuthException catch (e) {
+      _error = e.message;
+      return null;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  Future<void> completeSellerOtpLogin({
+    required String email,
+    required String password,
+    required String phone,
+    required String firebaseIdToken,
+  }) async {
+    _clearError();
+    _setLoading(true);
+    try {
+      _user = await _authService.login(
+        email,
+        password,
+        phone: phone,
+        firebaseIdToken: firebaseIdToken,
+      );
+      _status = AuthStatus.authenticated;
+    } on AuthException catch (e) {
+      _error = e.message;
+      _status = AuthStatus.unauthenticated;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
   Future<void> signup({
     required String name,
     required String email,
     required String password,
     String role = 'CUSTOMER',
+    String? phone,
+    String? firebaseIdToken,
   }) async {
     _clearError();
     _setLoading(true);
@@ -69,32 +139,9 @@ class AuthProvider extends ChangeNotifier {
         email: email,
         password: password,
         role: role,
+        phone: phone,
+        firebaseIdToken: firebaseIdToken,
       );
-      _status = AuthStatus.authenticated;
-    } on AuthException catch (e) {
-      _error = e.message;
-    } finally {
-      _setLoading(false);
-    }
-  }
-
-  Future<void> sendOtp(String phone) async {
-    _clearError();
-    _setLoading(true);
-    try {
-      await _authService.sendOtp(phone);
-    } on AuthException catch (e) {
-      _error = e.message;
-    } finally {
-      _setLoading(false);
-    }
-  }
-
-  Future<void> verifyOtp(String phone, String code) async {
-    _clearError();
-    _setLoading(true);
-    try {
-      _user = await _authService.verifyOtp(phone, code);
       _status = AuthStatus.authenticated;
     } on AuthException catch (e) {
       _error = e.message;
@@ -110,9 +157,18 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Called by CartProvider so the cart can reset on auth change.
-  void _setLoading(bool v) {
-    _loading = v;
+  void clearError() {
+    _clearError();
+    notifyListeners();
+  }
+
+  void setError(String message) {
+    _error = message;
+    notifyListeners();
+  }
+
+  void _setLoading(bool value) {
+    _loading = value;
     notifyListeners();
   }
 

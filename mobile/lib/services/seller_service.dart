@@ -2,14 +2,10 @@ import '../models/product.dart';
 import 'api_client.dart';
 import 'product_service.dart' show ServiceException;
 
-/// Service for seller-specific API calls.
 class SellerService {
   final ApiClient _client;
   SellerService({ApiClient? client}) : _client = client ?? ApiClient();
 
-  // ── Listings ───────────────────────────────────────────────────────────────
-
-  /// Fetch the current seller's own listings.
   Future<List<Product>> fetchListings() async {
     final res = await _client.get('/api/seller/products');
     if (!res.ok) throw ServiceException(res.error ?? 'Failed to load listings');
@@ -17,11 +13,6 @@ class SellerService {
     return list.map((j) => Product.fromJson(j as Map<String, dynamic>)).toList();
   }
 
-  /// Create a new listing.
-  ///
-  /// The backend expects a multipart POST to /api/seller/products.
-  /// [imageUrl] should be a publicly accessible URL obtained from the
-  /// image upload endpoint (/api/seller/upload) before calling this method.
   Future<Product> createListing({
     required String title,
     required String description,
@@ -35,48 +26,57 @@ class SellerService {
     String? pickupCity,
     String? pickupState,
     String? pickupPostalCode,
+    required double weightOz,
+    required double lengthIn,
+    required double widthIn,
+    required double heightIn,
   }) async {
-    final res = await _client.post('/api/seller/products', body: {
+    final shippingMode = shippingUsd > 0 ? 'FLAT' : 'CALCULATED';
+    final fields = <String, String>{
       'title': title,
       'description': description,
       'price': priceUsd.toStringAsFixed(2),
       'category': category,
       'condition': condition,
+      'images': imageUrl,
       'imageUrl': imageUrl,
       'shipping': shippingUsd.toStringAsFixed(2),
+      'shippingMode': shippingMode,
       'inventory': inventory.toString(),
       'pickupAvailable': pickupAvailable ? 'true' : 'false',
-      if (pickupCity != null) 'pickupCity': pickupCity,
-      if (pickupState != null) 'pickupState': pickupState,
-      if (pickupPostalCode != null) 'pickupPostalCode': pickupPostalCode,
-    });
+      'weight': weightOz.toStringAsFixed(2),
+      'weightUnit': 'oz',
+      'length': lengthIn.toStringAsFixed(2),
+      'width': widthIn.toStringAsFixed(2),
+      'height': heightIn.toStringAsFixed(2),
+      'submitAction': 'SUBMIT_REVIEW',
+    };
+    if (pickupCity != null && pickupCity.isNotEmpty) fields['pickupCity'] = pickupCity;
+    if (pickupState != null && pickupState.isNotEmpty) fields['pickupState'] = pickupState;
+    if (pickupPostalCode != null && pickupPostalCode.isNotEmpty) fields['pickupPostalCode'] = pickupPostalCode;
+
+    final res = await _client.postForm('/api/seller/products', fields: fields);
     if (!res.ok) throw ServiceException(res.error ?? 'Failed to create listing');
     return Product.fromJson(res.data as Map<String, dynamic>);
   }
 
-  /// Update an existing listing.
   Future<Product> updateListing(String productId, Map<String, dynamic> fields) async {
     final res = await _client.patch('/api/seller/products/$productId', body: fields);
     if (!res.ok) throw ServiceException(res.error ?? 'Failed to update listing');
     return Product.fromJson(res.data as Map<String, dynamic>);
   }
 
-  /// Delete a listing.
   Future<void> deleteListing(String productId) async {
     final res = await _client.delete('/api/seller/products/$productId');
     if (!res.ok) throw ServiceException(res.error ?? 'Failed to delete listing');
   }
 
-  // ── Subscription ───────────────────────────────────────────────────────────
-
-  /// Get current subscription status.
   Future<Map<String, dynamic>> fetchSubscriptionStatus() async {
     final res = await _client.get('/api/seller/subscription');
     if (!res.ok) throw ServiceException(res.error ?? 'Failed to load subscription');
     return res.data as Map<String, dynamic>;
   }
 
-  /// Create a Stripe Checkout session for subscribing — returns a checkout URL.
   Future<String> startSubscriptionCheckout() async {
     final res = await _client.post('/api/seller/subscription');
     if (!res.ok) throw ServiceException(res.error ?? 'Could not start subscription');
@@ -85,7 +85,6 @@ class SellerService {
     return url;
   }
 
-  /// Open the Stripe billing portal — returns a portal URL.
   Future<String> openBillingPortal() async {
     final res = await _client.post('/api/seller/subscription/portal');
     if (!res.ok) throw ServiceException(res.error ?? 'Could not open billing portal');
@@ -94,37 +93,44 @@ class SellerService {
     return url;
   }
 
-  // ── Stripe Connect onboarding ──────────────────────────────────────────────
-
-  /// Start Stripe Connect onboarding — returns a Stripe onboarding URL.
   Future<String> startStripeOnboarding() async {
-    final res = await _client.post('/api/seller/connect');
+    final res = await _client.post('/api/stripe/connect/create-link');
     if (!res.ok) throw ServiceException(res.error ?? 'Could not start onboarding');
-    final url = (res.data as Map<String, dynamic>)['url'] as String?;
-    if (url == null) throw ServiceException('Invalid onboarding response');
+    final data = res.data as Map<String, dynamic>;
+    final url = data['url'] as String? ?? data['link'] as String?;
+    if (url == null || url.isEmpty) throw ServiceException('Invalid onboarding response');
     return url;
   }
 
-  // ── Orders ─────────────────────────────────────────────────────────────────
-
-  /// Fetch seller's incoming orders.
-  Future<List<Map<String, dynamic>>> fetchSellerOrders() async {
-    final res = await _client.get('/api/seller/orders');
-    if (!res.ok) throw ServiceException(res.error ?? 'Failed to load orders');
-    return (res.data as List<dynamic>)
-        .map((j) => j as Map<String, dynamic>)
-        .toList();
+  Future<Map<String, dynamic>> fetchVerificationStatus() async {
+    final res = await _client.get('/api/seller/verification');
+    if (!res.ok) throw ServiceException(res.error ?? 'Failed to load seller verification status');
+    return res.data as Map<String, dynamic>;
   }
 
-  // ── Image upload ───────────────────────────────────────────────────────────
+  Future<String> startVerification() async {
+    final res = await _client.post('/api/seller/verification/initiate');
+    if (!res.ok) throw ServiceException(res.error ?? 'Unable to start seller verification');
+    final data = res.data as Map<String, dynamic>;
+    final url = data['sessionUrl'] as String?;
+    if (url == null || url.isEmpty) throw ServiceException('Missing seller verification URL');
+    return url;
+  }
 
-  /// Request a pre-signed upload URL from the server.
-  Future<Map<String, dynamic>> getUploadUrl(String filename, String mimeType) async {
-    final res = await _client.post('/api/seller/upload', body: {
-      'filename': filename,
-      'contentType': mimeType,
+  Future<Map<String, dynamic>> getUploadSignature({
+    required String contentType,
+    required int fileSize,
+  }) async {
+    final res = await _client.post('/api/upload/product-media', body: {
+      'contentType': contentType,
+      'fileSize': fileSize,
     });
-    if (!res.ok) throw ServiceException(res.error ?? 'Could not get upload URL');
+    if (!res.ok) throw ServiceException(res.error ?? 'Could not get upload signature');
     return res.data as Map<String, dynamic>;
+  }
+
+  Future<List<Map<String, dynamic>>> fetchSellerOrders() async {
+    // Dedicated seller-orders API is not available yet. Keep dashboard stable.
+    return <Map<String, dynamic>>[];
   }
 }
