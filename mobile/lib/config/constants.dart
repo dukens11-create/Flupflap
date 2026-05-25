@@ -13,6 +13,9 @@ class AppConstants {
   static const String legalPrivacyUrl = '$baseUrl/legal/privacy';
   static const String accountSecurityUrl = '$baseUrl/account';
 
+  // Firebase config must be passed at build/runtime via --dart-define values.
+  // These mirror NEXT_PUBLIC_FIREBASE_* keys used by the web app.
+  // If any required values are missing, seller OTP flow is disabled by hasFirebaseConfig.
   static const String firebaseApiKey = String.fromEnvironment('NEXT_PUBLIC_FIREBASE_API_KEY');
   static const String firebaseAppId = String.fromEnvironment('NEXT_PUBLIC_FIREBASE_APP_ID');
   static const String firebaseMessagingSenderId = String.fromEnvironment('NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID');

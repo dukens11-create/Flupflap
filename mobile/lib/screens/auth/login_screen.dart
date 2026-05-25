@@ -333,7 +333,7 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
         const SizedBox(height: 8),
         Text(
-          'We sent a $_otpCodeLength-digit code to $_maskedPhone',
+          'We sent a ${_otpCodeLength}-digit code to $_maskedPhone',
           style: const TextStyle(color: AppTheme.textSecondary),
           textAlign: TextAlign.center,
         ),

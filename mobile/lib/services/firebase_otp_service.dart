@@ -25,6 +25,8 @@ class FirebaseOtpService {
   String? _verificationId;
   int? _resendToken;
 
+  String? _nullIfEmpty(String value) => value.isEmpty ? null : value;
+
   Future<void> _ensureInitialized() async {
     if (!AppConstants.hasFirebaseConfig) {
       throw FirebaseOtpException(
@@ -34,14 +36,14 @@ class FirebaseOtpService {
 
     if (_app != null && _auth != null) return;
     _app = await Firebase.initializeApp(
-      options: const FirebaseOptions(
+      options: FirebaseOptions(
         apiKey: AppConstants.firebaseApiKey,
         appId: AppConstants.firebaseAppId,
         messagingSenderId: AppConstants.firebaseMessagingSenderId,
         projectId: AppConstants.firebaseProjectId,
-        authDomain: AppConstants.firebaseAuthDomain.isEmpty ? null : AppConstants.firebaseAuthDomain,
-        storageBucket: AppConstants.firebaseStorageBucket.isEmpty ? null : AppConstants.firebaseStorageBucket,
-        measurementId: AppConstants.firebaseMeasurementId.isEmpty ? null : AppConstants.firebaseMeasurementId,
+        authDomain: _nullIfEmpty(AppConstants.firebaseAuthDomain),
+        storageBucket: _nullIfEmpty(AppConstants.firebaseStorageBucket),
+        measurementId: _nullIfEmpty(AppConstants.firebaseMeasurementId),
       ),
     );
     _auth = FirebaseAuth.instanceFor(app: _app!);

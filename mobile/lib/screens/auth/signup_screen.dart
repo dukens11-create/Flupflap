@@ -75,7 +75,7 @@ class _SignupScreenState extends State<SignupScreen> {
     final auth = context.read<AuthProvider>();
     final code = _otpCtrl.text.trim();
     if (code.length != _otpCodeLength) {
-      auth.setError('Please enter the $_otpCodeLength-digit OTP code.');
+      auth.setError('Please enter the ${_otpCodeLength}-digit OTP code.');
       return;
     }
     try {
