@@ -1,15 +1,17 @@
-def localProperties = new Properties()
-def localPropertiesFile = rootProject.file('local.properties')
-if (localPropertiesFile.exists()) {
-    localPropertiesFile.withReader('UTF-8') { reader ->
-        localProperties.load(reader)
-    }
+plugins {
+    id 'com.android.application'
+    id 'kotlin-android'
+    id 'dev.flutter.flutter-gradle-plugin'
 }
 
-def flutterRoot = localProperties.getProperty('flutter.sdk')
-if (flutterRoot == null) {
-    throw new GradleException("Flutter SDK not found. Define location with flutter.sdk in the local.properties file.")
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file('local.properties')
+assert localPropertiesFile.exists(), "local.properties file not found at ${localPropertiesFile.absolutePath}. Run 'flutter pub get' to generate it."
+localPropertiesFile.withReader('UTF-8') { reader ->
+    localProperties.load(reader)
 }
+def flutterRoot = localProperties.getProperty('flutter.sdk')
+assert flutterRoot != null, "flutter.sdk not set in local.properties"
 
 def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
 if (flutterVersionCode == null) {
@@ -37,10 +39,6 @@ if (releaseSigningReady) {
         "See mobile/ANDROID_SIGNING.md for setup instructions."
     )
 }
-
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
 
 android {
     namespace "com.flupflap.app"
@@ -91,8 +89,4 @@ android {
 
 flutter {
     source '../..'
-}
-
-dependencies {
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
 }
