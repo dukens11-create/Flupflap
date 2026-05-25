@@ -1693,19 +1693,6 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
             <p className="text-center text-sm text-slate-700 font-medium">
               ✉️ Request sent — waiting for seller approval
             </p>
-            {/* Show local preview so user sees their camera is ready */}
-            <div className="relative aspect-video overflow-hidden rounded-xl bg-slate-900">
-              <video
-                ref={setGuestLocalVideoRef}
-                autoPlay
-                playsInline
-                muted
-                className="h-full w-full object-cover scale-x-[-1]"
-              />
-              <span className="absolute bottom-2 left-2 rounded bg-black/60 px-2 py-0.5 text-[10px] font-semibold text-white">
-                Your camera (preview only)
-              </span>
-            </div>
             <button
               type="button"
               onClick={() => void handleEndGuestCall()}
@@ -1721,15 +1708,6 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
             <p className="text-center text-sm text-emerald-700 font-medium">
               ✅ Accepted — connecting…
             </p>
-            <div className="relative aspect-video overflow-hidden rounded-xl bg-slate-900">
-              <video
-                ref={setGuestLocalVideoRef}
-                autoPlay
-                playsInline
-                muted
-                className="h-full w-full object-cover scale-x-[-1]"
-              />
-            </div>
             <button
               type="button"
               onClick={() => void handleEndGuestCall()}
@@ -1745,18 +1723,6 @@ export default function GarageSaleBuyerLiveView({ saleId, initialIsLive, initial
             <p className="text-center text-sm font-bold text-emerald-700">
               🎙 You are live with seller
             </p>
-            <div className="relative aspect-video overflow-hidden rounded-xl bg-slate-900">
-              <video
-                ref={setGuestLocalVideoRef}
-                autoPlay
-                playsInline
-                muted
-                className="h-full w-full object-cover scale-x-[-1]"
-              />
-              <span className="absolute top-2 left-2 inline-flex items-center gap-1 rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold text-white animate-pulse">
-                🔴 LIVE
-              </span>
-            </div>
             <button
               type="button"
               onClick={() => void handleEndGuestCall()}
