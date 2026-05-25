@@ -10,7 +10,8 @@ assert localPropertiesFile.exists(), "local.properties file not found at ${local
 localPropertiesFile.withReader('UTF-8') { reader ->
     localProperties.load(reader)
 }
-assert localProperties.getProperty('flutter.sdk') != null, "flutter.sdk not set in local.properties"
+def flutterRoot = localProperties.getProperty('flutter.sdk')
+assert flutterRoot != null, "flutter.sdk not set in local.properties"
 
 def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
 if (flutterVersionCode == null) {
