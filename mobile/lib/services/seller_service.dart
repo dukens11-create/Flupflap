@@ -39,7 +39,6 @@ class SellerService {
       'category': category,
       'condition': condition,
       'images': imageUrl,
-      'imageUrl': imageUrl,
       'shipping': shippingUsd.toStringAsFixed(2),
       'shippingMode': shippingMode,
       'inventory': inventory.toString(),

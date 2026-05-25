@@ -6,6 +6,8 @@ import '../../config/theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/firebase_otp_service.dart';
 
+const int _otpCodeLength = 6;
+
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
 
@@ -72,8 +74,8 @@ class _SignupScreenState extends State<SignupScreen> {
   Future<void> _verifySellerOtp() async {
     final auth = context.read<AuthProvider>();
     final code = _otpCtrl.text.trim();
-    if (code.length != 6) {
-      auth.setError('Please enter the 6-digit OTP code.');
+    if (code.length != _otpCodeLength) {
+      auth.setError('Please enter the $_otpCodeLength-digit OTP code.');
       return;
     }
     try {
@@ -259,7 +261,7 @@ class _SignupScreenState extends State<SignupScreen> {
                             ? 'Code sent to $_maskedPhone'
                             : null,
                       ),
-                      maxLength: 6,
+                      maxLength: _otpCodeLength,
                       keyboardType: TextInputType.number,
                     ),
                     ElevatedButton(

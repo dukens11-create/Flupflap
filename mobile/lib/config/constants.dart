@@ -8,7 +8,6 @@ class AppConstants {
   );
 
   static const String supportEmail = 'support@flupflap.com';
-  static const String supportUrl = '$baseUrl';
   static const String forgotPasswordUrl = '$baseUrl/forgot-password';
   static const String legalTermsUrl = '$baseUrl/legal/terms';
   static const String legalPrivacyUrl = '$baseUrl/legal/privacy';

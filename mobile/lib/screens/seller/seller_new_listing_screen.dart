@@ -75,10 +75,10 @@ class _SellerNewListingScreenState extends State<SellerNewListingScreen> {
         pickupCity: _pickupAvailable ? _pickupCityCtrl.text.trim() : null,
         pickupState: _pickupAvailable ? _pickupStateCtrl.text.trim() : null,
         pickupPostalCode: _pickupAvailable ? _pickupPostalCtrl.text.trim() : null,
-        weightOz: double.tryParse(_weightCtrl.text.trim()) ?? 0,
-        lengthIn: double.tryParse(_lengthCtrl.text.trim()) ?? 0,
-        widthIn: double.tryParse(_widthCtrl.text.trim()) ?? 0,
-        heightIn: double.tryParse(_heightCtrl.text.trim()) ?? 0,
+        weightOz: double.parse(_weightCtrl.text.trim()),
+        lengthIn: double.parse(_lengthCtrl.text.trim()),
+        widthIn: double.parse(_widthCtrl.text.trim()),
+        heightIn: double.parse(_heightCtrl.text.trim()),
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

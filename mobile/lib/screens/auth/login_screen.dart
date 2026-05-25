@@ -9,6 +9,7 @@ import '../../providers/auth_provider.dart';
 import '../../services/firebase_otp_service.dart';
 
 enum _LoginStep { credentials, addPhone, otp }
+const int _otpCodeLength = 6;
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -117,7 +118,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _verifyOtp() async {
     final auth = context.read<AuthProvider>();
     final code = _otpCtrl.text.trim();
-    if (code.length != 6) return;
+    if (code.length != _otpCodeLength) return;
     try {
       final proof = await _firebaseOtp.verifyCode(code);
       final verifiedPhone = proof.phoneNumber ?? _pendingPhone;
@@ -332,7 +333,7 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
         const SizedBox(height: 8),
         Text(
-          'We sent a 6-digit code to $_maskedPhone',
+          'We sent a $_otpCodeLength-digit code to $_maskedPhone',
           style: const TextStyle(color: AppTheme.textSecondary),
           textAlign: TextAlign.center,
         ),
@@ -346,7 +347,7 @@ class _LoginScreenState extends State<LoginScreen> {
           keyboardType: TextInputType.number,
           textAlign: TextAlign.center,
           style: const TextStyle(fontSize: 24, letterSpacing: 8),
-          maxLength: 6,
+          maxLength: _otpCodeLength,
         ),
         if (auth.error != null) _errorBox(auth.error!),
         const SizedBox(height: 16),
