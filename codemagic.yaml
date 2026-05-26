@@ -42,7 +42,7 @@ workflows:
         script: cd mobile && flutter build ios --release --no-codesign
     artifacts:
       - mobile/build/app/outputs/flutter-apk/*.apk
-      - mobile/build/ios/iphoneos/*.app
+      - mobile/build/ios/iphoneos/**/*.app/**/*
 
   android_release:
     name: Flutter Android Release (App Bundle)
