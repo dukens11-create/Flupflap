@@ -33,21 +33,13 @@ workflows:
       xcode: latest
     scripts:
       - name: Flutter doctor
-        script: |
-          cd mobile
-          flutter doctor -v
+        script: cd mobile && flutter doctor -v
       - name: Install Flutter dependencies
-        script: |
-          cd mobile
-          flutter pub get
+        script: cd mobile && flutter pub get
       - name: Build Android release APK
-        script: |
-          cd mobile
-          flutter build apk --release
+        script: cd mobile && flutter build apk --release
       - name: Build iOS release (no codesign)
-        script: |
-          cd mobile
-          flutter build ios --release --no-codesign
+        script: cd mobile && flutter build ios --release --no-codesign
     artifacts:
       - mobile/build/app/outputs/flutter-apk/*.apk
       - mobile/build/ios/iphoneos/*.app
