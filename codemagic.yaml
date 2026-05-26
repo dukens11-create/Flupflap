@@ -18,6 +18,41 @@ workflows:
       - .next/**/*
       - coverage/**/*
 
+  flutter_mobile_release:
+    name: Flutter Mobile Release
+    max_build_duration: 60
+    instance_type: mac_mini_m1
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+    environment:
+      flutter: stable
+      xcode: latest
+    scripts:
+      - name: Flutter doctor
+        script: |
+          cd mobile
+          flutter doctor -v
+      - name: Install Flutter dependencies
+        script: |
+          cd mobile
+          flutter pub get
+      - name: Build Android release APK
+        script: |
+          cd mobile
+          flutter build apk --release
+      - name: Build iOS release (no codesign)
+        script: |
+          cd mobile
+          flutter build ios --release --no-codesign
+    artifacts:
+      - mobile/build/app/outputs/flutter-apk/*.apk
+      - mobile/build/app/outputs/**/*.apk
+      - mobile/build/ios/iphoneos/*.app
+
   android_release:
     name: Flutter Android Release (App Bundle)
     max_build_duration: 60
