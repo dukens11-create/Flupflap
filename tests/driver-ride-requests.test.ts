@@ -45,7 +45,8 @@ test('applyRideRequestTimeouts records timeout responses for expired requests', 
   const snapshot = buildDriverRideSnapshot(timedOutState, baseTime + RIDE_REQUEST_TIMEOUT_MS + 500).snapshot;
 
   assert.equal(snapshot.analytics.timedOut, 1);
-  assert.equal(snapshot.activeRequest, null);
+  assert.equal(snapshot.activeRequest?.id, 'ride-request-2');
+  assert.equal(snapshot.queueCount, 2);
   assert.equal(snapshot.recentResponses[0]?.action, 'timeout');
 });
 
