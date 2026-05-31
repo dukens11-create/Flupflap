@@ -134,7 +134,8 @@ export default function DriverDashboardClient({ mapboxToken }: { mapboxToken: st
   const driverMarkerRef = useRef<MarkerLike | null>(null);
   const rideMarkersRef = useRef<MarkerLike[]>([]);
   const watchIdRef = useRef<number | null>(null);
-  const mapStyleModeRef = useRef<'map' | 'street' | 'traffic'>('map');
+  const geoStatusRef = useRef<'idle' | 'loading' | 'active' | 'denied' | 'unavailable' | 'error'>('idle');
+  const lastKnownPositionRef = useRef<DriverPosition | null>(null);
 
   const [driverOnline, setDriverOnline] = useState(true);
   const [driverPosition, setDriverPosition] = useState<DriverPosition | null>(null);
@@ -143,6 +144,10 @@ export default function DriverDashboardClient({ mapboxToken }: { mapboxToken: st
   const [acceptedRideId, setAcceptedRideId] = useState<string | null>(null);
   const [mapMode, setMapMode] = useState<'map' | 'street'>('map');
   const [trafficEnabled, setTrafficEnabled] = useState(false);
+
+  useEffect(() => {
+    geoStatusRef.current = geoStatus;
+  }, [geoStatus]);
 
   const acceptedRide = useMemo(
     () => MOCK_RIDE_REQUESTS.find((ride) => ride.id === acceptedRideId) ?? null,
@@ -279,7 +284,6 @@ export default function DriverDashboardClient({ mapboxToken }: { mapboxToken: st
         ? STREET_STYLE
         : BASE_MAP_STYLE;
 
-    mapStyleModeRef.current = trafficEnabled ? 'traffic' : mapMode;
     map.setStyle(style);
     map.on('style.load', () => {
       updateMapMarkers();
@@ -330,11 +334,7 @@ export default function DriverDashboardClient({ mapboxToken }: { mapboxToken: st
             return previous;
           }
 
-          try {
-            localStorage.setItem('driver.lastPosition', JSON.stringify(nextPosition));
-          } catch {
-            // noop cache best-effort
-          }
+          lastKnownPositionRef.current = nextPosition;
 
           if (!document.hidden && mapRef.current) {
             mapRef.current.setCenter([nextPosition.lng, nextPosition.lat]);
@@ -357,7 +357,7 @@ export default function DriverDashboardClient({ mapboxToken }: { mapboxToken: st
       },
       {
         enableHighAccuracy: true,
-        maximumAge: 10000,
+        maximumAge: 1000,
         timeout: 15000,
       },
     );
@@ -380,8 +380,7 @@ export default function DriverDashboardClient({ mapboxToken }: { mapboxToken: st
 
         mapboxgl.accessToken = mapboxToken;
 
-        const cachedPositionRaw = localStorage.getItem('driver.lastPosition');
-        const cachedPosition = cachedPositionRaw ? (JSON.parse(cachedPositionRaw) as DriverPosition) : null;
+        const cachedPosition = lastKnownPositionRef.current;
         const center = cachedPosition
           ? [cachedPosition.lng, cachedPosition.lat]
           : [-122.4194, 37.7749];
@@ -448,7 +447,7 @@ export default function DriverDashboardClient({ mapboxToken }: { mapboxToken: st
 
       startLocationTracking();
       status.onchange = () => {
-        if (status.state === 'granted' && geoStatus !== 'active') {
+        if (status.state === 'granted' && geoStatusRef.current !== 'active') {
           startLocationTracking();
         }
       };
@@ -459,7 +458,7 @@ export default function DriverDashboardClient({ mapboxToken }: { mapboxToken: st
     return () => {
       mounted = false;
     };
-  }, [geoStatus, startLocationTracking]);
+  }, [startLocationTracking]);
 
   return (
     <div className="mx-auto min-h-screen w-full max-w-7xl bg-slate-950 text-slate-100">
