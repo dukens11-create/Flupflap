@@ -64,3 +64,15 @@ body {
     @apply hover:text-[var(--ff-hover-navy)];
   }
 }
+
+
+@keyframes driver-popup-enter {
+  0% { opacity: 0; transform: translateY(32px) scale(0.96); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@layer components {
+  .driver-popup {
+    animation: driver-popup-enter 220ms ease-out;
+  }
+}
