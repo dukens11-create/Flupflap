@@ -1233,3 +1233,37 @@ model GarageSaleGuestRequest {
   @@index([sellerId, status])
   @@map("live_join_requests")
 }
+
+enum DriverAvailabilityStatus {
+  ONLINE
+  OFFLINE
+}
+
+model DriverAvailabilityState {
+  id           String                  @id @default(cuid())
+  driverId     String                  @unique
+  status       DriverAvailabilityStatus @default(OFFLINE)
+  offlineReason String?
+  lastOnlineAt DateTime?
+  version      Int                     @default(0)
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @updatedAt
+  logs         DriverAvailabilityLog[]
+
+  @@index([status])
+  @@index([updatedAt])
+}
+
+model DriverAvailabilityLog {
+  id        String                  @id @default(cuid())
+  stateId   String
+  state     DriverAvailabilityState @relation(fields: [stateId], references: [id], onDelete: Cascade)
+  driverId  String
+  status    DriverAvailabilityStatus
+  reason    String?
+  source    String                  @default("dashboard")
+  createdAt DateTime                @default(now())
+
+  @@index([driverId, createdAt])
+  @@index([stateId, createdAt])
+}
