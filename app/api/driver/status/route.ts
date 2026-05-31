@@ -173,9 +173,16 @@ async function writeToDatabase(input: z.infer<typeof updateSchema>): Promise<{
     };
   }
 
-  const refreshed = await prisma.driverAvailabilityState.findUniqueOrThrow({
+  const refreshed = await prisma.driverAvailabilityState.findUnique({
     where: { driverId: input.driverId },
   });
+
+  if (!refreshed) {
+    return {
+      snapshot: defaultSnapshot(input.driverId),
+      conflict: true,
+    };
+  }
 
   await prisma.driverAvailabilityLog.create({
     data: {
@@ -248,8 +255,11 @@ export async function GET(request: Request) {
   }
 
   try {
-    const snapshot = (await readFromDatabase(driverId)) ?? readFromMemory(driverId);
-    return NextResponse.json({ status: snapshot, fallback: snapshot.version ? undefined : 'memory' });
+    const dbSnapshot = await readFromDatabase(driverId);
+    if (dbSnapshot) {
+      return NextResponse.json({ status: dbSnapshot });
+    }
+    return NextResponse.json({ status: readFromMemory(driverId), fallback: 'memory' });
   } catch (error) {
     console.error('[driver-status GET]', error);
     return NextResponse.json({ status: readFromMemory(driverId), fallback: 'memory' });

@@ -102,7 +102,7 @@
     const DRIVER_ID_KEY = 'flupflap.driver.id';
     const CHANNEL = 'flupflap.driver.status.channel';
     const RETRIES = [0, 500, 1500];
-    const DEFAULT_STATE = { status: 'OFFLINE', reason: null, lastOnlineAt: null, version: 0, updatedAt: new Date(0).toISOString() };
+    const makeDefaultState = (id) => ({ driverId: id, status: 'OFFLINE', reason: null, lastOnlineAt: null, version: 0, updatedAt: new Date(0).toISOString() });
     const driverId = localStorage.getItem(DRIVER_ID_KEY) || `driver-${Math.random().toString(36).slice(2, 10)}`;
     localStorage.setItem(DRIVER_ID_KEY, driverId);
 
@@ -128,11 +128,11 @@
         const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || '');
         if (parsed && (parsed.status === 'ONLINE' || parsed.status === 'OFFLINE')) return parsed;
       } catch {}
-      return { ...DEFAULT_STATE };
+      return makeDefaultState(driverId);
     }
 
     function saveLocalState(nextState, source = 'local') {
-      state = { ...state, ...nextState };
+      state = { ...state, ...nextState, driverId };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       localStorage.setItem(LAST_SYNC_KEY, JSON.stringify({ at: new Date().toISOString(), source }));
       if (bc) bc.postMessage({ type: 'status', payload: state });
@@ -150,6 +150,13 @@
         new Notification(message);
       }
       toast(message);
+    }
+
+    async function ensureNotificationPermission() {
+      if (!('Notification' in window) || Notification.permission !== 'default') return;
+      try {
+        await Notification.requestPermission();
+      } catch {}
     }
 
     function formatLastOnline(v) {
@@ -235,18 +242,21 @@
       try {
         const confirmed = await updateServerStatus(nextStatus, reason);
         saveLocalState({ ...confirmed, fallback: null }, 'server');
-        notify(nextStatus === 'ONLINE' ? 'You are now online.' : `You are now offline${reason ? `: ${reason}` : '.'}`);
+        if (!fromAuto) {
+          notify(nextStatus === 'ONLINE' ? 'You are now online.' : `You are now offline${reason ? `: ${reason}` : '.'}`);
+        }
       } catch (error) {
-        saveLocalState({ ...DEFAULT_STATE, fallback: 'local' }, 'error');
-        toast((error && error.message) || 'Status update failed. Using local fallback.');
+        saveLocalState({ ...makeDefaultState(driverId), fallback: 'local' }, 'error');
+        toast(error?.message || 'Status update failed. Using local fallback.');
       }
       if (fromAuto) {
-        toast('Auto-offline triggered due to inactivity.');
+        toast(`Auto-offline triggered due to inactivity${reason ? ` (${reason})` : ''}.`);
       }
     }
 
     el.switch.addEventListener('click', async () => {
       lastInteractionAt = Date.now();
+      ensureNotificationPermission();
       if (state.status === 'ONLINE') {
         const reason = el.reason.value || 'Taking a break';
         if (!confirm(`Go offline now?\nReason: ${reason}`)) return;
@@ -281,9 +291,6 @@
     }, 10_000);
 
     setInterval(syncFromServer, 15_000);
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission().catch(() => {});
-    }
     render();
     syncFromServer();
   </script>
