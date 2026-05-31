@@ -69,6 +69,7 @@ type DriverDashboardState = {
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const BASE_TIME = Date.parse('2026-05-31T18:00:00.000Z');
 
 const initialState: DriverDashboardState = {
   availabilityStatus: 'offline',
@@ -87,7 +88,7 @@ const initialState: DriverDashboardState = {
       destinationAddress: '11 Wall St, New York, NY',
       pickupDistanceMiles: 1.2,
       estimatedEarningsCents: 1850,
-      requestedAt: new Date(Date.now() - 4 * 60 * 1000).toISOString(),
+      requestedAt: new Date(BASE_TIME - 4 * 60 * 1000).toISOString(),
       pickup: { lat: 40.6892, lng: -73.9442, label: 'Flatbush Ave' },
       destination: { lat: 40.7074, lng: -74.0113, label: 'Wall St' },
       status: 'pending',
@@ -101,7 +102,7 @@ const initialState: DriverDashboardState = {
       destinationAddress: '200 W 43rd St, New York, NY',
       pickupDistanceMiles: 2.4,
       estimatedEarningsCents: 2330,
-      requestedAt: new Date(Date.now() - 9 * 60 * 1000).toISOString(),
+      requestedAt: new Date(BASE_TIME - 9 * 60 * 1000).toISOString(),
       pickup: { lat: 40.7177, lng: -73.9562, label: 'Bedford Ave' },
       destination: { lat: 40.757, lng: -73.9865, label: 'Times Square' },
       status: 'pending',
@@ -115,7 +116,7 @@ const initialState: DriverDashboardState = {
       destinationAddress: '4 Pennsylvania Plaza, New York, NY',
       pickupDistanceMiles: 0.8,
       estimatedEarningsCents: 1420,
-      requestedAt: new Date(Date.now() - 11 * 60 * 1000).toISOString(),
+      requestedAt: new Date(BASE_TIME - 11 * 60 * 1000).toISOString(),
       pickup: { lat: 40.6937, lng: -73.9896, label: 'Montague St' },
       destination: { lat: 40.7505, lng: -73.9934, label: 'Penn Station' },
       status: 'pending',
@@ -124,7 +125,7 @@ const initialState: DriverDashboardState = {
   tripHistory: [
     {
       id: 'trip_510',
-      date: new Date().toISOString(),
+      date: new Date(BASE_TIME).toISOString(),
       passengerName: 'Daniel Brooks',
       pickupAddress: '53 Atlantic Ave, Brooklyn, NY',
       destinationAddress: '1 W 72nd St, New York, NY',
@@ -133,7 +134,7 @@ const initialState: DriverDashboardState = {
     },
     {
       id: 'trip_509',
-      date: new Date(Date.now() - DAY_MS).toISOString(),
+      date: new Date(BASE_TIME - DAY_MS).toISOString(),
       passengerName: 'Chloe Carter',
       pickupAddress: '200 Kent Ave, Brooklyn, NY',
       destinationAddress: '80 W Broadway, New York, NY',
@@ -142,7 +143,7 @@ const initialState: DriverDashboardState = {
     },
     {
       id: 'trip_508',
-      date: new Date(Date.now() - (2 * DAY_MS)).toISOString(),
+      date: new Date(BASE_TIME - (2 * DAY_MS)).toISOString(),
       passengerName: 'Mason Lee',
       pickupAddress: '56 Court St, Brooklyn, NY',
       destinationAddress: '5th Ave & E 90th St, New York, NY',
@@ -151,7 +152,7 @@ const initialState: DriverDashboardState = {
     },
     {
       id: 'trip_507',
-      date: new Date(Date.now() - (6 * DAY_MS)).toISOString(),
+      date: new Date(BASE_TIME - (6 * DAY_MS)).toISOString(),
       passengerName: 'Aria Davis',
       pickupAddress: '75 Smith St, Brooklyn, NY',
       destinationAddress: '10 Columbus Cir, New York, NY',
@@ -165,14 +166,14 @@ const initialState: DriverDashboardState = {
       title: 'New ride nearby',
       message: 'Ava Thompson requested a pickup 1.2 mi away.',
       type: 'ride_request',
-      createdAt: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
+      createdAt: new Date(BASE_TIME - 2 * 60 * 1000).toISOString(),
     },
     {
       id: 'notif_2',
       title: 'Passenger message',
       message: 'Noah Williams: “I am at the front entrance.”',
       type: 'message',
-      createdAt: new Date(Date.now() - 7 * 60 * 1000).toISOString(),
+      createdAt: new Date(BASE_TIME - 7 * 60 * 1000).toISOString(),
     },
   ],
 };

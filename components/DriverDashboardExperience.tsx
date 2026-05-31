@@ -12,8 +12,8 @@ import {
   Home,
   Loader2,
   Menu,
-  MessageCircle,
   Phone,
+  RefreshCw,
   Star,
   UserCircle2,
 } from 'lucide-react';
@@ -361,7 +361,7 @@ export default function DriverDashboardExperience() {
           <Phone className="h-5 w-5" />
         </a>
         <button type="button" onClick={() => void loadDashboard(true)} className="flex h-12 w-12 items-center justify-center rounded-full bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/30 transition hover:scale-105" aria-label="Refresh dashboard">
-          <MessageCircle className="h-5 w-5" />
+          <RefreshCw className="h-5 w-5" />
         </button>
       </div>
     </div>
