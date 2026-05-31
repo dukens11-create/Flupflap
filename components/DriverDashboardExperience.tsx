@@ -24,6 +24,7 @@ import type {
   DriverRideSnapshot,
   RideRequestResponseAction,
 } from '@/lib/driver-ride-requests';
+import { RIDE_REQUEST_TIMEOUT_MS } from '@/lib/driver-ride-requests';
 
 const POLL_INTERVAL_MS = 4_000;
 const BANNER_TIMEOUT_MS = 5_000;
@@ -565,7 +566,7 @@ export default function DriverDashboardExperience() {
             <div className="absolute inset-x-0 top-0 h-1.5 bg-white/10">
               <div
                 className={`h-full ${activeRequest.urgency === 'urgent' ? 'bg-rose-400' : 'bg-sky-400'}`}
-                style={{ width: `${Math.max(0, Math.min(100, (countdownMs / 30_000) * 100))}%` }}
+              style={{ width: `${Math.max(0, Math.min(100, (countdownMs / RIDE_REQUEST_TIMEOUT_MS) * 100))}%` }}
               />
             </div>
             <div className="grid gap-6 p-5 sm:p-6 lg:grid-cols-[0.9fr_1.1fr]">
