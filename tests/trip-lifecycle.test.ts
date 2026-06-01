@@ -51,7 +51,7 @@ test('waiting timer tracks countdown, color transitions, and 5-minute beep', () 
 
   assert.equal(state.waitingTimer.color, 'green');
 
-  state = reduceTripState(state, { type: 'TICK_WAITING_TIMER', seconds: 301 });
+  state = reduceTripState(state, { type: 'TICK_WAITING_TIMER', seconds: 300 });
   assert.equal(state.waitingTimer.shouldBeep, true);
   assert.equal(state.waitingTimer.color, 'orange');
 

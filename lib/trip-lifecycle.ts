@@ -82,6 +82,7 @@ export type TripConfig = {
   cancellationFeeCents: number;
   noShowFeeCents: number;
   surgeMultiplier: number;
+  gpsUpdateIntervalSeconds: number;
 };
 
 export const DEFAULT_TRIP_CONFIG: TripConfig = {
@@ -94,6 +95,7 @@ export const DEFAULT_TRIP_CONFIG: TripConfig = {
   cancellationFeeCents: 500,
   noShowFeeCents: 700,
   surgeMultiplier: 1,
+  gpsUpdateIntervalSeconds: 2,
 };
 
 export type TripState = {
@@ -193,10 +195,19 @@ function computeEtaSeconds(distanceMeters: number, speedMps: number): number {
   return Math.ceil(distanceMeters / speedMps);
 }
 
+function getCancellationFee(reason: CancellationReason, config: TripConfig): number {
+  if (reason === 'Passenger not arriving' || reason === 'Wrong pickup location') {
+    return config.cancellationFeeCents;
+  }
+  return 0;
+}
+
 function tripFareCents(state: TripState, config: TripConfig): number {
   const distanceKm = state.distanceMeters / 1_000;
   const durationMinutes = state.tripDurationSeconds / 60;
-  const variableFare = Math.round((distanceKm * config.centsPerKm + durationMinutes * config.centsPerMinute) * config.surgeMultiplier);
+  const distanceFare = Math.round(distanceKm * config.centsPerKm * config.surgeMultiplier);
+  const durationFare = Math.round(durationMinutes * config.centsPerMinute * config.surgeMultiplier);
+  const variableFare = distanceFare + durationFare;
   return config.baseFareCents + variableFare;
 }
 
@@ -277,9 +288,9 @@ function applyGpsUpdate(state: TripState, action: Extract<TripAction, { type: 'G
 
   if (state.status === 'TRIP_STARTED') {
     next.distanceMeters += haversineDistanceMeters(previousLocation, action.location);
-    next.tripDurationSeconds += 2;
+    next.tripDurationSeconds += config.gpsUpdateIntervalSeconds;
     const remainingDistance = haversineDistanceMeters(action.location, state.dropoffLocation);
-    next.etaSeconds = computeEtaSeconds(remainingDistance, next.speedMps || 1);
+    next.etaSeconds = computeEtaSeconds(remainingDistance, next.speedMps);
 
     if (!next.destinationArrivalDetectedAt && isWithinRadiusMeters(action.location, state.dropoffLocation, config.arrivalRadiusMeters)) {
       next.destinationArrivalDetectedAt = now.toISOString();
@@ -290,7 +301,7 @@ function applyGpsUpdate(state: TripState, action: Extract<TripAction, { type: 'G
     }
   } else if (state.status === 'RIDE_ACCEPTED') {
     const distanceToPickup = haversineDistanceMeters(action.location, state.pickupLocation);
-    next.etaSeconds = computeEtaSeconds(distanceToPickup, next.speedMps || 1);
+    next.etaSeconds = computeEtaSeconds(distanceToPickup, next.speedMps);
     if (isWithinRadiusMeters(action.location, state.pickupLocation, config.arrivalRadiusMeters)) {
       next = arrivedAtPickup(next, config, now);
     }
@@ -309,7 +320,7 @@ function applyWaitingTick(state: TripState, seconds: number, config: TripConfig,
     return state;
   }
 
-  const elapsed = state.waitingTimer.elapsedSeconds + Math.max(1, seconds);
+  const elapsed = state.waitingTimer.elapsedSeconds + seconds;
   const remaining = Math.max(0, config.noShowTimeoutSeconds - elapsed);
   const beepCrossedThreshold =
     state.waitingTimer.elapsedSeconds < config.beepAtSeconds && elapsed >= config.beepAtSeconds;
@@ -450,10 +461,7 @@ function cancelTrip(
     };
   }
 
-  let fee = 0;
-  if (action.reason === 'Passenger not arriving' || action.reason === 'Wrong pickup location') {
-    fee = config.cancellationFeeCents;
-  }
+  const fee = getCancellationFee(action.reason, config);
 
   let next: TripState = {
     ...state,
@@ -534,7 +542,7 @@ export function reduceTripState(state: TripState, action: TripAction, config: Pa
       case 'GPS_UPDATE':
         return applyGpsUpdate(state, action, mergedConfig);
       case 'TICK_WAITING_TIMER':
-        return applyWaitingTick(state, action.seconds ?? 1, mergedConfig);
+        return applyWaitingTick(state, Math.max(0, action.seconds ?? 1), mergedConfig);
       case 'SET_PASSENGER_IN_VEHICLE':
         return withLog({
           ...state,
@@ -553,11 +561,12 @@ export function reduceTripState(state: TripState, action: TripAction, config: Pa
       default:
         return state;
     }
-  } catch {
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
     return withLog({
       ...state,
       lastError: 'State transition failed. Please retry.',
-    }, 'STATE_TRANSITION_FAILED', { action: action.type });
+    }, 'STATE_TRANSITION_FAILED', { action: action.type, error: errorMessage });
   }
 }
 
@@ -586,7 +595,12 @@ export function getTripSummary(state: TripState, config: Partial<TripConfig> = {
   };
 }
 
-export function getTripUiState(state: TripState): TripUiState {
+export function getTripUiState(state: TripState, config: Partial<TripConfig> = {}): TripUiState {
+  const mergedConfig = {
+    ...DEFAULT_TRIP_CONFIG,
+    ...config,
+  } satisfies TripConfig;
+
   switch (state.status) {
     case 'RIDE_ACCEPTED':
       return {
@@ -600,7 +614,7 @@ export function getTripUiState(state: TripState): TripUiState {
         animateTransition: true,
       };
     case 'ARRIVED_AT_PICKUP': {
-      const canNoShow = state.waitingTimer.elapsedSeconds >= DEFAULT_TRIP_CONFIG.noShowTimeoutSeconds;
+      const canNoShow = state.waitingTimer.elapsedSeconds >= mergedConfig.noShowTimeoutSeconds;
       return {
         headerStatus: 'Arrived at Pickup',
         mapMode: 'waiting_pickup',
