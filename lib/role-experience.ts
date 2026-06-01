@@ -82,6 +82,7 @@ const adminNav: RoleNavItem[] = [
   { label: 'Fraud', href: '/admin/fraud' },
   { label: 'Promotions', href: '/admin/promotions' },
   { label: 'KYC', href: '/admin/sellers#kyc-verification' },
+  { label: 'Drivers', href: '/admin/driver-verifications' },
   { label: 'Settings', href: '/admin#site-settings' },
 ];
 

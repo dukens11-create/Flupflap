@@ -57,6 +57,9 @@ export default function AccountPage() {
   const [recentLogins, setRecentLogins] = useState<SecurityLoginEntry[]>([]);
   const [suspiciousLogins, setSuspiciousLogins] = useState<SecurityLoginEntry[]>([]);
   const [securityLoading, setSecurityLoading] = useState(false);
+  const [driverVerificationStatus, setDriverVerificationStatus] = useState<string | null>(null);
+  const [driverVerificationReason, setDriverVerificationReason] = useState<string | null>(null);
+  const [driverVerificationVerifiedAt, setDriverVerificationVerifiedAt] = useState<string | null>(null);
 
   // Account deletion
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -115,6 +118,23 @@ export default function AccountPage() {
         setSuspiciousLogins([]);
       })
       .finally(() => setSecurityLoading(false));
+  }, [sessionUser?.id, status]);
+
+  useEffect(() => {
+    if (status !== 'authenticated' || !sessionUser?.id) return;
+
+    fetch('/api/account/driver-verification')
+      .then((response) => response.json())
+      .then((data) => {
+        setDriverVerificationStatus(data?.verificationStatus ?? null);
+        setDriverVerificationReason(data?.verification?.rejectionReason ?? null);
+        setDriverVerificationVerifiedAt(data?.verification?.verifiedAt ?? null);
+      })
+      .catch(() => {
+        setDriverVerificationStatus(null);
+        setDriverVerificationReason(null);
+        setDriverVerificationVerifiedAt(null);
+      });
   }, [sessionUser?.id, status]);
 
   if (status === 'loading') {
@@ -291,6 +311,45 @@ export default function AccountPage() {
   return (
     <main className="max-w-md mx-auto">
       <h1 className="text-3xl font-black mb-6">My Account</h1>
+
+      <section className="card p-4 mb-6">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-bold">Driver verification</h2>
+            <p className="text-sm text-slate-500">
+              Submit a selfie and driver&apos;s license to unlock the verified driver badge and admin approval workflow.
+            </p>
+          </div>
+          <span
+            className={`badge ${
+              driverVerificationStatus === 'APPROVED'
+                ? 'badge-green'
+                : driverVerificationStatus === 'REJECTED'
+                  ? 'badge-red'
+                  : driverVerificationStatus === 'REVIEW' || driverVerificationStatus === 'PENDING'
+                    ? 'badge-yellow'
+                    : 'badge-slate'
+            }`}
+          >
+            {driverVerificationStatus ?? 'NOT STARTED'}
+          </span>
+        </div>
+        {driverVerificationVerifiedAt && (
+          <p className="mt-3 rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
+            ✓ Verified on {new Date(driverVerificationVerifiedAt).toLocaleString()}
+          </p>
+        )}
+        {driverVerificationReason && (
+          <p className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+            {driverVerificationReason}
+          </p>
+        )}
+        <div className="mt-4">
+          <Link href="/account/driver-verification" className="btn-outline">
+            Manage driver verification
+          </Link>
+        </div>
+      </section>
 
       <section className="card p-4 mb-6">
         <div className="flex items-start justify-between gap-4">

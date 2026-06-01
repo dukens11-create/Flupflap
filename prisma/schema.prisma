@@ -53,6 +53,13 @@ enum SellerAdminFallbackStatus {
   REJECTED
 }
 
+enum DriverVerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  REVIEW
+}
+
 enum ProductStatus {
   DRAFT
   SCHEDULED
@@ -218,6 +225,8 @@ model User {
   phoneVerificationToken   PhoneVerificationToken?
   verificationSubmission   SellerVerification?        @relation("SellerVerificationSubmission")
   reviewedVerifications    SellerVerification[]       @relation("SellerVerificationReviewer")
+  driverVerificationSubmission DriverVerification?    @relation("DriverVerificationSubmission")
+  reviewedDriverVerifications DriverVerification[]    @relation("DriverVerificationReviewer")
   moderationLogsAsSeller   SellerModerationLog[]     @relation("ModeratedSeller")
   moderationLogsAsAdmin    SellerModerationLog[]     @relation("AdminModerator")
   adminAccessLogs          AdminAccessLog[]          @relation("AdminAccessor")
@@ -670,6 +679,69 @@ model SellerVerification {
   createdAt                    DateTime                       @default(now())
   updatedAt                    DateTime                       @updatedAt
 
+  @@index([status])
+}
+
+model DriverVerification {
+  id                         String                   @id @default(cuid())
+  userId                     String                   @unique
+  user                       User                     @relation("DriverVerificationSubmission", fields: [userId], references: [id], onDelete: Cascade)
+  status                     DriverVerificationStatus @default(PENDING)
+  latestAttemptId            String?                  @unique
+  latestAttempt              DriverVerificationAttempt? @relation("DriverVerificationLatestAttempt", fields: [latestAttemptId], references: [id], onDelete: SetNull)
+  licenseNumber              String?
+  driverName                 String?
+  dateOfBirth                String?
+  expirationDate             String?
+  issuingRegion              String?
+  vehicleClass               String?
+  rejectionReason            String?
+  adminNotes                 String?
+  requestAdditionalDocuments Boolean                  @default(false)
+  approvalDeadline           DateTime?
+  submittedAt                DateTime?
+  reviewedAt                 DateTime?
+  approvedAt                 DateTime?
+  verifiedAt                 DateTime?
+  verificationExpiresAt      DateTime?
+  reviewedById               String?
+  reviewedBy                 User?                    @relation("DriverVerificationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  attempts                   DriverVerificationAttempt[] @relation("DriverVerificationAttempts")
+  createdAt                  DateTime                 @default(now())
+  updatedAt                  DateTime                 @updatedAt
+
+  @@index([status])
+}
+
+model DriverVerificationAttempt {
+  id                  String                   @id @default(cuid())
+  verificationId      String
+  verification        DriverVerification       @relation("DriverVerificationAttempts", fields: [verificationId], references: [id], onDelete: Cascade)
+  attemptNumber       Int
+  status              DriverVerificationStatus @default(PENDING)
+  selfieImagePublicId String
+  selfieImageFormat   String?
+  licenseFrontPublicId String
+  licenseFrontFormat  String?
+  licenseBackPublicId String
+  licenseBackFormat   String?
+  ocrRawText          String?
+  extractedData       Json?
+  correctedData       Json?
+  confidenceScores    Json?
+  validationResults   Json?
+  suspiciousFlags     Json?
+  selfieChecks        Json?
+  documentChecks      Json?
+  livenessChecks      Json?
+  submittedAt         DateTime                 @default(now())
+  reviewedAt          DateTime?
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+  latestFor           DriverVerification?      @relation("DriverVerificationLatestAttempt")
+
+  @@unique([verificationId, attemptNumber])
+  @@index([verificationId, submittedAt])
   @@index([status])
 }
 

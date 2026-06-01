@@ -155,6 +155,7 @@ export default async function AdminPage({
           </a>
           <a href="/admin/categories" className="btn-outline text-sm whitespace-nowrap min-w-[120px]">Categories →</a>
           <a href="/admin/sellers#kyc-verification" className="btn-outline text-sm whitespace-nowrap min-w-[120px]">KYC →</a>
+          <a href="/admin/driver-verifications" className="btn-outline text-sm whitespace-nowrap min-w-[140px]">Drivers →</a>
           <a href="/admin#site-settings" className="btn-outline text-sm whitespace-nowrap min-w-[120px]">Settings →</a>
         </div>
       </div>
@@ -216,6 +217,10 @@ export default async function AdminPage({
           <a href="/admin/sellers?kyc=NOT_SUBMITTED" aria-label="View sellers with KYC not submitted" className="rounded-xl bg-white/10 p-3 hover:bg-white/20 transition-colors">
             <p className="text-xs text-slate-200">KYC Not Submitted</p>
             <p className="text-2xl font-black">{kycNotSubmittedCount}</p>
+          </a>
+          <a href="/admin/driver-verifications" aria-label="View driver verification queue" className="rounded-xl bg-white/10 p-3 hover:bg-white/20 transition-colors">
+            <p className="text-xs text-slate-200">Driver Verification Queue</p>
+            <p className="text-2xl font-black">→</p>
           </a>
           <a href="/admin/sellers" aria-label="View suspended or restricted sellers" className="rounded-xl bg-white/10 p-3 hover:bg-white/20 transition-colors">
             <p className="text-xs text-slate-200">Suspended/Restricted Sellers</p>
@@ -297,6 +302,13 @@ export default async function AdminPage({
           <div>
             <p className="font-bold text-slate-800">Seller Moderation</p>
             <p className="text-sm text-slate-500">Suspend or ban sellers for policy violations</p>
+          </div>
+        </a>
+        <a href="/admin/driver-verifications" className="card p-5 flex items-center gap-4 hover:bg-slate-50 transition-colors">
+          <div className="text-3xl">🪪</div>
+          <div>
+            <p className="font-bold text-slate-800">Driver Verification</p>
+            <p className="text-sm text-slate-500">Review selfies, license scans, OCR data, and approval notes</p>
           </div>
         </a>
         <a href="/admin/reports" className={`card p-5 flex items-center gap-4 hover:bg-slate-50 transition-colors ${openReportsCount > 0 ? 'border-red-200 bg-red-50' : ''}`}>
