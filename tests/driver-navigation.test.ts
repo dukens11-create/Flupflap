@@ -68,7 +68,7 @@ test('getTurnAnnouncement emits 300m and 100m warnings once per turn', () => {
   let state = { turnId: '', warned300m: false, warned100m: false };
 
   const first = getTurnAnnouncement(250, turn, state);
-  assert.match(first.message ?? '', /Turn right in 250m/);
+  assert.match(first.message ?? '', /Turn right in 250 m/);
   state = first.nextState;
 
   const repeat300 = getTurnAnnouncement(220, turn, state);

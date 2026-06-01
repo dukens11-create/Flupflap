@@ -76,6 +76,15 @@ export function formatDurationMinutes(minutes: number): string {
   return remainder === 0 ? `${hours}h` : `${hours}h ${remainder}m`;
 }
 
+export function convertKmhToMps(speedKmh: number): number {
+  return (speedKmh * 1000) / 3600;
+}
+
+export function formatEarlyLateMinutes(minutes: number): string {
+  if (minutes <= 0) return `${Math.abs(minutes)} min early`;
+  return `${minutes} min late`;
+}
+
 export function getCompletionPercent(totalMeters: number, remainingMeters: number): number {
   if (totalMeters <= 0) return 100;
   const traveled = Math.max(0, totalMeters - Math.max(0, remainingMeters));
@@ -107,6 +116,7 @@ export function getTurnAnnouncement(
   distanceToNextTurnMeters: number,
   turn: TurnInstruction | null,
   state: AnnouncementState,
+  unit: DistanceUnit = 'km',
 ): { message: string | null; nextState: AnnouncementState } {
   if (!turn || turn.id !== state.turnId) {
     const nextState = {
@@ -115,12 +125,12 @@ export function getTurnAnnouncement(
       warned100m: false,
     };
 
-    return getTurnAnnouncement(distanceToNextTurnMeters, turn, nextState);
+    return getTurnAnnouncement(distanceToNextTurnMeters, turn, nextState, unit);
   }
 
   if (!state.warned300m && distanceToNextTurnMeters <= 300 && distanceToNextTurnMeters > 100) {
     return {
-      message: `${directionVerb(turn.direction)} in ${Math.round(distanceToNextTurnMeters)}m on ${turn.streetName}`,
+      message: `${directionVerb(turn.direction)} in ${formatDistance(distanceToNextTurnMeters, unit)} on ${turn.streetName}`,
       nextState: { ...state, warned300m: true },
     };
   }
@@ -148,7 +158,7 @@ export function calculateNavigationSnapshot(input: {
   const totalDistanceMeters = Math.max(0, input.totalDistanceMeters);
   const traveledMeters = Math.min(totalDistanceMeters, Math.max(0, input.traveledMeters));
   const remainingMeters = Math.max(0, totalDistanceMeters - traveledMeters);
-  const speedMps = Math.max(4, (input.currentSpeedKmh * 1000) / 3600);
+  const speedMps = Math.max(4, convertKmhToMps(input.currentSpeedKmh));
   const travelMinutes = remainingMeters / speedMps / 60;
   const etaMinutes = Math.max(0, Math.round(travelMinutes + Math.max(0, input.trafficDelayMinutes)));
   const nextTurn = input.turns.find((turn) => turn.distanceFromStartMeters > traveledMeters) ?? null;
@@ -244,7 +254,7 @@ export const DEFAULT_TURNS: TurnInstruction[] = [
   {
     id: 't-5',
     direction: 'right',
-    streetName: 'Oak Destination Ln',
+    streetName: 'Oak Valley Ln',
     distanceFromStartMeters: 5600,
   },
 ];
@@ -257,7 +267,7 @@ export const DEFAULT_SEGMENTS: RouteSegment[] = [
 ];
 
 export const DEFAULT_WAYPOINTS: Waypoint[] = [
-  { id: 'w-1', label: 'Pickup · 221B Baker St', completed: false },
+  { id: 'w-1', label: 'Pickup · 221B Baker Street', completed: false },
   { id: 'w-2', label: 'Dropoff · 85 King Street', completed: false },
   { id: 'w-3', label: 'Final Destination · Terminal 2', completed: false },
 ];

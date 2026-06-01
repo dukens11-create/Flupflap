@@ -10,8 +10,10 @@ import {
   AlternativeRoute,
   AnnouncementState,
   calculateNavigationSnapshot,
+  convertKmhToMps,
   directionIcon,
   directionVerb,
+  formatEarlyLateMinutes,
   formatDistance,
   formatDurationMinutes,
   getTurnAnnouncement,
@@ -32,6 +34,10 @@ function trafficColor(traffic: RouteSegment['traffic']): string {
   if (traffic === 'slow') return 'bg-rose-500';
   if (traffic === 'moderate') return 'bg-amber-500';
   return 'bg-emerald-500';
+}
+
+function findMatchingVoice(voices: SpeechSynthesisVoice[], targetLang: string): SpeechSynthesisVoice | undefined {
+  return voices.find((voice) => voice.lang === targetLang || voice.lang.startsWith(targetLang.split('-')[0]));
 }
 
 export default function DriverNavigationMode() {
@@ -93,34 +99,55 @@ export default function DriverNavigationMode() {
   useEffect(() => {
     if (!rideAccepted || snapshot.arrived) return;
 
-    let updateIntervalMs = 3000;
-    const batteryApi = (navigator as Navigator & { getBattery?: () => Promise<{ level: number }> }).getBattery;
-    if (batteryApi) {
-      batteryApi().then((battery) => {
-        if (battery.level < 0.2) {
-          updateIntervalMs = 5000;
+    let active = true;
+    let interval: number | null = null;
+
+    const startInterval = async () => {
+      let updateIntervalMs = 3000;
+      const batteryApi = (navigator as Navigator & { getBattery?: () => Promise<{ level: number }> }).getBattery;
+      if (batteryApi) {
+        try {
+          const battery = await batteryApi();
+          if (battery.level < 0.2) {
+            updateIntervalMs = 5000;
+          }
+        } catch {
+          // no-op
         }
-      }).catch(() => {
-        // no-op
-      });
-    }
+      }
 
-    const interval = window.setInterval(() => {
-      setTraveledMeters((current) => Math.min(totalDistance, current + Math.round((speedKmh * 1000 / 3600) * 3)));
-      setTrafficDelayMinutes((current) => Math.max(0, current + (Math.random() < 0.35 ? 1 : -1)));
-      setSpeedKmh((current) => Math.max(18, Math.min(62, current + (Math.random() < 0.5 ? 2 : -2))));
-      setDeviationMeters((current) => Math.max(0, current + (Math.random() < 0.2 ? 45 : -30)));
-      setGpsLost(Math.random() < 0.04);
-      setNetworkError(Math.random() < 0.03);
-    }, updateIntervalMs);
+      if (!active) return;
 
-    return () => window.clearInterval(interval);
+      const tickSeconds = updateIntervalMs / 1000;
+      interval = window.setInterval(() => {
+        setTraveledMeters((current) => Math.min(totalDistance, current + Math.round(convertKmhToMps(speedKmh) * tickSeconds)));
+        setTrafficDelayMinutes((current) => Math.max(0, current + (Math.random() < 0.35 ? 1 : -1)));
+        setSpeedKmh((current) => Math.max(18, Math.min(62, current + (Math.random() < 0.5 ? 2 : -2))));
+        setDeviationMeters((current) => Math.max(0, current + (Math.random() < 0.2 ? 45 : -30)));
+        setGpsLost(Math.random() < 0.04);
+        setNetworkError(Math.random() < 0.03);
+      }, updateIntervalMs);
+    };
+
+    startInterval();
+
+    return () => {
+      active = false;
+      if (interval !== null) {
+        window.clearInterval(interval);
+      }
+    };
   }, [rideAccepted, snapshot.arrived, speedKmh, totalDistance]);
 
   useEffect(() => {
     if (!rideAccepted || voiceMuted || voicePaused) return;
 
-    const { message, nextState } = getTurnAnnouncement(snapshot.distanceToNextTurnMeters, snapshot.nextTurn, announcementState);
+    const { message, nextState } = getTurnAnnouncement(
+      snapshot.distanceToNextTurnMeters,
+      snapshot.nextTurn,
+      announcementState,
+      distanceUnit,
+    );
     if (!message) return;
 
     setAnnouncementState(nextState);
@@ -129,15 +156,13 @@ export default function DriverNavigationMode() {
     if ('speechSynthesis' in window) {
       const utterance = new SpeechSynthesisUtterance(message);
       utterance.lang = voiceOption.lang;
-      const voice = window.speechSynthesis
-        .getVoices()
-        .find((item) => item.lang === voiceOption.lang || item.lang.startsWith(voiceOption.lang.split('-')[0]));
+      const voice = findMatchingVoice(window.speechSynthesis.getVoices(), voiceOption.lang);
       if (voice) {
         utterance.voice = voice;
       }
       window.speechSynthesis.speak(utterance);
     }
-  }, [announcementState, rideAccepted, snapshot.distanceToNextTurnMeters, snapshot.nextTurn, voiceMuted, voiceOption.lang, voicePaused]);
+  }, [announcementState, distanceUnit, rideAccepted, snapshot.distanceToNextTurnMeters, snapshot.nextTurn, voiceMuted, voiceOption.lang, voicePaused]);
 
   useEffect(() => {
     if (!rideAccepted || !snapshot.nextTurn) return;
@@ -244,7 +269,7 @@ export default function DriverNavigationMode() {
             <p className="text-slate-300">ETA remaining</p>
             <p className="text-2xl font-black">{formatDurationMinutes(snapshot.etaMinutes)}</p>
             <p className="text-xs text-slate-400">
-              Arrive by {snapshot.arrivalTimeLabel} · {snapshot.earlyLateMinutes <= 0 ? `${Math.abs(snapshot.earlyLateMinutes)} min early` : `${snapshot.earlyLateMinutes} min late`}
+              Arrive by {snapshot.arrivalTimeLabel} · {formatEarlyLateMinutes(snapshot.earlyLateMinutes)}
             </p>
           </div>
         </div>
@@ -362,8 +387,8 @@ export default function DriverNavigationMode() {
 
         {alerts.length > 0 && (
           <ul className="space-y-1 text-xs text-slate-200">
-            {alerts.slice(0, 3).map((alert) => (
-              <li key={alert} className="rounded bg-slate-800 px-2 py-1">{alert}</li>
+            {alerts.slice(0, 3).map((alert, index) => (
+              <li key={`${alert}-${index}`} className="rounded bg-slate-800 px-2 py-1">{alert}</li>
             ))}
           </ul>
         )}
