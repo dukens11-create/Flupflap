@@ -100,10 +100,11 @@ Set these in **Environment → Environment Variables** in the Render dashboard:
 | `NEXT_PUBLIC_APP_URL` | Same as `NEXTAUTH_URL` |
 | `NEXT_PUBLIC_SITE_URL` | Primary public site URL used for redirects and absolute links (e.g. `https://www.flupflap.com`) |
 | `NEXT_PUBLIC_API_URL` | Optional API base for external/mobile integrations; set to your backend URL if different from the site domain |
-| `NEXT_PUBLIC_FIREBASE_API_KEY` | Firebase Web API key — used client-side for seller signup, seller login phone OTP, and seller dashboard phone verification |
+| `NEXT_PUBLIC_FIREBASE_API_KEY` | Firebase Web API key — used client-side for seller signup, seller login phone OTP, seller dashboard phone verification, and the driver dashboard |
 | `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | Firebase Auth domain (e.g. `your-project.firebaseapp.com`) |
 | `NEXT_PUBLIC_FIREBASE_PROJECT_ID` | Firebase project ID |
 | `NEXT_PUBLIC_FIREBASE_APP_ID` | Firebase web app ID |
+| `NEXT_PUBLIC_FIREBASE_DATABASE_URL` | Firebase Realtime Database URL used by `/driver-dashboard` for rides, locations, earnings, payments, and chat sync |
 | `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | Firebase messaging sender ID |
 | `FIREBASE_API_KEY` | Server-side Firebase API key for validating phone-verified ID tokens (can be the same value as `NEXT_PUBLIC_FIREBASE_API_KEY`; if omitted, the public key is used as fallback) |
 | `STRIPE_SECRET_KEY` | Stripe secret key |
@@ -114,6 +115,12 @@ Set these in **Environment → Environment Variables** in the Render dashboard:
 | `PLATFORM_FEE_PERCENT` | Legacy bootstrap env var (the app normalizes commission snapshots to `7`) |
 
 URL precedence for app redirects/absolute links: `NEXT_PUBLIC_SITE_URL` → `NEXT_PUBLIC_APP_URL` → `NEXTAUTH_URL`.
+
+### Driver dashboard realtime backend
+
+The driver dashboard is available at `/driver-dashboard` and `/driver-dashboard.html`.
+It uses Firebase Auth + Firebase Realtime Database for live ride requests, location updates, earnings, payments, and chat.
+Apply the rules in `docs/firebase-driver-dashboard.rules.json` and follow the setup notes in `docs/driver-dashboard-firebase.md`.
 
 ### Legacy scheduled-listing publisher job
 

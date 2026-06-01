@@ -2,6 +2,7 @@
 
 import { FirebaseApp, getApp, getApps, initializeApp } from 'firebase/app';
 import { Auth, getAuth } from 'firebase/auth';
+import { Database, getDatabase } from 'firebase/database';
 import * as Sentry from '@sentry/nextjs';
 
 type FirebaseClientConfig = {
@@ -9,6 +10,7 @@ type FirebaseClientConfig = {
   authDomain: string;
   projectId: string;
   appId: string;
+  databaseURL?: string;
   messagingSenderId?: string;
   measurementId?: string;
 };
@@ -18,6 +20,7 @@ function getFirebaseClientConfig(): FirebaseClientConfig {
   const authDomain = process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN?.trim() ?? '';
   const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID?.trim() ?? '';
   const appId = process.env.NEXT_PUBLIC_FIREBASE_APP_ID?.trim() ?? '';
+  const databaseURL = process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL?.trim() ?? '';
   const messagingSenderId = process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID?.trim() ?? '';
   const measurementId = process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID?.trim() ?? '';
 
@@ -32,9 +35,22 @@ function getFirebaseClientConfig(): FirebaseClientConfig {
     authDomain,
     projectId,
     appId,
+    databaseURL: databaseURL || undefined,
     messagingSenderId: messagingSenderId || undefined,
     measurementId: measurementId || undefined,
   };
+}
+
+export function getFirebaseClientSetupError() {
+  try {
+    getFirebaseClientConfig();
+    return null;
+  } catch (error) {
+    if (error instanceof Error && error.message.trim()) {
+      return error.message.trim();
+    }
+    return 'Firebase client configuration is missing.';
+  }
 }
 
 let analyticsInitPromise: Promise<void> | null = null;
@@ -72,4 +88,17 @@ function getFirebaseApp(): FirebaseApp {
 
 export function getFirebaseClientAuth(): Auth {
   return getAuth(getFirebaseApp());
+}
+
+export function getFirebaseClientDatabase(): Database {
+  const app = getFirebaseApp();
+  const databaseURL = process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL?.trim() ?? '';
+
+  if (!databaseURL) {
+    throw new Error(
+      'Firebase Realtime Database is not configured. Set NEXT_PUBLIC_FIREBASE_DATABASE_URL to connect the driver dashboard.',
+    );
+  }
+
+  return getDatabase(app, databaseURL);
 }

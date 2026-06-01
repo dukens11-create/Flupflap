@@ -1,0 +1,66 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "drivers": {
+      "$driverId": {
+        ".read": "auth != null && auth.uid === $driverId",
+        ".write": "auth != null && auth.uid === $driverId",
+        ".validate": "newData.hasChildren(['driver_id', 'email', 'status']) && newData.child('driver_id').val() === $driverId",
+        "status": {
+          ".validate": "newData.isString() && (newData.val() === 'offline' || newData.val() === 'online' || newData.val() === 'busy' || newData.val() === 'on_trip')"
+        }
+      }
+    },
+    "rides": {
+      "$driverId": {
+        ".read": "auth != null && auth.uid === $driverId",
+        ".write": "auth != null && auth.uid === $driverId",
+        "$rideId": {
+          ".validate": "newData.hasChildren(['ride_id', 'driver_id', 'status', 'pickup', 'dropoff', 'created_at']) && newData.child('driver_id').val() === $driverId"
+        },
+        ".indexOn": ["status", "created_at"]
+      }
+    },
+    "locations": {
+      "$driverId": {
+        ".read": "auth != null && auth.uid === $driverId",
+        ".write": "auth != null && auth.uid === $driverId",
+        "$locationId": {
+          ".validate": "newData.hasChildren(['location_id', 'driver_id', 'latitude', 'longitude', 'timestamp']) && newData.child('driver_id').val() === $driverId"
+        },
+        ".indexOn": ["timestamp"]
+      }
+    },
+    "earnings": {
+      "$driverId": {
+        ".read": "auth != null && auth.uid === $driverId",
+        ".write": "auth != null && auth.uid === $driverId",
+        "$earningsId": {
+          ".validate": "newData.hasChildren(['earnings_id', 'driver_id', 'amount', 'date', 'type']) && newData.child('driver_id').val() === $driverId"
+        },
+        ".indexOn": ["date", "type"]
+      }
+    },
+    "payments": {
+      "$driverId": {
+        ".read": "auth != null && auth.uid === $driverId",
+        ".write": "auth != null && auth.uid === $driverId",
+        "$paymentId": {
+          ".validate": "newData.hasChildren(['payment_id', 'driver_id', 'amount', 'status', 'date']) && newData.child('driver_id').val() === $driverId"
+        },
+        ".indexOn": ["date", "status"]
+      }
+    },
+    "chatMessages": {
+      "$driverId": {
+        ".read": "auth != null && auth.uid === $driverId",
+        ".write": "auth != null && auth.uid === $driverId",
+        "$messageId": {
+          ".validate": "newData.hasChildren(['message_id', 'driver_id', 'trip_id', 'sender', 'created_at']) && newData.child('driver_id').val() === $driverId"
+        },
+        ".indexOn": ["created_at", "trip_id"]
+      }
+    }
+  }
+}
