@@ -4,11 +4,11 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Car,
   ChevronDown,
+  ChevronUp,
   Map,
   MessageCircle,
   Navigation,
   Phone,
-  Plus,
   Settings,
   Star,
   User,
@@ -53,6 +53,7 @@ export default function DriverDashboardPage() {
   const [mapZoom, setMapZoom] = useState(14);
   const [trafficEnabled, setTrafficEnabled] = useState(true);
   const [onlineSeconds, setOnlineSeconds] = useState(2 * 3600 + 17 * 60);
+  const [activeTab, setActiveTab] = useState<'map' | 'rides' | 'earnings' | 'profile'>('map');
 
   useEffect(() => {
     if (!isOnline || hasAcceptedRide) return;
@@ -97,6 +98,7 @@ export default function DriverDashboardPage() {
               </div>
               <button
                 type="button"
+                aria-pressed={isOnline}
                 onClick={() => setIsOnline((current) => !current)}
                 className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition active:scale-95 ${
                   isOnline
@@ -104,7 +106,7 @@ export default function DriverDashboardPage() {
                     : 'bg-white/10 text-[#f5f5f5]'
                 }`}
               >
-                <span className={`h-2.5 w-2.5 rounded-full ${isOnline ? 'bg-[#0fff9d] animate-pulse' : 'bg-[#6b7280]'}`} />
+                <span aria-hidden="true" className={`h-2.5 w-2.5 rounded-full ${isOnline ? 'bg-[#0fff9d] animate-pulse' : 'bg-[#6b7280]'}`} />
                 {isOnline ? 'Online' : 'Offline'}
               </button>
               <button
@@ -135,14 +137,15 @@ export default function DriverDashboardPage() {
           </div>
 
           <div className="absolute right-4 top-4 z-20 flex flex-col gap-2">
-            <button type="button" onClick={() => setMapZoom((z) => Math.min(20, z + 1))} className="grid h-10 w-10 place-items-center rounded-xl bg-black/70 text-white transition hover:bg-black">
+            <button type="button" aria-label="Zoom in" onClick={() => setMapZoom((z) => Math.min(20, z + 1))} className="grid h-10 w-10 place-items-center rounded-xl bg-black/70 text-white transition hover:bg-black">
               <ZoomIn className="h-5 w-5" />
             </button>
-            <button type="button" onClick={() => setMapZoom((z) => Math.max(1, z - 1))} className="grid h-10 w-10 place-items-center rounded-xl bg-black/70 text-white transition hover:bg-black">
+            <button type="button" aria-label="Zoom out" onClick={() => setMapZoom((z) => Math.max(1, z - 1))} className="grid h-10 w-10 place-items-center rounded-xl bg-black/70 text-white transition hover:bg-black">
               <ZoomOut className="h-5 w-5" />
             </button>
             <button
               type="button"
+              aria-pressed={trafficEnabled}
               onClick={() => setTrafficEnabled((value) => !value)}
               className={`rounded-xl px-3 py-2 text-xs font-semibold ${trafficEnabled ? 'bg-[#00D084] text-[#0b1512]' : 'bg-black/70 text-white'}`}
             >
@@ -158,7 +161,7 @@ export default function DriverDashboardPage() {
             <article className="ride-card absolute bottom-6 left-1/2 z-30 w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 rounded-3xl border border-white/10 bg-[#111111]/95 p-4 shadow-[0_20px_60px_rgba(0,0,0,0.5)] backdrop-blur">
               <div className="mb-3 flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="grid h-12 w-12 place-items-center rounded-full bg-[#222] text-sm font-bold">ML</div>
+                  <div aria-label={`${RIDE_REQUEST.passengerName} avatar`} className="grid h-12 w-12 place-items-center rounded-full bg-[#222] text-sm font-bold">ML</div>
                   <div>
                     <p className="text-base font-semibold">{RIDE_REQUEST.passengerName}</p>
                     <p className="text-sm text-[#bcbcbc]">{RIDE_REQUEST.passengerRating} ★ passenger rating</p>
@@ -234,8 +237,13 @@ export default function DriverDashboardPage() {
             <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4">
               <p className="text-sm text-[#bcbcbc]">Weekly earnings</p>
               <div className="mt-3 flex h-24 items-end gap-2">
-                {WEEKLY_EARNINGS.map((amount) => (
-                  <span key={amount} className="flex-1 rounded-t-md bg-[#00D084]/80" style={{ height: `${Math.max(18, amount / 2)}%` }} />
+                {WEEKLY_EARNINGS.map((amount, index) => (
+                  <span
+                    key={index}
+                    aria-label={`Day ${index + 1}: $${amount}`}
+                    className="flex-1 rounded-t-md bg-[#00D084]/80"
+                    style={{ height: `${Math.max(18, amount / 2)}%` }}
+                  />
                 ))}
               </div>
             </div>
@@ -269,8 +277,8 @@ export default function DriverDashboardPage() {
               </div>
             </div>
             <div className="mt-4 flex gap-2">
-              <button type="button" className="flex-1 rounded-xl border border-white/15 px-3 py-2 text-sm font-semibold">Settings</button>
-              <button type="button" className="flex-1 rounded-xl border border-white/15 px-3 py-2 text-sm font-semibold">Help</button>
+              <button type="button" aria-label="Open settings" className="flex-1 rounded-xl border border-white/15 px-3 py-2 text-sm font-semibold">Settings</button>
+              <button type="button" aria-label="Get help" className="flex-1 rounded-xl border border-white/15 px-3 py-2 text-sm font-semibold">Help</button>
             </div>
           </div>
         </section>
@@ -281,8 +289,8 @@ export default function DriverDashboardPage() {
           sheetOpen ? 'translate-y-0' : 'translate-y-[84%]'
         }`}
       >
-        <button type="button" onClick={() => setSheetOpen((open) => !open)} className="mx-auto mb-3 block rounded-full bg-white/20 p-1">
-          {sheetOpen ? <ChevronDown className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
+        <button type="button" aria-label={sheetOpen ? 'Collapse trip details' : 'Expand trip details'} onClick={() => setSheetOpen((open) => !open)} className="mx-auto mb-3 block rounded-full bg-white/20 p-1">
+          {sheetOpen ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
         </button>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -293,26 +301,26 @@ export default function DriverDashboardPage() {
           {hasAcceptedRide && <span className="rounded-full bg-[#00D084]/20 px-3 py-1 text-sm font-semibold text-[#00D084]">Navigation ready</span>}
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
-          <button type="button" className="rounded-xl border border-white/15 px-3 py-2 text-sm font-semibold">Directions</button>
-          <button type="button" className="rounded-xl border border-white/15 px-3 py-2 text-sm font-semibold">Call</button>
-          <button type="button" className="rounded-xl border border-white/15 px-3 py-2 text-sm font-semibold">Message</button>
+          <button type="button" aria-label="Get directions to passenger" className="rounded-xl border border-white/15 px-3 py-2 text-sm font-semibold">Directions</button>
+          <button type="button" aria-label="Call passenger" className="rounded-xl border border-white/15 px-3 py-2 text-sm font-semibold">Call</button>
+          <button type="button" aria-label="Message passenger" className="rounded-xl border border-white/15 px-3 py-2 text-sm font-semibold">Message</button>
         </div>
       </aside>
 
       {hasAcceptedRide && (
         <div className="fixed bottom-28 right-5 z-50 flex flex-col gap-3">
-          <button type="button" className="grid h-14 w-14 place-items-center rounded-full bg-[#00D084] text-[#0b1512] shadow-xl"><Phone className="h-6 w-6" /></button>
-          <button type="button" className="grid h-12 w-12 place-items-center rounded-full bg-[#111] text-white shadow-xl"><MessageCircle className="h-5 w-5" /></button>
-          <button type="button" className="grid h-12 w-12 place-items-center rounded-full bg-[#111] text-white shadow-xl"><Navigation className="h-5 w-5" /></button>
+          <button type="button" aria-label="Call passenger" className="grid h-14 w-14 place-items-center rounded-full bg-[#00D084] text-[#0b1512] shadow-xl"><Phone className="h-6 w-6" /></button>
+          <button type="button" aria-label="Message passenger" className="grid h-12 w-12 place-items-center rounded-full bg-[#111] text-white shadow-xl"><MessageCircle className="h-5 w-5" /></button>
+          <button type="button" aria-label="Start navigation" className="grid h-12 w-12 place-items-center rounded-full bg-[#111] text-white shadow-xl"><Navigation className="h-5 w-5" /></button>
         </div>
       )}
 
       <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 bg-black/95 p-2 md:hidden">
         <ul className="mx-auto grid max-w-md grid-cols-4 gap-1 text-center text-xs">
-          <li><button type="button" className="flex w-full flex-col items-center gap-1 rounded-lg px-2 py-2 text-[#00D084]"><Map className="h-4 w-4" />Map</button></li>
-          <li><button type="button" className="flex w-full flex-col items-center gap-1 rounded-lg px-2 py-2 text-[#d4d4d4]"><Car className="h-4 w-4" />Rides</button></li>
-          <li><button type="button" className="flex w-full flex-col items-center gap-1 rounded-lg px-2 py-2 text-[#d4d4d4]"><Wallet className="h-4 w-4" />Earnings</button></li>
-          <li><button type="button" className="flex w-full flex-col items-center gap-1 rounded-lg px-2 py-2 text-[#d4d4d4]"><User className="h-4 w-4" />Profile</button></li>
+          <li><button type="button" aria-label="Map view" aria-current={activeTab === 'map' ? 'page' : undefined} onClick={() => setActiveTab('map')} className={`flex w-full flex-col items-center gap-1 rounded-lg px-2 py-2 ${activeTab === 'map' ? 'text-[#00D084]' : 'text-[#d4d4d4]'}`}><Map className="h-4 w-4" />Map</button></li>
+          <li><button type="button" aria-label="Rides" aria-current={activeTab === 'rides' ? 'page' : undefined} onClick={() => setActiveTab('rides')} className={`flex w-full flex-col items-center gap-1 rounded-lg px-2 py-2 ${activeTab === 'rides' ? 'text-[#00D084]' : 'text-[#d4d4d4]'}`}><Car className="h-4 w-4" />Rides</button></li>
+          <li><button type="button" aria-label="Earnings" aria-current={activeTab === 'earnings' ? 'page' : undefined} onClick={() => setActiveTab('earnings')} className={`flex w-full flex-col items-center gap-1 rounded-lg px-2 py-2 ${activeTab === 'earnings' ? 'text-[#00D084]' : 'text-[#d4d4d4]'}`}><Wallet className="h-4 w-4" />Earnings</button></li>
+          <li><button type="button" aria-label="Profile" aria-current={activeTab === 'profile' ? 'page' : undefined} onClick={() => setActiveTab('profile')} className={`flex w-full flex-col items-center gap-1 rounded-lg px-2 py-2 ${activeTab === 'profile' ? 'text-[#00D084]' : 'text-[#d4d4d4]'}`}><User className="h-4 w-4" />Profile</button></li>
         </ul>
       </nav>
 
