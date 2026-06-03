@@ -19,6 +19,7 @@ import { buildShippingPurchaseIdempotencyKey } from '@/lib/shipping-purchase';
 import { isShipmentShipped } from '@/lib/order-shipment';
 import { sendEmail } from '@/lib/email';
 import { logError, logInfo, logWarn } from '@/lib/logger';
+import { notifySellersOfPaidOrder } from '@/lib/seller-purchase-notifications';
 import {
   confirmGarageSalePayment,
   failGarageSaleCheckoutSession,
@@ -666,6 +667,8 @@ export async function POST(req: Request) {
           seller: {
             select: {
               id: true,
+              name: true,
+              email: true,
               stripeAccountId: true,
               stripeOnboardingComplete: true,
               verificationSubmission: {
@@ -869,7 +872,14 @@ export async function POST(req: Request) {
       });
     }
 
-    const sellerOrderGroups = orderItems.reduce<Map<string, { sellerId: string; itemCount: number; payoutCents: number }>>(
+    const sellerOrderGroups = orderItems.reduce<Map<string, {
+      sellerId: string;
+      sellerName: string | null;
+      sellerEmail: string | null;
+      itemCount: number;
+      payoutCents: number;
+      itemTitles: Set<string>;
+    }>>(
       (groups, item) => {
         const sellerId = item.product.seller.id;
         const existing = groups.get(sellerId);
@@ -878,11 +888,15 @@ export async function POST(req: Request) {
         if (existing) {
           existing.itemCount += item.quantity;
           existing.payoutCents += payoutCents;
+          existing.itemTitles.add(item.product.title);
         } else {
           groups.set(sellerId, {
             sellerId,
+            sellerName: item.product.seller.name ?? null,
+            sellerEmail: item.product.seller.email ?? null,
             itemCount: item.quantity,
             payoutCents,
+            itemTitles: new Set([item.product.title]),
           });
         }
 
@@ -892,18 +906,8 @@ export async function POST(req: Request) {
     );
 
     const sellerNotifications: CreateNotificationInput[] = Array.from(sellerOrderGroups.values()).flatMap(
-      ({ sellerId, itemCount, payoutCents }) => {
-        const notifications: CreateNotificationInput[] = [
-          {
-            userId: sellerId,
-            type: NotificationType.ORDER_UPDATE,
-            title: 'New paid order',
-            body: `${itemCount} item${itemCount === 1 ? '' : 's'} from your listings were purchased.`,
-            link: '/seller',
-            data: { orderId: order.id },
-          },
-        ];
-
+      ({ sellerId, payoutCents }) => {
+        const notifications: CreateNotificationInput[] = [];
         if (payoutCents > 0) {
           notifications.push({
             userId: sellerId,
@@ -920,6 +924,25 @@ export async function POST(req: Request) {
     );
 
     await createNotifications([...buyerNotifications, ...sellerNotifications]);
+
+    const buyerProfile = await prisma.user.findUnique({
+      where: { id: buyerId },
+      select: { name: true },
+    });
+
+    await notifySellersOfPaidOrder({
+      purchaseStatus: order.status,
+      orderId: order.id,
+      purchasedAt: order.createdAt,
+      buyerName: buyerProfile?.name ?? null,
+      sellers: Array.from(sellerOrderGroups.values()).map((group) => ({
+        sellerId: group.sellerId,
+        sellerName: group.sellerName,
+        sellerEmail: group.sellerEmail,
+        itemCount: group.itemCount,
+        itemTitles: Array.from(group.itemTitles),
+      })),
+    });
 
     // Single-seller checkouts that used payment_intent_data.transfer_data were
     // already split automatically by Stripe, so only platform-held payments need

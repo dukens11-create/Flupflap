@@ -21,3 +21,25 @@ export function passwordResetEmail(resetUrl: string): { subject: string; html: s
 <p>— The FlupFlap team</p>`,
   };
 }
+
+export function sellerPurchaseEmail(input: {
+  sellerName?: string | null;
+  buyerSummary: string;
+  itemSummary: string;
+  orderReference: string;
+  purchasedAtIso: string;
+  actionUrl: string;
+}): { subject: string; html: string } {
+  const greetingName = input.sellerName?.trim() || 'there';
+  const subject = `New purchase received (${input.orderReference})`;
+
+  return {
+    subject,
+    html: `<p>Hi ${greetingName},</p>
+<p>${input.buyerSummary} purchased ${input.itemSummary}.</p>
+<p><strong>Order:</strong> ${input.orderReference}<br/>
+<strong>Purchased:</strong> ${input.purchasedAtIso}</p>
+<p><a href="${input.actionUrl}">View order details</a></p>
+<p>— The FlupFlap team</p>`,
+  };
+}
