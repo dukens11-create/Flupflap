@@ -1,0 +1,31 @@
+require_relative '../node_modules/react-native/scripts/react_native_pods'
+
+platform :ios, min_ios_version_supported
+prepare_react_native_project!
+
+# Firebase — required by @react-native-firebase
+$RNFirebaseAsStaticFramework = true
+
+target 'FlupFlapRN' do
+  config = use_native_modules!
+
+  use_react_native!(
+    :path => config[:reactNativePath],
+    :hermes_enabled => true,
+    :fabric_enabled => false,
+    :flipper_configuration => FlipperConfiguration.disabled,
+    :app_path => "#{Pod::Config.instance.installation_root}/.."
+  )
+
+  # Firebase pods required by @react-native-firebase/app and /messaging
+  pod 'Firebase/App'
+  pod 'Firebase/Messaging'
+
+  target 'FlupFlapRNTests' do
+    inherit! :complete
+  end
+
+  post_install do |installer|
+    react_native_post_install(installer, config[:reactNativePath], :mac_catalyst_enabled => false)
+  end
+end
