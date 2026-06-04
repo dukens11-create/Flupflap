@@ -144,11 +144,17 @@ export function setupNotificationOpenedHandler(
     .then(message => {
       if (message) {
         const payload = parsePushPayload(message);
-        // Defer navigation until the navigator has mounted
+        // Defer navigation until the navigator has mounted.
+        // Stop polling after 5 seconds (50 × 100 ms) to avoid indefinite intervals.
+        let attempts = 0;
+        const maxAttempts = 50;
         const waitForNav = setInterval(() => {
+          attempts += 1;
           if (navigationRef.isReady()) {
             clearInterval(waitForNav);
             routeFromPayload(payload, navigationRef);
+          } else if (attempts >= maxAttempts) {
+            clearInterval(waitForNav);
           }
         }, 100);
       }

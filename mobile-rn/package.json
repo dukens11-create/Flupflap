@@ -44,7 +44,7 @@
   },
   "jest": {
     "preset": "react-native",
-    "setupFilesAfterFramework": [
+    "setupFilesAfterEnv": [
       "@testing-library/jest-native/extend-expect"
     ],
     "moduleNameMapper": {
