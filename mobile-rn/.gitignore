@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+android/app/build/
+android/.gradle/
+android/build/
+ios/build/
+ios/Pods/
+ios/Podfile.lock
+*.ipa
+*.apk
+*.aab
+
+# Generated assets
+android/app/src/main/assets/index.android.bundle
+android/app/src/main/assets/index.android.bundle.map
+
+# Secrets — never commit Firebase config files
+android/app/google-services.json
+ios/FlupFlapRN/GoogleService-Info.plist
+
+# Local properties
+android/local.properties
+
+# Metro
+.metro-health-check*
+
+# Jest
+coverage/
+
+# IDE
+.idea/
+*.xcworkspace/
+xcuserdata/
+
+# OS
+.DS_Store
+Thumbs.db
