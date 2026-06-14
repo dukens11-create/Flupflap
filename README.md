@@ -185,7 +185,7 @@ Each checkout stores commission snapshots on order items so seller earnings, Str
 ## Image uploads
 Seller listing media uses Cloudinary direct upload with AI-enhanced image variants:
 
-- Up to 6 images + optional 1 video per listing
+- Up to 12 images + optional 1 video per listing
 - Image enhancement pipeline: background removal, sharpening, auto brightness/contrast, auto crop/centering, optional HD upscale
 - Sellers can preview and choose original vs enhanced image before submit
 - Optimized transformed URLs + thumbnails are stored alongside originals
