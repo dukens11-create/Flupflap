@@ -151,7 +151,7 @@ function getMediaStatusMessage(
 
 /**
  * Multi-image + video upload component.
- * – Up to 6 images: multi-select, preview, remove, reorder
+ * – Up to 12 images: multi-select, preview, remove, reorder
  * – Up to 1 video: preview and remove
  * Hidden inputs (name="images", name="imageUrl", name="videoUrl") carry the
  * resolved Cloudinary URLs to the enclosing form POST.
@@ -755,7 +755,7 @@ export default function MediaUpload({
       <div>
         <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <label className="label">
-            Product Images <span className="text-slate-400 font-normal">(1–6, first = thumbnail)</span>
+            Product Images <span className="text-slate-400 font-normal">(1–12, first = thumbnail)</span>
           </label>
           <p className="text-sm text-slate-500">{images.length}/{MAX_PRODUCT_IMAGES} images</p>
         </div>

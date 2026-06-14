@@ -246,7 +246,7 @@ contrast auto-enhancement, auto-crop/centering, optional HD upscale,
 optimized delivery URL, and thumbnail URL). Sellers can preview and choose
 original vs enhanced before submitting.
 
-- Accepted image formats: JPEG, PNG, WebP, GIF (1–6 images, up to 10 MB each)
+- Accepted image formats: JPEG, PNG, WebP, GIF (1–12 images, up to 10 MB each)
 - Accepted video formats: MP4, MOV, WebM (optional, 1 video, up to 200 MB)
 - Product images are stored under `CLOUDINARY_PRODUCT_MEDIA_FOLDER` (defaults to
   `flupflap/products`) and videos under `CLOUDINARY_PRODUCT_VIDEO_FOLDER`
