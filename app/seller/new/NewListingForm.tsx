@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import CategoryPicker, { type SelectedCategoryState } from '@/components/CategoryPicker';
 import ConditionPicker from '@/components/ConditionPicker';
@@ -8,6 +8,7 @@ import MediaUpload, { type MediaUploadState } from '@/components/MediaUpload';
 import SizeVariantEditor from '@/components/SizeVariantEditor';
 import { readApiMessage } from '@/lib/read-api-message';
 import type { AiListingResponse } from '@/app/api/ai/generate-listing/route';
+import { sanitizeMediaUploadState } from '@/lib/ai-listing-assistant';
 
 type FormErrors = {
   title?: string;
@@ -84,6 +85,12 @@ export default function NewListingForm() {
   const [lengthValue, setLengthValue] = useState('');
   const [widthValue, setWidthValue] = useState('');
   const [heightValue, setHeightValue] = useState('');
+  const aiRequestIdRef = useRef(0);
+  const unmountedRef = useRef(false);
+
+  useEffect(() => () => {
+    unmountedRef.current = true;
+  }, []);
 
   /** Clear AI badge for a specific field when user edits it manually. */
   function clearAiBadge(field: string) {
@@ -96,11 +103,18 @@ export default function NewListingForm() {
   }
 
   async function handleGenerateListing() {
-    const imageUrls = mediaState.uploadedImageUrls;
+    if (aiLoading) return;
+
+    const imageUrls = Array.isArray(mediaState.uploadedImageUrls)
+      ? mediaState.uploadedImageUrls.filter((url): url is string => typeof url === 'string' && url.trim().length > 0)
+      : [];
     if (imageUrls.length === 0) {
       setAiError('Please upload at least one product image before generating a listing.');
       return;
     }
+
+    aiRequestIdRef.current += 1;
+    const requestId = aiRequestIdRef.current;
 
     setAiLoading(true);
     setAiError('');
@@ -111,13 +125,13 @@ export default function NewListingForm() {
         body: JSON.stringify({ imageUrls }),
       });
 
-      const json = await res.json() as { data?: AiListingResponse; error?: string };
-      if (!res.ok || !json.data) {
-        setAiError(json.error ?? 'AI generation failed. Please try again.');
+      const payload = await res.json().catch(() => null) as { data?: AiListingResponse; error?: string } | null;
+      if (!res.ok || !payload?.data || typeof payload.data !== 'object') {
+        setAiError(payload?.error ?? 'AI generation failed. Please try again.');
         return;
       }
 
-      const d = json.data;
+      const d = payload.data;
       const suggested = new Set<string>();
 
       if (d.title) { setTitleValue(d.title); suggested.add('title'); }
@@ -139,16 +153,19 @@ export default function NewListingForm() {
     } catch {
       setAiError('Network error. Please check your connection and try again.');
     } finally {
-      setAiLoading(false);
+      if (!unmountedRef.current && aiRequestIdRef.current === requestId) {
+        setAiLoading(false);
+      }
     }
   }
 
   const handleMediaStateChange = useCallback((nextState: MediaUploadState) => {
-    setMediaState(nextState);
+    const normalizedState = sanitizeMediaUploadState(nextState);
+    setMediaState(normalizedState);
     setErrors((current) => {
       if (!current.images) return current;
-      if (nextState.isUploading || nextState.hasErrors || !nextState.canSubmit) {
-        return { ...current, images: nextState.message || current.images };
+      if (normalizedState.isUploading || normalizedState.hasErrors || !normalizedState.canSubmit) {
+        return { ...current, images: normalizedState.message || current.images };
       }
       const nextErrors = { ...current };
       delete nextErrors.images;
