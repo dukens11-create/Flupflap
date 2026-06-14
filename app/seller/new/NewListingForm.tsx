@@ -87,9 +87,13 @@ export default function NewListingForm() {
   const [heightValue, setHeightValue] = useState('');
   const aiRequestIdRef = useRef(0);
   const unmountedRef = useRef(false);
+  const safeMediaState = sanitizeMediaUploadState(mediaState);
 
-  useEffect(() => () => {
-    unmountedRef.current = true;
+  useEffect(() => {
+    unmountedRef.current = false;
+    return () => {
+      unmountedRef.current = true;
+    };
   }, []);
 
   /** Clear AI badge for a specific field when user edits it manually. */
@@ -105,9 +109,7 @@ export default function NewListingForm() {
   async function handleGenerateListing() {
     if (aiLoading) return;
 
-    const imageUrls = Array.isArray(mediaState.uploadedImageUrls)
-      ? mediaState.uploadedImageUrls.filter((url): url is string => typeof url === 'string' && url.trim().length > 0)
-      : [];
+    const imageUrls = safeMediaState.uploadedImageUrls;
     if (imageUrls.length === 0) {
       setAiError('Please upload at least one product image before generating a listing.');
       return;
@@ -125,13 +127,22 @@ export default function NewListingForm() {
         body: JSON.stringify({ imageUrls }),
       });
 
-      const payload = await res.json().catch(() => null) as { data?: AiListingResponse; error?: string } | null;
+      const payloadRaw: unknown = await res.json().catch((error) => {
+        // API errors occasionally return non-JSON payloads (e.g. proxy/server errors).
+        // Treat those as generic failures so the first tap never throws in the client.
+        console.warn('[ai-listing-assistant] Received a non-JSON response from /api/ai/generate-listing.', error);
+        return null;
+      });
+      const payload = payloadRaw && typeof payloadRaw === 'object'
+        ? payloadRaw as { data?: unknown; error?: unknown }
+        : null;
       if (!res.ok || !payload?.data || typeof payload.data !== 'object') {
-        setAiError(payload?.error ?? 'AI generation failed. Please try again.');
+        const errorMessage = typeof payload?.error === 'string' ? payload.error : undefined;
+        setAiError(errorMessage ?? 'AI generation failed. Please try again.');
         return;
       }
 
-      const d = payload.data;
+      const d = payload.data as AiListingResponse;
       const suggested = new Set<string>();
 
       if (d.title) { setTitleValue(d.title); suggested.add('title'); }
@@ -453,7 +464,7 @@ export default function NewListingForm() {
           <button
             type="button"
             onClick={handleGenerateListing}
-            disabled={aiLoading || mediaState.uploadedImageUrls.length === 0}
+            disabled={aiLoading || safeMediaState.uploadedImageUrls.length === 0}
             className="inline-flex min-h-[44px] shrink-0 items-center gap-2 rounded-xl border border-violet-400 bg-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {aiLoading ? (

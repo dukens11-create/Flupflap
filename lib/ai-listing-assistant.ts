@@ -13,7 +13,7 @@ const EMPTY_MEDIA_UPLOAD_STATE: MediaUploadState = {
 
 export function sanitizeMediaUploadState(state: unknown): MediaUploadState {
   if (!state || typeof state !== 'object') {
-    return { ...EMPTY_MEDIA_UPLOAD_STATE, uploadedImageUrls: [] };
+    return { ...EMPTY_MEDIA_UPLOAD_STATE };
   }
 
   const candidate = state as Partial<MediaUploadState>;
