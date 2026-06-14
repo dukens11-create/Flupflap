@@ -1,4 +1,4 @@
-export const MAX_PRODUCT_IMAGES = 6;
+export const MAX_PRODUCT_IMAGES = 12;
 export const MAX_PRODUCT_VIDEOS = 1;
 export const MAX_PRODUCT_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MB
 export const MAX_PRODUCT_VIDEO_BYTES = 200 * 1024 * 1024; // 200 MB
