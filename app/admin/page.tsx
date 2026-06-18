@@ -33,12 +33,13 @@ export default async function AdminPage({
   const weekStart = new Date(now);
   weekStart.setDate(now.getDate() - (now.getDay() + 6) % 7);
   weekStart.setHours(0, 0, 0, 0);
+  const abandonedCartThreshold = new Date(now.getTime() - 24 * 60 * 60 * 1000);
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
   const suspiciousLoginSince = new Date(Date.now() - 1000 * 60 * 60 * 24 * 30);
 
   try {
-    const [settings, pending, all, recentOrders, restrictedSellersCount, buyerCount, sellerCount, totalUsersCount, totalOrdersCount, pendingSellerApprovalsCount, paidRevenueAgg, platformCommissionAgg, openReportsCount, openSellerReportsCount, suspiciousLoginCount, activePromotionsCount, productsThisWeek, productsThisMonth, activeListingsCount, soldItemsAgg, revenueThisWeekAgg, revenueThisMonthAgg, visitorMetrics, kycCounts, signupsTodayCount, sellerRegistrationsTodayCount, purchasesTodayCount, successfulRefundsAgg, abandonedCartAgg, topCategoryRows, topSellerRows, payoutsReadyCount, payoutsNeedsActionCount] = await Promise.all([
+    const [settings, pending, all, recentOrders, restrictedSellersCount, buyerCount, sellerCount, totalUsersCount, totalOrdersCount, pendingSellerApprovalsCount, paidRevenueAgg, platformCommissionAgg, openReportsCount, openSellerReportsCount, suspiciousLoginCount, activePromotionsCount, productsThisWeek, productsThisMonth, activeListingsCount, soldItemsAgg, revenueThisWeekAgg, revenueThisMonthAgg, visitorMetrics, kycCounts, signupsTodayCount, sellerRegistrationsTodayCount, purchasesTodayCount, successfulRefundsAgg, staleCartEntries, paidOrderProductRows, topCategoryRows, topSellerRows, payoutsReadyCount, payoutsNeedsActionCount] = await Promise.all([
       getMarketplaceSettings(),
       prisma.product.findMany({
         where: { status: 'PENDING' },
@@ -131,8 +132,20 @@ export default async function AdminPage({
         _sum: { stripeRefundAmount: true },
         where: { stripeRefundStatus: 'succeeded' },
       }),
-      prisma.productCartInterest.aggregate({
-        _sum: { totalAdds: true },
+      prisma.productCartInterest.findMany({
+        where: {
+          lastAddedAt: { lte: abandonedCartThreshold },
+        },
+        select: { productId: true },
+      }),
+      prisma.orderItem.findMany({
+        where: {
+          order: {
+            status: { in: PAID_ORDER_STATUSES },
+          },
+        },
+        distinct: ['productId'],
+        select: { productId: true },
       }),
       prisma.orderItem.groupBy({
         by: ['productId'],
@@ -162,9 +175,13 @@ export default async function AdminPage({
   const platformCommissionEarnedCents = platformCommissionAgg._sum.platformFeeCents ?? 0;
   const soldItemsCount = soldItemsAgg._sum.quantity ?? 0;
   const successfulRefundsCents = successfulRefundsAgg._sum.stripeRefundAmount ?? 0;
-  const abandonedCartsCount = Math.max(0, (abandonedCartAgg._sum.totalAdds ?? 0) - soldItemsCount);
-  const conversionRate = signupsTodayCount > 0
-    ? `${Math.min(100, Math.round((purchasesTodayCount / signupsTodayCount) * 10000) / 100).toFixed(2)}%`
+  const paidProductIdSet = new Set(paidOrderProductRows.map((row) => row.productId));
+  const abandonedCartsCount = staleCartEntries.reduce(
+    (sum, entry) => sum + (paidProductIdSet.has(entry.productId) ? 0 : 1),
+    0,
+  );
+  const signupToPurchaseRate = signupsTodayCount > 0
+    ? `${((purchasesTodayCount / signupsTodayCount) * 100).toFixed(2)}%`
     : '0.00%';
 
   const topCategoryProductIds = topCategoryRows.map((row) => row.productId);
@@ -179,7 +196,7 @@ export default async function AdminPage({
     topSellerProductIds.length > 0
       ? prisma.product.findMany({
         where: { id: { in: topSellerProductIds } },
-        select: { id: true, sellerId: true, seller: { select: { name: true, email: true } } },
+        select: { id: true, sellerId: true, seller: { select: { id: true, name: true, email: true } } },
       })
       : Promise.resolve([]),
   ]);
@@ -201,7 +218,7 @@ export default async function AdminPage({
   for (const row of topSellerRows) {
     const seller = sellerByProductId.get(row.productId);
     if (!seller) continue;
-    const key = seller.email ?? seller.name ?? 'seller';
+    const key = seller.id;
     const label = seller.name ?? seller.email ?? 'Unknown seller';
     const existing = sellerSalesMap.get(key);
     const totalCents = row._sum.sellerNetCents ?? 0;
@@ -381,7 +398,7 @@ export default async function AdminPage({
           </div>
           <div className="card p-4">
             <p className="text-xs uppercase tracking-wide text-slate-500">Conversion rate</p>
-            <p className="text-2xl font-black text-purple-700">{conversionRate}</p>
+            <p className="text-2xl font-black text-purple-700">{signupToPurchaseRate}</p>
           </div>
           <div className="card p-4">
             <p className="text-xs uppercase tracking-wide text-slate-500">Abandoned carts</p>
