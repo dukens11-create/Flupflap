@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { readApiMessage } from '@/lib/read-api-message';
 import { formatVariantSelectionLabel } from '@/lib/product-variants';
+import FloatingToast from '@/components/FloatingToast';
 
 interface CartItem {
   id: string;
@@ -701,6 +702,9 @@ export default function CheckoutPage() {
 
   async function handleCheckout() {
     if (!session?.user) {
+      console.warn('[checkout] redirecting unauthenticated buyer to login', {
+        offerId: offerId ?? null,
+      });
       router.push(`/login?callbackUrl=${encodeURIComponent(offerId ? `/checkout?offerId=${offerId}` : '/checkout')}`);
       return;
     }
@@ -737,6 +741,14 @@ export default function CheckoutPage() {
           }
         : undefined;
 
+      console.info('[checkout] creating cart checkout session', {
+        itemCount: items.length,
+        pickupItemCount: pickupItemIds.length,
+        hasCalculatedShipping,
+        shippingRateGroupCount: shippingRateInfo?.shipmentGroups.length ?? 0,
+        offerId: sourceOfferId,
+      });
+
       const res = await fetch('/api/checkout/cart', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -750,22 +762,40 @@ export default function CheckoutPage() {
       });
       if (!res.ok) {
         if (res.status === 401 || res.status === 403) {
+          console.warn('[checkout] checkout session rejected due to auth state', { status: res.status });
           router.push(`/login?callbackUrl=${encodeURIComponent(offerId ? `/checkout?offerId=${offerId}` : '/checkout')}`);
           return;
         }
-        setError(await readApiMessage(res, 'Checkout failed. Please try again.'));
+        const message = await readApiMessage(res, 'Checkout failed. Please try again.');
+        console.error('[checkout] checkout session request failed', {
+          status: res.status,
+          message,
+          offerId: sourceOfferId,
+        });
+        setError(message);
         setChecking(false);
         return;
       }
       const data = await res.json();
       if (data?.url) {
+        console.info('[checkout] redirecting buyer to Stripe Checkout', {
+          offerId: sourceOfferId,
+          warningCode: data.warningCode ?? null,
+        });
         // Stripe checkout requires a full page navigation to an external URL
         window.location.href = data.url;
       } else {
+        console.error('[checkout] checkout session response missing redirect URL', {
+          offerId: sourceOfferId,
+        });
         setError('Checkout failed. Please try again.');
         setChecking(false);
       }
-    } catch {
+    } catch (err) {
+      console.error('[checkout] network error creating checkout session', {
+        offerId: sourceOfferId,
+        error: err instanceof Error ? err.message : String(err),
+      });
       setError('Network error. Please try again.');
       setChecking(false);
     }
@@ -795,6 +825,7 @@ export default function CheckoutPage() {
   return (
     <main className="max-w-2xl mx-auto">
       <h1 className="text-3xl font-black mb-6">Review your order</h1>
+      {error && <FloatingToast message={error} onDismiss={() => setError('')} />}
 
       {shouldShowSignInPrompt && (
         <div className="card p-4 mb-4 bg-yellow-50 border-yellow-200 text-yellow-800 text-sm">

@@ -80,6 +80,13 @@ export async function POST(req: Request) {
     };
     const { items, pickupItemIds = [], shippingRateInfo, offerId } = body;
     if (!items?.length) return NextResponse.json({ error: 'Cart is empty.' }, { status: 400 });
+    console.info('[checkout/cart] checkout requested', {
+      buyerId,
+      itemCount: items.length,
+      pickupItemCount: pickupItemIds.length,
+      hasShippingRateInfo: !!shippingRateInfo,
+      offerId: offerId ?? null,
+    });
 
     const [settings, products] = await Promise.all([
       getMarketplaceSettings(),
@@ -553,6 +560,16 @@ export async function POST(req: Request) {
         },
       });
     }
+
+    console.info('[checkout/cart] Stripe checkout session created', {
+      buyerId,
+      stripeCheckoutId: stripeSession.id,
+      directToSellerId: sellerStripeId,
+      platformFeeCents,
+      lineItemCount: lineItems.length,
+      liveShippingTotalCents: validatedShippingRateInfo?.totalRateCents ?? 0,
+      sellerReconnectRequired,
+    });
 
     return NextResponse.json({
       url: stripeSession.url,

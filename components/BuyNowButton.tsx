@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import * as Sentry from '@sentry/nextjs';
 import { trackConversionEvent } from '@/lib/conversion-tracking';
+import FloatingToast from '@/components/FloatingToast';
 
 type BuyNowCartItem = {
   id: string;
@@ -55,6 +56,7 @@ export default function BuyNowButton({ productId, checkoutItem, isPickup = false
     if (loading) return;
     setError('');
     if (requireVariantSelection && !checkoutItem?.productVariantId) {
+      console.warn('[buy-now] blocked: missing variant selection', { productId });
       setError('Please choose a size before continuing.');
       return;
     }
@@ -62,6 +64,10 @@ export default function BuyNowButton({ productId, checkoutItem, isPickup = false
       const checkoutCart: BuyNowCartItem[] = [{ ...checkoutItem, quantity: 1 }];
       localStorage.setItem('flupflap_cart', JSON.stringify(checkoutCart));
       window.dispatchEvent(new Event('flupflap:cart-updated'));
+      console.info('[buy-now] rerouting to checkout for live shipping', {
+        productId,
+        variantId: checkoutItem.productVariantId ?? null,
+      });
       trackCheckoutStarted();
       router.push('/checkout');
       return;
@@ -85,12 +91,28 @@ export default function BuyNowButton({ productId, checkoutItem, isPickup = false
         });
       }
       if (res.ok && typeof data.url === 'string') {
+        console.info('[buy-now] Stripe checkout session created', {
+          productId,
+          isPickup,
+          variantId: checkoutItem?.productVariantId ?? null,
+        });
         trackCheckoutStarted();
         location.href = data.url;
         return;
       }
+      console.error('[buy-now] checkout session request failed', {
+        productId,
+        isPickup,
+        status: res.status,
+        error: data.error ?? 'Unknown checkout error',
+      });
       setError(data.error || 'Checkout failed. Please try again.');
-    } catch {
+    } catch (err) {
+      console.error('[buy-now] network error creating checkout session', {
+        productId,
+        isPickup,
+        error: err instanceof Error ? err.message : String(err),
+      });
       setError('Network error. Please try again.');
     } finally {
       setLoading(false);
@@ -99,11 +121,7 @@ export default function BuyNowButton({ productId, checkoutItem, isPickup = false
 
   return (
     <div className="space-y-2">
-      {error && (
-        <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-          ⚠ {error}
-        </p>
-      )}
+      {error && <FloatingToast message={error} onDismiss={() => setError('')} />}
       <button onClick={handle} disabled={loading} className="btn-primary w-full disabled:opacity-60 disabled:cursor-not-allowed">
         {loading
           ? 'Redirecting…'
