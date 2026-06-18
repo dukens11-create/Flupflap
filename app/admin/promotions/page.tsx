@@ -74,6 +74,8 @@ export default async function AdminPromotionsPage({
 
   const formatDate = (d: Date | null) =>
     d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+  const promotionRevenueCents = [...activePromotions, ...recentExpired]
+    .reduce((sum, promotion) => sum + Math.max(0, promotion.priceCents), 0);
 
   return (
     <main className="max-w-5xl mx-auto">
@@ -180,6 +182,11 @@ export default async function AdminPromotionsPage({
           <p className="text-3xl font-black text-slate-600">{recentExpired.length}</p>
           <p className="text-sm text-slate-500">Expired / cancelled</p>
         </div>
+      </div>
+
+      <div className="card p-4 mb-8">
+        <p className="text-xs uppercase tracking-wide text-slate-500">Promo revenue</p>
+        <p className="text-2xl font-black text-emerald-700">{dollars(promotionRevenueCents)}</p>
       </div>
 
       {/* Active promotions */}

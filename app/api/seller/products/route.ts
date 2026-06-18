@@ -26,6 +26,7 @@ import { applyRateLimitAsync } from '@/lib/security';
 import { getSchedulingDisabledError } from '@/lib/listing-scheduling';
 import { getAvailableVariantInventory, normalizeProductVariantsInput } from '@/lib/product-variants';
 import { normalizeSizeMlValue } from '@/lib/category-attribute-schema';
+import { trackServerConversionEvent } from '@/lib/conversion-tracking-server';
 
 import { SHIPPING_MODES, type ShippingMode } from '@/lib/product-constants';
 const schema = z.object({
@@ -575,6 +576,12 @@ export async function POST(req: Request) {
     const redirectTo = isPublishNowAction
         ? `/seller/listings/active?created=${product.id}${fraudQuery}`
         : `/seller/listings/drafts?created=${product.id}${fraudQuery}`;
+    if (isPublishNowAction) {
+      await trackServerConversionEvent('product_published', {
+        sellerId,
+        productId: product.id,
+      });
+    }
     return NextResponse.json({
       success: true,
       message: isDraftAction ? 'Draft saved successfully.' : 'Listing published successfully.',

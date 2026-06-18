@@ -1,5 +1,6 @@
 "use client";
 import { useState } from 'react';
+import { trackConversionEvent } from '@/lib/conversion-tracking';
 
 type Item = {
   id: string;
@@ -74,6 +75,12 @@ export default function AddToCartButton({
       body: JSON.stringify({ productId: item.id }),
       keepalive: true,
     }).catch(() => null);
+    trackConversionEvent('add_to_cart', {
+      product_id: item.id,
+      quantity: qty,
+      value: (item.priceCents * qty) / 100,
+      currency: 'USD',
+    });
     setDone(true);
     // Reset button label after 2 seconds
     setTimeout(() => { setDone(false); setCapped(false); }, 2000);

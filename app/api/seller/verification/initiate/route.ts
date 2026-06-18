@@ -13,6 +13,7 @@ import {
   createStripeIdentitySession,
 } from '@/lib/kyc/providers';
 import { classifyStripeError } from '@/lib/stripe';
+import { trackServerConversionEvent } from '@/lib/conversion-tracking-server';
 
 export async function POST() {
   try {
@@ -121,6 +122,11 @@ export async function POST() {
     await prisma.user.update({
       where: { id: session.user.id },
       data: { kycStatus: KycStatus.PENDING_REVIEW },
+    });
+    await trackServerConversionEvent('kyc_submitted', {
+      sellerId: session.user.id,
+      verificationSessionId: providerVerificationId,
+      provider: 'stripe_identity',
     });
 
     if (verificationUrl) {
