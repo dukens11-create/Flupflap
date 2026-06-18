@@ -1,6 +1,7 @@
 "use client";
 import { useState } from 'react';
 import { trackConversionEvent } from '@/lib/conversion-tracking';
+import FloatingToast from '@/components/FloatingToast';
 
 type Item = {
   id: string;
@@ -36,6 +37,7 @@ export default function AddToCartButton({
 
   function add() {
     if (requireVariantSelection && !item.productVariantId) {
+      console.warn('[cart] add to cart blocked: missing variant selection', { productId: item.id });
       setError('Please choose a size before adding this item.');
       return;
     }
@@ -69,6 +71,12 @@ export default function AddToCartButton({
     }
     localStorage.setItem('flupflap_cart', JSON.stringify(cart));
     window.dispatchEvent(new Event('flupflap:cart-updated'));
+    console.info('[cart] item added to cart', {
+      productId: item.id,
+      quantity: qty,
+      variantId: item.productVariantId ?? null,
+      resultingCartSize: cart.length,
+    });
     void fetch('/api/cart/interest', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -88,11 +96,7 @@ export default function AddToCartButton({
 
   return (
     <div className="flex flex-col gap-2">
-      {error && (
-        <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-          ⚠ {error}
-        </p>
-      )}
+      {error && <FloatingToast message={error} onDismiss={() => setError('')} />}
       <div className="flex items-center gap-2">
         <label htmlFor={`qty-${item.id}`} className="text-sm font-medium text-slate-700 flex-shrink-0">Qty:</label>
         <div className="flex items-center border border-slate-300 rounded-lg overflow-hidden">

@@ -20,6 +20,7 @@ import { isShipmentShipped } from '@/lib/order-shipment';
 import { sendEmail } from '@/lib/email';
 import { logError, logInfo, logWarn } from '@/lib/logger';
 import { notifySellersOfPaidOrder } from '@/lib/seller-purchase-notifications';
+import { buildProductInventoryUpdateData } from '@/lib/order-fulfillment';
 import {
   confirmGarageSalePayment,
   failGarageSaleCheckoutSession,
@@ -636,6 +637,11 @@ export async function POST(req: Request) {
     // fires with payment_status='unpaid'; the follow-up
     // `checkout.session.async_payment_succeeded` event will have status='paid'.
     if (cs.payment_status !== 'paid') {
+      console.warn('[webhook] marketplace checkout not yet paid; skipping order creation', {
+        stripeCheckoutId: cs.id,
+        paymentStatus: cs.payment_status,
+        eventType: event.type,
+      });
       return new NextResponse('ok', { status: 200 });
     }
 
@@ -663,6 +669,11 @@ export async function POST(req: Request) {
     const isPickupOrder = items.length > 0 && pickupItemIds.length === items.length;
 
     if (!buyerId || !items.length) {
+      console.error('[webhook] missing marketplace checkout metadata', {
+        stripeCheckoutId: cs.id,
+        hasBuyerId: !!buyerId,
+        itemCount: items.length,
+      });
       return new NextResponse('Missing metadata', { status: 400 });
     }
     const pickupSet = new Set(pickupItemIds);
@@ -710,6 +721,11 @@ export async function POST(req: Request) {
     const productsById = new Map(products.map((product) => [product.id, product]));
 
     if (products.length !== items.length) {
+      console.error('[webhook] missing products for paid checkout session', {
+        stripeCheckoutId: cs.id,
+        requestedItemCount: items.length,
+        loadedProductCount: products.length,
+      });
       return new NextResponse('Missing products', { status: 400 });
     }
 
@@ -848,6 +864,17 @@ export async function POST(req: Request) {
           })),
         },
       },
+    });
+    console.info('[webhook] order created from Stripe checkout', {
+      orderId: order.id,
+      stripeCheckoutId: cs.id,
+      buyerId,
+      itemCount: orderItems.length,
+      subtotalCents,
+      shippingTotalCents,
+      taxCents,
+      platformFeeCents,
+      totalCents,
     });
     await trackServerConversionEvent('purchase_completed', {
       orderId: order.id,
@@ -1021,6 +1048,11 @@ export async function POST(req: Request) {
               },
             });
           }
+          console.info('[webhook] Stripe Connect transfers created for marketplace order', {
+            orderId: order.id,
+            stripeCheckoutId: cs.id,
+            transferCount: sellerTransfers.size,
+          });
         }
       } catch (err) {
         console.error('[webhook] transfer creation failed:', err);
@@ -1068,21 +1100,28 @@ export async function POST(req: Request) {
         const newInventory = variantInventory._sum.quantity ?? 0;
         await prisma.product.update({
           where: { id: item.product.id },
-          data: {
-            inventory: newInventory,
-            soldQty: { increment: item.quantity },
-            ...(newInventory <= 0 ? { delistedAt: new Date() } : {}),
-          },
+          data: buildProductInventoryUpdateData(newInventory, item.quantity),
+        });
+        console.info('[webhook] variant inventory updated after paid checkout', {
+          orderId: order.id,
+          productId: item.product.id,
+          productVariantId: item.productVariantId,
+          quantitySold: item.quantity,
+          remainingInventory: newInventory,
+          listingDeactivated: newInventory <= 0,
         });
       } else {
         const newInventory = Math.max(0, item.product.inventory - item.quantity);
         await prisma.product.update({
           where: { id: item.product.id },
-          data: {
-            inventory: newInventory,
-            soldQty: { increment: item.quantity },
-            ...(newInventory <= 0 ? { delistedAt: new Date() } : {}),
-          },
+          data: buildProductInventoryUpdateData(newInventory, item.quantity),
+        });
+        console.info('[webhook] inventory updated after paid checkout', {
+          orderId: order.id,
+          productId: item.product.id,
+          quantitySold: item.quantity,
+          remainingInventory: newInventory,
+          listingDeactivated: newInventory <= 0,
         });
       }
     }
