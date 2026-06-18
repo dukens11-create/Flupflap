@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { dollars } from '@/lib/money';
 import Image from 'next/image';
 import { formatVariantSelectionLabel } from '@/lib/product-variants';
+import { trackConversionEvent } from '@/lib/conversion-tracking';
 
 type Item = {
   id: string;
@@ -68,6 +69,16 @@ export default function CartClient() {
   );
 
   const hasCalculatedShipping = items.some(isCalculatedShipping);
+
+  function handleCheckoutStart() {
+    const valueCents = items.reduce((sum, item) => sum + (item.priceCents * item.quantity), 0);
+    trackConversionEvent('checkout_started', {
+      item_count: items.reduce((sum, item) => sum + item.quantity, 0),
+      value: valueCents / 100,
+      currency: 'USD',
+    });
+    router.push('/checkout');
+  }
 
   if (!items.length) {
     return (
@@ -135,7 +146,7 @@ export default function CartClient() {
               : 'Includes item prices and shipping'}
           </p>
         </div>
-        <button onClick={() => router.push('/checkout')} className="btn-primary min-w-[140px]" aria-label="Review order and proceed to checkout">
+        <button onClick={handleCheckoutStart} className="btn-primary min-w-[140px]" aria-label="Review order and proceed to checkout">
           Review order →
         </button>
       </div>

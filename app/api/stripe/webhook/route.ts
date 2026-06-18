@@ -26,6 +26,7 @@ import {
   finalizeGarageSaleCheckoutSession,
   isGarageSaleCheckoutSession,
 } from '@/lib/garage-sale-payment-sync';
+import { trackServerConversionEvent } from '@/lib/conversion-tracking-server';
 
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 const CHECKOUT_COMPLETION_EVENTS = new Set(['checkout.session.completed', 'checkout.session.async_payment_succeeded']);
@@ -118,6 +119,12 @@ async function finalizeGarageSaleCheckout(cs: Stripe.Checkout.Session) {
     stripeReceiptUrl: receiptUrl,
     source: 'checkout_session',
   });
+  await trackServerConversionEvent('garage_sale_promo_purchased', {
+    saleId,
+    sellerId,
+    amountCents: typeof cs.amount_total === 'number' ? cs.amount_total : sale.totalPaidCents,
+    source: 'checkout_session',
+  });
 
   return new NextResponse('ok', { status: 200 });
 }
@@ -195,6 +202,12 @@ async function finalizeGarageSaleFromPaymentIntent(intent: Stripe.PaymentIntent)
     amountCents: amountPaidCents,
     stripePaymentId: intent.id,
     stripeReceiptUrl: receiptUrl,
+    source: 'payment_intent',
+  });
+  await trackServerConversionEvent('garage_sale_promo_purchased', {
+    saleId,
+    sellerId,
+    amountCents: amountPaidCents,
     source: 'payment_intent',
   });
 
@@ -609,6 +622,12 @@ export async function POST(req: Request) {
         where: { id: promo.productId },
         data: { isPromoted: true, promotionStart: now, promotionEnd: expiresAt },
       });
+      await trackServerConversionEvent('garage_sale_promo_purchased', {
+        promotionId,
+        sellerId: promo.sellerId,
+        productId: promo.productId,
+        amountCents: promo.priceCents,
+      });
 
       return new NextResponse('ok', { status: 200 });
     }
@@ -829,6 +848,13 @@ export async function POST(req: Request) {
           })),
         },
       },
+    });
+    await trackServerConversionEvent('purchase_completed', {
+      orderId: order.id,
+      buyerId,
+      stripeCheckoutId: cs.id,
+      totalCents,
+      platformFeeCents,
     });
 
     if (metadataOfferId) {

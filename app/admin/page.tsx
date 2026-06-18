@@ -28,6 +28,8 @@ export default async function AdminPage({
   const sp = await searchParams;
 
   const now = new Date();
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
   const weekStart = new Date(now);
   weekStart.setDate(now.getDate() - (now.getDay() + 6) % 7);
   weekStart.setHours(0, 0, 0, 0);
@@ -36,7 +38,7 @@ export default async function AdminPage({
   const suspiciousLoginSince = new Date(Date.now() - 1000 * 60 * 60 * 24 * 30);
 
   try {
-    const [settings, pending, all, recentOrders, restrictedSellersCount, buyerCount, sellerCount, totalUsersCount, totalOrdersCount, pendingSellerApprovalsCount, paidRevenueAgg, platformCommissionAgg, openReportsCount, openSellerReportsCount, suspiciousLoginCount, activePromotionsCount, productsThisWeek, productsThisMonth, activeListingsCount, soldItemsAgg, revenueThisWeekAgg, revenueThisMonthAgg, visitorMetrics, kycCounts] = await Promise.all([
+    const [settings, pending, all, recentOrders, restrictedSellersCount, buyerCount, sellerCount, totalUsersCount, totalOrdersCount, pendingSellerApprovalsCount, paidRevenueAgg, platformCommissionAgg, openReportsCount, openSellerReportsCount, suspiciousLoginCount, activePromotionsCount, productsThisWeek, productsThisMonth, activeListingsCount, soldItemsAgg, revenueThisWeekAgg, revenueThisMonthAgg, visitorMetrics, kycCounts, signupsTodayCount, sellerRegistrationsTodayCount, purchasesTodayCount, successfulRefundsAgg, abandonedCartAgg, topCategoryRows, topSellerRows, payoutsReadyCount, payoutsNeedsActionCount] = await Promise.all([
       getMarketplaceSettings(),
       prisma.product.findMany({
         where: { status: 'PENDING' },
@@ -116,6 +118,40 @@ export default async function AdminPage({
       // KYC counts use shared helpers that read both kycStatus and the legacy
       // verifiedSeller flag so previously-approved sellers are never miscounted.
       getSellerKycStats(),
+      prisma.user.count({
+        where: { createdAt: { gte: todayStart } },
+      }),
+      prisma.user.count({
+        where: { role: 'SELLER', createdAt: { gte: todayStart } },
+      }),
+      prisma.order.count({
+        where: { status: { in: PAID_ORDER_STATUSES }, createdAt: { gte: todayStart } },
+      }),
+      prisma.refundRequest.aggregate({
+        _sum: { stripeRefundAmount: true },
+        where: { stripeRefundStatus: 'succeeded' },
+      }),
+      prisma.productCartInterest.aggregate({
+        _sum: { totalAdds: true },
+      }),
+      prisma.orderItem.groupBy({
+        by: ['productId'],
+        _sum: { quantity: true },
+        orderBy: { _sum: { quantity: 'desc' } },
+        take: 50,
+      }),
+      prisma.orderItem.groupBy({
+        by: ['productId'],
+        _sum: { sellerNetCents: true },
+        orderBy: { _sum: { sellerNetCents: 'desc' } },
+        take: 50,
+      }),
+      prisma.user.count({
+        where: { role: 'SELLER', stripeOnboardingComplete: true },
+      }),
+      prisma.user.count({
+        where: { role: 'SELLER', stripeAccountId: { not: null }, stripeOnboardingComplete: false },
+      }),
     ]);
 
   const { kycApprovedCount, kycPendingCount, kycRejectedCount, kycNotSubmittedCount } = kycCounts;
@@ -125,6 +161,59 @@ export default async function AdminPage({
   const totalRevenueCents = paidRevenueAgg._sum.totalCents ?? 0;
   const platformCommissionEarnedCents = platformCommissionAgg._sum.platformFeeCents ?? 0;
   const soldItemsCount = soldItemsAgg._sum.quantity ?? 0;
+  const successfulRefundsCents = successfulRefundsAgg._sum.stripeRefundAmount ?? 0;
+  const abandonedCartsCount = Math.max(0, (abandonedCartAgg._sum.totalAdds ?? 0) - soldItemsCount);
+  const conversionRate = signupsTodayCount > 0
+    ? `${Math.min(100, Math.round((purchasesTodayCount / signupsTodayCount) * 10000) / 100).toFixed(2)}%`
+    : '0.00%';
+
+  const topCategoryProductIds = topCategoryRows.map((row) => row.productId);
+  const topSellerProductIds = topSellerRows.map((row) => row.productId);
+  const [topCategoryProducts, topSellerProducts] = await Promise.all([
+    topCategoryProductIds.length > 0
+      ? prisma.product.findMany({
+        where: { id: { in: topCategoryProductIds } },
+        select: { id: true, category: true },
+      })
+      : Promise.resolve([]),
+    topSellerProductIds.length > 0
+      ? prisma.product.findMany({
+        where: { id: { in: topSellerProductIds } },
+        select: { id: true, sellerId: true, seller: { select: { name: true, email: true } } },
+      })
+      : Promise.resolve([]),
+  ]);
+
+  const categoryByProductId = new Map(topCategoryProducts.map((product) => [product.id, product.category]));
+  const categorySalesMap = new Map<string, number>();
+  for (const row of topCategoryRows) {
+    const category = categoryByProductId.get(row.productId);
+    if (!category) continue;
+    categorySalesMap.set(category, (categorySalesMap.get(category) ?? 0) + (row._sum.quantity ?? 0));
+  }
+  const topCategories = Array.from(categorySalesMap.entries())
+    .map(([category, qty]) => ({ category, qty }))
+    .sort((a, b) => b.qty - a.qty)
+    .slice(0, 3);
+
+  const sellerByProductId = new Map(topSellerProducts.map((product) => [product.id, product.seller]));
+  const sellerSalesMap = new Map<string, { label: string; totalCents: number }>();
+  for (const row of topSellerRows) {
+    const seller = sellerByProductId.get(row.productId);
+    if (!seller) continue;
+    const key = seller.email ?? seller.name ?? 'seller';
+    const label = seller.name ?? seller.email ?? 'Unknown seller';
+    const existing = sellerSalesMap.get(key);
+    const totalCents = row._sum.sellerNetCents ?? 0;
+    if (existing) {
+      existing.totalCents += totalCents;
+    } else {
+      sellerSalesMap.set(key, { label, totalCents });
+    }
+  }
+  const topSellers = Array.from(sellerSalesMap.values())
+    .sort((a, b) => b.totalCents - a.totalCents)
+    .slice(0, 3);
 
   return (
     <main className="w-full max-w-5xl mx-auto px-4 sm:px-6">
@@ -271,6 +360,75 @@ export default async function AdminPage({
           <div className="card p-4 text-center">
             <p className="text-2xl font-black text-violet-600">{visitorMetrics.monthlyVisitors}</p>
             <p className="text-sm text-slate-500">Visitors this month</p>
+          </div>
+        </div>
+      </section>
+
+      <section className="mb-8">
+        <h2 className="text-xl font-bold mb-3">Launch Conversion Analytics</h2>
+        <div className="grid grid-cols-1 min-[380px]:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="card p-4">
+            <p className="text-xs uppercase tracking-wide text-slate-500">Signups today</p>
+            <p className="text-2xl font-black text-blue-700">{signupsTodayCount}</p>
+          </div>
+          <div className="card p-4">
+            <p className="text-xs uppercase tracking-wide text-slate-500">Seller registrations today</p>
+            <p className="text-2xl font-black text-indigo-700">{sellerRegistrationsTodayCount}</p>
+          </div>
+          <div className="card p-4">
+            <p className="text-xs uppercase tracking-wide text-slate-500">Purchases today</p>
+            <p className="text-2xl font-black text-emerald-700">{purchasesTodayCount}</p>
+          </div>
+          <div className="card p-4">
+            <p className="text-xs uppercase tracking-wide text-slate-500">Conversion rate</p>
+            <p className="text-2xl font-black text-purple-700">{conversionRate}</p>
+          </div>
+          <div className="card p-4">
+            <p className="text-xs uppercase tracking-wide text-slate-500">Abandoned carts</p>
+            <p className="text-2xl font-black text-amber-700">{abandonedCartsCount}</p>
+          </div>
+          <div className="card p-4">
+            <p className="text-xs uppercase tracking-wide text-slate-500">Gross sales</p>
+            <p className="text-2xl font-black text-emerald-700">{dollars(totalRevenueCents)}</p>
+          </div>
+          <div className="card p-4">
+            <p className="text-xs uppercase tracking-wide text-slate-500">Platform commission earned</p>
+            <p className="text-2xl font-black text-slate-900">{dollars(platformCommissionEarnedCents)}</p>
+          </div>
+          <div className="card p-4">
+            <p className="text-xs uppercase tracking-wide text-slate-500">Refunds</p>
+            <p className="text-2xl font-black text-red-700">{dollars(successfulRefundsCents)}</p>
+          </div>
+          <div className="card p-4">
+            <p className="text-xs uppercase tracking-wide text-slate-500">Stripe payout status</p>
+            <p className="text-sm font-semibold text-green-700">{payoutsReadyCount} ready</p>
+            <p className="text-sm font-semibold text-amber-700">{payoutsNeedsActionCount} need attention</p>
+          </div>
+          <div className="card p-4 min-[380px]:col-span-2">
+            <p className="text-xs uppercase tracking-wide text-slate-500">Top categories</p>
+            <ul className="mt-2 space-y-1 text-sm">
+              {topCategories.length === 0 ? (
+                <li className="text-slate-500">No completed purchases yet.</li>
+              ) : topCategories.map((entry) => (
+                <li key={entry.category} className="flex items-center justify-between">
+                  <span className="font-medium text-slate-800">{entry.category}</span>
+                  <span className="text-slate-500">{entry.qty} sold</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="card p-4 lg:col-span-1">
+            <p className="text-xs uppercase tracking-wide text-slate-500">Top sellers</p>
+            <ul className="mt-2 space-y-1 text-sm">
+              {topSellers.length === 0 ? (
+                <li className="text-slate-500">No seller payouts yet.</li>
+              ) : topSellers.map((entry) => (
+                <li key={entry.label} className="flex items-center justify-between">
+                  <span className="font-medium text-slate-800 truncate">{entry.label}</span>
+                  <span className="text-slate-500">{dollars(entry.totalCents)}</span>
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
       </section>

@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import * as Sentry from '@sentry/nextjs';
+import { trackConversionEvent } from '@/lib/conversion-tracking';
 
 type BuyNowCartItem = {
   id: string;
@@ -52,11 +53,23 @@ export default function BuyNowButton({ productId, checkoutItem, isPickup = false
       const checkoutCart: BuyNowCartItem[] = [{ ...checkoutItem, quantity: 1 }];
       localStorage.setItem('flupflap_cart', JSON.stringify(checkoutCart));
       window.dispatchEvent(new Event('flupflap:cart-updated'));
+      trackConversionEvent('checkout_started', {
+        product_id: productId,
+        quantity: 1,
+        value: checkoutItem.priceCents / 100,
+        currency: 'USD',
+      });
       router.push('/checkout');
       return;
     }
 
     setLoading(true);
+    trackConversionEvent('checkout_started', {
+      product_id: productId,
+      quantity: 1,
+      value: (checkoutItem?.priceCents ?? 0) / 100,
+      currency: 'USD',
+    });
     try {
       const res = await fetch('/api/checkout/buynow', {
         method: 'POST',

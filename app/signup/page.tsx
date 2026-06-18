@@ -10,6 +10,7 @@ import type { ConfirmationResult } from 'firebase/auth';
 import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 import { getFirebaseClientAuth } from '@/lib/firebase/client';
 import { normalizePhone } from '@/lib/phone';
+import { trackConversionEvent } from '@/lib/conversion-tracking';
 
 export default function SignupPage() {
   const { t } = useI18n();
@@ -211,6 +212,11 @@ export default function SignupPage() {
         }
         setLoading(false);
         return;
+      }
+
+      trackConversionEvent('signup_complete', { role: payload.role.toLowerCase() });
+      if (payload.role === 'SELLER') {
+        trackConversionEvent('seller_registration_complete', { role: 'seller' });
       }
 
       setRedirecting(true);
