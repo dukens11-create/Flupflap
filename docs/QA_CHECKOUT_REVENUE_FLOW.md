@@ -14,5 +14,5 @@
 - [ ] If inventory reached 0, confirm the listing shows as sold/out of stock and is no longer active in marketplace results
 - [ ] Confirm the order row in the database stores `platformFeeCents`, `sellerPayoutCents`, and order-item commission snapshot fields
 - [ ] Confirm Stripe shows either direct destination charge payout data (single-seller cart) or transfer records (multi-seller cart)
-- [ ] Confirm `/admin` updates Total Orders, Total Revenue, Platform Commission Earned, Items Sold, and Gross Revenue This Week/Month
+- [ ] Confirm `/admin` updates Total Orders, Total Revenue, Platform Commission Earned, Items Sold, Gross Revenue This Week/Month, and Total Visitors (Last 12 Months)
 - [ ] If checkout fails, confirm the buyer sees the new toast error and server logs include the `[checkout]`, `[checkout/cart]`, or `[webhook]` diagnostics
