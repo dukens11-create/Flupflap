@@ -378,7 +378,14 @@ export default async function AdminPage({
             <p className="text-2xl font-black text-violet-600">{visitorMetrics.monthlyVisitors}</p>
             <p className="text-sm text-slate-500">Visitors this month</p>
           </div>
+          <div className="card p-4 text-center">
+            <p className="text-2xl font-black text-fuchsia-600">{visitorMetrics.yearlyVisitors}</p>
+            <p className="text-sm text-slate-500">Total visitors (last 12 months)</p>
+          </div>
         </div>
+        {visitorMetrics.errorMessage && (
+          <p className="mt-2 text-sm text-red-600">{visitorMetrics.errorMessage}</p>
+        )}
       </section>
 
       <section className="mb-8">
