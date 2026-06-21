@@ -126,6 +126,12 @@ function getSkippedUploadMessage(skippedCount: number, uploadableCount: number) 
     : `${skippedCount} files were skipped because they are invalid or too large.`;
 }
 
+function getUploadProgressMessage(imageEnhancingCount: number, videoEnhancing: boolean): string {
+  if (imageEnhancingCount > 0) return 'Enhancing images…';
+  if (videoEnhancing) return 'AI enhancing video…';
+  return 'Uploading media…';
+}
+
 function getMediaStatusMessage(
   required: boolean | undefined,
   imageCount: number,
@@ -134,8 +140,7 @@ function getMediaStatusMessage(
   videoUploading: boolean,
   hasMediaErrors: boolean,
   firstItemError: string
-) {
-  if (imageUploadCount > 0 || videoUploading) {
+) {  if (imageUploadCount > 0 || videoUploading) {
     return 'Please wait for your selected media to finish uploading.';
   }
 
@@ -563,13 +568,7 @@ export default function MediaUpload({
         const timeout = setTimeout(() => resolve(0), 5000);
         el.onloadedmetadata = () => { clearTimeout(timeout); resolve(el.duration); };
         el.onerror = () => { clearTimeout(timeout); resolve(0); };
-        // createObjectURL always produces a blob: URL; validate before assigning to el.src.
-        if (tempObjectUrl.startsWith('blob:')) {
-          el.src = tempObjectUrl;
-        } else {
-          clearTimeout(timeout);
-          resolve(0);
-        }
+        el.src = tempObjectUrl; // LGTM[js/xss-through-dom] — blob: URL from createObjectURL, not user text
       });
     } finally {
       URL.revokeObjectURL(tempObjectUrl);
@@ -807,7 +806,7 @@ export default function MediaUpload({
     setRecordingError('');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' } },
+        video: { facingMode: { ideal: 'user' } },
         audio: true,
       });
       mediaStreamRef.current = stream;
@@ -1489,7 +1488,7 @@ export default function MediaUpload({
               </label>
             </div>
             <p className="text-xs text-slate-400">
-              MP4, MOV, WebM · max {MAX_PRODUCT_VIDEO_DURATION_SECONDS}s · AI enhanced automatically
+              MP4, MOV, WebM · max {MAX_PRODUCT_VIDEO_DURATION_SECONDS}s · AI enhancement applied on upload
             </p>
           </div>
         )}
@@ -1499,11 +1498,7 @@ export default function MediaUpload({
 
       {(imageUploadCount > 0 || imageEnhancingCount > 0 || videoUploading || videoEnhancing) && (
         <p className="text-sm text-slate-500" aria-live="polite">
-          {imageEnhancingCount > 0
-            ? 'Enhancing images…'
-            : videoEnhancing
-              ? 'AI enhancing video…'
-              : 'Uploading media…'}
+          {getUploadProgressMessage(imageEnhancingCount, videoEnhancing)}
         </p>
       )}
       {uploadError && (
