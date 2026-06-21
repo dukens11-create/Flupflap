@@ -251,9 +251,9 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
               Based on buyer messages from the last 90 days and replies sent within {SELLER_RESPONSE_WINDOW_HOURS} hours.
             </p>
             {product.viewCount > 0 && (
-              <p className="text-xs text-slate-400 mt-1 flex items-center gap-1">
-                <Eye size={12} aria-hidden="true" />
-                <span>{product.viewCount.toLocaleString()} {product.viewCount === 1 ? 'person' : 'people'} viewed this item</span>
+              <p className="text-sm font-semibold text-slate-600 mt-2 flex items-center gap-1">
+                <Eye size={14} aria-hidden="true" />
+                <span>Views: {product.viewCount.toLocaleString()}</span>
               </p>
             )}
           </div>
