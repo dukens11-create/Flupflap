@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ShieldCheck, Star } from 'lucide-react';
+import { Eye, ShieldCheck, Star } from 'lucide-react';
 import { dollars } from '@/lib/money';
 import { useI18n } from '@/components/I18nProvider';
 import { conditionBadgeClass } from '@/lib/condition-badge';
@@ -88,6 +88,12 @@ export default function ProductCard({ p: product }:{p:any}){
         {product.pickupAvailable&&product.pickupCity&&<p className="text-xs font-medium text-emerald-700">{t('product.pickupIn', { location: pickupLocation })}</p>}
         {typeof product.inventory === 'number' && product.inventory > 0 && product.inventory <= 5 && (product.status === 'APPROVED' || product.status === 'ACTIVE') && (
           <p className="text-xs font-semibold text-orange-600">Only {product.inventory} left!</p>
+        )}
+        {typeof product.viewCount === 'number' && product.viewCount > 0 && (
+          <p className="flex items-center gap-1 text-xs font-medium text-slate-500">
+            <Eye size={11} aria-hidden="true" />
+            <span>Views: {product.viewCount.toLocaleString()}</span>
+          </p>
         )}
 
         <div className="mt-auto space-y-3 border-t border-slate-100 pt-3">
