@@ -556,6 +556,16 @@ export default async function AdminPage({
                     <p className="text-xs text-slate-400">Seller: {p.seller.name} ({p.seller.email})</p>
                     <p className="text-xs text-slate-500 mt-0.5">Stock: <span className={`font-semibold ${p.inventory <= 0 ? 'text-red-600' : p.inventory <= 5 ? 'text-orange-600' : 'text-green-700'}`}>{p.inventory <= 0 ? 'Out of stock' : `${p.inventory} available`}</span></p>
                     <p className="text-sm text-slate-600 mt-1 line-clamp-2">{p.description}</p>
+                    {p.videoUrl && (
+                      <a
+                        href={p.videoUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline"
+                      >
+                        🎥 View seller video
+                      </a>
+                    )}
                   </div>
                   <div className="flex flex-col gap-2">
                     <form action={`/api/admin/products/${p.id}`} method="POST">
