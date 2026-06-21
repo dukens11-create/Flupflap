@@ -121,3 +121,67 @@ export function buildCloudinaryImageVariants(
 
   return { originalUrl, enhancedUrl, thumbnailUrl };
 }
+
+/**
+ * Build an AI-enhanced Cloudinary URL for a product video.
+ * Applies sharpening + quality optimisation and transcodes to MP4 for
+ * maximum browser compatibility.  The URL is computed via Cloudinary's
+ * on-the-fly transformation pipeline — no server-side upload is needed.
+ *
+ * Returns null when the URL is not a recognised Cloudinary video URL or when
+ * the Cloudinary environment is not configured.
+ */
+export function buildCloudinaryVideoEnhancedUrl(videoUrl: string): string | null {
+  const env = getCloudinaryEnvConfig();
+  if (!env) return null;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(videoUrl);
+  } catch {
+    return null;
+  }
+
+  if (parsed.protocol !== 'https:' || !parsed.hostname.endsWith('.cloudinary.com')) return null;
+
+  const segments = parsed.pathname.split('/').filter(Boolean);
+  if (segments.length < 4) return null;
+
+  const uploadIndex = segments.indexOf('upload');
+  if (uploadIndex < 0) return null;
+
+  // Expect: /{cloudName}/video/upload/[v{version}]/public_id.ext
+  const resourceType = segments[uploadIndex - 1];
+  if (resourceType !== 'video') return null;
+
+  const afterUpload = segments.slice(uploadIndex + 1);
+
+  let version: number | undefined;
+  let assetSegments = afterUpload;
+  const versionIndex = afterUpload.findIndex((part) => /^v\d+$/.test(part));
+  if (versionIndex >= 0) {
+    const parsedVersion = Number(afterUpload[versionIndex].slice(1));
+    if (Number.isFinite(parsedVersion) && parsedVersion > 0) {
+      version = parsedVersion;
+    }
+    assetSegments = afterUpload.slice(versionIndex + 1);
+  }
+
+  const withExtension = assetSegments.join('/');
+  const lastDot = withExtension.lastIndexOf('.');
+  const publicId = lastDot > 0 ? withExtension.slice(0, lastDot) : withExtension;
+  if (!publicId) return null;
+
+  const cloudinary = getCloudinary();
+  return cloudinary.url(publicId, {
+    secure: true,
+    resource_type: 'video',
+    type: 'upload',
+    ...(version ? { version } : {}),
+    transformation: [
+      { effect: 'sharpen' },
+      { quality: 'auto:good' },
+    ],
+    format: 'mp4',
+  });
+}

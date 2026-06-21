@@ -5,6 +5,7 @@ import {
   MAX_PRODUCT_IMAGES,
   MAX_PRODUCT_IMAGE_BYTES,
   MAX_PRODUCT_VIDEO_BYTES,
+  MAX_PRODUCT_VIDEO_DURATION_SECONDS,
   PRODUCT_IMAGE_TYPES,
   PRODUCT_VIDEO_TYPES,
 } from '@/lib/product-media';
@@ -56,7 +57,11 @@ type VideoUploadItem = {
   previewKind: 'object-url' | 'remote-url';
   status: UploadStatus;
   error?: string;
+  aiEnhancementStatus: 'idle' | 'processing' | 'ready' | 'error';
+  aiEnhancedUrl?: string;
 };
+
+type RecordingState = 'idle' | 'requesting' | 'ready' | 'recording' | 'reviewing' | 'error';
 
 export type MediaUploadState = {
   imageCount: number;
@@ -121,6 +126,12 @@ function getSkippedUploadMessage(skippedCount: number, uploadableCount: number) 
     : `${skippedCount} files were skipped because they are invalid or too large.`;
 }
 
+function getUploadProgressMessage(imageEnhancingCount: number, videoEnhancing: boolean): string {
+  if (imageEnhancingCount > 0) return 'Enhancing images…';
+  if (videoEnhancing) return 'AI enhancing video…';
+  return 'Uploading media…';
+}
+
 function getMediaStatusMessage(
   required: boolean | undefined,
   imageCount: number,
@@ -129,8 +140,7 @@ function getMediaStatusMessage(
   videoUploading: boolean,
   hasMediaErrors: boolean,
   firstItemError: string
-) {
-  if (imageUploadCount > 0 || videoUploading) {
+) {  if (imageUploadCount > 0 || videoUploading) {
     return 'Please wait for your selected media to finish uploading.';
   }
 
@@ -212,21 +222,35 @@ export default function MediaUpload({
           sourceFile: null,
           previewKind: 'remote-url',
           status: 'uploaded' as const,
+          aiEnhancementStatus: 'ready' as const,
+          aiEnhancedUrl: defaultVideoUrl,
         }
       : null
   );
   const [uploadError, setUploadError] = useState('');
   const [draggedImageId, setDraggedImageId] = useState<string | null>(null);
   const [hdUpscale, setHdUpscale] = useState(false);
+  const [recordingState, setRecordingState] = useState<RecordingState>('idle');
+  const [recordingCountdown, setRecordingCountdown] = useState(MAX_PRODUCT_VIDEO_DURATION_SECONDS);
+  const [recordingError, setRecordingError] = useState('');
+  const [reviewBlobUrl, setReviewBlobUrl] = useState('');
+  const [reviewBlob, setReviewBlob] = useState<Blob | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const videoPreviewRef = useRef<HTMLVideoElement>(null);
+  const liveVideoRef = useRef<HTMLVideoElement>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const objectUrlsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     return () => {
       objectUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
       objectUrlsRef.current.clear();
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
     };
   }, []);
 
@@ -242,6 +266,14 @@ export default function MediaUpload({
 
     element.load();
   }, [video]);
+
+  useEffect(() => {
+    const el = liveVideoRef.current;
+    if (!el || !mediaStreamRef.current) return;
+    if (recordingState === 'ready' || recordingState === 'recording') {
+      el.srcObject = mediaStreamRef.current;
+    }
+  }, [recordingState]);
 
   function isValidUploadConfig(value: unknown): value is {
     apiKey: string;
@@ -336,6 +368,21 @@ export default function MediaUpload({
       enhancedUrl: json.enhancedUrl,
       thumbnailUrl: json.thumbnailUrl,
     };
+  }
+
+  async function enhanceVideo(url: string): Promise<string | null> {
+    try {
+      const res = await fetch('/api/upload/product-media/enhance-video', {
+        method: 'POST',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ videoUrl: url }),
+      });
+      const json = await readJsonSafe(res);
+      if (!res.ok || !json?.success || typeof json.enhancedUrl !== 'string') return null;
+      return json.enhancedUrl;
+    } catch {
+      return null;
+    }
   }
 
   async function uploadFile(file: File): Promise<string> {
@@ -510,6 +557,31 @@ export default function MediaUpload({
       if (videoInputRef.current) videoInputRef.current.value = '';
       return;
     }
+
+    // Client-side duration validation via HTML5 video metadata.
+    const tempObjectUrl = URL.createObjectURL(file);
+    let detectedDuration = 0;
+    try {
+      detectedDuration = await new Promise<number>((resolve) => {
+        const el = document.createElement('video');
+        el.preload = 'metadata';
+        const timeout = setTimeout(() => resolve(0), 5000);
+        el.onloadedmetadata = () => { clearTimeout(timeout); resolve(el.duration); };
+        el.onerror = () => { clearTimeout(timeout); resolve(0); };
+        el.src = tempObjectUrl; // LGTM[js/xss-through-dom] — blob: URL from createObjectURL, not user text
+      });
+    } finally {
+      URL.revokeObjectURL(tempObjectUrl);
+    }
+
+    if (detectedDuration > MAX_PRODUCT_VIDEO_DURATION_SECONDS) {
+      setUploadError(
+        `Video is too long (${Math.ceil(detectedDuration)}s). Maximum is ${MAX_PRODUCT_VIDEO_DURATION_SECONDS}s.`,
+      );
+      if (videoInputRef.current) videoInputRef.current.value = '';
+      return;
+    }
+
     setUploadError('');
     if (video?.previewKind === 'object-url' && objectUrlsRef.current.has(video.previewUrl)) {
       objectUrlsRef.current.delete(video.previewUrl);
@@ -528,6 +600,7 @@ export default function MediaUpload({
       sourceFile: file,
       previewKind: 'object-url',
       status: 'uploading',
+      aiEnhancementStatus: 'idle',
     };
 
     setVideo(nextVideo);
@@ -537,15 +610,25 @@ export default function MediaUpload({
       const url = await uploadFile(file);
       setVideo((current) =>
         current?.id === nextVideo.id
-          ? { ...current, uploadedUrl: url, status: 'uploaded', error: undefined }
-          : current
+          ? { ...current, uploadedUrl: url, status: 'uploaded', aiEnhancementStatus: 'processing', error: undefined }
+          : current,
+      );
+      const enhanced = await enhanceVideo(url);
+      setVideo((current) =>
+        current?.id === nextVideo.id
+          ? {
+              ...current,
+              aiEnhancementStatus: enhanced ? 'ready' : 'error',
+              aiEnhancedUrl: enhanced ?? undefined,
+            }
+          : current,
       );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Upload failed.';
       setVideo((current) =>
         current?.id === nextVideo.id
-          ? { ...current, status: 'error', error: msg }
-          : current
+          ? { ...current, status: 'error', aiEnhancementStatus: 'idle', error: msg }
+          : current,
       );
       setUploadError(msg);
     }
@@ -655,24 +738,54 @@ export default function MediaUpload({
     if (!video || !sourceFile) return;
     const videoId = video.id;
     setVideo((current) =>
-      current?.id === videoId ? { ...current, status: 'uploading', error: undefined } : current,
+      current?.id === videoId ? { ...current, status: 'uploading', aiEnhancementStatus: 'idle', error: undefined } : current,
     );
     setUploadError('');
     try {
       const url = await uploadFile(sourceFile);
       setVideo((current) =>
         current?.id === videoId
-          ? { ...current, uploadedUrl: url, status: 'uploaded', error: undefined }
+          ? { ...current, uploadedUrl: url, status: 'uploaded', aiEnhancementStatus: 'processing', error: undefined }
+          : current,
+      );
+      const enhanced = await enhanceVideo(url);
+      setVideo((current) =>
+        current?.id === videoId
+          ? {
+              ...current,
+              aiEnhancementStatus: enhanced ? 'ready' : 'error',
+              aiEnhancedUrl: enhanced ?? undefined,
+            }
           : current,
       );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Upload failed.';
-      setVideo((current) => (current?.id === videoId ? { ...current, status: 'error', error: msg } : current));
+      setVideo((current) => (current?.id === videoId ? { ...current, status: 'error', aiEnhancementStatus: 'idle', error: msg } : current));
       setUploadError(msg);
     }
   }
 
+  function stopMediaTracks() {
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    mediaRecorderRef.current?.stop();
+    mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
+    mediaStreamRef.current = null;
+    mediaRecorderRef.current = null;
+  }
+
   function removeVideo() {
+    stopMediaTracks();
+    if (reviewBlobUrl && objectUrlsRef.current.has(reviewBlobUrl)) {
+      objectUrlsRef.current.delete(reviewBlobUrl);
+      URL.revokeObjectURL(reviewBlobUrl);
+    }
+    setReviewBlobUrl('');
+    setReviewBlob(null);
+    setRecordingState('idle');
+    setRecordingError('');
     setVideo((current) => {
       if (current && objectUrlsRef.current.has(current.previewUrl)) {
         objectUrlsRef.current.delete(current.previewUrl);
@@ -681,6 +794,178 @@ export default function MediaUpload({
       return null;
     });
     if (videoInputRef.current) videoInputRef.current.value = '';
+  }
+
+  async function requestCameraAccess() {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setRecordingError('Camera recording is not supported in this browser.');
+      setRecordingState('error');
+      return;
+    }
+    setRecordingState('requesting');
+    setRecordingError('');
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'user' } },
+        audio: true,
+      });
+      mediaStreamRef.current = stream;
+      setRecordingState('ready');
+    } catch (err: unknown) {
+      const name = err instanceof Error ? err.name : '';
+      const msg =
+        name === 'NotAllowedError'
+          ? 'Camera access denied. Please allow camera and microphone access in your browser settings.'
+          : name === 'NotFoundError'
+            ? 'No camera found on this device.'
+            : err instanceof Error
+              ? err.message
+              : 'Could not access camera.';
+      setRecordingError(msg);
+      setRecordingState('error');
+    }
+  }
+
+  function startRecording() {
+    if (!mediaStreamRef.current) return;
+    recordedChunksRef.current = [];
+    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+      ? 'video/webm;codecs=vp9'
+      : MediaRecorder.isTypeSupported('video/webm')
+        ? 'video/webm'
+        : '';
+    const recorderOptions = mimeType ? { mimeType } : {};
+    const recorder = new MediaRecorder(mediaStreamRef.current, recorderOptions);
+    mediaRecorderRef.current = recorder;
+
+    recorder.ondataavailable = (e) => {
+      if (e.data.size > 0) recordedChunksRef.current.push(e.data);
+    };
+    recorder.onstop = () => {
+      const blobType = recorder.mimeType || 'video/webm';
+      const blob = new Blob(recordedChunksRef.current, { type: blobType });
+      const url = URL.createObjectURL(blob);
+      objectUrlsRef.current.add(url);
+      setReviewBlobUrl(url);
+      setReviewBlob(blob);
+      setRecordingState('reviewing');
+      mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
+      mediaStreamRef.current = null;
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+    };
+
+    recorder.start(100);
+    setRecordingCountdown(MAX_PRODUCT_VIDEO_DURATION_SECONDS);
+    setRecordingState('recording');
+
+    let remaining = MAX_PRODUCT_VIDEO_DURATION_SECONDS;
+    recordingTimerRef.current = setInterval(() => {
+      remaining -= 1;
+      setRecordingCountdown(remaining);
+      if (remaining <= 0) stopRecording();
+    }, 1000);
+  }
+
+  function stopRecording() {
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    if (mediaRecorderRef.current?.state === 'recording') {
+      mediaRecorderRef.current.stop();
+    }
+  }
+
+  function cancelRecording() {
+    stopMediaTracks();
+    if (reviewBlobUrl && objectUrlsRef.current.has(reviewBlobUrl)) {
+      objectUrlsRef.current.delete(reviewBlobUrl);
+      URL.revokeObjectURL(reviewBlobUrl);
+    }
+    setReviewBlobUrl('');
+    setReviewBlob(null);
+    setRecordingState('idle');
+    setRecordingError('');
+  }
+
+  function retakeRecording() {
+    if (reviewBlobUrl && objectUrlsRef.current.has(reviewBlobUrl)) {
+      objectUrlsRef.current.delete(reviewBlobUrl);
+      URL.revokeObjectURL(reviewBlobUrl);
+    }
+    setReviewBlobUrl('');
+    setReviewBlob(null);
+    requestCameraAccess();
+  }
+
+  async function useRecording() {
+    if (!reviewBlob) return;
+    const blobType = reviewBlob.type || 'video/webm';
+    const ext = blobType.includes('mp4') ? 'mp4' : 'webm';
+    const file = new File([reviewBlob], `recording.${ext}`, { type: blobType });
+
+    if (reviewBlobUrl && objectUrlsRef.current.has(reviewBlobUrl)) {
+      objectUrlsRef.current.delete(reviewBlobUrl);
+      URL.revokeObjectURL(reviewBlobUrl);
+    }
+    setReviewBlobUrl('');
+    setReviewBlob(null);
+    setRecordingState('idle');
+    setRecordingError('');
+
+    // Remove any existing video before adding the recording
+    if (video?.previewKind === 'object-url' && objectUrlsRef.current.has(video.previewUrl)) {
+      objectUrlsRef.current.delete(video.previewUrl);
+      URL.revokeObjectURL(video.previewUrl);
+    }
+
+    setUploadError('');
+    const previewUrl = URL.createObjectURL(file);
+    objectUrlsRef.current.add(previewUrl);
+    const nextVideo: VideoUploadItem = {
+      id: createItemId(),
+      previewUrl,
+      safePreviewUrl: previewUrl,
+      uploadedUrl: '',
+      fileName: file.name,
+      fileSize: file.size,
+      sourceFile: file,
+      previewKind: 'object-url',
+      status: 'uploading',
+      aiEnhancementStatus: 'idle',
+    };
+
+    setVideo(nextVideo);
+
+    try {
+      const url = await uploadFile(file);
+      setVideo((current) =>
+        current?.id === nextVideo.id
+          ? { ...current, uploadedUrl: url, status: 'uploaded', aiEnhancementStatus: 'processing', error: undefined }
+          : current,
+      );
+      const enhanced = await enhanceVideo(url);
+      setVideo((current) =>
+        current?.id === nextVideo.id
+          ? {
+              ...current,
+              aiEnhancementStatus: enhanced ? 'ready' : 'error',
+              aiEnhancedUrl: enhanced ?? undefined,
+            }
+          : current,
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Upload failed.';
+      setVideo((current) =>
+        current?.id === nextVideo.id
+          ? { ...current, status: 'error', aiEnhancementStatus: 'idle', error: msg }
+          : current,
+      );
+      setUploadError(msg);
+    }
   }
 
   function handleImageKeyDown(index: number, event: React.KeyboardEvent<HTMLDivElement>) {
@@ -699,6 +984,7 @@ export default function MediaUpload({
   const imageUploadCount = images.filter((image) => image.status === 'uploading').length;
   const imageEnhancingCount = images.filter((image) => image.enhancementStatus === 'processing').length;
   const videoUploading = video?.status === 'uploading';
+  const videoEnhancing = video?.aiEnhancementStatus === 'processing';
   const hasMediaErrors =
     images.some((image) => image.status === 'error' || image.enhancementStatus === 'error') ||
     video?.status === 'error';
@@ -711,7 +997,7 @@ export default function MediaUpload({
     images.length,
     imageUploadCount,
     imageEnhancingCount,
-    videoUploading,
+    videoUploading || videoEnhancing,
     hasMediaErrors,
     firstItemError || ''
   );
@@ -720,6 +1006,7 @@ export default function MediaUpload({
     !imageUploadCount &&
     !imageEnhancingCount &&
     !videoUploading &&
+    !videoEnhancing &&
     !hasMediaErrors &&
     (!video || !!video.uploadedUrl) &&
     (!required || images.length > 0);
@@ -730,7 +1017,7 @@ export default function MediaUpload({
     onStateChange?.({
       imageCount: images.length,
       uploadedImageCount: uploadedImageUrls.length,
-      isUploading: imageUploadCount > 0 || videoUploading,
+      isUploading: imageUploadCount > 0 || videoUploading || videoEnhancing,
       isEnhancing: imageEnhancingCount > 0,
       hasErrors: hasMediaErrors,
       canSubmit: mediaReady,
@@ -747,6 +1034,7 @@ export default function MediaUpload({
     onStateChange,
     uploadedImageUrls.length,
     videoUploading,
+    videoEnhancing,
   ]);
 
   return (
@@ -972,15 +1260,133 @@ export default function MediaUpload({
       {/* ── Video ──────────────────────────────────────────────────── */}
       <div>
         <label className="label">
-          Product Video <span className="text-slate-400 font-normal">(optional, max 1)</span>
+          Product Video <span className="text-slate-400 font-normal">(optional · max {MAX_PRODUCT_VIDEO_DURATION_SECONDS}s)</span>
         </label>
 
-        {video ? (
+        {/* ── Recording UI (shown when recording is active) ─── */}
+        {recordingState !== 'idle' && (
+          <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            {recordingState === 'requesting' && (
+              <p className="text-sm text-slate-600">Accessing camera…</p>
+            )}
+
+            {(recordingState === 'ready' || recordingState === 'recording') && (
+              <>
+                {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+                <video
+                  ref={liveVideoRef}
+                  autoPlay
+                  muted
+                  playsInline
+                  className="w-full rounded-lg border border-slate-200 max-h-52 object-cover bg-black"
+                />
+                {recordingState === 'recording' && (
+                  <div className="flex items-center gap-2">
+                    <span className="inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" />
+                    <p className="text-sm font-semibold text-red-600">
+                      Recording — {recordingCountdown}s remaining
+                    </p>
+                  </div>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  {recordingState === 'ready' && (
+                    <button
+                      type="button"
+                      onClick={startRecording}
+                      className="inline-flex min-h-[44px] items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+                    >
+                      ● Start recording
+                    </button>
+                  )}
+                  {recordingState === 'recording' && (
+                    <button
+                      type="button"
+                      onClick={stopRecording}
+                      className="inline-flex min-h-[44px] items-center gap-2 rounded-md bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-900"
+                    >
+                      ■ Stop recording
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={cancelRecording}
+                    className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            )}
+
+            {recordingState === 'reviewing' && (
+              <>
+                {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+                <video
+                  src={reviewBlobUrl}
+                  controls
+                  playsInline
+                  preload="metadata"
+                  className="w-full rounded-lg border border-slate-200 max-h-52 object-cover"
+                />
+                <p className="text-sm text-slate-600">Review your recording. Use it or retake.</p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={useRecording}
+                    className="inline-flex min-h-[44px] items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                  >
+                    ✓ Use this video
+                  </button>
+                  <button
+                    type="button"
+                    onClick={retakeRecording}
+                    className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700"
+                  >
+                    Retake
+                  </button>
+                  <button
+                    type="button"
+                    onClick={cancelRecording}
+                    className="rounded-md border border-red-200 px-3 py-2 text-sm font-medium text-red-600"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            )}
+
+            {recordingState === 'error' && (
+              <>
+                <p className="text-sm text-red-600">{recordingError}</p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={requestCameraAccess}
+                    className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700"
+                  >
+                    Try again
+                  </button>
+                  <button
+                    type="button"
+                    onClick={cancelRecording}
+                    className="rounded-md border border-red-200 px-3 py-2 text-sm font-medium text-red-600"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ── Existing / uploaded video ─── */}
+        {recordingState === 'idle' && video && (
           <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             {video.previewKind === 'object-url' ? (
               <video
                 ref={videoPreviewRef}
                 controls
+                playsInline
                 preload="metadata"
                 className="rounded-lg border border-slate-200 max-h-48 w-full object-cover"
               />
@@ -1007,7 +1413,13 @@ export default function MediaUpload({
               {video.status === 'uploading' && (
                 <p className="text-xs font-medium text-blue-600">Uploading video…</p>
               )}
-              {video.status === 'uploaded' && (
+              {video.status === 'uploaded' && video.aiEnhancementStatus === 'processing' && (
+                <p className="text-xs font-medium text-blue-600">AI enhancing video…</p>
+              )}
+              {video.status === 'uploaded' && video.aiEnhancementStatus === 'ready' && (
+                <p className="text-xs font-medium text-emerald-600">✨ AI enhanced · Ready to submit</p>
+              )}
+              {video.status === 'uploaded' && video.aiEnhancementStatus === 'idle' && (
                 <p className="text-xs font-medium text-emerald-600">Ready to submit</p>
               )}
               {video.status === 'error' && (
@@ -1017,9 +1429,9 @@ export default function MediaUpload({
             <div className="flex flex-wrap gap-2">
               <label
                 className={`inline-flex min-h-[44px] items-center gap-2 rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 ${
-                  videoUploading ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+                  videoUploading || videoEnhancing ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
                 }`}
-                aria-disabled={videoUploading}
+                aria-disabled={videoUploading || videoEnhancing}
               >
                 Replace video
                 <input
@@ -1027,7 +1439,7 @@ export default function MediaUpload({
                   type="file"
                   accept={PRODUCT_VIDEO_TYPES.join(",")}
                   onChange={handleVideoFileChange}
-                  disabled={videoUploading}
+                  disabled={videoUploading || videoEnhancing}
                   className="hidden"
                 />
               </label>
@@ -1049,34 +1461,44 @@ export default function MediaUpload({
               </button>
             </div>
           </div>
-        ) : (
-          <div>
-            <label
-              className={`inline-flex min-h-[44px] items-center gap-2 btn-outline px-4 py-2 text-sm ${
-                videoUploading ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
-              }`}
-              aria-disabled={videoUploading}
-            >
-              Choose video
-              <input
-                ref={videoInputRef}
-                type="file"
-                accept={PRODUCT_VIDEO_TYPES.join(",")}
-                onChange={handleVideoFileChange}
-                disabled={videoUploading}
-                className="hidden"
-              />
-            </label>
-            <p className="text-xs text-slate-400 mt-1">MP4, MOV, WebM • max 200 MB</p>
+        )}
+
+        {/* ── No video yet — offer record or upload ─── */}
+        {recordingState === 'idle' && !video && (
+          <div className="space-y-2">
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={requestCameraAccess}
+                className="inline-flex min-h-[44px] items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+              >
+                🎥 Record video
+              </button>
+              <label
+                className="inline-flex min-h-[44px] cursor-pointer items-center gap-2 btn-outline px-4 py-2 text-sm"
+              >
+                Choose file
+                <input
+                  ref={videoInputRef}
+                  type="file"
+                  accept={PRODUCT_VIDEO_TYPES.join(",")}
+                  onChange={handleVideoFileChange}
+                  className="hidden"
+                />
+              </label>
+            </div>
+            <p className="text-xs text-slate-400">
+              MP4, MOV, WebM · max {MAX_PRODUCT_VIDEO_DURATION_SECONDS}s · AI enhancement applied on upload
+            </p>
           </div>
         )}
 
-        <input type="hidden" name="videoUrl" value={video?.uploadedUrl ?? ''} />
+        <input type="hidden" name="videoUrl" value={video?.aiEnhancedUrl ?? video?.uploadedUrl ?? ''} />
       </div>
 
-      {(imageUploadCount > 0 || imageEnhancingCount > 0 || videoUploading) && (
+      {(imageUploadCount > 0 || imageEnhancingCount > 0 || videoUploading || videoEnhancing) && (
         <p className="text-sm text-slate-500" aria-live="polite">
-          {imageEnhancingCount > 0 ? 'Enhancing images…' : 'Uploading media…'}
+          {getUploadProgressMessage(imageEnhancingCount, videoEnhancing)}
         </p>
       )}
       {uploadError && (

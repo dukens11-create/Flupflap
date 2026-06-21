@@ -72,6 +72,11 @@ export default function ProductCard({ p: product }:{p:any}){
         {isFeatured && (
           <span className="absolute left-3 top-3 rounded-full bg-amber-400 px-2.5 py-1 text-[11px] font-bold text-amber-950 shadow-sm">{t('product.sponsored')}</span>
         )}
+        {product.videoUrl && (
+          <span className="absolute right-3 bottom-3 inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-1 text-[11px] font-semibold text-white shadow-sm">
+            🎥 Video
+          </span>
+        )}
       </div>
       <div className="flex flex-1 flex-col gap-3 p-3 sm:p-4">
         <div className="space-y-2">
