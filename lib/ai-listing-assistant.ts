@@ -11,6 +11,11 @@ const EMPTY_MEDIA_UPLOAD_STATE: MediaUploadState = {
   uploadedImageUrls: [],
 };
 
+type AiListingApiPayload = {
+  data?: unknown;
+  error?: unknown;
+};
+
 export function sanitizeMediaUploadState(state: unknown): MediaUploadState {
   if (!state || typeof state !== 'object') {
     return { ...EMPTY_MEDIA_UPLOAD_STATE };
@@ -31,4 +36,22 @@ export function sanitizeMediaUploadState(state: unknown): MediaUploadState {
     message: typeof candidate.message === 'string' ? candidate.message : '',
     uploadedImageUrls,
   };
+}
+
+export function parseAiListingApiPayload(payloadRaw: unknown): {
+  data: Record<string, unknown> | null;
+  errorMessage?: string;
+} {
+  if (!payloadRaw || typeof payloadRaw !== 'object') {
+    return { data: null };
+  }
+
+  const payload = payloadRaw as AiListingApiPayload;
+  const data =
+    payload.data && typeof payload.data === 'object'
+      ? (payload.data as Record<string, unknown>)
+      : null;
+  const errorMessage = typeof payload.error === 'string' ? payload.error : undefined;
+
+  return { data, errorMessage };
 }

@@ -8,7 +8,7 @@ import MediaUpload, { type MediaUploadState } from '@/components/MediaUpload';
 import SizeVariantEditor from '@/components/SizeVariantEditor';
 import { readApiMessage } from '@/lib/read-api-message';
 import type { AiListingResponse } from '@/app/api/ai/generate-listing/route';
-import { sanitizeMediaUploadState } from '@/lib/ai-listing-assistant';
+import { parseAiListingApiPayload, sanitizeMediaUploadState } from '@/lib/ai-listing-assistant';
 
 type FormErrors = {
   title?: string;
@@ -133,16 +133,17 @@ export default function NewListingForm() {
         console.warn('[ai-listing-assistant] Received a non-JSON response from /api/ai/generate-listing.', error);
         return null;
       });
-      const payload = payloadRaw && typeof payloadRaw === 'object'
-        ? payloadRaw as { data?: unknown; error?: unknown }
-        : null;
-      if (!res.ok || !payload?.data || typeof payload.data !== 'object') {
-        const errorMessage = typeof payload?.error === 'string' ? payload.error : undefined;
+      const { data, errorMessage } = parseAiListingApiPayload(payloadRaw);
+      if (!res.ok || !data) {
+        console.error('[ai-listing-assistant] Invalid AI listing response payload.', {
+          status: res.status,
+          payload: payloadRaw,
+        });
         setAiError(errorMessage ?? 'AI generation failed. Please try again.');
         return;
       }
 
-      const d = payload.data as AiListingResponse;
+      const d = data as AiListingResponse;
       const suggested = new Set<string>();
 
       if (d.title) { setTitleValue(d.title); suggested.add('title'); }
