@@ -10,6 +10,7 @@ import { getVisitorMetrics } from '@/lib/traffic';
 import AdminListingsTable from '@/components/AdminListingsTable';
 import { getSellerKycStats } from '@/lib/seller-kyc-stats';
 import { isSchemaNotInitializedError } from '@/lib/db-errors';
+import { INTIMATE_WELLNESS_CATEGORY, isAdultWellnessCategory } from '@/lib/adult-wellness';
 
 export const dynamic = 'force-dynamic';
 
@@ -547,6 +548,11 @@ export default async function AdminPage({
           <div className="space-y-3">
             {pending.map((p: (typeof pending)[number]) => (
               <div key={p.id} className="card p-4">
+                {isAdultWellnessCategory({ categoryName: p.category }) && (
+                  <p className="mb-3 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-medium text-violet-900">
+                    {INTIMATE_WELLNESS_CATEGORY.adminGuidance}
+                  </p>
+                )}
                 <div className="flex gap-4 items-start">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={p.imageUrl} alt={p.title} className="h-20 w-20 flex-shrink-0 rounded-xl border border-slate-200 bg-white object-contain p-1.5" />

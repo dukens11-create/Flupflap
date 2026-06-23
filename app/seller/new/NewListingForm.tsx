@@ -9,6 +9,7 @@ import SizeVariantEditor from '@/components/SizeVariantEditor';
 import { readApiMessage } from '@/lib/read-api-message';
 import type { AiListingResponse } from '@/app/api/ai/generate-listing/route';
 import { sanitizeMediaUploadState } from '@/lib/ai-listing-assistant';
+import { INTIMATE_WELLNESS_CATEGORY, isAdultWellnessCategory } from '@/lib/adult-wellness';
 
 type FormErrors = {
   title?: string;
@@ -88,6 +89,12 @@ export default function NewListingForm() {
   const aiRequestIdRef = useRef(0);
   const unmountedRef = useRef(false);
   const safeMediaState = sanitizeMediaUploadState(mediaState);
+  const requiresAdultWellnessReview = isAdultWellnessCategory({
+    categoryId: selectedCategory.categoryId,
+    categorySlug: selectedCategory.categorySlug,
+    categoryName: selectedCategory.categoryName,
+    categoryPath: selectedCategory.categoryPath,
+  });
 
   useEffect(() => {
     unmountedRef.current = false;
@@ -652,6 +659,11 @@ export default function NewListingForm() {
       {selectedCategory.categoryPath && !selectedCategory.stale && (
         <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
           Selected category: {selectedCategory.categoryPath}
+        </p>
+      )}
+      {requiresAdultWellnessReview && (
+        <p className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-900">
+          <span className="font-semibold">{INTIMATE_WELLNESS_CATEGORY.name}:</span> {INTIMATE_WELLNESS_CATEGORY.sellerGuidance}
         </p>
       )}
 

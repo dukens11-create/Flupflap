@@ -28,6 +28,7 @@ import { getSchedulingDisabledError } from '@/lib/listing-scheduling';
 import { canEditProductForSeller, getProductEditSuccessPath } from '@/lib/product-edit-access';
 import { getAvailableVariantInventory, normalizeProductVariantsInput } from '@/lib/product-variants';
 import { normalizeSizeMlValue } from '@/lib/category-attribute-schema';
+import { INTIMATE_WELLNESS_CATEGORY, isAdultWellnessCategory } from '@/lib/adult-wellness';
 
 const optionalInputString = z.preprocess((value) => {
   if (value === undefined || value === null) return undefined;
@@ -588,7 +589,18 @@ export async function POST(
     const nextCategoryPath = resolvedCategorySelection.submitted
       ? (resolvedCategorySelection.categoryPath || nextCategoryName)
       : (await resolveCategoryPathFromIds(existing.categoryId, existing.subcategoryId)) || existing.category;
+    const requiresAdultWellnessReview = isAdultWellnessCategory({
+      categoryId: resolvedCategorySelection.submitted ? resolvedCategorySelection.categoryId : existing.categoryId,
+      categoryName: nextCategoryName,
+      categoryPath: nextCategoryPath,
+    });
     const nextBrand = typeof nextProductAttributes.brand === 'string' ? nextProductAttributes.brand : null;
+    if (requiresAdultWellnessReview) {
+      nextProductAttributes.ageRestricted = true;
+      nextProductAttributes.moderationRequired = true;
+      nextProductAttributes.contentPolicy = 'intimate_wellness_professional_only';
+      nextProductAttributes.complianceNotice = INTIMATE_WELLNESS_CATEGORY.buyerNotice;
+    }
     nextProductAttributes.searchableText = buildProductSearchableText({
       title: nextTitle,
       description: nextDescription,
@@ -607,7 +619,7 @@ export async function POST(
     const nextStatus = submitAction === 'SAVE_DRAFT'
       ? 'DRAFT'
       : submitAction === 'PUBLISH_NOW'
-          ? 'ACTIVE'
+          ? requiresAdultWellnessReview && actorRole !== 'ADMIN' ? 'PENDING' : 'ACTIVE'
           : isDraftLikeStatus(existing.status)
             ? existing.status
             : 'PENDING';
@@ -664,7 +676,7 @@ export async function POST(
           enhancedImages: resolvedEnhancedImages,
           imageThumbnails: resolvedImageThumbnails,
           status: nextStatus,
-          publishedAt: submitAction === 'PUBLISH_NOW' ? new Date() : existing.publishedAt,
+          publishedAt: submitAction === 'PUBLISH_NOW' && nextStatus === 'ACTIVE' ? new Date() : existing.publishedAt,
         },
         select: SELLER_PRODUCT_SAFE_SELECT,
       });

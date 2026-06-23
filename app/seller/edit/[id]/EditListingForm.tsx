@@ -8,6 +8,7 @@ import MediaUpload, { type MediaUploadState } from '@/components/MediaUpload';
 import { readApiMessage } from '@/lib/read-api-message';
 import SizeVariantEditor from '@/components/SizeVariantEditor';
 import type { ProductSizeType, ProductVariantDraft } from '@/lib/product-variants';
+import { INTIMATE_WELLNESS_CATEGORY, isAdultWellnessCategory } from '@/lib/adult-wellness';
 
 interface EditListingFormProps {
   id: string;
@@ -123,6 +124,12 @@ export default function EditListingForm({
     if (!nextCategory.categoryId || nextCategory.stale) return;
     setSubmitError((current) => (current === INVALID_CATEGORY_MESSAGE ? '' : current));
   }, []);
+  const requiresAdultWellnessReview = isAdultWellnessCategory({
+    categoryId: selectedCategory.categoryId || defaultCategoryId,
+    categorySlug: selectedCategory.categorySlug || defaultCategorySlug,
+    categoryName: selectedCategory.categoryName,
+    categoryPath: selectedCategory.categoryPath,
+  });
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -548,6 +555,11 @@ export default function EditListingForm({
       {selectedCategory.categoryPath && !selectedCategory.stale && (
         <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
           Selected category: {selectedCategory.categoryPath}
+        </p>
+      )}
+      {requiresAdultWellnessReview && (
+        <p className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-900">
+          <span className="font-semibold">{INTIMATE_WELLNESS_CATEGORY.name}:</span> {INTIMATE_WELLNESS_CATEGORY.sellerGuidance}
         </p>
       )}
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">

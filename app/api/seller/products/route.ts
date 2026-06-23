@@ -27,6 +27,7 @@ import { getSchedulingDisabledError } from '@/lib/listing-scheduling';
 import { getAvailableVariantInventory, normalizeProductVariantsInput } from '@/lib/product-variants';
 import { normalizeSizeMlValue } from '@/lib/category-attribute-schema';
 import { trackServerConversionEvent } from '@/lib/conversion-tracking-server';
+import { INTIMATE_WELLNESS_CATEGORY, isAdultWellnessCategory } from '@/lib/adult-wellness';
 
 import { SHIPPING_MODES, type ShippingMode } from '@/lib/product-constants';
 const schema = z.object({
@@ -409,6 +410,17 @@ export async function POST(req: Request) {
     }
     const category = validatedCategory.ok ? validatedCategory.displayName : (data.category ?? 'Draft');
     const categoryPath = validatedCategory.ok ? validatedCategory.path.map((node) => node.name).join(' > ') : category;
+    const requiresAdultWellnessReview = isAdultWellnessCategory({
+      categoryId: validatedCategory.ok ? validatedCategory.categoryId : data.categoryId,
+      categoryName: category,
+      categoryPath,
+    });
+    if (requiresAdultWellnessReview) {
+      normalizedAttributes.ageRestricted = true;
+      normalizedAttributes.moderationRequired = true;
+      normalizedAttributes.contentPolicy = 'intimate_wellness_professional_only';
+      normalizedAttributes.complianceNotice = INTIMATE_WELLNESS_CATEGORY.buyerNotice;
+    }
     normalizedAttributes.searchableText = buildProductSearchableText({
       title,
       description: data.description || '',
@@ -531,8 +543,8 @@ export async function POST(req: Request) {
           shippingCents: Number.isNaN(shippingValue) || shippingValue < 0 ? 0 : (resolvedShippingMode === 'FREE' ? 0 : cents(shippingRaw)),
           shippingMode: resolvedShippingMode,
           inventory: Number.isInteger(resolvedInventoryQty) && resolvedInventoryQty >= 0 ? resolvedInventoryQty : 0,
-          status: isDraftAction ? 'DRAFT' : isPublishNowAction ? 'ACTIVE' : 'PENDING',
-          publishedAt: isPublishNowAction ? new Date() : null,
+          status: isDraftAction ? 'DRAFT' : requiresAdultWellnessReview ? 'PENDING' : isPublishNowAction ? 'ACTIVE' : 'PENDING',
+          publishedAt: isPublishNowAction && !requiresAdultWellnessReview ? new Date() : null,
           pickupAvailable,
           pickupCity,
           pickupState,
@@ -573,7 +585,9 @@ export async function POST(req: Request) {
     }
 
     const fraudQuery = shouldRecommendFraudReview(riskAssessment) ? '&fraud=review' : '';
-    const redirectTo = isPublishNowAction
+    const redirectTo = !isDraftAction && requiresAdultWellnessReview
+        ? `/seller/listings/drafts?created=${product.id}${fraudQuery}`
+        : isPublishNowAction
         ? `/seller/listings/active?created=${product.id}${fraudQuery}`
         : `/seller/listings/drafts?created=${product.id}${fraudQuery}`;
     if (isPublishNowAction) {
@@ -584,7 +598,11 @@ export async function POST(req: Request) {
     }
     return NextResponse.json({
       success: true,
-      message: isDraftAction ? 'Draft saved successfully.' : 'Listing published successfully.',
+      message: isDraftAction
+        ? 'Draft saved successfully.'
+        : requiresAdultWellnessReview
+          ? 'Listing submitted for adult wellness review.'
+          : 'Listing published successfully.',
       redirectTo,
     });
   } catch (err) {

@@ -6,6 +6,7 @@ import { dollars } from '@/lib/money';
 import { useI18n } from '@/components/I18nProvider';
 import { conditionBadgeClass } from '@/lib/condition-badge';
 import UserAvatar from '@/components/UserAvatar';
+import { INTIMATE_WELLNESS_CATEGORY, isAdultWellnessCategory } from '@/lib/adult-wellness';
 
 const TRENDING_THRESHOLD = 5;
 
@@ -49,6 +50,13 @@ export default function ProductCard({ p: product }:{p:any}){
   const responseRate = typeof product.sellerResponseRate === 'number' ? product.sellerResponseRate : null;
   const filledStars = responseRate === null ? 0 : percentageToStarCount(responseRate);
   const cardClasses = `flex h-full flex-col overflow-hidden rounded-[28px] border bg-white shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-xl ${isFeatured ? 'border-amber-200 ring-2 ring-amber-300' : 'border-slate-200'}`;
+  const isAdultWellness = isAdultWellnessCategory({
+    categoryId: product.categoryId,
+    categoryName: product.category,
+    categoryPath: product.subcategoryRef?.parent?.name
+      ? `${product.subcategoryRef.parent.name} > ${product.subcategoryRef.name}`
+      : product.category,
+  });
 
   const shippingText = (() => {
     const key = resolveShippingKey(product.shippingMode, product.shippingCents);
@@ -85,11 +93,19 @@ export default function ProductCard({ p: product }:{p:any}){
               {product.condition}
             </span>
             <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wide">{product.category}</span>
+            {isAdultWellness && (
+              <span className="rounded-full bg-violet-100 px-2.5 py-0.5 text-[11px] font-semibold text-violet-700">
+                {INTIMATE_WELLNESS_CATEGORY.moderationLabel}
+              </span>
+            )}
           </div>
           <h3 className="line-clamp-2 text-sm font-bold text-slate-900 sm:text-base">{product.title}</h3>
           <p className="text-lg font-black text-amber-600 sm:text-xl">{dollars(product.priceCents)}</p>
         </div>
         <p className="text-xs text-slate-500">{shippingText}</p>
+        {isAdultWellness && (
+          <p className="text-xs text-violet-700">{INTIMATE_WELLNESS_CATEGORY.buyerNotice}</p>
+        )}
         {product.pickupAvailable&&product.pickupCity&&<p className="text-xs font-medium text-emerald-700">{t('product.pickupIn', { location: pickupLocation })}</p>}
         {typeof product.inventory === 'number' && product.inventory > 0 && product.inventory <= 5 && (product.status === 'APPROVED' || product.status === 'ACTIVE') && (
           <p className="text-xs font-semibold text-orange-600">Only {product.inventory} left!</p>

@@ -23,6 +23,10 @@ const CATEGORY_ALIAS_GROUPS = [
     keys: ['beauty'],
     aliases: ['beauty', 'makeup', 'cosmetics', 'skincare', 'lotion', 'cream'],
   },
+  {
+    keys: ['intimate wellness', 'adult wellness', 'sexual wellness', 'sex toys'],
+    aliases: ['intimate wellness', 'adult wellness', 'sexual wellness', 'sex toys', 'personal massager', 'couples wellness'],
+  },
 ] as const;
 
 const COMMON_TYPO_REDIRECTS: Record<string, string[]> = {

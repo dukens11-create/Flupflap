@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { INTIMATE_WELLNESS_CATEGORY, isAdultWellnessCategory } from '@/lib/adult-wellness';
 
 const LOW_STOCK_THRESHOLD = 5;
 
@@ -30,6 +31,15 @@ function dollars(cents: number) {
 /** Returns the best available thumbnail URL for a listing (mainImage > images[0] > imageUrl). */
 function getProductThumbnail(l: AdminListing): string {
   return l.mainImage || (l.images && l.images[0]) || l.imageUrl || '';
+}
+
+function AdultWellnessBadge({ category }: { category: string }) {
+  if (!isAdultWellnessCategory({ categoryName: category })) return null;
+  return (
+    <span className="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-700">
+      {INTIMATE_WELLNESS_CATEGORY.moderationLabel}
+    </span>
+  );
 }
 
 function StatusBadge({ status, inventory }: { status: string; inventory: number }) {
@@ -380,7 +390,10 @@ export default function AdminListingsTable({ listings }: { listings: AdminListin
                       <td className="px-3 py-2.5">{thumbnail(l)}</td>
                       <td className="px-3 py-2.5 max-w-[200px]">
                         <p className="font-medium text-slate-900 truncate" title={l.title}>{l.title}</p>
-                        <p className="text-xs text-slate-400 truncate">{l.category}</p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-xs text-slate-400 truncate">{l.category}</p>
+                          <AdultWellnessBadge category={l.category} />
+                        </div>
                       </td>
                       <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{l.seller.name}</td>
                       <td className="px-3 py-2.5 text-right font-medium text-slate-900 whitespace-nowrap">{dollars(l.priceCents)}</td>
@@ -411,7 +424,10 @@ export default function AdminListingsTable({ listings }: { listings: AdminListin
                   {thumbnail(l)}
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm text-slate-900 truncate" title={l.title}>{l.title}</p>
-                    <p className="text-xs text-slate-500 truncate">{l.seller.name} · {l.category}</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-xs text-slate-500 truncate">{l.seller.name} · {l.category}</p>
+                      <AdultWellnessBadge category={l.category} />
+                    </div>
                     <div className="flex items-center gap-2 mt-0.5">
                       <span className="text-xs font-semibold text-slate-900">{dollars(l.priceCents)}</span>
                       <span className="text-xs text-slate-400">·</span>

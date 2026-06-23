@@ -20,6 +20,7 @@ import { conditionBadgeClass } from '@/lib/condition-badge';
 import { absoluteUrl, BRAND_LOGO_PATH, DEFAULT_SEO_DESCRIPTION, MARKETPLACE_CURRENCY } from '@/lib/seo';
 import UserAvatar from '@/components/UserAvatar';
 import ProductPurchasePanel from '@/components/ProductPurchasePanel';
+import { INTIMATE_WELLNESS_CATEGORY, isAdultWellnessCategory } from '@/lib/adult-wellness';
 
 export const dynamic = 'force-dynamic';
 
@@ -152,6 +153,11 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
   const sellerResponseStats = await getSellerResponseStats(product.seller.id);
   const canonicalUrl = absoluteUrl(`/products/${product.id}`);
   const imageCandidates = getProductImages(product.images, product.imageUrl);
+  const isAdultWellness = isAdultWellnessCategory({
+    categoryId: product.categoryId,
+    categoryName: product.category,
+    categoryPath: product.category,
+  });
   const productJsonLd = {
     '@context': 'https://schema.org',
     '@type': 'Product',
@@ -208,12 +214,22 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
               {activePromotion && (
                 <span className="badge bg-yellow-400 text-yellow-900 text-xs font-bold inline-flex">Boosted</span>
               )}
+              {isAdultWellness && (
+                <span className="badge bg-violet-100 text-violet-800 text-xs font-bold inline-flex">
+                  {INTIMATE_WELLNESS_CATEGORY.moderationLabel}
+                </span>
+              )}
             </div>
             <p className="text-xs text-slate-400 font-medium uppercase tracking-wide mt-1">
               {product.category}
             </p>
             <h1 className="text-2xl font-black mt-1">{product.title}</h1>
             <p className="text-3xl font-black text-blue-700 mt-2">{dollars(product.priceCents)}</p>
+            {isAdultWellness && (
+              <p className="mt-2 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 text-sm text-violet-900">
+                {INTIMATE_WELLNESS_CATEGORY.buyerNotice}
+              </p>
+            )}
             {product.pickupAvailable ? (
               <p className="text-sm text-slate-500">
                 {product.shippingMode === 'FREE'

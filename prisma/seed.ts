@@ -408,6 +408,81 @@ async function ensureBeautyCategory() {
   console.log('Beauty & Personal Care category hierarchy ensured.');
 }
 
+async function ensureIntimateWellnessCategory() {
+  const healthWellness = await prisma.category.upsert({
+    where: { slug: 'health-wellness' },
+    update: {},
+    create: {
+      name: 'Health & Wellness',
+      slug: 'health-wellness',
+      aliases: ['health', 'wellness', 'self care', 'supplements'],
+      level: 0,
+      icon: '🧘',
+      sortOrder: 8,
+      attributeSchema: JSON.parse(BEAUTY_SKINCARE_FIELDS),
+    },
+  });
+
+  const intimateWellness = await prisma.category.upsert({
+    where: { slug: 'health-wellness-intimate-wellness' },
+    update: {},
+    create: {
+      name: 'Intimate Wellness',
+      slug: 'health-wellness-intimate-wellness',
+      aliases: ['intimate wellness', 'adult wellness', 'sexual wellness', 'sex toys', 'personal massagers', 'couples wellness'],
+      parentId: healthWellness.id,
+      level: 1,
+      icon: '💜',
+      sortOrder: 4,
+      attributeSchema: JSON.parse(BEAUTY_SKINCARE_FIELDS),
+    },
+  });
+
+  await prisma.category.upsert({
+    where: { slug: 'health-wellness-intimate-wellness-personal-massagers' },
+    update: {},
+    create: {
+      name: 'Personal Massagers',
+      slug: 'health-wellness-intimate-wellness-personal-massagers',
+      aliases: ['massagers', 'vibrators', 'devices'],
+      parentId: intimateWellness.id,
+      level: 2,
+      sortOrder: 1,
+      attributeSchema: JSON.parse(BEAUTY_SKINCARE_FIELDS),
+    },
+  });
+
+  await prisma.category.upsert({
+    where: { slug: 'health-wellness-intimate-wellness-lubricants-care' },
+    update: {},
+    create: {
+      name: 'Lubricants & Care',
+      slug: 'health-wellness-intimate-wellness-lubricants-care',
+      aliases: ['lubricants', 'care', 'wellness essentials'],
+      parentId: intimateWellness.id,
+      level: 2,
+      sortOrder: 2,
+      attributeSchema: JSON.parse(BEAUTY_SKINCARE_FIELDS),
+    },
+  });
+
+  await prisma.category.upsert({
+    where: { slug: 'health-wellness-intimate-wellness-accessories-storage' },
+    update: {},
+    create: {
+      name: 'Accessories & Storage',
+      slug: 'health-wellness-intimate-wellness-accessories-storage',
+      aliases: ['accessories', 'storage', 'cleaning'],
+      parentId: intimateWellness.id,
+      level: 2,
+      sortOrder: 3,
+      attributeSchema: JSON.parse(BEAUTY_SKINCARE_FIELDS),
+    },
+  });
+
+  console.log('Intimate Wellness category hierarchy ensured.');
+}
+
 async function ensureFashionCategoryHierarchy() {
   const clothingSchema = JSON.parse(CLOTHING_FIELDS);
   const fashion = await prisma.category.upsert({
@@ -614,6 +689,7 @@ async function main(){
   await seedCategories();
   // Always ensure new categories exist (safe upsert for existing databases)
   await ensureBeautyCategory();
+  await ensureIntimateWellnessCategory();
   await ensureFashionCategoryHierarchy();
   await ensureAsianCategory();
   await ensureCulturalMarketplaceCategories();
