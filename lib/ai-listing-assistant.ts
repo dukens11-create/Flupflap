@@ -11,6 +11,22 @@ const EMPTY_MEDIA_UPLOAD_STATE: MediaUploadState = {
   uploadedImageUrls: [],
 };
 
+type AiListingApiPayload = {
+  data?: unknown;
+  error?: unknown;
+};
+
+function getAiListingErrorMessage(error: unknown): string | undefined {
+  if (typeof error === 'string' && error.trim()) return error;
+  if (error && typeof error === 'object' && 'message' in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === 'string' && message.trim()) {
+      return message;
+    }
+  }
+  return undefined;
+}
+
 export function sanitizeMediaUploadState(state: unknown): MediaUploadState {
   if (!state || typeof state !== 'object') {
     return { ...EMPTY_MEDIA_UPLOAD_STATE };
@@ -31,4 +47,22 @@ export function sanitizeMediaUploadState(state: unknown): MediaUploadState {
     message: typeof candidate.message === 'string' ? candidate.message : '',
     uploadedImageUrls,
   };
+}
+
+export function parseAiListingApiPayload(payloadRaw: unknown): {
+  data: Record<string, unknown> | null;
+  errorMessage?: string;
+} {
+  if (!payloadRaw || typeof payloadRaw !== 'object') {
+    return { data: null };
+  }
+
+  const payload = payloadRaw as AiListingApiPayload;
+  const data =
+    payload.data && typeof payload.data === 'object'
+      ? (payload.data as Record<string, unknown>)
+      : null;
+  const errorMessage = getAiListingErrorMessage(payload.error);
+
+  return { data, errorMessage };
 }
