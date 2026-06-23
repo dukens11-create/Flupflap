@@ -38,3 +38,10 @@ test('parseAiListingApiPayload returns object data when valid', () => {
   assert.deepEqual(parsed.data, { title: 'Sample' });
   assert.equal(parsed.errorMessage, undefined);
 });
+
+test('parseAiListingApiPayload extracts message from object-style errors', () => {
+  const parsed = parseAiListingApiPayload({ data: null, error: { message: 'Gateway timeout' } });
+
+  assert.equal(parsed.data, null);
+  assert.equal(parsed.errorMessage, 'Gateway timeout');
+});

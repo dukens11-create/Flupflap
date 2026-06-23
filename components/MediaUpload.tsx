@@ -233,6 +233,7 @@ export default function MediaUpload({
   const [hdUpscale, setHdUpscale] = useState(false);
   const [recordingState, setRecordingState] = useState<RecordingState>('idle');
   const [cameraFacingMode, setCameraFacingMode] = useState<CameraFacingMode>('environment');
+  const [cameraSwitching, setCameraSwitching] = useState(false);
   const [recordingCountdown, setRecordingCountdown] = useState(MAX_PRODUCT_VIDEO_DURATION_SECONDS);
   const [recordingError, setRecordingError] = useState('');
   const [reviewBlobUrl, setReviewBlobUrl] = useState('');
@@ -829,15 +830,16 @@ export default function MediaUpload({
   }
 
   async function switchCamera() {
-    if (!mediaStreamRef.current) return;
+    if (!mediaStreamRef.current || cameraSwitching) return;
 
     const nextFacingMode: CameraFacingMode = cameraFacingMode === 'environment' ? 'user' : 'environment';
     setRecordingError('');
+    setCameraSwitching(true);
 
     try {
       const replacementStream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: nextFacingMode } },
-        audio: false,
+        audio: true,
       });
       const replacementVideoTrack = replacementStream.getVideoTracks()[0];
       if (!replacementVideoTrack) {
@@ -848,12 +850,12 @@ export default function MediaUpload({
       const currentVideoTrack = currentStream.getVideoTracks()[0];
       if (currentVideoTrack) {
         currentStream.removeTrack(currentVideoTrack);
-      }
-      currentStream.addTrack(replacementVideoTrack);
-      if (currentVideoTrack) {
         currentVideoTrack.stop();
       }
+      currentStream.addTrack(replacementVideoTrack);
 
+      // Keep the original stream's audio track so recording audio stays continuous
+      // while we only swap the active camera video track.
       replacementStream.getTracks().forEach((track) => {
         if (track !== replacementVideoTrack) {
           track.stop();
@@ -868,6 +870,8 @@ export default function MediaUpload({
     } catch (err: unknown) {
       console.warn('[MediaUpload] Failed to switch recording camera.', err);
       setRecordingError('Unable to switch camera. Please try again.');
+    } finally {
+      setCameraSwitching(false);
     }
   }
 
@@ -1057,6 +1061,7 @@ export default function MediaUpload({
     (!required || images.length > 0);
   const mainImage = uploadedImageUrls[0] ?? '';
   const safeUploadedVideoUrl = video ? getSafePreviewUrl(video.uploadedUrl) : '';
+  const targetCameraLabel = cameraFacingMode === 'environment' ? 'front' : 'back';
 
   useEffect(() => {
     onStateChange?.({
@@ -1358,9 +1363,13 @@ export default function MediaUpload({
                   <button
                     type="button"
                     onClick={switchCamera}
-                    className="inline-flex min-h-[44px] items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700"
+                    disabled={cameraSwitching || !mediaStreamRef.current}
+                    aria-label="Switch camera between front and back"
+                    className="inline-flex min-h-[44px] items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    ↺ Switch to {cameraFacingMode === 'environment' ? 'front' : 'back'} camera
+                    {cameraSwitching
+                      ? 'Switching camera…'
+                      : `↺ Switch to ${targetCameraLabel} camera`}
                   </button>
                   <button
                     type="button"
