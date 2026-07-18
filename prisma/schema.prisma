@@ -1233,3 +1233,42 @@ model GarageSaleGuestRequest {
   @@index([sellerId, status])
   @@map("live_join_requests")
 }
+
+// ─── Founding Seller Program ─────────────────────────────────────────────────
+
+/// Tracks enrollment in the limited (1,000-seat) Founding Seller Program.
+model FoundingSellerProgram {
+  id                   String   @id @default(cuid())
+  userId               String   @unique
+  enrollmentDate       DateTime @default(now())
+  expiryDate           DateTime
+  /// Sequential founder number (1–1000).
+  foundingSellerNumber Int      @unique
+  /// ACTIVE | EXPIRED | TRANSITIONED
+  status               String   @default("ACTIVE")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([foundingSellerNumber])
+}
+
+/// Tracks seller subscription state across plan types.
+model SellerSubscription {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  /// FOUNDING | GARAGE_SELLER | REGULAR_SELLER
+  type            String
+  /// ACTIVE | EXPIRED | CANCELLED
+  status          String   @default("ACTIVE")
+  /// Monthly fee in cents (0 for founding year).
+  monthlyFeeCents Int      @default(0)
+  nextBillingDate DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([type])
+}
