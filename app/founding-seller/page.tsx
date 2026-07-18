@@ -126,7 +126,7 @@ export default function FoundingSellerPage() {
           {[
             {
               q: 'How do I enroll?',
-              a: 'Click "Become a Founding Seller" above. You\'ll need a FlupFlap account — signing up takes less than a minute.',
+              a: `Click "Become a Founding Seller" above. You'll need a FlupFlap account — signing up takes less than a minute.`,
             },
             {
               q: 'Is there a credit card required?',
