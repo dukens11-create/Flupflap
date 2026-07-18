@@ -13,6 +13,7 @@ import { getSellerResponseStatsForSellers } from '@/lib/messages';
 import { authOptions } from '@/lib/auth-options';
 import { getRoleDefaultPath, normalizeExperienceRole } from '@/lib/role-experience';
 import GarageSalesPromoBanner from '@/components/GarageSalesPromoBanner';
+import FoundingSellerPromo from '@/components/FoundingSellerPromo';
 import { createPageMetadata, DEFAULT_SEO_DESCRIPTION } from '@/lib/seo';
 import { DEFAULT_CATEGORY_TREE, type DefaultCategoryNode } from '@/lib/default-categories';
 import {
@@ -487,6 +488,8 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
       </section>
 
       <GarageSalesPromoBanner />
+
+      <FoundingSellerPromo />
 
       <section id="featured-products" className="space-y-4">
         <div className="space-y-2">
