@@ -52,18 +52,10 @@ export async function POST() {
       );
     }
 
-    const isOpen = await isFoundingSellerProgramOpen();
-    if (!isOpen) {
-      return NextResponse.json(
-        {
-          error:
-            'The Founding Seller Program has reached its limit of 1,000 founders. ' +
-            'Stay tuned for future seller plans.',
-        },
-        { status: 409 },
-      );
-    }
-
+    // Skip the optimistic pre-check and let the transaction in enrollFoundingSeller
+    // be the single source of truth for the enrollment limit. This prevents a race
+    // condition where the check passes but enrollment fails because the 1,000th
+    // spot was claimed between the check and the insert.
     const { foundingSellerNumber, expiryDate, enrollmentDate } =
       await enrollFoundingSeller(session.user.id);
 
@@ -77,8 +69,8 @@ export async function POST() {
       },
       { status: 201 },
     );
-  } catch (err: any) {
-    if (err?.message === 'PROGRAM_CLOSED') {
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message === 'PROGRAM_CLOSED') {
       return NextResponse.json(
         {
           error:

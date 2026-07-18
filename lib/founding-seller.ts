@@ -34,12 +34,13 @@ export async function getFoundingSellerCount(): Promise<number> {
 /**
  * Enrolls a user in the Founding Seller Program.
  *
- * - Assigns the next sequential founder number.
- * - Creates a `SellerSubscription` record with a $0 monthly fee.
+ * - Assigns the next sequential founder number using a SERIALIZABLE transaction
+ *   so that concurrent enrollments cannot claim the same founder number.
+ * - Creates a `SellerSubscription` record with a $0 monthly fee when none exists.
  * - Is idempotent: calling again for an already-enrolled user returns the
  *   existing record without creating a duplicate.
  *
- * @throws {Error} when the program is full or the enrollment limit is reached.
+ * @throws {Error} with message 'PROGRAM_CLOSED' when the limit is reached.
  */
 export async function enrollFoundingSeller(userId: string): Promise<{
   foundingSellerNumber: number;
@@ -53,45 +54,57 @@ export async function enrollFoundingSeller(userId: string): Promise<{
   });
   if (existing) return existing;
 
-  // Use a transaction to safely claim the next founder number.
-  return prisma.$transaction(async (tx) => {
-    const count = await tx.foundingSellerProgram.count();
-    if (count >= FOUNDING_SELLER_LIMIT) {
-      throw new Error('PROGRAM_CLOSED');
-    }
+  // Use a SERIALIZABLE transaction so that concurrent reads of the count are
+  // isolated: two simultaneous enrollments cannot both read the same count and
+  // attempt to create the same foundingSellerNumber.
+  return prisma.$transaction(
+    async (tx) => {
+      // Use MAX+1 to ensure sequential numbers are never reused if records are
+      // deleted, and to remain safe under the SERIALIZABLE isolation level.
+      const maxResult = await tx.foundingSellerProgram.aggregate({
+        _max: { foundingSellerNumber: true },
+        _count: { id: true },
+      });
+      const currentCount = maxResult._count.id;
+      if (currentCount >= FOUNDING_SELLER_LIMIT) {
+        throw new Error('PROGRAM_CLOSED');
+      }
+      const nextNumber = (maxResult._max.foundingSellerNumber ?? 0) + 1;
+      const now = new Date();
+      const expiryDate = new Date(now.getTime() + ONE_YEAR_MS);
 
-    const nextNumber = count + 1;
-    const now = new Date();
-    const expiryDate = new Date(now.getTime() + ONE_YEAR_MS);
+      const record = await tx.foundingSellerProgram.create({
+        data: {
+          userId,
+          foundingSellerNumber: nextNumber,
+          enrollmentDate: now,
+          expiryDate,
+          status: 'ACTIVE',
+          updatedAt: now,
+        },
+        select: { foundingSellerNumber: true, expiryDate: true, enrollmentDate: true },
+      });
 
-    const record = await tx.foundingSellerProgram.create({
-      data: {
-        userId,
-        foundingSellerNumber: nextNumber,
-        enrollmentDate: now,
-        expiryDate,
-        status: 'ACTIVE',
-        updatedAt: now,
-      },
-      select: { foundingSellerNumber: true, expiryDate: true, enrollmentDate: true },
-    });
+      // Only create a SellerSubscription when the user does not already have one,
+      // preserving any pre-existing subscription state.
+      const existingSubscription = await tx.sellerSubscription.findUnique({ where: { userId } });
+      if (!existingSubscription) {
+        await tx.sellerSubscription.create({
+          data: {
+            userId,
+            type: 'FOUNDING',
+            status: 'ACTIVE',
+            monthlyFeeCents: 0,
+            nextBillingDate: expiryDate,
+            updatedAt: now,
+          },
+        });
+      }
 
-    // Create (or leave existing) SellerSubscription record.
-    await tx.sellerSubscription.upsert({
-      where: { userId },
-      create: {
-        userId,
-        type: 'FOUNDING',
-        status: 'ACTIVE',
-        monthlyFeeCents: 0,
-        nextBillingDate: expiryDate,
-        updatedAt: now,
-      },
-      update: {}, // don't overwrite an existing subscription
-    });
-
-    return record;
-  });
+      return record;
+    },
+    { isolationLevel: 'Serializable' },
+  );
 }
 
 /** Returns true when the user has an active founding-seller enrollment. */

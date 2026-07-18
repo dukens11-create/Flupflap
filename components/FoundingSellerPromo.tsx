@@ -35,6 +35,7 @@ const BENEFITS = [
 
 export default function FoundingSellerPromo({ inlineEnroll = false }: Props) {
   const [status, setStatus] = useState<ProgramStatus | null>(null);
+  const [statusError, setStatusError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [enrolling, setEnrolling] = useState(false);
   const [result, setResult] = useState<EnrollResult | null>(null);
@@ -43,7 +44,7 @@ export default function FoundingSellerPromo({ inlineEnroll = false }: Props) {
     void fetch('/api/founding-seller/enroll')
       .then((r) => r.json())
       .then((data: ProgramStatus) => setStatus(data))
-      .catch(() => setStatus(null))
+      .catch(() => setStatusError(true))
       .finally(() => setLoading(false));
   }, []);
 
@@ -67,6 +68,9 @@ export default function FoundingSellerPromo({ inlineEnroll = false }: Props) {
   }
 
   const isClosed = !loading && status && !status.isOpen;
+  const progressPercent = status
+    ? Math.min(100, (status.enrolledCount / status.limit) * 100)
+    : 0;
 
   return (
     <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
@@ -126,6 +130,11 @@ export default function FoundingSellerPromo({ inlineEnroll = false }: Props) {
         </div>
 
         {/* Enrollment progress */}
+        {statusError && (
+          <p className="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-center text-sm text-amber-700">
+            Could not load program status. Please refresh the page and try again.
+          </p>
+        )}
         {status && (
           <div className="mt-4 space-y-1">
             <div className="flex justify-between text-xs text-slate-500">
@@ -135,9 +144,7 @@ export default function FoundingSellerPromo({ inlineEnroll = false }: Props) {
             <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
               <div
                 className="h-full rounded-full bg-[var(--ff-primary-navy,#0f172a)] transition-all"
-                style={{
-                  width: `${Math.min(100, (status.enrolledCount / status.limit) * 100)}%`,
-                }}
+                style={{ width: `${progressPercent}%` }}
               />
             </div>
           </div>
