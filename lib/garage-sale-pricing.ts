@@ -11,6 +11,8 @@ export type GarageSalePricingSettings = {
   topSearchEnabled: boolean;
   topSearchCents: number;
   firstListingFree: boolean;
+  /** When true, all garage sale listings are free (no payment required). */
+  garageSalesFree: boolean;
 };
 
 export const DEFAULT_GARAGE_SALE_PRICING_SETTINGS: GarageSalePricingSettings = {
@@ -21,6 +23,7 @@ export const DEFAULT_GARAGE_SALE_PRICING_SETTINGS: GarageSalePricingSettings = {
   topSearchEnabled: false,
   topSearchCents: 0,
   firstListingFree: false,
+  garageSalesFree: true,
 };
 
 export type GarageSalePricingInput = {
@@ -69,6 +72,9 @@ export function calculateGarageSalePricing(input: GarageSalePricingInput): Garag
   const subtotal = baseAmountCents;
   const discountCents = 0;
 
+  // All garage sales are free when the garageSalesFree flag is enabled.
+  const totalCents = input.settings.garageSalesFree ? 0 : Math.max(0, subtotal - discountCents);
+
   return {
     durationDays,
     pricePerDayCents,
@@ -77,7 +83,7 @@ export function calculateGarageSalePricing(input: GarageSalePricingInput): Garag
     homepagePromotionCents,
     topLocalSearchPlacementCents,
     discountCents,
-    totalCents: Math.max(0, subtotal - discountCents),
+    totalCents,
     effectiveHomepagePromotion,
     effectiveTopLocalSearchPlacement,
   };

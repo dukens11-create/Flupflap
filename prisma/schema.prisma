@@ -926,6 +926,7 @@ model MarketplaceSettings {
   garageTopSearchEnabled     Boolean  @default(true)
   garageTopSearchCents       Int      @default(399)
   garageFirstListingFree     Boolean  @default(false)
+  garageSalesFree            Boolean  @default(true)
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
 }

@@ -44,6 +44,7 @@ export async function POST(req: Request) {
       garageTopSearchEnabled: form.get('garageTopSearchEnabled') === 'on',
       garageTopSearchCents: topSearchCents,
       garageFirstListingFree: form.get('garageFirstListingFree') === 'on',
+      garageSalesFree: form.get('garageSalesFree') === 'on',
     },
   });
 

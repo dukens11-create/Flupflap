@@ -1,15 +1,29 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { logInfo, logWarn } from '@/lib/logger';
-import {
-  DEFAULT_GARAGE_SALE_PRICING_SETTINGS,
-  type GarageSalePricingSettings,
-} from '@/lib/garage-sale-pricing';
+import { DEFAULT_GARAGE_SALE_PRICING_SETTINGS, type GarageSalePricingSettings } from '@/lib/garage-sale-pricing';
 
 // Matches the window used in the live signaling route (35-second active heartbeat window)
 const ACTIVE_VIEWER_WINDOW_MS = 35_000;
 
 export async function getGarageSalePricingSettings(): Promise<GarageSalePricingSettings> {
+  try {
+    const dbSettings = await prisma.marketplaceSettings.findUnique({ where: { id: 1 } });
+    if (dbSettings) {
+      return {
+        standardPriceCents: dbSettings.garageStandardPriceCents,
+        featuredPriceCents: dbSettings.garageFeaturedPriceCents,
+        homepagePromoEnabled: dbSettings.garageHomepagePromoEnabled,
+        homepagePromoCents: dbSettings.garageHomepagePromoCents,
+        topSearchEnabled: dbSettings.garageTopSearchEnabled,
+        topSearchCents: dbSettings.garageTopSearchCents,
+        firstListingFree: dbSettings.garageFirstListingFree,
+        garageSalesFree: dbSettings.garageSalesFree,
+      };
+    }
+  } catch {
+    // Fall through to defaults if DB is unavailable
+  }
   return { ...DEFAULT_GARAGE_SALE_PRICING_SETTINGS };
 }
 
