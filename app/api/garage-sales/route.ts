@@ -3,7 +3,6 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { z } from 'zod';
-import { appUrl, stripe } from '@/lib/stripe';
 import { calculateGarageSalePricing } from '@/lib/garage-sale-pricing';
 import { buildPublicGarageSaleWhere, expireGarageSales, getGarageSalePricingSettings, batchGetLiveViewerCounts } from '@/lib/garage-sales';
 import { logInfo } from '@/lib/logger';
@@ -187,7 +186,7 @@ export async function GET(req: Request) {
   return NextResponse.json({ sales: salesWithViewers, total, page, perPage });
 }
 
-/** POST /api/garage-sales — create a garage sale listing and payment checkout */
+/** POST /api/garage-sales — create a free garage sale listing */
 export async function POST(req: Request) {
   await expireGarageSales();
 
@@ -250,7 +249,7 @@ export async function POST(req: Request) {
     endDate: end,
     homepagePromotion: false,
     topLocalSearchPlacement: false,
-    settings: pricingSettings,
+    settings: { ...pricingSettings, garageSalesFree: true },
   });
 
   if (pricing.durationDays <= 0) {
@@ -288,10 +287,10 @@ export async function POST(req: Request) {
       baseAmountCents: pricing.baseAmountCents,
       addOnsAmountCents: pricing.addOnsAmountCents,
       totalPaidCents: pricing.totalCents,
-      paymentStatus: pricing.totalCents === 0 ? 'PAID' : 'PENDING',
-      paidAt: pricing.totalCents === 0 ? now : null,
-      activatedAt: pricing.totalCents === 0 ? now : null,
-      status: pricing.totalCents === 0 ? 'APPROVED' : 'HIDDEN',
+      paymentStatus: 'PAID',
+      paidAt: now,
+      activatedAt: now,
+      status: 'APPROVED',
     },
   });
 
@@ -299,89 +298,25 @@ export async function POST(req: Request) {
     tag: 'garage-sales/POST',
     saleId: sale.id,
     sellerId: session.user.id,
-    requiresPayment: pricing.totalCents > 0,
+    requiresPayment: false,
     initialStatus: sale.status,
     paymentStatus: sale.paymentStatus,
   });
 
-  if (pricing.totalCents === 0) {
-    await prisma.garageSalePayment.create({
-      data: {
-        saleId: sale.id,
-        sellerId: session.user.id,
-        amountCents: 0,
-        status: 'PAID',
-      },
-    });
-    logInfo('Garage sale listing activated without checkout', {
-      tag: 'garage-sales/POST',
+  await prisma.garageSalePayment.create({
+    data: {
       saleId: sale.id,
       sellerId: session.user.id,
-    });
-    return NextResponse.json({ id: sale.id, checkoutUrl: null, requiresPayment: false }, { status: 201 });
-  }
-
-  const lineItems: Array<{ quantity: number; price_data: { currency: string; product_data: { name: string; description?: string }; unit_amount: number } }> = [
-    {
-      quantity: 1,
-      price_data: {
-        currency: 'usd',
-        product_data: {
-          name: 'Garage Sale Listing',
-          description: `${pricing.durationDays} day${pricing.durationDays === 1 ? '' : 's'} at $${(pricing.pricePerDayCents / 100).toFixed(2)}/day`,
-        },
-        unit_amount: pricing.baseAmountCents,
-      },
-    },
-  ];
-
-  const checkout = await stripe.checkout.sessions.create({
-    mode: 'payment',
-    payment_method_types: ['card'],
-    line_items: lineItems,
-    success_url: `${appUrl}/garage-sales/${sale.id}?payment=success&session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${appUrl}/garage-sales/manage/${sale.id}?payment=cancelled`,
-    customer_email: session.user.email ?? undefined,
-    metadata: {
-      type: 'garage_sale_listing',
-      saleId: sale.id,
-      sellerId: session.user.id,
-      listingType: 'STANDARD',
-      durationDays: String(pricing.durationDays),
-    },
-    payment_intent_data: {
-      metadata: {
-        type: 'garage_sale_listing',
-        saleId: sale.id,
-        sellerId: session.user.id,
-      },
+      amountCents: 0,
+      status: 'PAID',
     },
   });
-
-  await prisma.$transaction([
-    prisma.garageSale.update({
-      where: { id: sale.id },
-      data: { stripeCheckoutId: checkout.id },
-    }),
-    prisma.garageSalePayment.create({
-      data: {
-        saleId: sale.id,
-        sellerId: session.user.id,
-        amountCents: pricing.totalCents,
-        status: 'PENDING',
-        stripeCheckoutId: checkout.id,
-      },
-    }),
-  ]);
-
-  logInfo('Garage sale checkout session created', {
+  logInfo('Garage sale listing activated without checkout', {
     tag: 'garage-sales/POST',
     saleId: sale.id,
     sellerId: session.user.id,
-    stripeCheckoutId: checkout.id,
   });
-
-  return NextResponse.json({ id: sale.id, checkoutUrl: checkout.url, requiresPayment: true }, { status: 201 });
+  return NextResponse.json({ id: sale.id, checkoutUrl: null, requiresPayment: false }, { status: 201 });
 }
 
 function haversineDistanceMiles(lat1: number, lng1: number, lat2: number, lng2: number): number {
