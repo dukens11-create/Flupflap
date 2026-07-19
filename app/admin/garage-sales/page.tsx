@@ -111,7 +111,11 @@ export default async function AdminGarageSalesPage({
         </div>
         <div className="card p-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Current standard pricing</p>
-          <p className="mt-1 text-2xl font-black text-slate-900">${(settings.garageStandardPriceCents / 100).toFixed(2)}/day</p>
+          {settings.garageSalesFree ? (
+            <p className="mt-1 text-2xl font-black text-emerald-600">FREE 🎉</p>
+          ) : (
+            <p className="mt-1 text-2xl font-black text-slate-900">${(settings.garageStandardPriceCents / 100).toFixed(2)}/day</p>
+          )}
           <p className="mt-1 text-xs text-slate-500">Featured: ${(settings.garageFeaturedPriceCents / 100).toFixed(2)}/day</p>
         </div>
         <div className="card p-4">
@@ -125,7 +129,16 @@ export default async function AdminGarageSalesPage({
       <div className="card p-5">
         <h2 className="text-lg font-black text-slate-900">Pricing &amp; promotion controls</h2>
         <p className="mt-1 text-xs text-slate-500">Changes apply instantly to new garage sale checkout sessions.</p>
+        {settings.garageSalesFree && (
+          <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
+            🎉 Garage sales are currently <strong>FREE</strong> for all sellers. All fees are waived.
+          </div>
+        )}
         <form action="/api/admin/garage-sales/pricing" method="POST" className="mt-4 grid gap-4 md:grid-cols-2">
+          <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 md:col-span-2">
+            <input type="checkbox" name="garageSalesFree" defaultChecked={settings.garageSalesFree} className="accent-[var(--ff-primary-navy)]" />
+            Make all garage sales free (Go Live for Free — waives all listing fees)
+          </label>
           <label className="space-y-1 text-sm">
             <span className="font-semibold text-slate-700">Standard listing ($/day)</span>
             <input name="garageStandardPrice" type="number" min="0" step="0.01" defaultValue={(settings.garageStandardPriceCents / 100).toFixed(2)} className="input" required />
