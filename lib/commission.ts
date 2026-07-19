@@ -103,6 +103,8 @@ export async function getMarketplaceSettings() {
         garageTopSearchEnabled: true,
         garageTopSearchCents: DEFAULT_GARAGE_TOP_SEARCH_CENTS,
         garageFirstListingFree: false,
+        // Seller monthly subscription fees are disabled by default (FREE TIER).
+        sellerSubscriptionFeeEnabled: false,
       },
     });
   }

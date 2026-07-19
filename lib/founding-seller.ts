@@ -3,6 +3,10 @@
  *
  * The program offers the first 1,000 sellers a free 12-month subscription.
  * After year 1 they automatically transition to a paid plan unless they cancel.
+ *
+ * NOTE: All seller subscription fees are currently DISABLED (FREE TIER).
+ * Monthly fees remain $0 and no billing dates are scheduled.
+ * Fees can be re-enabled via the admin panel without data loss.
  */
 
 import { prisma } from '@/lib/db';
@@ -14,7 +18,8 @@ export const FOUNDING_SELLER_LIMIT = 1_000;
 const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1_000;
 
 /**
- * Monthly fees (in cents) applied after the founding year expires.
+ * Monthly fees (in cents) applied after the founding year expires
+ * when seller subscription fees are re-enabled.
  * Regular Seller is used as the default transition plan.
  */
 export const GARAGE_SELLER_MONTHLY_FEE_CENTS = 399;  // $3.99
@@ -95,7 +100,10 @@ export async function enrollFoundingSeller(userId: string): Promise<{
             type: 'FOUNDING',
             status: 'ACTIVE',
             monthlyFeeCents: 0,
-            nextBillingDate: expiryDate,
+            // Billing is currently disabled (FREE TIER). nextBillingDate is null
+            // so no charges are ever triggered. Will be populated when fees are
+            // re-enabled via the admin panel.
+            nextBillingDate: null,
             updatedAt: now,
           },
         });
@@ -139,10 +147,14 @@ export async function getFoundingSellerDetails(userId: string): Promise<{
 }
 
 /**
- * Transitions an expired founding-seller subscription to the Regular Seller
- * paid plan ($4.99/month).
+ * Transitions an expired founding-seller subscription to the Regular Seller plan.
  *
  * This is intended to be called by a cron job that runs nightly.
+ *
+ * NOTE: While the global FREE TIER is active (sellerSubscriptionFeeEnabled = false),
+ * the monthly fee is kept at $0 and no billing date is scheduled.
+ * The subscription type is updated to REGULAR_SELLER so the record is ready
+ * for re-activation without data loss when fees are re-enabled.
  *
  * @returns The updated `SellerSubscription` record, or `null` when the user
  *          has not enrolled / is already transitioned.
@@ -164,9 +176,6 @@ export async function renewFoundingSellerSubscription(userId: string): Promise<{
   // Only transition when the founding year has elapsed.
   if (program.expiryDate > now) return null;
 
-  const nextBillingDate = new Date(now);
-  nextBillingDate.setMonth(nextBillingDate.getMonth() + 1);
-
   return prisma.$transaction(async (tx) => {
     // Mark the program record as transitioned.
     await tx.foundingSellerProgram.update({
@@ -174,22 +183,24 @@ export async function renewFoundingSellerSubscription(userId: string): Promise<{
       data: { status: 'TRANSITIONED', updatedAt: now },
     });
 
-    // Upgrade the subscription to Regular Seller.
+    // Upgrade the subscription type to Regular Seller.
+    // Monthly fee stays $0 and nextBillingDate is null while FREE TIER is active.
+    // These will be updated when fees are re-enabled via the admin panel.
     const sub = await tx.sellerSubscription.upsert({
       where: { userId },
       create: {
         userId,
         type: 'REGULAR_SELLER',
         status: 'ACTIVE',
-        monthlyFeeCents: REGULAR_SELLER_MONTHLY_FEE_CENTS,
-        nextBillingDate,
+        monthlyFeeCents: 0,
+        nextBillingDate: null,
         updatedAt: now,
       },
       update: {
         type: 'REGULAR_SELLER',
         status: 'ACTIVE',
-        monthlyFeeCents: REGULAR_SELLER_MONTHLY_FEE_CENTS,
-        nextBillingDate,
+        monthlyFeeCents: 0,
+        nextBillingDate: null,
         updatedAt: now,
       },
       select: { type: true, monthlyFeeCents: true, nextBillingDate: true },

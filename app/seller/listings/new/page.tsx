@@ -5,9 +5,10 @@ import SellerListingsSectionNav from '@/components/SellerListingsSectionNav';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { isSellerRestricted } from '@/lib/seller-listings';
-import { isSubscriptionActive } from '@/lib/subscription';
+import { isSellerAllowedToSell } from '@/lib/subscription';
 import { syncSellerSubscriptionFromStripe } from '@/lib/subscription-sync';
 import { isSellerVerificationApproved } from '@/lib/seller-verification';
+import { getMarketplaceSettings } from '@/lib/commission';
 import NewListingForm from '../../new/NewListingForm';
 
 export const dynamic = 'force-dynamic';
@@ -21,7 +22,10 @@ export default async function SellerListingsNewPage() {
   const sellerId = session.user.id;
   if (!sellerId) redirect('/login');
 
-  const dbUser = await prisma.user.findUnique({ where: { id: sellerId } });
+  const [dbUser, settings] = await Promise.all([
+    prisma.user.findUnique({ where: { id: sellerId } }),
+    getMarketplaceSettings(),
+  ]);
   if (isSellerRestricted(dbUser?.sellerStatus)) {
     redirect('/seller');
   }
@@ -39,7 +43,7 @@ export default async function SellerListingsNewPage() {
   }
 
   let effectiveUser = dbUser;
-  if (!isSubscriptionActive(effectiveUser) && effectiveUser.stripeCustomerId) {
+  if (!isSellerAllowedToSell(effectiveUser, settings) && effectiveUser.stripeCustomerId) {
     try {
       const synced = await syncSellerSubscriptionFromStripe(effectiveUser.id);
       if (synced) {
@@ -53,7 +57,7 @@ export default async function SellerListingsNewPage() {
     }
   }
 
-  if (!isSubscriptionActive(effectiveUser)) {
+  if (!isSellerAllowedToSell(effectiveUser, settings)) {
     redirect('/seller?subscribe=1');
   }
 

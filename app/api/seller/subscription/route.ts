@@ -3,7 +3,8 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { stripe, appUrl } from '@/lib/stripe';
-import { SELLER_SUBSCRIPTION_PRICE_CENTS, isSubscriptionActive } from '@/lib/subscription';
+import { SELLER_SUBSCRIPTION_PRICE_CENTS, isSubscriptionActive, isGlobalFreeTierActive } from '@/lib/subscription';
+import { getMarketplaceSettings } from '@/lib/commission';
 
 /** GET /api/seller/subscription — return current subscription status for the signed-in seller */
 export async function GET() {
@@ -13,20 +14,26 @@ export async function GET() {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: {
-        subscriptionStatus: true,
-        subscriptionId: true,
-        subscriptionCurrentPeriodEnd: true,
-      },
-    });
+    const [user, settings] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: {
+          subscriptionStatus: true,
+          subscriptionId: true,
+          subscriptionCurrentPeriodEnd: true,
+        },
+      }),
+      getMarketplaceSettings(),
+    ]);
+
+    const freeTier = isGlobalFreeTierActive(settings);
 
     return NextResponse.json({
       subscriptionStatus: user?.subscriptionStatus ?? null,
       subscriptionId: user?.subscriptionId ?? null,
       subscriptionCurrentPeriodEnd: user?.subscriptionCurrentPeriodEnd ?? null,
-      active: isSubscriptionActive(user ?? {}),
+      active: freeTier || isSubscriptionActive(user ?? {}),
+      freeTier,
     });
   } catch (err) {
     console.error('[seller/subscription GET]', err);
@@ -40,6 +47,15 @@ export async function POST() {
     const session = await getServerSession(authOptions);
     if (!session?.user || session.user.role !== 'SELLER') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    // Subscription billing is disabled while the global FREE TIER is active.
+    const settings = await getMarketplaceSettings();
+    if (isGlobalFreeTierActive(settings)) {
+      return NextResponse.json(
+        { error: 'Seller subscriptions are currently FREE. No billing required.' },
+        { status: 400 },
+      );
     }
 
     const dbUser = await prisma.user.findUnique({ where: { id: session.user.id } });

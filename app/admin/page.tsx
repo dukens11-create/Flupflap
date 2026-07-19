@@ -20,7 +20,7 @@ const PAID_ORDER_STATUSES: OrderStatus[] = ['PAID', 'SHIPPED', 'DELIVERED', 'PIC
 export default async function AdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{ commission?: string }>;
+  searchParams: Promise<{ commission?: string; subscriptionFees?: string }>;
 }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect('/login');
@@ -277,6 +277,18 @@ export default async function AdminPage({
         </div>
       )}
 
+      {sp.subscriptionFees === 'disabled' && (
+        <div className="card p-4 mb-6 bg-green-50 border-green-200 text-green-800 text-sm">
+          ✅ Seller subscription fees disabled — FREE TIER is now active. All sellers can list and sell for free.
+        </div>
+      )}
+
+      {sp.subscriptionFees === 'enabled' && (
+        <div className="card p-4 mb-6 bg-yellow-50 border-yellow-300 text-yellow-900 text-sm">
+          ✅ Seller subscription fees re-enabled. Sellers must now have an active subscription to list items.
+        </div>
+      )}
+
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
         <div className="card p-4 text-center">
           <p className="text-3xl font-black text-yellow-600">{pending.length}</p>
@@ -518,6 +530,50 @@ export default async function AdminPage({
       <section id="site-settings" className="mb-4">
         <div className="card p-4 bg-slate-100 border-slate-200 text-sm text-slate-600">
           Site settings and marketplace payment controls.
+        </div>
+      </section>
+
+      {/* ── Seller Subscription Fees Toggle ── */}
+      <section id="subscription-fees-panel" className="mb-8">
+        <div className="card p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <h2 className="text-xl font-bold">Seller Subscription Fees</h2>
+              <p className="text-sm text-slate-500 mt-1">
+                Control whether sellers are required to pay a monthly subscription fee.
+                When disabled (FREE TIER), all sellers can list and sell for free — only the 7% transaction fee applies.
+                All subscription records are preserved so fees can be re-enabled without data loss.
+              </p>
+              <p className="text-sm font-semibold mt-2">
+                Current status:{' '}
+                {settings.sellerSubscriptionFeeEnabled ? (
+                  <span className="text-yellow-700">💰 Fees enabled — sellers pay monthly subscription</span>
+                ) : (
+                  <span className="text-green-700">🎉 FREE TIER — no subscription fee required</span>
+                )}
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 flex-shrink-0">
+              {settings.sellerSubscriptionFeeEnabled ? (
+                <form action="/api/admin/subscription-fees" method="POST">
+                  <input type="hidden" name="enabled" value="false" />
+                  <button type="submit" className="btn bg-green-600 hover:bg-green-700 text-white text-sm whitespace-nowrap">
+                    ✅ Switch to FREE TIER
+                  </button>
+                </form>
+              ) : (
+                <form action="/api/admin/subscription-fees" method="POST">
+                  <input type="hidden" name="enabled" value="true" />
+                  <button type="submit" className="btn bg-yellow-600 hover:bg-yellow-700 text-white text-sm whitespace-nowrap">
+                    💰 Re-enable Subscription Fees
+                  </button>
+                </form>
+              )}
+            </div>
+          </div>
+          <p className="text-xs text-slate-400 mt-3">
+            Toggling fees off sets the platform to FREE TIER — no monthly charges for sellers. Toggling back on resumes normal billing requirements. No subscription data is lost during either transition.
+          </p>
         </div>
       </section>
 
