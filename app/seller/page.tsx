@@ -11,7 +11,7 @@ import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import PickupVerifyForm from '@/components/PickupVerifyForm';
 import { expirePromotions, getPromotionLabel } from '@/lib/promotions';
-import { isSubscriptionActive, SELLER_SUBSCRIPTION_PRICE_LABEL } from '@/lib/subscription';
+import { isSubscriptionActive, isGlobalFreeTierActive, SELLER_SUBSCRIPTION_PRICE_LABEL } from '@/lib/subscription';
 import { syncSellerSubscriptionFromStripe } from '@/lib/subscription-sync';
 import SubscriptionButton from '@/components/SubscriptionButton';
 import { getInboxConversations, getSellerResponseStats, SELLER_RESPONSE_WINDOW_HOURS } from '@/lib/messages';
@@ -195,10 +195,11 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
   }
   const sellerStatus = dbUser?.sellerStatus ?? 'ACTIVE';
   const isRestricted = sellerStatus === 'SUSPENDED' || sellerStatus === 'BANNED' || sellerStatus === 'RESTRICTED';
-  const subscriptionActive = dbUser ? isSubscriptionActive(dbUser) : false;
-  const subscriptionPeriodEnd = dbUser?.subscriptionCurrentPeriodEnd ?? null;
-  const subscriptionStatus = dbUser?.subscriptionStatus ?? null;
   const settings = await getMarketplaceSettings();
+  const globalFreeTier = isGlobalFreeTierActive(settings);
+  const subscriptionActive = globalFreeTier || (dbUser ? isSubscriptionActive(dbUser) : false);
+  const subscriptionPeriodEnd = globalFreeTier ? null : (dbUser?.subscriptionCurrentPeriodEnd ?? null);
+  const subscriptionStatus = dbUser?.subscriptionStatus ?? null;
   const freePromotionEligible = settings.freePromotionEnabled && !!dbUser && isFreePromotionEligible(dbUser);
   const freePromotionExpiresAt = dbUser?.freePromotionEnd ?? dbUser?.freePromotionExpiresAt ?? null;
   const freePromotionDaysLeft = dbUser ? getFreePromotionDaysLeft(dbUser) : 0;
@@ -673,7 +674,16 @@ export default async function SellerPage({ searchParams }: { searchParams: Promi
         </div>
       )}
 
-      {isDashboardView && !isRestricted && subscriptionActive && (
+      {isDashboardView && !isRestricted && subscriptionActive && globalFreeTier && (
+        <div className="card p-4 mb-6 bg-green-50 border-green-200 text-green-800 text-sm flex justify-between items-center gap-3">
+          <span>
+            🎉 <strong>FREE TIER — No subscription fee.</strong> You can list and sell with no monthly cost.
+            Only the 7% selling fee applies on successful transactions.
+          </span>
+        </div>
+      )}
+
+      {isDashboardView && !isRestricted && subscriptionActive && !globalFreeTier && (
         <div className="card p-4 mb-6 bg-green-50 border-green-200 text-green-800 text-sm flex justify-between items-center gap-3">
           <span>
               ✅ Seller subscription active

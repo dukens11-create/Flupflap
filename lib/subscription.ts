@@ -19,3 +19,26 @@ type SubscriptionUser = {
 export function isSubscriptionActive(user: SubscriptionUser): boolean {
   return user.subscriptionStatus === 'ACTIVE';
 }
+
+/**
+ * Returns true when seller monthly subscription fees are globally disabled
+ * (i.e. the platform is in FREE TIER mode).
+ *
+ * When the free tier is active, all sellers may list and sell without a paid
+ * subscription — only the 7% transaction fee applies.
+ * Fees can be re-enabled at any time via the admin panel without data loss.
+ */
+export function isGlobalFreeTierActive(settings: { sellerSubscriptionFeeEnabled: boolean }): boolean {
+  return !settings.sellerSubscriptionFeeEnabled;
+}
+
+/**
+ * Returns true when a seller is allowed to list and sell.
+ * Passes when either their subscription is active OR the global free tier is on.
+ */
+export function isSellerAllowedToSell(
+  user: SubscriptionUser,
+  settings: { sellerSubscriptionFeeEnabled: boolean },
+): boolean {
+  return isGlobalFreeTierActive(settings) || isSubscriptionActive(user);
+}

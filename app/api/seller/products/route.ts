@@ -5,9 +5,10 @@ import { prisma } from '@/lib/db';
 import { cents } from '@/lib/money';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
-import { isSubscriptionActive } from '@/lib/subscription';
+import { isSellerAllowedToSell } from '@/lib/subscription';
 import { syncSellerSubscriptionFromStripe } from '@/lib/subscription-sync';
 import { isSellerVerificationApproved } from '@/lib/seller-verification';
+import { getMarketplaceSettings } from '@/lib/commission';
 import {
   getListingRiskAssessmentForCandidate,
   shouldRecommendFraudReview,
@@ -222,12 +223,13 @@ export async function POST(req: Request) {
       return jsonError('Submit and pass seller verification before listing products.', 403);
     }
 
-    // Require an active subscription to list items
+    // Require an active subscription (or global free tier) to list items
     if (!dbUser) {
       return jsonError('An active seller subscription is required to list items.', 403);
     }
+    const marketplaceSettings = await getMarketplaceSettings();
     let effectiveUser = dbUser;
-    if (!isSubscriptionActive(effectiveUser) && effectiveUser.stripeCustomerId) {
+    if (!isSellerAllowedToSell(effectiveUser, marketplaceSettings) && effectiveUser.stripeCustomerId) {
       try {
         const synced = await syncSellerSubscriptionFromStripe(effectiveUser.id);
         if (synced) {
@@ -240,7 +242,7 @@ export async function POST(req: Request) {
         console.error('[seller/products POST] subscription recovery sync failed:', err);
       }
     }
-    if (!isSubscriptionActive(effectiveUser)) {
+    if (!isSellerAllowedToSell(effectiveUser, marketplaceSettings)) {
       return jsonError('An active seller subscription is required to list items.', 403);
     }
 
