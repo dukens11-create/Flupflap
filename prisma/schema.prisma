@@ -926,6 +926,9 @@ model MarketplaceSettings {
   garageTopSearchEnabled     Boolean  @default(true)
   garageTopSearchCents       Int      @default(399)
   garageFirstListingFree     Boolean  @default(false)
+  /// When false (default) all seller monthly subscription fees are waived — FREE TIER.
+  /// Set to true to re-enable monthly billing.  Only the 7% transaction fee applies when false.
+  sellerSubscriptionFeeEnabled Boolean @default(false)
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
 }
