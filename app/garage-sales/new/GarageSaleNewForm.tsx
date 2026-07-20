@@ -404,21 +404,19 @@ export default function GarageSaleNewForm() {
         </div>
       </div>
 
-      {/* Pricing */}
+      {/* Listing summary */}
       <div className="card p-5 space-y-4">
-        <h2 className="font-bold text-slate-900">Pricing &amp; Checkout</h2>
+        <h2 className="font-bold text-slate-900">Listing Summary</h2>
 
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
           {!pricingEstimate ? (
-            <p className="text-slate-500">Select start and end times to see your live total.</p>
+            <p className="text-slate-500">Select start and end times to see your listing duration.</p>
           ) : (
             <div className="space-y-1.5">
               <p className="font-semibold text-slate-800">
                 Garage Sale · {pricingEstimate.durationDays} day{pricingEstimate.durationDays === 1 ? '' : 's'}
               </p>
-              <p className="text-slate-600">Price per day: ${centsToDollars(pricingEstimate.pricePerDayCents)}</p>
-              <p className="text-slate-600">Base: ${centsToDollars(pricingEstimate.baseAmountCents)}</p>
-              <p className="pt-1 text-base font-black text-slate-900">Total: ${centsToDollars(pricingEstimate.totalCents)}</p>
+              <p className="pt-1 text-base font-black text-green-700">Free — no payment required</p>
             </div>
           )}
         </div>
@@ -427,9 +425,9 @@ export default function GarageSaleNewForm() {
       {/* Submit */}
       <div className="flex items-center gap-3">
         <button type="submit" disabled={submitting || uploading} className="btn-brand px-8 py-3 text-base">
-          {submitting ? 'Preparing checkout…' : 'Continue to Secure Checkout'}
+          {submitting ? 'Publishing…' : 'Publish Free Listing'}
         </button>
-        <p className="text-xs text-slate-400">Your listing activates instantly after successful payment.</p>
+        <p className="text-xs text-slate-400">Your listing will be published instantly.</p>
       </div>
     </form>
   );

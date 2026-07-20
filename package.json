@@ -15,6 +15,7 @@
     "prisma:push": "node scripts/conditional-prisma-push.js",
     "seed": "tsx prisma/seed.ts",
     "backfill:product-categories": "tsx scripts/backfill-product-categories.ts",
+    "backfill:garage-sales-free": "tsx scripts/backfill-garage-sales-free.ts",
     "cleanup:profile-images": "tsx scripts/cleanup-profile-images.ts",
     "repair:affected-accounts": "tsx scripts/repair-affected-accounts.ts",
     "sync:seller-statuses": "tsx scripts/sync-seller-statuses.ts"
