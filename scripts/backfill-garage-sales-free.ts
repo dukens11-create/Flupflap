@@ -70,24 +70,24 @@ async function run() {
   console.log(`[backfill-garage-sales-free] Updated ${updated.count} garage sale(s) to PAID/APPROVED.`);
 
   // Create $0 payment records for sales that don't already have one
-  let paymentCount = 0;
-  for (const sale of stuck) {
-    const existing = await prisma.garageSalePayment.findFirst({
-      where: { saleId: sale.id },
-      select: { id: true },
+  const existingPayments = await prisma.garageSalePayment.findMany({
+    where: { saleId: { in: saleIds } },
+    select: { saleId: true },
+  });
+  const paidSaleIds = new Set(existingPayments.map((p) => p.saleId));
+
+  const salesNeedingPayment = stuck.filter((s) => !paidSaleIds.has(s.id));
+  if (salesNeedingPayment.length > 0) {
+    await prisma.garageSalePayment.createMany({
+      data: salesNeedingPayment.map((sale) => ({
+        saleId: sale.id,
+        sellerId: sale.sellerId,
+        amountCents: 0,
+        status: 'PAID' as const,
+      })),
     });
-    if (!existing) {
-      await prisma.garageSalePayment.create({
-        data: {
-          saleId: sale.id,
-          sellerId: sale.sellerId,
-          amountCents: 0,
-          status: 'PAID',
-        },
-      });
-      paymentCount += 1;
-    }
   }
+  const paymentCount = salesNeedingPayment.length;
 
   console.log(`[backfill-garage-sales-free] Created ${paymentCount} payment record(s).`);
   console.log('[backfill-garage-sales-free] Backfill complete.');
