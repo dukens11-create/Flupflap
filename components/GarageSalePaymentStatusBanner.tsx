@@ -114,7 +114,7 @@ export default function GarageSalePaymentStatusBanner({
       return {
         className: 'border-green-200 bg-green-50 text-green-900',
         title: isReposted ? 'Your garage sale repost is now live!' : 'Your garage sale is now live!',
-        description: 'Payment confirmed. Your listing is active, public, and ready for buyers.',
+        description: 'Your listing is active, public, and ready for buyers.',
       };
     }
 

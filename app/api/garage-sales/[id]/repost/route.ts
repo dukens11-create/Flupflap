@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
-import { appUrl, stripe } from '@/lib/stripe';
 import { calculateGarageSalePricing, MILLISECONDS_PER_DAY } from '@/lib/garage-sale-pricing';
 import { getGarageSalePricingSettings } from '@/lib/garage-sales';
 import { logInfo } from '@/lib/logger';
@@ -37,13 +36,11 @@ export async function POST(req: Request, { params }: Params) {
 
   const settings = await getGarageSalePricingSettings();
 
+  // Used only to compute durationDays; all pricing is free.
   const pricing = calculateGarageSalePricing({
-    listingType: 'STANDARD',
-    startDate,
-    endDate,
     homepagePromotion: false,
     topLocalSearchPlacement: false,
-    settings,
+    settings: { ...settings, garageSalesFree: true },
   });
 
   const repost = await prisma.garageSale.create({
@@ -54,7 +51,7 @@ export async function POST(req: Request, { params }: Params) {
       description: source.description,
       saleType: source.saleType,
       listingType: 'STANDARD',
-      status: pricing.totalCents === 0 ? 'APPROVED' : 'HIDDEN',
+      status: 'APPROVED',
       address: source.address,
       city: source.city,
       state: source.state,
@@ -74,13 +71,13 @@ export async function POST(req: Request, { params }: Params) {
       isFeatured: false,
       homepagePromoted: false,
       topSearchPromoted: false,
-      pricePerDayCents: pricing.pricePerDayCents,
-      baseAmountCents: pricing.baseAmountCents,
-      addOnsAmountCents: pricing.addOnsAmountCents,
-      totalPaidCents: pricing.totalCents,
-      paymentStatus: pricing.totalCents === 0 ? 'PAID' : 'PENDING',
-      paidAt: pricing.totalCents === 0 ? now : null,
-      activatedAt: pricing.totalCents === 0 ? now : null,
+      pricePerDayCents: 0,
+      baseAmountCents: 0,
+      addOnsAmountCents: 0,
+      totalPaidCents: 0,
+      paymentStatus: 'PAID',
+      paidAt: now,
+      activatedAt: now,
     },
   });
 
@@ -89,85 +86,23 @@ export async function POST(req: Request, { params }: Params) {
     saleId: repost.id,
     sourceSaleId: source.id,
     sellerId: repost.sellerId,
-    requiresPayment: pricing.totalCents > 0,
+    requiresPayment: false,
   });
 
-  if (pricing.totalCents === 0) {
-    await prisma.garageSalePayment.create({
-      data: {
-        saleId: repost.id,
-        sellerId: repost.sellerId,
-        amountCents: 0,
-        status: 'PAID',
-      },
-    });
-    const encodedRepostId = encodeURIComponent(repost.id);
-    return NextResponse.redirect(new URL(`/garage-sales/${encodedRepostId}?payment=success&reposted=1`, req.url), 303);
-  }
-
-  const lineItems: Array<{ quantity: number; price_data: { currency: string; product_data: { name: string; description?: string }; unit_amount: number } }> = [
-    {
-      quantity: 1,
-      price_data: {
-        currency: 'usd',
-        product_data: {
-          name: 'Garage Sale Repost',
-          description: `${pricing.durationDays} day${pricing.durationDays === 1 ? '' : 's'} at $${(pricing.pricePerDayCents / 100).toFixed(2)}/day`,
-        },
-        unit_amount: pricing.baseAmountCents,
-      },
-    },
-  ];
-
-  const encodedRepostId = encodeURIComponent(repost.id);
-  const checkout = await stripe.checkout.sessions.create({
-    mode: 'payment',
-    payment_method_types: ['card'],
-    line_items: lineItems,
-    success_url: `${appUrl}/garage-sales/${encodedRepostId}?payment=success&reposted=1&session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${appUrl}/garage-sales/manage/${encodedRepostId}?payment=cancelled`,
-    customer_email: session.user.email ?? undefined,
-    metadata: {
-      type: 'garage_sale_listing',
+  await prisma.garageSalePayment.create({
+    data: {
       saleId: repost.id,
       sellerId: repost.sellerId,
-        listingType: 'STANDARD',
-      durationDays: String(pricing.durationDays),
-      repostOfId: source.id,
-    },
-    payment_intent_data: {
-      metadata: {
-        type: 'garage_sale_listing',
-        saleId: repost.id,
-        sellerId: repost.sellerId,
-      },
+      amountCents: 0,
+      status: 'PAID',
     },
   });
-
-  await prisma.$transaction([
-    prisma.garageSale.update({ where: { id: repost.id }, data: { stripeCheckoutId: checkout.id } }),
-    prisma.garageSalePayment.create({
-      data: {
-        saleId: repost.id,
-        sellerId: repost.sellerId,
-        amountCents: pricing.totalCents,
-        status: 'PENDING',
-        stripeCheckoutId: checkout.id,
-      },
-    }),
-  ]);
-
-  logInfo('Garage sale repost checkout session created', {
+  const encodedRepostId = encodeURIComponent(repost.id);
+  logInfo('Garage sale repost activated without checkout', {
     tag: 'garage-sales/repost',
     saleId: repost.id,
     sourceSaleId: source.id,
     sellerId: repost.sellerId,
-    stripeCheckoutId: checkout.id,
   });
-
-  if (checkout.url) {
-    return NextResponse.redirect(checkout.url, 303);
-  }
-
-  return NextResponse.redirect(new URL(`/seller/garage-sales?saleId=${encodedRepostId}&reposted=1`, req.url), 303);
+  return NextResponse.redirect(new URL(`/garage-sales/${encodedRepostId}?reposted=1`, req.url), 303);
 }
