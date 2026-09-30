@@ -40,7 +40,7 @@ test('non-scheduled submit actions are not rejected', () => {
 });
 
 test('seller listing navigation and sections no longer expose scheduled tab', () => {
-  assert.equal(SELLER_LISTINGS_NAV_ITEMS.some((item) => item.key === 'scheduled'), false);
+  assert.equal(SELLER_LISTINGS_NAV_ITEMS.map((item) => String(item.key)).includes('scheduled'), false);
   assert.equal(Object.hasOwn(SELLER_LISTINGS_SECTION_COPY, 'scheduled'), false);
 });
 
