@@ -350,6 +350,7 @@ model AirtimeSale {
   profileId             String
   profile               AirtimeAgentProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
   externalReference     String              @unique
+  idempotencyKey        String              @unique
   provider              String              @default("RELOADLY")
   providerTransactionId String?
   operatorId            Int
