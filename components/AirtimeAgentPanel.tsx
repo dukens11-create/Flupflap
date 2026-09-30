@@ -70,9 +70,10 @@ export default function AirtimeAgentPanel() {
     setBusy(true); setError(''); setMessage('');
     const form = new FormData(e.currentTarget);
     const amount = Number(form.get('amount'));
+    const idempotencyKey = 'agent-' + crypto.randomUUID();
     const res = await fetch('/api/airtime-agent/sales', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
       body: JSON.stringify({
         operatorId: Number(form.get('operatorId')),
         amountCents: Math.round(amount * 100),
