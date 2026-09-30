@@ -38,7 +38,8 @@ test('provider status classification distinguishes success pending and failure',
   assert.equal(classifyProviderTopupStatus('SUCCESSFUL'), 'SUCCESS');
   assert.equal(classifyProviderTopupStatus('PROCESSING'), 'PENDING');
   assert.equal(classifyProviderTopupStatus('FAILED'), 'FAILURE');
-  assert.equal(classifyProviderTopupStatus(undefined), 'PENDING');
+  assert.equal(classifyProviderTopupStatus(undefined), 'UNKNOWN');
+  assert.equal(classifyProviderTopupStatus('unrecognized'), 'UNKNOWN');
 });
 
 test('wallet adjustments require non-zero integer cents', () => {

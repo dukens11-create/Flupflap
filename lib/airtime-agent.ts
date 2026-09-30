@@ -1,4 +1,4 @@
-export type ProviderTopupDisposition = 'SUCCESS' | 'PENDING' | 'FAILURE';
+export type ProviderTopupDisposition = 'SUCCESS' | 'PENDING' | 'FAILURE' | 'UNKNOWN';
 
 export function normalizeIso2(value: unknown): string | null {
   const code = String(value ?? '').trim().toUpperCase();
@@ -33,7 +33,8 @@ export function classifyProviderTopupStatus(value: unknown): ProviderTopupDispos
   const status = String(value ?? '').trim().toUpperCase();
   if (['SUCCESS', 'SUCCESSFUL', 'COMPLETED'].includes(status)) return 'SUCCESS';
   if (['FAILED', 'REFUNDED', 'REVERSED', 'CANCELLED', 'CANCELED', 'REJECTED'].includes(status)) return 'FAILURE';
-  return 'PENDING';
+  if (['PENDING', 'PROCESSING'].includes(status)) return 'PENDING';
+  return 'UNKNOWN';
 }
 
 export function validateWalletAdjustment(amountCents: unknown): number | null {

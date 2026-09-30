@@ -86,16 +86,28 @@ export default function AirtimeAgentPanel() {
     const data = await res.json();
     setBusy(false);
     if (!res.ok) {
-      pendingSaleKeyRef.current = null;
+      // Server/network failures can follow a successful provider purchase. Keep
+      // the same key for any retry unless rejection/final failure is explicit.
+      if (data.sale?.status === 'FAILED' || (res.status >= 400 && res.status < 500)) {
+        pendingSaleKeyRef.current = null;
+      }
       return setError(data.error || 'Top-up failed');
     }
     const status = String(data.sale?.status ?? '').toUpperCase();
+    if (status === 'FAILED') {
+      pendingSaleKeyRef.current = null;
+      setError('The provider confirmed this airtime sale failed. Its wallet debit was refunded.');
+      await load();
+      return;
+    }
     if (status === 'SUCCESSFUL' || status === 'SUCCESS' || status === 'COMPLETED') {
       setMessage(data.duplicate ? 'This airtime sale was already completed.' : 'Airtime sent successfully.');
       e.currentTarget.reset();
       pendingSaleKeyRef.current = null;
     } else {
-      setMessage('Airtime request accepted and is still processing. Do not submit it again.');
+      setMessage(status === 'UNKNOWN'
+        ? 'Airtime outcome needs reconciliation. Funds remain reserved. Do not start a new sale for this request.'
+        : 'Airtime request accepted and is still processing. Do not submit it again.');
     }
     await load();
   }
