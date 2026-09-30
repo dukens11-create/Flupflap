@@ -38,10 +38,22 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Valid 2-letter country and 3-letter currency codes are required.' }, { status: 400 });
   }
 
-  const profile = await prisma.airtimeAgentProfile.upsert({
-    where: { sellerId: id },
-    create: { sellerId: id, countryCode, currency, businessName },
-    update: { countryCode, currency, businessName },
-  });
-  return NextResponse.json({ profile }, { status: 201 });
+  const existing = await prisma.airtimeAgentProfile.findUnique({ where: { sellerId: id } });
+  if (existing && existing.currency !== currency) {
+    return NextResponse.json(
+      { error: 'Agent wallet currency is locked after profile creation. Contact FlupFlap support to change it.' },
+      { status: 409 },
+    );
+  }
+
+  const profile = existing
+    ? await prisma.airtimeAgentProfile.update({
+        where: { sellerId: id },
+        data: { countryCode, businessName },
+      })
+    : await prisma.airtimeAgentProfile.create({
+        data: { sellerId: id, countryCode, currency, businessName },
+      });
+
+  return NextResponse.json({ profile }, { status: existing ? 200 : 201 });
 }
