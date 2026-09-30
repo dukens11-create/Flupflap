@@ -245,6 +245,9 @@ export async function POST(req: Request) {
 
   // Used only to validate duration and compute durationDays; all pricing is free.
   const pricing = calculateGarageSalePricing({
+    listingType: 'STANDARD',
+    startDate: start,
+    endDate: end,
     homepagePromotion: false,
     topLocalSearchPlacement: false,
     settings: { ...pricingSettings, garageSalesFree: true },
