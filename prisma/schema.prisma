@@ -150,6 +150,27 @@ enum RefundRequestStatus {
   REFUNDED
 }
 
+enum AirtimeAgentStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  REJECTED
+}
+
+enum AirtimeAgentTier {
+  AGENT
+  SUPER_AGENT
+  DISTRIBUTOR
+  MASTER_DISTRIBUTOR
+}
+
+enum AirtimeAgentLedgerType {
+  FUNDING
+  SALE_DEBIT
+  REFUND
+  ADJUSTMENT
+}
+
 // ── Garage Sales ──────────────────────────────────────────────────────────────
 
 enum GarageSaleType {
@@ -278,6 +299,77 @@ model User {
   garageSales                   GarageSale[]  @relation("GarageSaleSeller")
   garageSalePayments            GarageSalePayment[] @relation("GarageSalePaymentSeller")
   orderShipments                OrderShipment[]     @relation("OrderShipmentSeller")
+  airtimeAgentProfile           AirtimeAgentProfile?
+}
+
+
+// ── Global Airtime Agent Network ─────────────────────────────────────────────
+
+model AirtimeAgentProfile {
+  id                      String             @id @default(cuid())
+  sellerId                String             @unique
+  seller                  User               @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  status                   AirtimeAgentStatus @default(PENDING)
+  tier                     AirtimeAgentTier   @default(AGENT)
+  countryCode              String
+  currency                 String             @default("USD")
+  businessName             String?
+  commissionBps            Int                @default(300)
+  walletBalanceCents       Int                @default(0)
+  lifetimeSalesCents       Int                @default(0)
+  lifetimeCommissionCents  Int                @default(0)
+  approvedAt               DateTime?
+  suspendedAt              DateTime?
+  createdAt                DateTime           @default(now())
+  updatedAt                DateTime           @updatedAt
+  ledgerEntries            AirtimeAgentLedgerEntry[]
+  airtimeSales             AirtimeSale[]
+
+  @@index([status, countryCode])
+  @@index([tier])
+}
+
+model AirtimeAgentLedgerEntry {
+  id                String                 @id @default(cuid())
+  profileId         String
+  profile           AirtimeAgentProfile    @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  type              AirtimeAgentLedgerType
+  amountCents       Int
+  balanceAfterCents Int
+  referenceId       String?
+  note              String?
+  metadata          Json?
+  createdAt         DateTime               @default(now())
+
+  @@index([profileId, createdAt])
+  @@index([referenceId])
+}
+
+model AirtimeSale {
+  id                    String              @id @default(cuid())
+  profileId             String
+  profile               AirtimeAgentProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  externalReference     String              @unique
+  provider              String              @default("RELOADLY")
+  providerTransactionId String?
+  operatorId            Int
+  recipientCountryCode  String
+  recipientPhone        String
+  amountCents           Int
+  debitCents            Int
+  commissionCents       Int
+  providerCostCents     Int?
+  currency              String
+  status                String              @default("PENDING")
+  failureCode           String?
+  failureMessage        String?
+  providerPayload       Json?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  @@index([profileId, createdAt])
+  @@index([status])
+  @@index([providerTransactionId])
 }
 
 model SellerOtp {
