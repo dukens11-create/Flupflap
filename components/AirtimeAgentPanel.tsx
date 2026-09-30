@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 type Sale = {
   id: string;
@@ -35,6 +35,7 @@ export default function AirtimeAgentPanel() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const pendingSaleKeyRef = useRef<string | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch('/api/airtime-agent/profile', { cache: 'no-store' });
@@ -70,7 +71,8 @@ export default function AirtimeAgentPanel() {
     setBusy(true); setError(''); setMessage('');
     const form = new FormData(e.currentTarget);
     const amount = Number(form.get('amount'));
-    const idempotencyKey = 'agent-' + crypto.randomUUID();
+    const idempotencyKey = pendingSaleKeyRef.current ?? ('agent-' + crypto.randomUUID());
+    pendingSaleKeyRef.current = idempotencyKey;
     const res = await fetch('/api/airtime-agent/sales', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
@@ -83,9 +85,18 @@ export default function AirtimeAgentPanel() {
     });
     const data = await res.json();
     setBusy(false);
-    if (!res.ok) return setError(data.error || 'Top-up failed');
-    setMessage('Airtime sent successfully.');
-    e.currentTarget.reset();
+    if (!res.ok) {
+      pendingSaleKeyRef.current = null;
+      return setError(data.error || 'Top-up failed');
+    }
+    const status = String(data.sale?.status ?? '').toUpperCase();
+    if (status === 'SUCCESSFUL' || status === 'SUCCESS' || status === 'COMPLETED') {
+      setMessage(data.duplicate ? 'This airtime sale was already completed.' : 'Airtime sent successfully.');
+      e.currentTarget.reset();
+      pendingSaleKeyRef.current = null;
+    } else {
+      setMessage('Airtime request accepted and is still processing. Do not submit it again.');
+    }
     await load();
   }
 
