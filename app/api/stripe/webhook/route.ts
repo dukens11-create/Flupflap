@@ -61,6 +61,59 @@ async function markGarageSaleCheckoutAsFailed(cs: Stripe.Checkout.Session, reaso
   ]);
 }
 
+async function failMarketplaceCheckoutSession(cs: Stripe.Checkout.Session) {
+  await prisma.$transaction([
+    prisma.order.updateMany({
+      where: { stripeCheckoutId: cs.id, status: 'PENDING' },
+      data: { status: 'CANCELLED' },
+    }),
+    prisma.checkoutSessionSnapshot.deleteMany({
+      where: { stripeCheckoutId: cs.id },
+    }),
+    prisma.offer.updateMany({
+      where: {
+        checkoutSessionId: cs.id,
+        convertedOrderId: null,
+      },
+      data: {
+        checkoutSessionId: null,
+        checkoutSessionExpiresAt: null,
+      },
+    }),
+  ]);
+}
+
+async function failMarketplacePaymentIntent(intent: Stripe.PaymentIntent) {
+  await prisma.order.updateMany({
+    where: { stripePaymentIntentId: intent.id, status: 'PENDING' },
+    data: { status: 'CANCELLED' },
+  });
+
+  try {
+    const sessions = await stripe.checkout.sessions.list({
+      payment_intent: intent.id,
+      limit: 10,
+    });
+    for (const cs of sessions.data) {
+      if (isGarageSaleCheckoutSession(cs)) {
+        await failGarageSaleCheckoutSession(cs);
+        await markGarageSaleCheckoutAsFailed(cs, 'FAILED');
+      } else {
+        await failMarketplaceCheckoutSession(cs);
+      }
+    }
+  } catch (error) {
+    logWarn('Unable to reconcile failed payment intent to checkout session', {
+      tag: 'stripe/webhook',
+      action: 'reconcileFailedPaymentIntent',
+      paymentIntentId: intent.id,
+      declineCode: intent.last_payment_error?.decline_code ?? null,
+      errorCode: intent.last_payment_error?.code ?? null,
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
 async function resolveGarageSaleCheckoutContext(checkoutId: string) {
   const payment = await prisma.garageSalePayment.findUnique({
     where: { stripeCheckoutId: checkoutId },
@@ -230,6 +283,7 @@ export async function POST(req: Request) {
 
   if (
     event.type === 'payment_intent.succeeded'
+    || event.type === 'payment_intent.payment_failed'
     || CHECKOUT_COMPLETION_EVENTS.has(event.type)
     || event.type === 'checkout.session.expired'
     || event.type === 'checkout.session.async_payment_failed'
@@ -491,6 +545,8 @@ export async function POST(req: Request) {
       });
       await failGarageSaleCheckoutSession(cs);
       await markGarageSaleCheckoutAsFailed(cs, 'FAILED');
+    } else {
+      await failMarketplaceCheckoutSession(cs);
     }
     return new NextResponse('ok', { status: 200 });
   }
@@ -506,7 +562,23 @@ export async function POST(req: Request) {
         saleId: cs.metadata?.saleId,
       });
       await failGarageSaleCheckoutSession(cs);
+      await markGarageSaleCheckoutAsFailed(cs, 'FAILED');
+    } else {
+      await failMarketplaceCheckoutSession(cs);
     }
+    return new NextResponse('ok', { status: 200 });
+  }
+
+  if (event.type === 'payment_intent.payment_failed') {
+    const intent = event.data.object as Stripe.PaymentIntent;
+    logWarn('Stripe payment failed', {
+      tag: 'stripe/webhook',
+      action: 'paymentIntentFailed',
+      paymentIntentId: intent.id,
+      declineCode: intent.last_payment_error?.decline_code ?? null,
+      errorCode: intent.last_payment_error?.code ?? null,
+    });
+    await failMarketplacePaymentIntent(intent);
     return new NextResponse('ok', { status: 200 });
   }
 
